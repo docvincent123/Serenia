@@ -37,6 +37,8 @@ jobs:
       - name: Compile wizard with fixture payload
         shell: powershell
         run: |
+          node tools/materialize-brand.cjs
+          if (!(Test-Path assets/solvia.ico)) { throw 'SOLVIA installer icon was not materialized' }
           New-Item -ItemType Directory -Force out/SOLVIA | Out-Null
           Set-Content out/SOLVIA/fixture.txt 'Compiler fixture only; not an installer release'
           & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" installer/SOLVIA.iss
