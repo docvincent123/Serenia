@@ -66,6 +66,19 @@ CREATE TABLE IF NOT EXISTS consultations(
   UNIQUE(appointment_id,patient_id)
 );
 
+CREATE TABLE IF NOT EXISTS shift_reports(
+  id BIGSERIAL PRIMARY KEY,
+  psychologist_id BIGINT NOT NULL REFERENCES users(id),
+  shift_date TEXT NOT NULL,
+  consultations_count INTEGER NOT NULL DEFAULT 0,
+  summary TEXT NOT NULL,
+  incidents TEXT NOT NULL DEFAULT '',
+  handover TEXT NOT NULL DEFAULT '',
+  created TEXT NOT NULL,
+  updated TEXT NOT NULL,
+  UNIQUE(psychologist_id, shift_date)
+);
+
 CREATE TABLE IF NOT EXISTS assessments(
   id BIGSERIAL PRIMARY KEY,
   patient_id BIGINT NOT NULL REFERENCES patients(id),
@@ -103,3 +116,4 @@ CREATE TABLE IF NOT EXISTS module_settings(
 CREATE INDEX IF NOT EXISTS idx_patient_psychologist ON patients(psychologist_id);
 CREATE INDEX IF NOT EXISTS idx_appointment_start ON appointments(start,"end");
 CREATE INDEX IF NOT EXISTS idx_consultation_patient ON consultations(patient_id);
+CREATE INDEX IF NOT EXISTS idx_shift_report_date ON shift_reports(shift_date);

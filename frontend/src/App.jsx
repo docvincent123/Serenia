@@ -22,6 +22,7 @@ const icons = {
   families: '⌘',
   team: '◇',
   rooms: '▦',
+  reports: '▤',
   audit: '≡'
 };
 
@@ -83,11 +84,12 @@ function navFor(role) {
       ['families', 'Сім’ї'],
       ['team', 'Команда'],
       ['rooms', 'Кабінети'],
+      ['reports', 'Звіти психологів'],
       ['audit', 'Журнал дій']
     ];
   }
   if (role === 'reception') return [['calendar', 'Календар'], ['patients', 'Пацієнти'], ['families', 'Сім’ї']];
-  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти']];
+  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну']];
   return [['dashboard', 'Огляд центру']];
 }
 
@@ -817,6 +819,8 @@ function PatientCard({ api, role, patientId, back }) {
   const [assessmentLink, setAssessmentLink] = useState('');
 
   const isPsychologist = role === 'psychologist';
+  const isAdmin = role === 'admin';
+  const canReadConsultations = isPsychologist || isAdmin;
 
   async function load() {
     setError('');
@@ -946,20 +950,20 @@ function PatientCard({ api, role, patientId, back }) {
           <div className="section-head compact">
             <div>
               <div className="eyebrow">ПРИВАТНІСТЬ</div>
-              <h2>{isPsychologist ? 'Доступ психолога' : 'Захищений розділ'}</h2>
+              <h2>{isPsychologist ? 'Доступ психолога' : isAdmin ? 'Контроль адміністратора' : 'Захищений розділ'}</h2>
             </div>
           </div>
-          <div className={`privacy-card ${isPsychologist ? 'allowed' : 'locked'}`}>
-            <div className="privacy-icon">{isPsychologist ? '✓' : '⌁'}</div>
+          <div className={`privacy-card ${canReadConsultations ? 'allowed' : 'locked'}`}>
+            <div className="privacy-icon">{canReadConsultations ? '✓' : '⌁'}</div>
             <div>
-              <strong>{isPsychologist ? 'Приватні записи доступні' : 'Нотатки психолога приховані'}</strong>
-              <p>{isPsychologist ? 'Ви бачите записи лише цього пацієнта, який закріплений за вашим профілем.' : 'Реєстратура та адміністративні ролі не отримують текст консультацій.'}</p>
+              <strong>{isPsychologist ? 'Приватні записи доступні' : isAdmin ? 'Записи доступні для контролю' : 'Нотатки психолога приховані'}</strong>
+              <p>{isPsychologist ? 'Ви бачите записи лише цього пацієнта, який закріплений за вашим профілем.' : isAdmin ? 'Адміністратор має доступ до записів психологів у режимі перегляду. Зміни вносить тільки психолог.' : 'Реєстратура та керівник центру не отримують текст консультацій.'}</p>
             </div>
           </div>
         </section>
       </div>
 
-      {isPsychologist && (
+      {canReadConsultations && (
         <>
           <section className="surface">
             <div className="section-head">
@@ -990,6 +994,7 @@ function PatientCard({ api, role, patientId, back }) {
             )}
           </section>
 
+          {isPsychologist && (
           <section className="surface">
             <div className="section-head">
               <div>
@@ -1020,6 +1025,7 @@ function PatientCard({ api, role, patientId, back }) {
             )}
             <p className="legal-note">«Самопочуття сьогодні» — авторський інструмент самоспостереження, а не валідована діагностична шкала.</p>
           </section>
+          )}
         </>
       )}
 
@@ -1286,6 +1292,129 @@ function Rooms({ api }) {
   );
 }
 
+function Reports({ api, role }) {
+  const [from, setFrom] = useState(monthStart());
+  const [to, setTo] = useState(localDate());
+  const [reports, setReports] = useState([]);
+  const [records, setRecords] = useState([]);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState('');
+  const [form, setForm] = useState({ summary: '', incidents: '', handover: '' });
+  const isAdmin = role === 'admin';
+
+  async function load() {
+    setError('');
+    try {
+      const reportTask = api('GET', `/api/shift-reports?from=${from}&to=${to}`);
+      if (isAdmin) {
+        const [r, c] = await Promise.all([reportTask, api('GET', `/api/psychology-records?from=${from}&to=${to}`)]);
+        setReports(r);
+        setRecords(c);
+      } else {
+        const r = await reportTask;
+        setReports(r);
+        const todayReport = r.find((x) => x.shift_date === localDate());
+        if (todayReport) setForm({ summary: todayReport.summary || '', incidents: todayReport.incidents || '', handover: todayReport.handover || '' });
+      }
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function submitReport(e) {
+    e.preventDefault();
+    setSaved('');
+    try {
+      const result = await api('POST', '/api/shift-reports', {
+        shift_date: localDate(),
+        summary: form.summary,
+        incidents: form.incidents,
+        handover: form.handover
+      });
+      setSaved(`Звіт за зміну збережено. Консультацій за сьогодні: ${result.consultations_count}.`);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  return (
+    <>
+      <PageHead
+        eyebrow={isAdmin ? 'КОНТРОЛЬ РОБОТИ' : 'ЗАВЕРШЕННЯ ЗМІНИ'}
+        title={isAdmin ? 'Звіти психологів' : 'Звіт за зміну'}
+        subtitle={isAdmin ? 'Записи консультацій та підсумкові звіти психологів зберігаються в PostgreSQL.' : 'Наприкінці зміни зафіксуйте підсумок роботи та інформацію для передачі.'}
+        actions={isAdmin && <div className="date-range"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /><span>—</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /><Button variant="secondary" onClick={load}>Оновити</Button></div>}
+      />
+      {error && <div className="alert error">{error}</div>}
+      {saved && <div className="alert info">{saved}</div>}
+
+      {!isAdmin && (
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">СЬОГОДНІ · {localDate()}</div><h2>Підсумок зміни</h2></div>
+            <Badge tone={reports.some((r) => r.shift_date === localDate()) ? 'forest' : 'sand'}>{reports.some((r) => r.shift_date === localDate()) ? 'Звіт подано' : 'Очікує звіту'}</Badge>
+          </div>
+          <form className="form-grid" onSubmit={submitReport}>
+            <Field label="Підсумок роботи за зміну" full><textarea rows="6" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="Що було виконано за зміну, загальна динаміка роботи…" required /></Field>
+            <Field label="Важливі події / ризики" full><textarea rows="4" value={form.incidents} onChange={(e) => setForm({ ...form, incidents: e.target.value })} placeholder="Якщо немає — можна залишити порожнім." /></Field>
+            <Field label="Передача / що проконтролювати" full><textarea rows="4" value={form.handover} onChange={(e) => setForm({ ...form, handover: e.target.value })} placeholder="Що потрібно врахувати наступній зміні або адміністратору." /></Field>
+            <div className="form-actions full-span"><Button type="submit">Зберегти звіт за зміну</Button></div>
+          </form>
+        </section>
+      )}
+
+      <section className="surface">
+        <div className="section-head">
+          <div><div className="eyebrow">ЗВІТИ ЗА ЗМІНИ</div><h2>{isAdmin ? 'Історія звітів' : 'Мої попередні звіти'}</h2></div>
+          <Badge tone="stone">{reports.length} звітів</Badge>
+        </div>
+        {!reports.length ? <Empty title="Звітів ще немає" text="Після завершення зміни тут з’явиться збережений звіт." /> : (
+          <div className="consultation-list">
+            {reports.map((r) => (
+              <article className="consultation-card" key={r.id}>
+                <div className="consultation-date">{r.shift_date} · {r.psychologist} · {r.consultations_count} консультацій</div>
+                <div className="consultation-note"><div className="eyebrow">ПІДСУМОК ЗМІНИ</div><p>{r.summary}</p></div>
+                <div className="consultation-grid">
+                  <div><span>Важливі події / ризики</span><p>{r.incidents || '—'}</p></div>
+                  <div><span>Передача / контроль</span><p>{r.handover || '—'}</p></div>
+                  <div><span>Оновлено</span><p>{r.updated?.replace('T', ' ')}</p></div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {isAdmin && (
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">ЗАПИСИ ПСИХОЛОГІВ</div><h2>Консультації за період</h2></div>
+            <Badge tone="forest">{records.length} записів</Badge>
+          </div>
+          {!records.length ? <Empty title="Записів немає" text="За вибраний період психологи ще не зберігали консультацій." /> : (
+            <div className="consultation-list">
+              {records.map((c) => (
+                <article className="consultation-card" key={c.id}>
+                  <div className="consultation-date">{c.created?.replace('T', ' ')} · {c.psychologist} · {c.patient}</div>
+                  <div className="consultation-note"><div className="eyebrow">ЗАПИС КОНСУЛЬТАЦІЇ</div><p>{c.note}</p></div>
+                  <div className="consultation-grid">
+                    <div><span>Цілі роботи</span><p>{c.goals || '—'}</p></div>
+                    <div><span>Наступна консультація</span><p>{c.next_plan || '—'}</p></div>
+                    <div><span>Домашнє завдання</span><p>{c.homework || '—'}</p></div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
 function Audit({ api }) {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
@@ -1332,6 +1461,7 @@ function Shell({ api, user, onLogout }) {
     if (page === 'families') return <Families api={api} />;
     if (page === 'team') return <Team api={api} />;
     if (page === 'rooms') return <Rooms api={api} />;
+    if (page === 'reports') return <Reports api={api} role={user.role} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
   })();
