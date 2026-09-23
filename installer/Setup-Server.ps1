@@ -77,7 +77,7 @@ function Install-Package([string]$Id, [string]$Override = '') {
 if (-not (Test-Administrator)) { throw 'Запустіть інсталятор або налаштування SOLVIA від імені адміністратора.' }
 $InstallDir = (Resolve-Path -LiteralPath $InstallDir).Path
 $serverExe = Join-Path $InstallDir 'SolviaServer.exe'
-if (-not (Test-Path -LiteralPath $serverExe)) { throw 'SolviaServer.exe не знайдено. Запустіть повний інсталятор SOLVIA 1.1.' }
+if (-not (Test-Path -LiteralPath $serverExe)) { throw 'SolviaServer.exe не знайдено. Запустіть повний інсталятор SOLVIA 2.0.' }
 $programData = Join-Path $env:ProgramData 'QureMed\SOLVIA'
 $localDir = Join-Path $programData 'local'
 New-Item -ItemType Directory -Force $programData,$localDir | Out-Null
@@ -112,7 +112,7 @@ if (-not $existingDatabase) {
     if ([Text.Encoding]::UTF8.GetByteCount($adminPassword) -lt 12 -or [Text.Encoding]::UTF8.GetByteCount($adminPassword) -gt 128 -or $adminPassword -match '[\r\n]') { throw 'Пароль SOLVIA: 12–128 байтів UTF-8, без перенесень рядка.' }
 }
 
-Write-Host 'SOLVIA 1.1 — перевірка PostgreSQL' -ForegroundColor Cyan
+Write-Host 'SOLVIA 2.0 — перевірка PostgreSQL' -ForegroundColor Cyan
 Refresh-Path
 $postgresBin = Find-PostgresBin
 $installedPostgres = $false
@@ -171,7 +171,7 @@ $postgresAdminPassword = $null
 
 Test-SolviaDatabase $psql $databaseUrl
 
-Write-Host 'SOLVIA 1.1 — ініціалізація сервера' -ForegroundColor Cyan
+Write-Host 'SOLVIA 2.0 — ініціалізація сервера' -ForegroundColor Cyan
 $env:SOLVIA_DATABASE_URL = $databaseUrl
 $env:SOLVIA_ADMIN_LOGIN = $adminLogin
 $env:SOLVIA_ADMIN_PASSWORD = $adminPassword
@@ -182,7 +182,7 @@ finally {
     $adminPassword = $null
 }
 
-Write-Host 'SOLVIA 1.1 — локальний HTTPS' -ForegroundColor Cyan
+Write-Host 'SOLVIA 2.0 — локальний HTTPS' -ForegroundColor Cyan
 Refresh-Path
 $caddy = Get-Command caddy.exe -ErrorAction SilentlyContinue
 $stableCaddy = Join-Path $InstallDir 'bin\caddy.exe'
@@ -198,7 +198,7 @@ $settings['SOLVIA_API_PORT'] = '8765'
 $settings['SOLVIA_HTTPS_PORT'] = '8443'
 $settings['SOLVIA_INSTALL_DIR'] = $InstallDir
 $settings['SOLVIA_CADDY_EXE'] = $stableCaddy
-$settings['SOLVIA_VERSION'] = '1.1.0'
+$settings['SOLVIA_VERSION'] = '2.0.0'
 $settings['SOLVIA_SETUP_PENDING'] = '1'
 Write-ServerSettings $configPath $settings
 Protect-SetupPath $configPath
@@ -238,7 +238,7 @@ for ($i=0; $i -lt 60; $i++) {
     try {
         $response = Invoke-RestMethod 'http://127.0.0.1:8765/api/health' -TimeoutSec 2
         $httpsListener = Get-NetTCPConnection -State Listen -LocalPort 8443 -ErrorAction SilentlyContinue
-        if ($response.ok -and $response.version -eq '1.1.0' -and $httpsListener -and (Test-Path $rootCert)) { $ready=$true; break }
+        if ($response.ok -and $response.version -eq '2.0.0' -and $httpsListener -and (Test-Path $rootCert)) { $ready=$true; break }
     } catch {}
     Start-Sleep -Seconds 1
 }
@@ -251,4 +251,4 @@ Copy-Item $rootCert (Join-Path $InstallDir 'QureMed-Local-CA.crt') -Force
 $settings['SOLVIA_SETUP_PENDING'] = '0'
 Write-ServerSettings $configPath $settings
 Protect-SetupPath $configPath
-Write-Host ('SOLVIA 1.1 готова. Адреса для телефонів: https://' + $serverIp + ':8443') -ForegroundColor Green
+Write-Host ('SOLVIA 2.0 готова. Адреса для телефонів: https://' + $serverIp + ':8443') -ForegroundColor Green
