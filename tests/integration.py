@@ -92,7 +92,7 @@ class Scenario(unittest.TestCase):
         self.api(psy,'POST','/api/appointments',booking,status=403)
         self.assertNotIn('09:00',self.api(rec,'GET',f'/api/slots?date={day}&psychologist_id=3&room_id=1'))
         self.assertEqual(self.api('other','GET','/api/appointments?date='+day),[])
-        note={'patient_id':pid,'appointment_id':aid,'note':'ПРИВАТНА НОТАТКА','goals':'Цілі','next_plan':'План','homework':'Завдання'}
+        note={'patient_id':pid,'appointment_id':aid,'note':'ПРИВАТНА НОТАТКА','goals':'Цілі','next_plan':'План','homework':'Завдання','consultation_type':'primary','duration_minutes':60,'request_text':'Запит','state_text':'Стан','work_done':'Робота','recommendations':'Рекомендації','result_text':'Результат','risk_level':'moderate','risk_flags':['sleep','anxiety']}
         self.api(rec,'POST','/api/consultations',note,status=403)
         self.api('other','POST','/api/consultations',note,status=403)
         self.api(psy,'POST','/api/consultations',note)
@@ -104,10 +104,21 @@ class Scenario(unittest.TestCase):
         self.assertNotIn('ПРИВАТНА',json.dumps(result,ensure_ascii=False))
         admin_detail=self.api(admin,'GET',f'/api/patients/{pid}')
         self.assertEqual(admin_detail['consultations'][0]['note'],note['note'])
+        self.assertEqual(admin_detail['consultations'][0]['risk_level'],'moderate')
+        self.api(admin,'PATCH','/api/settings/center',{'center_name':'Тестовий центр','short_name':'SOLVIA','address':'Адреса','phone':'123','email':'test@example.com','website':'','city':'Місто','director_name':'Директор','admin_name':'Адмін','work_hours':'08:00-20:00','document_footer':'Футер','discharge_signatory':'Психолог'})
+        self.assertEqual(self.api(admin,'GET','/api/settings/center')['center_name'],'Тестовий центр')
+        search=self.api(admin,'GET','/api/search?q=Тестовий')
+        self.assertTrue(any(x['id']==pid for x in search['patients']))
+        rid=self.api(admin,'POST','/api/rooms',{'name':'Тестова кімната','code':'T1','type':'family','capacity':4,'description':'Тест'})['id']
+        self.api(admin,'PATCH',f'/api/rooms/{rid}',{'active':False})
+        self.api(admin,'DELETE',f'/api/rooms/{rid}',{})
+        discharge=self.api(psy,'POST','/api/discharges',{'patient_id':pid,'date_from':day,'date_to':dt.date.today().isoformat(),'summary':'Підсумок','dynamics':'Динаміка','recommendations':'Рекомендації','followup':'Контроль'})
+        self.assertEqual(discharge['patient']['id'],pid)
+
         admin_records=self.api(admin,'GET',f'/api/psychology-records?from={day}&to={day}')
         self.assertEqual(admin_records[0]['note'],note['note'])
         self.api(rec,'GET',f'/api/psychology-records?from={day}&to={day}',status=403)
-        report={'shift_date':day,'summary':'Підсумок зміни','incidents':'Без критичних подій','handover':'Продовжити спостереження'}
+        report={'shift_date':day,'summary':'Підсумок зміни','incidents':'Без критичних подій','handover':'Продовжити спостереження','critical_cases':False,'notify_admin':True,'notify_director':False}
         saved_report=self.api(psy,'POST','/api/shift-reports',report)
         self.assertEqual(saved_report['consultations_count'],1)
         reports=self.api(admin,'GET',f'/api/shift-reports?from={day}&to={day}')
