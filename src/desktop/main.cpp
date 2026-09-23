@@ -16,8 +16,8 @@ ComPtr<ICoreWebView2> g_webview;
 
 std::filesystem::path executableDirectory() {
     wchar_t buffer[32768]{};
-    const DWORD length = GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(std::size(buffer)));
-    if (length == 0 || length >= std::size(buffer)) {
+    const DWORD length = GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0])));
+    if (length == 0 || length >= sizeof(buffer) / sizeof(buffer[0])) {
         return std::filesystem::current_path();
     }
     return std::filesystem::path(buffer).parent_path();
