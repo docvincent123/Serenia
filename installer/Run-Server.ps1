@@ -30,10 +30,8 @@ if ($existing) {
     Stop-Process -Id $owner.Id -Force
     $owner.WaitForExit(10000) | Out-Null
 }
-if ($true) {
-    $args = @('--host','127.0.0.1','--port',$port,'--ui',('"' + $uiDir + '"'))
-    Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir 'api-output.log') -RedirectStandardError (Join-Path $logDir 'api-error.log')
-}
+$args = @('--host','127.0.0.1','--port',$port,'--ui',('"' + $uiDir + '"'))
+$serverProcess = Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'api-output.log') -RedirectStandardError (Join-Path $logDir 'api-error.log')
 
 $healthy = $false
 for ($i=0; $i -lt 40; $i++) {
@@ -43,7 +41,10 @@ for ($i=0; $i -lt 40; $i++) {
     } catch {}
     Start-Sleep -Milliseconds 500
 }
-if (-not $healthy) { throw 'SOLVIA API did not become healthy on localhost.' }
+if (-not $healthy) {
+    if ($serverProcess.HasExited) { throw ('SOLVIA API exited with code ' + $serverProcess.ExitCode + '. Check api-error.log.') }
+    throw 'SOLVIA API did not become healthy on localhost.'
+}
 
 for ($i=0; $i -lt 60; $i++) {
     if (Get-NetIPAddress -AddressFamily IPv4 -IPAddress $serverIp -ErrorAction SilentlyContinue) { break }
@@ -69,6 +70,21 @@ if ($https) {
 if ($caddyPath -and (Test-Path $caddyConfig) -and -not $https) {
     $caddyProcess = Start-Process -FilePath $caddyPath -ArgumentList @('run','--config',('"' + $caddyConfig + '"'),'--adapter','caddyfile') -WorkingDirectory (Split-Path $caddyConfig) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'https-output.log') -RedirectStandardError (Join-Path $logDir 'https-error.log')
     [IO.File]::WriteAllText($caddyPidPath, [string]$caddyProcess.Id)
+} elseif ($https) {
+    $caddyProcess = Get-Process -Id $https.OwningProcess -ErrorAction Stop
+}
+
+# Keep the scheduled task alive. On some Windows systems child processes launched
+# from a scheduled task are terminated when the task host exits.
+Write-Host ('SOLVIA supervisor active. API PID=' + $serverProcess.Id + '; Caddy PID=' + $caddyProcess.Id)
+while ($true) {
+    Start-Sleep -Seconds 5
+    if ($serverProcess.HasExited) {
+        throw ('SolviaServer.exe stopped unexpectedly with code ' + $serverProcess.ExitCode + '. Check api-error.log.')
+    }
+    if ($caddyProcess.HasExited) {
+        throw ('Caddy stopped unexpectedly with code ' + $caddyProcess.ExitCode + '. Check https-error.log.')
+    }
 }
 
 
