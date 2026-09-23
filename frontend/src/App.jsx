@@ -1707,8 +1707,8 @@ function Settings({ api }) {
         <div className="section-head"><div><div className="eyebrow">ДАНІ</div><h2>Резервне копіювання</h2></div><Badge tone="sand">Admin only</Badge></div>
         <p className="muted">Резервні копії та відновлення виконуються локально на серверному ПК. Модуль захищає RehaFlow: працює тільки з базою SOLVIA.</p>
         <div className="backup-actions">
-          <Button variant="secondary" onClick={() => window.dispatchEvent(new CustomEvent('solvia-native-backup'))}>Створити backup</Button>
-          <Button variant="secondary" onClick={() => window.dispatchEvent(new CustomEvent('solvia-native-restore'))}>Відновити з backup</Button>
+          <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('backup')}>Створити backup</Button>
+          <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restore')}>Відновити з backup</Button>
         </div>
       </section>
     </>
