@@ -12,6 +12,7 @@ import time
 import unittest
 import urllib.request
 import urllib.error
+import urllib.parse
 
 BINARY = str(pathlib.Path(sys.argv.pop(1)).resolve())
 
@@ -107,7 +108,7 @@ class Scenario(unittest.TestCase):
         self.assertEqual(admin_detail['consultations'][0]['risk_level'],'moderate')
         self.api(admin,'PATCH','/api/settings/center',{'center_name':'Тестовий центр','short_name':'SOLVIA','address':'Адреса','phone':'123','email':'test@example.com','website':'','city':'Місто','director_name':'Директор','admin_name':'Адмін','work_hours':'08:00-20:00','document_footer':'Футер','discharge_signatory':'Психолог'})
         self.assertEqual(self.api(admin,'GET','/api/settings/center')['center_name'],'Тестовий центр')
-        search=self.api(admin,'GET','/api/search?q=Тестовий')
+        search=self.api(admin,'GET','/api/search?q='+urllib.parse.quote('Тестовий'))
         self.assertTrue(any(x['id']==pid for x in search['patients']))
         rid=self.api(admin,'POST','/api/rooms',{'name':'Тестова кімната','code':'T1','type':'family','capacity':4,'description':'Тест'})['id']
         self.api(admin,'PATCH',f'/api/rooms/{rid}',{'active':False})
