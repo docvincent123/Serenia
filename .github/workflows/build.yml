@@ -119,13 +119,13 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SOLVIA-1.1.0-Windows-x64-portable
+          name: SOLVIA-2.0.0-Windows-x64-portable
           path: out/SOLVIA/
           retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SOLVIA-1.1.0-Setup-EXE
+          name: SOLVIA-2.0.0-Setup-EXE
           path: out/installer/*.exe
           if-no-files-found: error
           retention-days: 14
