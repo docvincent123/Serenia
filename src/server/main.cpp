@@ -16,6 +16,8 @@
 #include <regex>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
+#include <cstdlib>
 #include "schema.h"
 using J=nlohmann::json;
 struct Error:std::runtime_error {int status; Error(int s,const std::string&m):runtime_error(m),status(s){}};
@@ -64,6 +66,7 @@ static std::string arg(const J&v){
     return {};
 }
 void ensure(PGresult*r,const char*context){
+    if(!r)throw std::runtime_error(std::string(context)+": PostgreSQL returned no result");
     auto status=PQresultStatus(r);
     if(status==PGRES_COMMAND_OK||status==PGRES_TUPLES_OK)return;
     const char*state=PQresultErrorField(r,PG_DIAG_SQLSTATE);
