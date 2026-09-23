@@ -1135,45 +1135,84 @@ function Families({ api }) {
 
 function Team({ api }) {
   const [users, setUsers] = useState([]);
-  const [dialog, setDialog] = useState(false);
+  const [dialog, setDialog] = useState('');
+  const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: '', login: '', password: '', role: 'psychologist' });
+  const [form, setForm] = useState({ name: '', login: '', password: '', role: 'psychologist', active: true });
 
   async function load() {
     try { setUsers(await api('GET', '/api/users')); } catch (e) { setError(e.message); }
   }
   useEffect(() => { load(); }, []);
 
-  async function createUser(e) {
+  function openCreate() {
+    setForm({ name: '', login: '', password: '', role: 'psychologist', active: true });
+    setEditing(null);
+    setDialog('create');
+  }
+
+  function openEdit(user) {
+    setEditing(user);
+    setForm({ name: user.name, login: user.login, password: '', role: user.role, active: Boolean(user.active) });
+    setDialog('edit');
+  }
+
+  async function saveUser(e) {
     e.preventDefault();
     try {
-      await api('POST', '/api/users', form);
-      setDialog(false);
-      setForm({ name: '', login: '', password: '', role: 'psychologist' });
+      if (dialog === 'create') {
+        await api('POST', '/api/users', {
+          name: form.name,
+          login: form.login,
+          password: form.password,
+          role: form.role
+        });
+      } else {
+        const payload = { name: form.name, role: form.role, active: form.active };
+        if (form.password) payload.password = form.password;
+        await api('PATCH', `/api/users/${editing.id}`, payload);
+      }
+      setDialog('');
+      setEditing(null);
       await load();
     } catch (e) { setError(e.message); }
   }
 
   return (
     <>
-      <PageHead eyebrow="АДМІНІСТРУВАННЯ" title="Команда центру" subtitle="Персональні облікові записи та ролі без спільних паролів." actions={<Button onClick={() => setDialog(true)}>+ Додати працівника</Button>} />
+      <PageHead
+        eyebrow="АДМІНІСТРУВАННЯ"
+        title="Команда центру"
+        subtitle="Адміністратор створює працівників, призначає ролі, змінює доступ і за потреби скидає пароль."
+        actions={<Button onClick={openCreate}>+ Додати працівника</Button>}
+      />
       {error && <div className="alert error">{error}</div>}
       <section className="surface">
         <div className="team-grid">
           {users.map((u) => (
-            <article className="team-card" key={u.id}>
+            <button className="team-card team-card-button" key={u.id} onClick={() => openEdit(u)}>
               <div className="avatar">{u.name.slice(0, 1).toUpperCase()}</div>
               <div><strong>{u.name}</strong><span>@{u.login}</span></div>
-              <Badge tone={u.active ? 'forest' : 'stone'}>{roleLabels[u.role] || u.role}</Badge>
-            </article>
+              <div className="team-state">
+                <Badge tone={u.active ? 'forest' : 'stone'}>{roleLabels[u.role] || u.role}</Badge>
+                {!u.active && <small>Доступ вимкнено</small>}
+              </div>
+            </button>
           ))}
         </div>
       </section>
+
       {dialog && (
-        <Dialog title="Новий працівник" onClose={() => setDialog(false)}>
-          <form className="form-grid" onSubmit={createUser}>
-            <Field label="ПІБ" full><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
-            <Field label="Логін"><input value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} required /></Field>
+        <Dialog title={dialog === 'create' ? 'Новий працівник' : 'Керування працівником'} subtitle={dialog === 'edit' ? `@${editing?.login}` : 'Створення облікового запису'} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={saveUser}>
+            <Field label="ПІБ" full>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            </Field>
+            {dialog === 'create' && (
+              <Field label="Логін" full>
+                <input value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} required />
+              </Field>
+            )}
             <Field label="Роль">
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 <option value="psychologist">Психолог</option>
@@ -1182,8 +1221,21 @@ function Team({ api }) {
                 <option value="admin">Адміністратор</option>
               </select>
             </Field>
-            <Field label="Пароль" hint="Мінімум 12 символів." full><input type="password" minLength="12" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required /></Field>
-            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button><Button type="submit">Створити акаунт</Button></div>
+            {dialog === 'edit' && (
+              <Field label="Доступ">
+                <select value={form.active ? 'on' : 'off'} onChange={(e) => setForm({ ...form, active: e.target.value === 'on' })}>
+                  <option value="on">Активний</option>
+                  <option value="off">Вимкнений</option>
+                </select>
+              </Field>
+            )}
+            <Field label={dialog === 'create' ? 'Пароль' : 'Новий пароль'} hint={dialog === 'edit' ? 'Залиште порожнім, якщо пароль не змінюється.' : 'Мінімум 12 символів.'} full>
+              <input type="password" minLength={dialog === 'create' ? 12 : undefined} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={dialog === 'create'} />
+            </Field>
+            <div className="form-actions full-span">
+              <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
+              <Button type="submit">{dialog === 'create' ? 'Створити акаунт' : 'Зберегти зміни'}</Button>
+            </div>
           </form>
         </Dialog>
       )}
@@ -1325,7 +1377,8 @@ function Shell({ api, user, onLogout }) {
 
 export default function App() {
   const queryBase = new URLSearchParams(window.location.search).get('api');
-  const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || 'http://127.0.0.1:8765');
+  const runtimeBase = window.location.hostname === 'app.solvia.local' ? 'http://127.0.0.1:8765' : window.location.origin;
+  const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(Boolean(token));
