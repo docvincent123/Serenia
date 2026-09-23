@@ -1,6 +1,6 @@
 {
   "name": "solvia",
-  "version-string": "1.1.0",
+  "version-string": "2.0.0",
   "dependencies": [
     "nlohmann-json",
     {
