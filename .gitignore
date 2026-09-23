@@ -1,0 +1,12 @@
+build/
+out/
+data/
+*.db
+*.db-*
+*.pem
+*.key
+*.pfx
+.env
+.vs/
+__pycache__/
+vcpkg_installed/
