@@ -81,7 +81,7 @@ Protect-Path $programData -Container
 
 Write-Host ''
 Write-Host 'SOLVIA by QureMed — налаштування серверного ПК' -ForegroundColor Cyan
-Write-Host 'PostgreSQL буде доступний тільки на цьому комп’ютері. Телефони працюватимуть через HTTPS API.'
+Write-Host 'PostgreSQL буде доступний тільки на цьому компютері. Телефони працюватимуть через HTTPS API.'
 Write-Host ''
 
 Refresh-Path
@@ -132,7 +132,7 @@ if ([string]::IsNullOrWhiteSpace(($db | Out-String))) {
 }
 
 & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET listen_addresses TO 'localhost'" *> $null
-if ($LASTEXITCODE -ne 0) { throw 'Не вдалося обмежити PostgreSQL локальним комп’ютером.' }
+if ($LASTEXITCODE -ne 0) { throw 'Не вдалося обмежити PostgreSQL локальним компютером.' }
 
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 $postgresAdminPassword = $null
