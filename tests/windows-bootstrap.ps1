@@ -10,7 +10,10 @@ New-Item -ItemType Directory $root | Out-Null
 $started = $false
 try {
     Invoke-SetupProcess (Join-Path $bin 'initdb.exe') @('-D',$data,'-U','postgres','--auth=trust','--encoding=UTF8','--locale=C') -Sensitive | Out-Null
-    Invoke-SetupProcess $pg.FullName @('-D',$data,'-l',(Join-Path $root 'postgres.log'),'-o','-h 127.0.0.1 -p 55439','-w','start') -Sensitive | Out-Null
+    # pg_ctl starts a persistent child. Do not give that child redirected pipes.
+    $ctlArgs = @('-D',$data,'-l',(Join-Path $root 'postgres.log'),'-o','-h 127.0.0.1 -p 55439','-w','start')
+    $ctl = Start-Process $pg.FullName -ArgumentList (($ctlArgs | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join ' ') -PassThru -WindowStyle Hidden
+    if (-not $ctl.WaitForExit(60000) -or $ctl.ExitCode -ne 0) { throw 'Test PostgreSQL failed to start' }
     $started = $true
     $psql = Join-Path $bin 'psql.exe'
     $argsPg = @('-X','-h','127.0.0.1','-p','55439','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1')
