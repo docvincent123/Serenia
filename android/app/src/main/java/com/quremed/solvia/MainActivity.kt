@@ -15,6 +15,7 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.Space
 import android.widget.Spinner
@@ -57,6 +58,13 @@ class MainActivity : Activity() {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(bg)
         setPadding(dp(18), dp(18), dp(18), dp(24))
+    }
+
+    private fun logo(size: Int = 82): ImageView = ImageView(this).apply {
+        setImageResource(R.drawable.solvia_icon)
+        adjustViewBounds = true
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        layoutParams = LinearLayout.LayoutParams(dp(size), dp(size)).apply { bottomMargin = dp(12) }
     }
 
     private fun title(value: String, size: Float = 28f): TextView = TextView(this).apply {
@@ -175,6 +183,7 @@ class MainActivity : Activity() {
     private fun setupScreen() {
         backAction = null
         val body = root()
+        body.addView(logo())
         body.addView(title("SOLVIA by QureMed", 18f))
         body.addView(title("Підключення до центру"))
         body.addView(caption("Введіть HTTPS-адресу серверного ПК. SOLVIA використовує порт 8443."))
@@ -200,7 +209,8 @@ class MainActivity : Activity() {
     private fun loginScreen() {
         backAction = { setupScreen() }
         val body = root()
-        body.addView(title("SOLVIA", 20f))
+        body.addView(logo())
+        body.addView(title("SOLVIA 2.0", 20f))
         body.addView(title("Вхід до центру"))
         body.addView(caption(server))
         val login = edit("Логін")
@@ -213,6 +223,7 @@ class MainActivity : Activity() {
             val payload = JSONObject()
                 .put("login", login.text.toString())
                 .put("password", password.text.toString())
+                .put("platform", "Android")
             apiAsync("POST", "/api/login", payload) { result ->
                 val obj = result as JSONObject
                 token = obj.getString("token")
@@ -229,6 +240,7 @@ class MainActivity : Activity() {
     private fun homeScreen() {
         backAction = null
         val outer = root()
+        outer.addView(logo(64))
         val head = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -325,7 +337,7 @@ class MainActivity : Activity() {
         backAction = { homeScreen() }
         val body = root()
         body.addView(topBar(if (role == "psychologist") "Мої пацієнти" else "Пацієнти", ::homeScreen))
-        val search = edit("Пошук за ПІБ, телефоном, категорією")
+        val search = edit("Пошук за №, ПІБ, телефоном, категорією")
         body.addView(search)
         body.addView(spacer())
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -340,6 +352,7 @@ class MainActivity : Activity() {
                 for (i in 0 until all.length()) {
                     val patient = all.getJSONObject(i)
                     val hay = (
+                        patient.optString("patient_no") + " " +
                         patient.optString("name") + " " +
                         patient.optString("phone") + " " +
                         patient.optString("category")
@@ -349,7 +362,7 @@ class MainActivity : Activity() {
                     val box = card()
                     box.setOnClickListener { patientScreen(patientId) }
                     box.addView(title(patient.optString("name"), 17f))
-                    box.addView(caption(patient.optString("category") + " · " + patient.optString("phone")))
+                    box.addView(caption("№" + patient.optString("patient_no", "—") + " · " + patient.optString("category") + " · " + patient.optString("phone")))
                     list.addView(box)
                     list.addView(spacer(8))
                 }
@@ -379,6 +392,7 @@ class MainActivity : Activity() {
             content.removeAllViews()
             content.addView(title(patient.optString("name")))
             content.addView(caption(
+                "№" + patient.optString("patient_no", "—") + " · " +
                 patient.optString("category") + " · " +
                 patient.optString("phone") + " · " +
                 patient.optString("dob")
