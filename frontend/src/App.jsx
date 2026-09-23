@@ -196,7 +196,7 @@ function Login({ initialBase, onLogin }) {
     setError('');
     try {
       const base = cleanBase(server);
-      const result = await request(base, '', 'POST', '/api/login', { login, password });
+      const result = await request(base, '', 'POST', '/api/login', { login, password, platform: 'Windows' });
       onLogin(base, result);
     } catch (e) {
       setError(e.message);
@@ -209,7 +209,7 @@ function Login({ initialBase, onLogin }) {
     <div className="login-screen">
       <section className="login-brand">
         <div className="brand-orbit">
-          <div className="brand-core">S</div>
+          <img className="brand-logo" src="/solvia-icon.png" alt="SOLVIA" />
         </div>
         <div className="login-brand-copy">
           <div className="eyebrow light">PSYCHOLOGICAL CARE PLATFORM</div>
@@ -228,7 +228,7 @@ function Login({ initialBase, onLogin }) {
       <section className="login-panel">
         <form className="login-card" onSubmit={submit}>
           <div className="product">
-            <div className="product-mark">S</div>
+            <div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
             <div>
               <strong>SOLVIA</strong>
               <span>by QureMed</span>
@@ -264,7 +264,7 @@ function Login({ initialBase, onLogin }) {
             </Field>
           )}
 
-          <div className="login-foot">Версія 1.1 • by QureMed</div>
+          <div className="login-foot">Версія 2.0 • by QureMed</div>
         </form>
       </section>
     </div>
@@ -739,7 +739,7 @@ function Patients({ api, role, openPatient }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return patients;
-    return patients.filter((p) => [p.name, p.phone, p.category, p.psychologist, p.family].some((v) => String(v || '').toLowerCase().includes(q)));
+    return patients.filter((p) => [p.patient_no, p.name, p.phone, p.category, p.psychologist, p.family].some((v) => String(v || '').toLowerCase().includes(q)));
   }, [patients, search]);
 
   function openCreate() {
@@ -795,7 +795,7 @@ function Patients({ api, role, openPatient }) {
         <div className="toolbar">
           <div className="search-box">
             <span>⌕</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук за ПІБ, телефоном, категорією…" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук за №, ПІБ, телефоном, категорією…" />
           </div>
           <Badge tone="stone">{filtered.length} записів</Badge>
         </div>
@@ -813,7 +813,7 @@ function Patients({ api, role, openPatient }) {
               <button className="patient-row" key={p.id} onClick={() => openPatient(p.id)}>
                 <span className="patient-identity">
                   <span className="avatar small">{p.name.slice(0, 1).toUpperCase()}</span>
-                  <span><strong>{p.name}</strong><small>{p.phone}</small></span>
+                  <span><strong>{p.name}</strong><small>№{p.patient_no || '—'} · {p.phone}</small></span>
                 </span>
                 <span><Badge tone={categoryTone[p.category] || 'stone'}>{p.category}</Badge></span>
                 <span>{p.psychologist}</span>
@@ -1066,6 +1066,7 @@ function PatientCard({ api, role, patientId, back }) {
             <div className="eyebrow">КАРТКА ПАЦІЄНТА</div>
             <h1>{card.name}</h1>
             <div className="patient-subline">
+              <Badge tone="forest">№{card.patient_no || '—'}</Badge>
               <Badge tone={categoryTone[card.category] || 'stone'}>{card.category}</Badge>
               <span>{card.phone}</span>
               <span>Народження: {card.dob}</span>
@@ -1783,7 +1784,7 @@ function GlobalSearch({ api, onPatient, onNavigate }) {
       {result && (
         <div className="search-popover">
           <div className="search-popover-head"><strong>Результати</strong><span>{total}</span></div>
-          {result.patients?.map((p) => <button key={`p-${p.id}`} onClick={() => { onPatient(p.id); setQuery(''); setResult(null); }}><span>Пацієнт</span><strong>{p.name}</strong><small>{p.phone} · {p.category}</small></button>)}
+          {result.patients?.map((p) => <button key={`p-${p.id}`} onClick={() => { onPatient(p.id); setQuery(''); setResult(null); }}><span>Пацієнт</span><strong>{p.name}</strong><small>№{p.patient_no || '—'} · {p.phone} · {p.category}</small></button>)}
           {result.families?.map((x) => <button key={`f-${x.id}`} onClick={() => { onNavigate('families'); setQuery(''); setResult(null); }}><span>Сім’я</span><strong>{x.name}</strong></button>)}
           {result.rooms?.map((x) => <button key={`r-${x.id}`} onClick={() => { onNavigate('rooms'); setQuery(''); setResult(null); }}><span>Кабінет</span><strong>{x.name}</strong><small>{x.code || x.type}</small></button>)}
           {result.users?.map((x) => <button key={`u-${x.id}`} onClick={() => { onNavigate('team'); setQuery(''); setResult(null); }}><span>Працівник</span><strong>{x.name}</strong><small>{roleLabels[x.role] || x.role}</small></button>)}
@@ -1995,7 +1996,7 @@ function Shell({ api, user, onLogout }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="product-mark inverse"><span className="solvia-glyph">S</span></div>
+          <div className="product-mark inverse"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
           <div><strong>SOLVIA</strong><span>by QureMed</span></div>
         </div>
 
@@ -2010,7 +2011,7 @@ function Shell({ api, user, onLogout }) {
 
         <div className="sidebar-spacer" />
         <div className="sidebar-version">
-          <strong>SOLVIA 1.1.0</strong>
+          <strong>SOLVIA 2.0</strong>
           <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
           <small>Support 24/7</small>
         </div>
@@ -2031,7 +2032,7 @@ function Shell({ api, user, onLogout }) {
 
 export default function App() {
   const queryBase = new URLSearchParams(window.location.search).get('api');
-  const runtimeBase = window.location.hostname === 'app.solvia.local' ? 'http://127.0.0.1:8765' : window.location.origin;
+  const runtimeBase = window.location.hostname === 'app.solvia' ? 'http://127.0.0.1:8765' : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
   const [user, setUser] = useState(null);
@@ -2091,7 +2092,7 @@ export default function App() {
   }
 
   if (booting) {
-    return <div className="boot-screen"><div className="product-mark">S</div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
+    return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
   }
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} />;
