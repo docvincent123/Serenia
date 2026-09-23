@@ -232,16 +232,24 @@ $taskSettings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (N
 Register-ScheduledTask -TaskName 'SOLVIA Local Server' -Action $action -Trigger $trigger -Principal $principal -Settings $taskSettings -Force | Out-Null
 Start-ScheduledTask -TaskName 'SOLVIA Local Server'
 
-$rootCert = Join-Path $localDir 'caddy-data\pki\authorities\local\root.crt'
+$rootCertCandidates = @(
+    (Join-Path $localDir 'caddy-data\pki\authorities\local\root.crt'),
+    (Join-Path $localDir 'caddy-data\caddy\pki\authorities\local\root.crt')
+)
+$rootCert = $null
 $apiErrorLog = Join-Path $programData 'api-error.log'
 $serverLog = Join-Path $programData 'server.log'
 $ready = $false
 $lastHealthError = ''
-for ($i=0; $i -lt 20; $i++) {
+$lastState = ''
+
+# First Caddy start can take longer while the local CA is generated.
+for ($i=0; $i -lt 60; $i++) {
     Start-Sleep -Milliseconds 750
 
     $listener = Get-NetTCPConnection -State Listen -LocalPort 8765 -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $listener) {
+        $lastState = 'API listener 8765 not ready'
         $taskInfo = Get-ScheduledTaskInfo -TaskName 'SOLVIA Local Server' -ErrorAction SilentlyContinue
         if ($taskInfo -and $taskInfo.LastTaskResult -ne 0 -and $taskInfo.LastTaskResult -ne 267009) {
             break
@@ -254,10 +262,17 @@ for ($i=0; $i -lt 20; $i++) {
         if ($LASTEXITCODE -eq 0 -and $responseText) {
             $response = $responseText | ConvertFrom-Json
             $httpsListener = Get-NetTCPConnection -State Listen -LocalPort 8443 -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($response.ok -and $response.version -eq '2.0.0' -and $httpsListener -and (Test-Path $rootCert)) {
+            $rootCert = $rootCertCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+
+            if ($response.ok -and $response.version -eq '2.0.0' -and $httpsListener -and $rootCert) {
                 $ready = $true
                 break
             }
+
+            $lastState = 'health=' + [string]$response.ok +
+                '; version=' + [string]$response.version +
+                '; https8443=' + [string][bool]$httpsListener +
+                '; rootCert=' + [string][bool]$rootCert
         }
     } catch {
         $lastHealthError = $_.Exception.Message
@@ -267,21 +282,22 @@ if (-not $ready) {
     $details = @()
     $taskInfo = Get-ScheduledTaskInfo -TaskName 'SOLVIA Local Server' -ErrorAction SilentlyContinue
     if ($taskInfo) { $details += ('ScheduledTask LastTaskResult=' + $taskInfo.LastTaskResult) }
+    if ($lastState) { $details += ('Startup state: ' + $lastState) }
     if (Test-Path $apiErrorLog) {
-        $apiTail = (Get-Content $apiErrorLog -Tail 12 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+        $apiTail = (Get-Content $apiErrorLog -Encoding UTF8 -Tail 12 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
         if ($apiTail) { $details += ('api-error.log:' + [Environment]::NewLine + $apiTail) }
     }
     if (Test-Path $serverLog) {
-        $serverTail = (Get-Content $serverLog -Tail 12 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+        $serverTail = (Get-Content $serverLog -Encoding UTF8 -Tail 12 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
         if ($serverTail) { $details += ('server.log:' + [Environment]::NewLine + $serverTail) }
     }
     if ($lastHealthError) { $details += ('Health check: ' + $lastHealthError) }
     throw ('SOLVIA 2.0 не запустила локальний API/HTTPS.' + [Environment]::NewLine + ($details -join [Environment]::NewLine))
 }
-$rootCert = Join-Path $localDir 'caddy-data\pki\authorities\local\root.crt'
-# Older Caddy installations can have an extra caddy directory.
-if (-not (Test-Path $rootCert)) { $rootCert = Join-Path $localDir 'caddy-data\caddy\pki\authorities\local\root.crt' }
-if (-not (Test-Path $rootCert)) { throw 'HTTPS запущено, але сертифікат центру ще не знайдено. Повторіть налаштування.' }
+if (-not $rootCert) {
+    $rootCert = $rootCertCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+}
+if (-not $rootCert) { throw 'HTTPS запущено, але сертифікат центру ще не знайдено. Повторіть налаштування.' }
 Copy-Item $rootCert (Join-Path $InstallDir 'QureMed-Local-CA.crt') -Force
 $settings['SOLVIA_SETUP_PENDING'] = '0'
 Write-ServerSettings $configPath $settings
