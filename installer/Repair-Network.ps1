@@ -1,5 +1,5 @@
-$ErrorActionPreference = 'Stop'
 param([Parameter(Mandatory=$true)][string]$InstallDir)
+$ErrorActionPreference = 'Stop'
 
 $programData = Join-Path $env:ProgramData 'QureMed\SOLVIA'
 $configPath = Join-Path $programData 'server.env'
