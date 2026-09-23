@@ -193,15 +193,15 @@ public final class MainActivity extends Activity {
         web.setBackgroundColor(background);
         root.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        WebSettings settings = web.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-        settings.setSupportMultipleWindows(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " SolviaAndroid/0.3");
+        WebSettings webSettings = web.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
+        webSettings.setAllowFileAccess(false);
+        webSettings.setAllowContentAccess(false);
+        webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        webSettings.setSupportMultipleWindows(false);
+        webSettings.setUserAgentString(webSettings.getUserAgentString() + " SolviaAndroid/0.3");
 
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         reload.setOnClickListener(v -> web.reload());
