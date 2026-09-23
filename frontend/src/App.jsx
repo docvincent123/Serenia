@@ -2066,10 +2066,32 @@ function Audit({ api }) {
 function Shell({ api, user, onLogout }) {
   const [page, setPage] = useState(defaultPage(user.role));
   const [patientId, setPatientId] = useState(null);
+  const [shift, setShift] = useState(null);
+  const [shiftError, setShiftError] = useState('');
+  const [shiftBusy, setShiftBusy] = useState(false);
   const navigation = navFor(user.role);
 
   function openPatient(id) { setPatientId(id); setPage('patient-card'); }
   function navigate(target) { setPatientId(null); setPage(target); }
+
+  async function loadShift() {
+    try {
+      setShift(await api('GET', '/api/shift-day'));
+      setShiftError('');
+    } catch (e) { setShiftError(e.message); }
+  }
+
+  async function changeShift(action) {
+    if (action === 'close' && !window.confirm('Закрити робочу зміну SOLVIA на сьогодні?')) return;
+    setShiftBusy(true);
+    try {
+      await api('POST', '/api/shift-day', { action });
+      await loadShift();
+    } catch (e) { setShiftError(e.message); }
+    finally { setShiftBusy(false); }
+  }
+
+  useEffect(() => { loadShift(); }, []);
 
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} />;
@@ -2085,6 +2107,8 @@ function Shell({ api, user, onLogout }) {
     return null;
   })();
 
+  const locked = shift && !shift.open;
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -2093,10 +2117,10 @@ function Shell({ api, user, onLogout }) {
           <div><strong>SOLVIA</strong><span>by QureMed</span></div>
         </div>
 
-        <nav>
+        <nav className={locked ? 'nav-locked' : ''}>
           <div className="nav-label">РОБОЧИЙ ПРОСТІР</div>
           {navigation.map(([key, label]) => (
-            <button key={key} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
+            <button key={key} disabled={locked} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
               <span className="nav-icon">{icons[key]}</span><span>{label}</span>
             </button>
           ))}
@@ -2116,8 +2140,33 @@ function Shell({ api, user, onLogout }) {
       </aside>
 
       <main className="workspace">
-        <div className="workspace-topbar"><GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} /></div>
-        <div className="workspace-inner">{content}</div>
+        {shift?.open && (
+          <div className="shift-bar">
+            <div><span className="shift-dot" /> Зміна відкрита · {shift.shift_date} · {shift.opened_by_name || 'Адміністратор'}</div>
+            {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={() => changeShift('close')}>Завершити зміну</Button>}
+          </div>
+        )}
+        {!locked && <div className="workspace-topbar"><GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} /></div>}
+        <div className="workspace-inner">
+          {shiftError && <div className="alert error">{shiftError}</div>}
+          {!shift ? <Spinner /> : locked ? (
+            <section className="shift-gate surface">
+              <img src="/solvia-icon.png" alt="SOLVIA" />
+              <div className="eyebrow">ЩОДЕННЕ ВІДКРИТТЯ ЦЕНТРУ</div>
+              <h1>Зміна {shift.shift_date} ще не відкрита</h1>
+              {user.role === 'admin' ? (
+                <>
+                  <p>Підтвердіть відкриття робочої зміни. Після підтвердження календар, пацієнти та робочі модулі стануть доступними для команди.</p>
+                  <Button disabled={shiftBusy} onClick={() => changeShift('open')}>{shiftBusy ? 'Відкриваємо…' : 'Підтвердити відкриття зміни'}</Button>
+                </>
+              ) : (
+                <p>Адміністратор має підтвердити відкриття зміни на сьогодні. Після цього робочий простір відкриється.</p>
+              )}
+              {shift.closed_at && <small>Попереднє закриття: {shift.closed_at.replace('T',' ')}</small>}
+              <Button variant="ghost" onClick={loadShift}>Перевірити ще раз</Button>
+            </section>
+          ) : content}
+        </div>
       </main>
     </div>
   );
