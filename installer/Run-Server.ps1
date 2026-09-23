@@ -25,6 +25,16 @@ if (-not $existing) {
     Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden
 }
 
+$healthy = $false
+for ($i=0; $i -lt 40; $i++) {
+    try {
+        $response = Invoke-RestMethod -Uri ('http://127.0.0.1:' + $port + '/api/health') -TimeoutSec 2
+        if ($response.ok) { $healthy = $true; break }
+    } catch {}
+    Start-Sleep -Milliseconds 500
+}
+if (-not $healthy) { throw 'SOLVIA API did not become healthy on localhost.' }
+
 for ($i=0; $i -lt 60; $i++) {
     if (Get-NetIPAddress -AddressFamily IPv4 -IPAddress $serverIp -ErrorAction SilentlyContinue) { break }
     Start-Sleep -Seconds 1
