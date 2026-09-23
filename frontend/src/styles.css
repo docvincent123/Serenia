@@ -1124,3 +1124,161 @@ h1, h2, h3 { letter-spacing: -.025em; }
   .dialog-body { padding: 0 !important; }
   .discharge-print { border: 0 !important; padding: 0 !important; }
 }
+
+
+/* SOLVIA 2.0 brand and shift */
+.brand-logo {
+  width: 108px;
+  height: 108px;
+  object-fit: cover;
+  border-radius: 28px;
+  box-shadow: 0 22px 54px rgba(7, 45, 32, .28);
+}
+.product-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.logo-settings {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 18px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #dce5de;
+  border-radius: 14px;
+  background: #f8faf8;
+}
+.logo-settings > img {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  border-radius: 22px;
+  background: #fff;
+}
+.logo-settings > div { display: grid; gap: 9px; }
+.logo-settings input[type=file] { padding: 10px; }
+
+.team-card {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+.team-card-main {
+  border: 0;
+  background: transparent;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+.team-card-copy { display: grid; gap: 3px; }
+.team-card-copy span, .team-card-copy small { color: var(--muted); }
+.team-state { display: grid; gap: 7px; justify-items: end; text-align: right; }
+
+.shift-bar {
+  min-height: 46px;
+  padding: 7px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  background: #eaf4ed;
+  border-bottom: 1px solid #d3e5d7;
+  color: #285943;
+  font-size: 12px;
+  font-weight: 700;
+}
+.shift-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #4fa66d;
+  box-shadow: 0 0 0 4px rgba(79,166,109,.12);
+}
+.shift-gate {
+  max-width: 620px;
+  margin: 9vh auto 0;
+  text-align: center;
+  padding: 48px;
+}
+.shift-gate > img {
+  width: 104px;
+  height: 104px;
+  object-fit: cover;
+  border-radius: 26px;
+  margin-bottom: 22px;
+  box-shadow: 0 20px 48px rgba(21,75,56,.16);
+}
+.shift-gate h1 { margin: 8px 0 10px; }
+.shift-gate p { color: var(--muted); line-height: 1.7; max-width: 500px; margin: 0 auto 20px; }
+.shift-gate .button { margin: 6px; }
+.nav-locked { opacity: .5; }
+.nav-locked .nav-item { cursor: not-allowed; }
+
+.discharge-logo {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  border-radius: 18px;
+}
+.discharge-center-copy { flex: 1; }
+.discharge-doc-number {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1d5e47;
+  white-space: nowrap;
+}
+.discharge-title { text-align: center; margin: 28px 0; }
+.discharge-title h1 { margin: 4px 0; font-size: 30px; letter-spacing: .08em; }
+.discharge-title p { color: var(--muted); font-size: 12px; }
+.signature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  margin-top: 54px;
+}
+.signature-block { display: grid; gap: 10px; }
+.signature-block strong { font-size: 12px; color: #526b60; }
+.signature-block span { min-height: 22px; font-weight: 650; }
+.signature-line {
+  border-top: 1px solid #647a70;
+  padding-top: 5px;
+  color: #809087;
+  font-size: 9px;
+  text-align: center;
+}
+.discharge-footer {
+  margin-top: 40px;
+  padding-top: 12px;
+  border-top: 1px solid #dfe7df;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  color: #788a82;
+  font-size: 10px;
+}
+.discharge-profile { margin-bottom: 28px; }
+
+@media (max-width: 760px) {
+  .team-card { grid-template-columns: 1fr; }
+  .team-state { justify-items: start; text-align: left; }
+  .logo-settings { grid-template-columns: 1fr; }
+  .signature-grid { grid-template-columns: 1fr; gap: 28px; }
+  .shift-bar { padding: 7px 12px; }
+}
+
+@media print {
+  @page { size: A4; margin: 14mm; }
+  .discharge-print { font-size: 11pt; }
+  .discharge-logo { width: 22mm; height: 22mm; }
+  .signature-grid { break-inside: avoid; }
+  .discharge-footer { break-inside: avoid; }
+}
