@@ -5,13 +5,15 @@
     "nlohmann-json",
     {
       "name": "cpp-httplib",
-      "features": ["openssl"]
+      "features": [
+        "openssl"
+      ]
     },
-    "sqlite3",
     "openssl",
     {
       "name": "webview2",
       "platform": "windows"
-    }
+    },
+    "libpq"
   ]
 }
