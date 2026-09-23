@@ -2214,7 +2214,7 @@ function Shell({ api, user, onLogout }) {
 
 export default function App() {
   const queryBase = new URLSearchParams(window.location.search).get('api');
-  const runtimeBase = window.location.hostname === 'app.solvia' ? 'http://127.0.0.1:8765' : window.location.origin;
+  const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? 'http://127.0.0.1:8765' : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
   const [user, setUser] = useState(null);
