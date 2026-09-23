@@ -899,6 +899,7 @@ function PatientCard({ api, role, patientId, back }) {
   const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
   const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate(), summary: '', dynamics: '', recommendations: '', followup: '' });
   const [printDoc, setPrintDoc] = useState(null);
+  const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', address: '', status: 'active', admin_note: '' });
 
   const isPsychologist = role === 'psychologist';
   const isAdmin = role === 'admin';
@@ -1010,6 +1011,26 @@ function PatientCard({ api, role, patientId, back }) {
     } catch (e) { setError(e.message); }
   }
 
+  function openPatientEdit() {
+    setPatientEdit({
+      name: card.name || '',
+      phone: card.phone || '',
+      address: card.address || '',
+      status: card.status || 'active',
+      admin_note: card.admin_note || ''
+    });
+    setDialog('edit-patient');
+  }
+
+  async function savePatientEdit(e) {
+    e.preventDefault();
+    try {
+      await api('PATCH', `/api/patients/${patientId}`, patientEdit);
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
   async function assignAssessment() {
     try {
       const result = await api('POST', '/api/assessments', { patient_id: Number(patientId) });
@@ -1055,6 +1076,7 @@ function PatientCard({ api, role, patientId, back }) {
           <div className="page-actions">
             {isPsychologist && <Button variant="secondary" onClick={assignAssessment}>Призначити анкету</Button>}
             {isPsychologist && <Button onClick={openConsultation}>+ Консультація</Button>}
+            {isAdmin && <Button variant="secondary" onClick={openPatientEdit}>Редагувати профіль</Button>}
             {isAdmin && <Button variant="secondary" onClick={() => setDialog('admin-note')}>+ Службова нотатка</Button>}
             <Button variant="secondary" onClick={() => setDialog('discharge')}>Сформувати виписку</Button>
           </div>
@@ -1312,6 +1334,25 @@ function PatientCard({ api, role, patientId, back }) {
             <Field label="Рекомендації" full><textarea rows="4" value={discharge.recommendations} onChange={(e) => setDischarge({ ...discharge, recommendations: e.target.value })} /></Field>
             <Field label="Подальший супровід" full><textarea rows="4" value={discharge.followup} onChange={(e) => setDischarge({ ...discharge, followup: e.target.value })} /></Field>
             <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти виписку</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'edit-patient' && isAdmin && (
+        <Dialog title="Редагувати профіль пацієнта" subtitle={card.name} onClose={() => setDialog('')} wide>
+          <form className="form-grid" onSubmit={savePatientEdit}>
+            <Field label="ПІБ" full><input value={patientEdit.name} onChange={(e) => setPatientEdit({ ...patientEdit, name: e.target.value })} required /></Field>
+            <Field label="Телефон"><input value={patientEdit.phone} onChange={(e) => setPatientEdit({ ...patientEdit, phone: e.target.value })} required /></Field>
+            <Field label="Статус">
+              <select value={patientEdit.status} onChange={(e) => setPatientEdit({ ...patientEdit, status: e.target.value })}>
+                <option value="active">Активний</option>
+                <option value="completed">Супровід завершено</option>
+                <option value="archived">Архів</option>
+              </select>
+            </Field>
+            <Field label="Адреса" full><input value={patientEdit.address} onChange={(e) => setPatientEdit({ ...patientEdit, address: e.target.value })} /></Field>
+            <Field label="Службова примітка" full><textarea rows="4" value={patientEdit.admin_note} onChange={(e) => setPatientEdit({ ...patientEdit, admin_note: e.target.value })} /></Field>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти зміни</Button></div>
           </form>
         </Dialog>
       )}
