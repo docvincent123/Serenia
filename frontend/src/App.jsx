@@ -866,6 +866,8 @@ function PatientCard({ api, role, patientId, back }) {
     risk_level: 'low', risk_flags: []
   });
   const [assessmentLink, setAssessmentLink] = useState('');
+  const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
+  const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate(), summary: '', dynamics: '', recommendations: '', followup: '' });
 
   const isPsychologist = role === 'psychologist';
   const isAdmin = role === 'admin';
@@ -950,6 +952,25 @@ function PatientCard({ api, role, patientId, back }) {
     }));
   }
 
+  async function saveAdminNote(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/admin-notes', { patient_id: Number(patientId), ...adminNote });
+      setAdminNote({ note: '', priority: 'normal' });
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function saveDischarge(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/discharges', { patient_id: Number(patientId), ...discharge });
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
   async function assignAssessment() {
     try {
       const result = await api('POST', '/api/assessments', { patient_id: Number(patientId) });
@@ -991,10 +1012,12 @@ function PatientCard({ api, role, patientId, back }) {
             </div>
           </div>
         </div>
-        {isPsychologist && (
+        {(isPsychologist || isAdmin) && (
           <div className="page-actions">
-            <Button variant="secondary" onClick={assignAssessment}>Призначити анкету</Button>
-            <Button onClick={openConsultation}>+ Додати консультацію</Button>
+            {isPsychologist && <Button variant="secondary" onClick={assignAssessment}>Призначити анкету</Button>}
+            {isPsychologist && <Button onClick={openConsultation}>+ Консультація</Button>}
+            {isAdmin && <Button variant="secondary" onClick={() => setDialog('admin-note')}>+ Службова нотатка</Button>}
+            <Button variant="secondary" onClick={() => setDialog('discharge')}>Сформувати виписку</Button>
           </div>
         )}
       </div>
@@ -1015,6 +1038,9 @@ function PatientCard({ api, role, patientId, back }) {
             <div><dt>Категорія</dt><dd>{card.category}</dd></div>
             <div><dt>Сім’я</dt><dd>{card.family || 'Не вказано'}</dd></div>
             <div><dt>Роль у сім’ї</dt><dd>{card.family_role || '—'}</dd></div>
+            <div><dt>Адреса</dt><dd>{card.address || '—'}</dd></div>
+            <div><dt>Стать</dt><dd>{card.sex || '—'}</dd></div>
+            <div><dt>Статус</dt><dd>{card.status || 'active'}</dd></div>
           </dl>
         </section>
 
@@ -1101,6 +1127,45 @@ function PatientCard({ api, role, patientId, back }) {
         </>
       )}
 
+      {isAdmin && (
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">АДМІНІСТРАТИВНИЙ КОНТРОЛЬ</div><h2>Службові нотатки</h2></div>
+            <Badge tone="stone">{card.admin_notes?.length || 0}</Badge>
+          </div>
+          {!card.admin_notes?.length ? <Empty title="Нотаток немає" text="Службові позначки адміністратора з’являться тут." /> : (
+            <div className="consultation-list">
+              {card.admin_notes.map((n) => (
+                <article className="consultation-card" key={n.id}>
+                  <div className="consultation-date">{n.created?.replace('T',' ')} · {n.author}</div>
+                  <Badge tone={n.priority === 'urgent' ? 'rose' : n.priority === 'important' ? 'sand' : 'stone'}>{n.priority}</Badge>
+                  <p>{n.note}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {(isAdmin || isPsychologist) && (
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">ДОКУМЕНТИ</div><h2>Виписки</h2></div>
+            <Badge tone="sky">{card.discharges?.length || 0}</Badge>
+          </div>
+          {!card.discharges?.length ? <Empty title="Виписок ще немає" text="Сформуйте підсумкову виписку за обраний період." /> : (
+            <div className="assessment-list">
+              {card.discharges.map((d) => (
+                <div className="assessment-row" key={d.id}>
+                  <div><strong>{d.date_from} — {d.date_to}</strong><span>{d.consultation_count} консультацій · {d.author}</span></div>
+                  <Badge tone="forest">Збережено</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {dialog === 'consultation' && (
         <Dialog title="Підсумок консультації" subtitle={card.name} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveConsultation}>
@@ -1178,6 +1243,36 @@ function PatientCard({ api, role, patientId, back }) {
               <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
               <Button type="submit">Зберегти консультацію</Button>
             </div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'admin-note' && (
+        <Dialog title="Службова нотатка" subtitle={card.name} onClose={() => setDialog('')}>
+          <form onSubmit={saveAdminNote}>
+            <Field label="Пріоритет" full>
+              <select value={adminNote.priority} onChange={(e) => setAdminNote({ ...adminNote, priority: e.target.value })}>
+                <option value="normal">Звичайна</option>
+                <option value="important">Важлива</option>
+                <option value="urgent">Терміново</option>
+              </select>
+            </Field>
+            <Field label="Нотатка" full><textarea rows="6" value={adminNote.note} onChange={(e) => setAdminNote({ ...adminNote, note: e.target.value })} required /></Field>
+            <div className="form-actions"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'discharge' && (
+        <Dialog title="Сформувати виписку" subtitle={card.name} onClose={() => setDialog('')} wide>
+          <form className="form-grid" onSubmit={saveDischarge}>
+            <Field label="Початок періоду"><input type="date" value={discharge.date_from} onChange={(e) => setDischarge({ ...discharge, date_from: e.target.value })} /></Field>
+            <Field label="Кінець періоду"><input type="date" value={discharge.date_to} onChange={(e) => setDischarge({ ...discharge, date_to: e.target.value })} /></Field>
+            <Field label="Підсумок психологічного супроводу" full><textarea rows="6" value={discharge.summary} onChange={(e) => setDischarge({ ...discharge, summary: e.target.value })} required /></Field>
+            <Field label="Динаміка" full><textarea rows="4" value={discharge.dynamics} onChange={(e) => setDischarge({ ...discharge, dynamics: e.target.value })} /></Field>
+            <Field label="Рекомендації" full><textarea rows="4" value={discharge.recommendations} onChange={(e) => setDischarge({ ...discharge, recommendations: e.target.value })} /></Field>
+            <Field label="Подальший супровід" full><textarea rows="4" value={discharge.followup} onChange={(e) => setDischarge({ ...discharge, followup: e.target.value })} /></Field>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти виписку</Button></div>
           </form>
         </Dialog>
       )}
