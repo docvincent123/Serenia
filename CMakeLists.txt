@@ -26,8 +26,19 @@ target_compile_definitions(SolviaServer PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 
 if(WIN32)
   find_package(unofficial-webview2 CONFIG REQUIRED)
+  find_program(SOLVIA_NODE_EXECUTABLE node REQUIRED)
+  execute_process(
+    COMMAND "${SOLVIA_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/materialize-brand.cjs"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    RESULT_VARIABLE SOLVIA_BRAND_RESULT
+  )
+  if(NOT SOLVIA_BRAND_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to materialize SOLVIA brand assets")
+  endif()
+  set(SOLVIA_ICON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/assets/solvia.ico")
+  configure_file(src/desktop/solvia.rc.in generated/solvia.rc @ONLY)
 
-  add_executable(Solvia WIN32 src/desktop/main.cpp)
+  add_executable(Solvia WIN32 src/desktop/main.cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/solvia.rc")
   target_compile_definitions(Solvia PRIVATE
     UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00
   )
