@@ -243,7 +243,7 @@ function Login({ initialBase, onLogin }) {
             </Field>
           )}
 
-          <div className="login-foot">Версія 0.2 • React Desktop</div>
+          <div className="login-foot">Версія 0.3 • React Desktop + Mobile</div>
         </form>
       </section>
     </div>
