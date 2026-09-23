@@ -1731,7 +1731,8 @@ function Rooms({ api }) {
 function Settings({ api }) {
   const empty = {
     center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
-    director_name: '', admin_name: '', work_hours: '', document_footer: '', discharge_signatory: ''
+    director_name: '', admin_name: '', work_hours: '', document_footer: '', discharge_signatory: '',
+    head_name: '', head_title: 'Завідувач центру', logo_data: ''
   };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState('');
@@ -1742,6 +1743,21 @@ function Settings({ api }) {
     catch (e) { setError(e.message); }
   }
   useEffect(() => { load(); }, []);
+
+  function chooseLogo(file) {
+    if (!file) return;
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setError('Емблема має бути PNG або JPEG.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setError('Емблема має бути не більше 1 МБ.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setForm((current) => ({ ...current, logo_data: String(reader.result || '') }));
+    reader.readAsDataURL(file);
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -1754,11 +1770,11 @@ function Settings({ api }) {
 
   return (
     <>
-      <PageHead eyebrow="СИСТЕМА" title="Налаштування центру" subtitle="Ці дані використовуються у виписках, документах і шапці центру." />
+      <PageHead eyebrow="СИСТЕМА" title="Налаштування центру" subtitle="Реквізити, емблема та підписи автоматично використовуються у виписках." />
       {error && <div className="alert error">{error}</div>}
       {saved && <div className="alert info">{saved}</div>}
       <section className="surface">
-        <div className="section-head"><div><div className="eyebrow">РЕКВІЗИТИ</div><h2>Центр</h2></div><Badge tone="forest">SOLVIA 1.1.0</Badge></div>
+        <div className="section-head"><div><div className="eyebrow">РЕКВІЗИТИ</div><h2>Центр</h2></div><Badge tone="forest">SOLVIA 2.0</Badge></div>
         <form className="form-grid" onSubmit={save}>
           <Field label="Повна назва центру" full><input value={form.center_name} onChange={(e) => setForm({ ...form, center_name: e.target.value })} required /></Field>
           <Field label="Коротка назва"><input value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} /></Field>
@@ -1770,14 +1786,29 @@ function Settings({ api }) {
           <Field label="Режим роботи"><input value={form.work_hours} onChange={(e) => setForm({ ...form, work_hours: e.target.value })} placeholder="08:00–20:00" /></Field>
           <Field label="Керівник"><input value={form.director_name} onChange={(e) => setForm({ ...form, director_name: e.target.value })} /></Field>
           <Field label="Відповідальний адміністратор"><input value={form.admin_name} onChange={(e) => setForm({ ...form, admin_name: e.target.value })} /></Field>
-          <Field label="Підписант виписки"><input value={form.discharge_signatory} onChange={(e) => setForm({ ...form, discharge_signatory: e.target.value })} /></Field>
+          <Field label="ПІБ завідувача"><input value={form.head_name} onChange={(e) => setForm({ ...form, head_name: e.target.value })} placeholder="ПІБ для підпису" /></Field>
+          <Field label="Посада завідувача"><input value={form.head_title} onChange={(e) => setForm({ ...form, head_title: e.target.value })} placeholder="Завідувач центру" /></Field>
+          <Field label="Посада психолога у виписці"><input value={form.discharge_signatory} onChange={(e) => setForm({ ...form, discharge_signatory: e.target.value })} placeholder="Психолог" /></Field>
           <Field label="Футер документів" full><textarea rows="3" value={form.document_footer} onChange={(e) => setForm({ ...form, document_footer: e.target.value })} /></Field>
+
+          <div className="field full">
+            <span>Емблема центру для виписок</span>
+            <div className="logo-settings">
+              <img src={form.logo_data || '/solvia-icon.png'} alt="Емблема центру" />
+              <div>
+                <input type="file" accept="image/png,image/jpeg" onChange={(e) => chooseLogo(e.target.files?.[0])} />
+                <small>PNG/JPEG до 1 МБ. Якщо не завантажувати свою — використовується емблема SOLVIA.</small>
+                {form.logo_data && <Button type="button" variant="ghost" onClick={() => setForm({ ...form, logo_data: '' })}>Використовувати емблему SOLVIA</Button>}
+              </div>
+            </div>
+          </div>
+
           <div className="form-actions full-span"><Button type="submit">Зберегти налаштування</Button></div>
         </form>
       </section>
       <section className="surface maintenance-card">
         <div className="section-head"><div><div className="eyebrow">ДАНІ</div><h2>Резервне копіювання</h2></div><Badge tone="sand">Admin only</Badge></div>
-        <p className="muted">Резервні копії та відновлення виконуються локально на серверному ПК. Модуль захищає RehaFlow: працює тільки з базою SOLVIA.</p>
+        <p className="muted">Резервні копії та відновлення виконуються локально на серверному ПК. Модуль працює тільки з базою SOLVIA і не змінює RehaFlow.</p>
         <div className="backup-actions">
           <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('backup')}>Створити backup</Button>
           <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restore')}>Відновити з backup</Button>
