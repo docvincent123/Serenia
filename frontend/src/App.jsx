@@ -1114,9 +1114,51 @@ function PatientCard({ api, role, patientId, back }) {
               </select>
             </Field>
             {!eligibleAppointments.length && <div className="alert info full-span">На цю дату немає незавершеного запису цього пацієнта. Майбутню консультацію сервер не дозволить завершити достроково.</div>}
+            <Field label="Тип консультації">
+              <select value={consultation.consultation_type} onChange={(e) => setConsultation({ ...consultation, consultation_type: e.target.value })}>
+                <option value="primary">Первинна</option>
+                <option value="repeat">Повторна</option>
+                <option value="crisis">Кризова</option>
+                <option value="individual">Індивідуальна</option>
+                <option value="family">Сімейна</option>
+                <option value="child">Дитяча</option>
+                <option value="group">Групова</option>
+              </select>
+            </Field>
+            <Field label="Тривалість, хв">
+              <input type="number" min="10" max="480" value={consultation.duration_minutes} onChange={(e) => setConsultation({ ...consultation, duration_minutes: e.target.value })} />
+            </Field>
+            <Field label="Основний запит" full>
+              <textarea rows="3" value={consultation.request_text} onChange={(e) => setConsultation({ ...consultation, request_text: e.target.value })} />
+            </Field>
+            <Field label="Поточний стан" full>
+              <textarea rows="3" value={consultation.state_text} onChange={(e) => setConsultation({ ...consultation, state_text: e.target.value })} />
+            </Field>
+            <Field label="Виконана робота" full>
+              <textarea rows="3" value={consultation.work_done} onChange={(e) => setConsultation({ ...consultation, work_done: e.target.value })} />
+            </Field>
             <Field label="Приватна нотатка" full>
               <textarea rows="6" value={consultation.note} onChange={(e) => setConsultation({ ...consultation, note: e.target.value })} required />
             </Field>
+            <Field label="Рівень ризику">
+              <select value={consultation.risk_level} onChange={(e) => setConsultation({ ...consultation, risk_level: e.target.value })}>
+                <option value="low">Низький</option>
+                <option value="moderate">Помірний</option>
+                <option value="high">Високий</option>
+                <option value="critical">Критичний</option>
+              </select>
+            </Field>
+            <div className="field full">
+              <span>Важливі позначки</span>
+              <div className="check-grid">
+                {riskFlagOptions.map(([value, label]) => (
+                  <label className="check-chip" key={value}>
+                    <input type="checkbox" checked={consultation.risk_flags.includes(value)} onChange={() => toggleRiskFlag(value)} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
             <Field label="Цілі роботи" full>
               <textarea rows="3" value={consultation.goals} onChange={(e) => setConsultation({ ...consultation, goals: e.target.value })} />
             </Field>
@@ -1125,6 +1167,12 @@ function PatientCard({ api, role, patientId, back }) {
             </Field>
             <Field label="Домашнє завдання" full>
               <textarea rows="3" value={consultation.homework} onChange={(e) => setConsultation({ ...consultation, homework: e.target.value })} />
+            </Field>
+            <Field label="Рекомендації" full>
+              <textarea rows="3" value={consultation.recommendations} onChange={(e) => setConsultation({ ...consultation, recommendations: e.target.value })} />
+            </Field>
+            <Field label="Результат / динаміка" full>
+              <textarea rows="3" value={consultation.result_text} onChange={(e) => setConsultation({ ...consultation, result_text: e.target.value })} />
             </Field>
             <div className="form-actions full-span">
               <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
