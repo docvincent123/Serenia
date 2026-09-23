@@ -15,9 +15,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        with:
+          path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
+          key: solvia-vcpkg-release-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
       - name: Configure C++20 desktop and server
         shell: pwsh
-        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static -DBUILD_TESTING=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-solvia -DVCPKG_OVERLAY_TRIPLETS="${{ github.workspace }}/cmake/triplets" -DBUILD_TESTING=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+      - uses: actions/cache/save@v4
+        with:
+          path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
+          key: solvia-vcpkg-release-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
       - name: Build native executables
         run: cmake --build build --config Release --parallel
       - name: Test real API scenario and role isolation
