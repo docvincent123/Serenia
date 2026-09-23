@@ -1716,7 +1716,7 @@ function Reports({ api, role }) {
   const [records, setRecords] = useState([]);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
-  const [form, setForm] = useState({ summary: '', incidents: '', handover: '' });
+  const [form, setForm] = useState({ summary: '', incidents: '', handover: '', critical_cases: false, notify_admin: false, notify_director: false });
   const isAdmin = role === 'admin';
 
   async function load() {
@@ -1731,7 +1731,14 @@ function Reports({ api, role }) {
         const r = await reportTask;
         setReports(r);
         const todayReport = r.find((x) => x.shift_date === localDate());
-        if (todayReport) setForm({ summary: todayReport.summary || '', incidents: todayReport.incidents || '', handover: todayReport.handover || '' });
+        if (todayReport) setForm({
+          summary: todayReport.summary || '',
+          incidents: todayReport.incidents || '',
+          handover: todayReport.handover || '',
+          critical_cases: Boolean(todayReport.critical_cases),
+          notify_admin: Boolean(todayReport.notify_admin),
+          notify_director: Boolean(todayReport.notify_director)
+        });
       }
     } catch (e) {
       setError(e.message);
@@ -1748,7 +1755,10 @@ function Reports({ api, role }) {
         shift_date: localDate(),
         summary: form.summary,
         incidents: form.incidents,
-        handover: form.handover
+        handover: form.handover,
+        critical_cases: form.critical_cases,
+        notify_admin: form.notify_admin,
+        notify_director: form.notify_director
       });
       setSaved(`Звіт за зміну збережено. Консультацій за сьогодні: ${result.consultations_count}.`);
       await load();
@@ -1778,6 +1788,14 @@ function Reports({ api, role }) {
             <Field label="Підсумок роботи за зміну" full><textarea rows="6" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="Що було виконано за зміну, загальна динаміка роботи…" required /></Field>
             <Field label="Важливі події / ризики" full><textarea rows="4" value={form.incidents} onChange={(e) => setForm({ ...form, incidents: e.target.value })} placeholder="Якщо немає — можна залишити порожнім." /></Field>
             <Field label="Передача / що проконтролювати" full><textarea rows="4" value={form.handover} onChange={(e) => setForm({ ...form, handover: e.target.value })} placeholder="Що потрібно врахувати наступній зміні або адміністратору." /></Field>
+            <div className="field full">
+              <span>Контроль зміни</span>
+              <div className="check-grid">
+                <label className="check-chip"><input type="checkbox" checked={form.critical_cases} onChange={(e) => setForm({ ...form, critical_cases: e.target.checked })} /><span>Були критичні випадки</span></label>
+                <label className="check-chip"><input type="checkbox" checked={form.notify_admin} onChange={(e) => setForm({ ...form, notify_admin: e.target.checked })} /><span>Потрібен контроль адміністратора</span></label>
+                <label className="check-chip"><input type="checkbox" checked={form.notify_director} onChange={(e) => setForm({ ...form, notify_director: e.target.checked })} /><span>Потрібно повідомити керівника</span></label>
+              </div>
+            </div>
             <div className="form-actions full-span"><Button type="submit">Зберегти звіт за зміну</Button></div>
           </form>
         </section>
@@ -1794,7 +1812,18 @@ function Reports({ api, role }) {
               <article className="consultation-card" key={r.id}>
                 <div className="consultation-date">{r.shift_date} · {r.psychologist} · {r.consultations_count} консультацій</div>
                 <div className="consultation-note"><div className="eyebrow">ПІДСУМОК ЗМІНИ</div><p>{r.summary}</p></div>
+                <div className="risk-strip">
+                  {r.critical_cases && <Badge tone="rose">Критичні випадки</Badge>}
+                  {r.notify_admin && <Badge tone="sand">Контроль адміністратора</Badge>}
+                  {r.notify_director && <Badge tone="sky">Повідомити керівника</Badge>}
+                </div>
                 <div className="consultation-grid">
+                  <div><span>Первинні</span><p>{r.primary_count || 0}</p></div>
+                  <div><span>Повторні</span><p>{r.repeat_count || 0}</p></div>
+                  <div><span>Кризові</span><p>{r.crisis_count || 0}</p></div>
+                  <div><span>Групові</span><p>{r.group_count || 0}</p></div>
+                  <div><span>Сімейні</span><p>{r.family_count || 0}</p></div>
+                  <div><span>Скасовані</span><p>{r.cancelled_count || 0}</p></div>
                   <div><span>Важливі події / ризики</span><p>{r.incidents || '—'}</p></div>
                   <div><span>Передача / контроль</span><p>{r.handover || '—'}</p></div>
                   <div><span>Оновлено</span><p>{r.updated?.replace('T', ' ')}</p></div>
