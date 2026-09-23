@@ -157,6 +157,25 @@ void createWebView(HWND hwnd) {
                                 return mapping;
                             }
 
+                            EventRegistrationToken navigationToken{};
+                            g_webview->add_NavigationCompleted(
+                                Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                                    [](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+                                        BOOL success = FALSE;
+                                        if (FAILED(args->get_IsSuccess(&success)) || success) return S_OK;
+
+                                        COREWEBVIEW2_WEB_ERROR_STATUS status{};
+                                        args->get_WebErrorStatus(&status);
+                                        std::wstring message = L"Не вдалося завантажити локальний інтерфейс SOLVIA. WebView2 status: " +
+                                            std::to_wstring(static_cast<int>(status)) +
+                                            L". Перевстановіть актуальну збірку SOLVIA 2.0.";
+                                        MessageBoxW(g_window, message.c_str(), L"SOLVIA", MB_OK | MB_ICONERROR);
+                                        return S_OK;
+                                    }
+                                ).Get(),
+                                &navigationToken
+                            );
+
                             resizeWebView();
                             const auto url = launchUrl();
                             const HRESULT navigate = g_webview->Navigate(url.c_str());
