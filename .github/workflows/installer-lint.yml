@@ -1,0 +1,32 @@
+name: SOLVIA installer PowerShell lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse installer scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem installer/*.ps1 | ForEach-Object {
+            $file = $_
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            foreach ($error in $errors) {
+              $failed = $true
+              Write-Host ("{0}:{1}:{2} {3}" -f $file.Name, $error.Extent.StartLineNumber, $error.Extent.StartColumnNumber, $error.Message)
+            }
+          }
+          if ($failed) { throw 'Installer PowerShell syntax validation failed' }
