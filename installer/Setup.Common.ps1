@@ -54,7 +54,7 @@ function Write-ServerSettings([string]$Path, [System.Collections.IDictionary]$Se
     $temporary = $Path + '.new'
     [IO.File]::WriteAllLines($temporary, [string[]]$lines, [Text.UTF8Encoding]::new($false))
     if (Test-Path -LiteralPath $Path) {
-        [IO.File]::Replace($temporary, $Path, $null)
+        [IO.File]::Replace($temporary, $Path, [System.Management.Automation.Language.NullString]::Value)
     } else { [IO.File]::Move($temporary, $Path) }
 }
 function Protect-SetupPath([string]$Path, [switch]$Container) {
