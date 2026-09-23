@@ -233,16 +233,51 @@ Register-ScheduledTask -TaskName 'SOLVIA Local Server' -Action $action -Trigger 
 Start-ScheduledTask -TaskName 'SOLVIA Local Server'
 
 $rootCert = Join-Path $localDir 'caddy-data\pki\authorities\local\root.crt'
+$apiErrorLog = Join-Path $programData 'api-error.log'
+$serverLog = Join-Path $programData 'server.log'
 $ready = $false
-for ($i=0; $i -lt 60; $i++) {
+$lastHealthError = ''
+for ($i=0; $i -lt 20; $i++) {
+    Start-Sleep -Milliseconds 750
+
+    $listener = Get-NetTCPConnection -State Listen -LocalPort 8765 -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $listener) {
+        $taskInfo = Get-ScheduledTaskInfo -TaskName 'SOLVIA Local Server' -ErrorAction SilentlyContinue
+        if ($taskInfo -and $taskInfo.LastTaskResult -ne 0 -and $taskInfo.LastTaskResult -ne 267009) {
+            break
+        }
+        continue
+    }
+
     try {
-        $response = Invoke-RestMethod 'http://127.0.0.1:8765/api/health' -TimeoutSec 2
-        $httpsListener = Get-NetTCPConnection -State Listen -LocalPort 8443 -ErrorAction SilentlyContinue
-        if ($response.ok -and $response.version -eq '2.0.0' -and $httpsListener -and (Test-Path $rootCert)) { $ready=$true; break }
-    } catch {}
-    Start-Sleep -Seconds 1
+        $responseText = & curl.exe --noproxy '*' --silent --show-error --max-time 2 'http://127.0.0.1:8765/api/health'
+        if ($LASTEXITCODE -eq 0 -and $responseText) {
+            $response = $responseText | ConvertFrom-Json
+            $httpsListener = Get-NetTCPConnection -State Listen -LocalPort 8443 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($response.ok -and $response.version -eq '2.0.0' -and $httpsListener -and (Test-Path $rootCert)) {
+                $ready = $true
+                break
+            }
+        }
+    } catch {
+        $lastHealthError = $_.Exception.Message
+    }
 }
-if (-not $ready) { throw 'Служба SOLVIA не запустила API 1.1 та HTTPS. Перегляньте install.log і server.log у ProgramData\QureMed\SOLVIA.' }
+if (-not $ready) {
+    $details = @()
+    $taskInfo = Get-ScheduledTaskInfo -TaskName 'SOLVIA Local Server' -ErrorAction SilentlyContinue
+    if ($taskInfo) { $details += ('ScheduledTask LastTaskResult=' + $taskInfo.LastTaskResult) }
+    if (Test-Path $apiErrorLog) {
+        $apiTail = (Get-Content $apiErrorLog -Tail 12 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+        if ($apiTail) { $details += ('api-error.log:' + [Environment]::NewLine + $apiTail) }
+    }
+    if (Test-Path $serverLog) {
+        $serverTail = (Get-Content $serverLog -Tail 12 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+        if ($serverTail) { $details += ('server.log:' + [Environment]::NewLine + $serverTail) }
+    }
+    if ($lastHealthError) { $details += ('Health check: ' + $lastHealthError) }
+    throw ('SOLVIA 2.0 не запустила локальний API/HTTPS.' + [Environment]::NewLine + ($details -join [Environment]::NewLine))
+}
 $rootCert = Join-Path $localDir 'caddy-data\pki\authorities\local\root.crt'
 # Older Caddy installations can have an extra caddy directory.
 if (-not (Test-Path $rootCert)) { $rootCert = Join-Path $localDir 'caddy-data\caddy\pki\authorities\local\root.crt' }
