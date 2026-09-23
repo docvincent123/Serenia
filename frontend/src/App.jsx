@@ -1470,12 +1470,13 @@ function Families({ api }) {
   );
 }
 
-function Team({ api }) {
+function Team({ api, currentUser }) {
   const [users, setUsers] = useState([]);
   const [dialog, setDialog] = useState('');
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: '', login: '', password: '', role: 'psychologist', active: true });
+  const emptyForm = { name: '', login: '', phone: '', password: '', role: 'psychologist', active: true };
+  const [form, setForm] = useState(emptyForm);
 
   async function load() {
     try { setUsers(await api('GET', '/api/users')); } catch (e) { setError(e.message); }
@@ -1483,14 +1484,21 @@ function Team({ api }) {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
-    setForm({ name: '', login: '', password: '', role: 'psychologist', active: true });
+    setForm(emptyForm);
     setEditing(null);
     setDialog('create');
   }
 
   function openEdit(user) {
     setEditing(user);
-    setForm({ name: user.name, login: user.login, password: '', role: user.role, active: Boolean(user.active) });
+    setForm({
+      name: user.name || '',
+      login: user.login || '',
+      phone: user.phone || '',
+      password: '',
+      role: user.role,
+      active: Boolean(user.active)
+    });
     setDialog('edit');
   }
 
@@ -1501,11 +1509,12 @@ function Team({ api }) {
         await api('POST', '/api/users', {
           name: form.name,
           login: form.login,
+          phone: form.phone,
           password: form.password,
           role: form.role
         });
       } else {
-        const payload = { name: form.name, role: form.role, active: form.active };
+        const payload = { name: form.name, phone: form.phone, role: form.role, active: form.active };
         if (form.password) payload.password = form.password;
         await api('PATCH', `/api/users/${editing.id}`, payload);
       }
@@ -1515,26 +1524,44 @@ function Team({ api }) {
     } catch (e) { setError(e.message); }
   }
 
+  async function terminateSessions(user) {
+    if (!Number(user.active_sessions || 0)) return;
+    if (!window.confirm(`Завершити всі активні сесії «${user.name}»? На його пристроях буде потрібен повторний вхід.`)) return;
+    try {
+      await api('DELETE', `/api/users/${user.id}/sessions`, {});
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
   return (
     <>
       <PageHead
         eyebrow="АДМІНІСТРУВАННЯ"
         title="Команда центру"
-        subtitle="Адміністратор створює працівників, призначає ролі, змінює доступ і за потреби скидає пароль."
+        subtitle="Контакти, ролі, платформи входу та активні сесії працівників."
         actions={<Button onClick={openCreate}>+ Додати працівника</Button>}
       />
       {error && <div className="alert error">{error}</div>}
       <section className="surface">
         <div className="team-grid">
           {users.map((u) => (
-            <button className="team-card team-card-button" key={u.id} onClick={() => openEdit(u)}>
-              <div className="avatar">{u.name.slice(0, 1).toUpperCase()}</div>
-              <div><strong>{u.name}</strong><span>@{u.login}</span></div>
+            <article className="team-card" key={u.id}>
+              <button className="team-card-main" onClick={() => openEdit(u)}>
+                <div className="avatar">{u.name.slice(0, 1).toUpperCase()}</div>
+                <div className="team-card-copy">
+                  <strong>{u.name}</strong>
+                  <span>@{u.login}</span>
+                  <small>{u.phone || 'Телефон не вказано'}</small>
+                </div>
+              </button>
               <div className="team-state">
                 <Badge tone={u.active ? 'forest' : 'stone'}>{roleLabels[u.role] || u.role}</Badge>
-                {!u.active && <small>Доступ вимкнено</small>}
+                <small>{Number(u.active_sessions || 0) ? `${u.active_sessions} активн. сес. · ${u.platforms || 'Unknown'}` : 'Немає активної сесії'}</small>
+                {Number(u.active_sessions || 0) > 0 && Number(u.id) !== Number(currentUser?.id) && (
+                  <Button variant="danger" onClick={() => terminateSessions(u)}>Завершити сесію</Button>
+                )}
               </div>
-            </button>
+            </article>
           ))}
         </div>
       </section>
@@ -1544,6 +1571,9 @@ function Team({ api }) {
           <form className="form-grid" onSubmit={saveUser}>
             <Field label="ПІБ" full>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            </Field>
+            <Field label="Телефон" full>
+              <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+380…" />
             </Field>
             {dialog === 'create' && (
               <Field label="Логін" full>
@@ -1984,7 +2014,7 @@ function Shell({ api, user, onLogout }) {
     if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} />;
     if (page === 'families') return <Families api={api} />;
-    if (page === 'team') return <Team api={api} />;
+    if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports api={api} role={user.role} />;
     if (page === 'settings') return <Settings api={api} />;
