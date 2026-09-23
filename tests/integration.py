@@ -83,7 +83,9 @@ class Scenario(unittest.TestCase):
         p={'name':'Тестовий Пацієнт','phone':'+380000000000','dob':'1990-01-01','category':'Ветеран/ветеранка','psychologist_id':3,'family_id':family,'family_role':'Військовий'}
         created_patient=self.api(rec,'POST','/api/patients',p)
         pid=created_patient['id']
-        self.assertRegex(created_patient['patient_no'], r'^\\d{5}        self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
+        self.assertEqual(len(created_patient['patient_no']),5)
+        self.assertTrue(created_patient['patient_no'].isdigit())
+        self.api(rec,'POST','/api/patients',p,status=409)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
         self.api('other','GET',f'/api/patients/{pid}',status=403)
@@ -179,7 +181,6 @@ class Scenario(unittest.TestCase):
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -269,7 +270,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -366,7 +366,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -456,7 +455,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -553,7 +551,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -643,7 +640,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -740,7 +736,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -830,7 +825,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -927,7 +921,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -1017,7 +1010,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -1114,7 +1106,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -1204,7 +1195,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -1301,7 +1291,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -1391,7 +1380,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
@@ -1488,7 +1476,6 @@ if __name__=='__main__': unittest.main()
 if __name__=='__main__': unittest.main()
 
 )
-        self.api(rec,'POST','/api/patients',p,status=409)
         self.api(rec,'POST','/api/patients',{**p,'name':'Invalid date','dob':'2026-02-30'},status=400)
         second=self.api(rec,'POST','/api/patients',{**p,'name':'Інший член сім’ї','psychologist_id':other})['id']
         self.assertEqual([x['id'] for x in self.api(psy,'GET','/api/patients')],[pid])
