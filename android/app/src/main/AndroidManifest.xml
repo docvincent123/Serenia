@@ -3,7 +3,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
-        android:label="SOLVIA"
+        android:label="SOLVIA 2.0"
+        android:icon="@drawable/solvia_icon"
+        android:roundIcon="@drawable/solvia_icon"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
