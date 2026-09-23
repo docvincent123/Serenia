@@ -71,6 +71,16 @@ jobs:
           path: out/ui/
           if-no-files-found: ignore
 
+      - name: Validate installer PowerShell
+        shell: pwsh
+        run: |
+          Get-ChildItem installer/*.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { $errors | Format-List; throw "PowerShell syntax error in $($_.Name)" }
+          }
+
       - name: Package portable application
         shell: pwsh
         run: |
