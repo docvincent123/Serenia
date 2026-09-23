@@ -377,6 +377,8 @@ function Calendar({ api, role, openPatient }) {
     start: '09:00',
     end: '10:00',
     kind: 'individual',
+    status: 'scheduled',
+    note: '',
     patient_ids: []
   });
   const [slotForm, setSlotForm] = useState({ psychologist_id: '', room_id: '' });
@@ -407,6 +409,8 @@ function Calendar({ api, role, openPatient }) {
       start: '09:00',
       end: '10:00',
       kind: 'individual',
+      status: 'scheduled',
+      note: '',
       patient_ids: []
     });
     setDialog('booking');
@@ -420,6 +424,8 @@ function Calendar({ api, role, openPatient }) {
       start: selected.start.slice(11, 16),
       end: selected.end.slice(11, 16),
       kind: selected.kind,
+      status: selected.status,
+      note: selected.note || '',
       patient_ids: selected.patients.map((p) => p.id)
     });
     setDialog('edit');
@@ -439,6 +445,8 @@ function Calendar({ api, role, openPatient }) {
         start: `${date}T${booking.start}`,
         end: `${date}T${booking.end}`,
         kind: booking.kind,
+        status: booking.status,
+        note: booking.note,
         patient_ids: ids
       };
 
@@ -452,13 +460,20 @@ function Calendar({ api, role, openPatient }) {
 
   async function cancelAppointment() {
     if (!selected) return;
-    if (!window.confirm('Скасувати цей запис?')) return;
+    const reason = window.prompt('Причина скасування (необов’язково):', '') ?? null;
+    if (reason === null) return;
     try {
-      await api('PATCH', `/api/appointments/${selected.id}`, { status: 'cancelled' });
+      await api('PATCH', `/api/appointments/${selected.id}`, { status: 'cancelled', cancellation_reason: reason });
       await load();
-    } catch (e) {
-      setError(e.message);
-    }
+    } catch (e) { setError(e.message); }
+  }
+
+  async function markNoShow() {
+    if (!selected || !window.confirm('Позначити, що пацієнт не з’явився?')) return;
+    try {
+      await api('PATCH', `/api/appointments/${selected.id}`, { status: 'no_show', cancellation_reason: 'Пацієнт не з’явився' });
+      await load();
+    } catch (e) { setError(e.message); }
   }
 
   async function findSlots(e) {
@@ -474,8 +489,11 @@ function Calendar({ api, role, openPatient }) {
     }
   }
 
-  const statusLabel = (status) => status === 'completed' ? 'Проведено' : status === 'cancelled' ? 'Скасовано' : 'Заплановано';
-  const statusTone = (status) => status === 'completed' ? 'forest' : status === 'cancelled' ? 'rose' : 'sky';
+  const statusLabel = (status) => ({
+    draft: 'Чернетка', scheduled: 'Заплановано', confirmed: 'Підтверджено',
+    completed: 'Проведено', cancelled: 'Скасовано', no_show: 'Не з’явився', rescheduled: 'Перенесено'
+  }[status] || status);
+  const statusTone = (status) => status === 'completed' || status === 'confirmed' ? 'forest' : status === 'cancelled' || status === 'no_show' ? 'rose' : status === 'draft' ? 'sand' : 'sky';
 
   return (
     <>
@@ -568,12 +586,14 @@ function Calendar({ api, role, openPatient }) {
                 <span>Учасники</span>
                 {selected.patients.map((p) => <strong key={p.id}>{p.name}</strong>)}
               </div>
-              {canSchedule && selected.status === 'scheduled' && (
+              {canSchedule && ['draft','scheduled','confirmed'].includes(selected.status) && (
                 <div className="context-actions">
                   <Button variant="secondary" onClick={openEdit}>Перенести / змінити</Button>
+                  <Button variant="secondary" onClick={markNoShow}>Не з’явився</Button>
                   <Button variant="danger" onClick={cancelAppointment}>Скасувати</Button>
                 </div>
               )}
+              {selected.cancellation_reason && <div className="alert info">Причина: {selected.cancellation_reason}</div>}
             </div>
           )}
         </aside>
@@ -603,6 +623,16 @@ function Calendar({ api, role, openPatient }) {
                 <option value="individual">Індивідуальна консультація</option>
                 <option value="group">Групове заняття</option>
               </select>
+            </Field>
+            <Field label="Статус запису">
+              <select value={booking.status} onChange={(e) => setBooking({ ...booking, status: e.target.value })}>
+                <option value="draft">Чернетка</option>
+                <option value="scheduled">Заплановано</option>
+                <option value="confirmed">Підтверджено</option>
+              </select>
+            </Field>
+            <Field label="Примітка до запису">
+              <input value={booking.note} onChange={(e) => setBooking({ ...booking, note: e.target.value })} placeholder="Напр. підтвердити телефоном" />
             </Field>
             <Field label={booking.kind === 'group' ? 'Учасники' : 'Пацієнт'} hint={booking.kind === 'group' ? 'Ctrl + клік для вибору кількох учасників.' : ''} full>
               <select
