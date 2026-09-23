@@ -25,6 +25,21 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Validate installer PowerShell
+        shell: pwsh
+        run: |
+          Get-ChildItem installer/*.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object {
+                Write-Error ("{0}:{1} {2}" -f $_.Extent.StartLineNumber, $_.Extent.StartColumnNumber, $_.Message)
+              }
+              throw "PowerShell syntax error in $($_.Name)"
+            }
+          }
+
       - name: Install React dependencies
         shell: pwsh
         working-directory: frontend
@@ -70,16 +85,6 @@ jobs:
           name: SOLVIA-react-UI-check
           path: out/ui/
           if-no-files-found: ignore
-
-      - name: Validate installer PowerShell
-        shell: pwsh
-        run: |
-          Get-ChildItem installer/*.ps1 | ForEach-Object {
-            $tokens = $null
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
-            if ($errors.Count -gt 0) { $errors | Format-List; throw "PowerShell syntax error in $($_.Name)" }
-          }
 
       - name: Package portable application
         shell: pwsh
