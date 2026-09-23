@@ -1,5 +1,5 @@
-$ErrorActionPreference = 'Stop'
 param([Parameter(Mandatory=$true)][string]$InstallDir)
+$ErrorActionPreference = 'Stop'
 
 $configPath = Join-Path $env:ProgramData 'QureMed\SOLVIA\server.env'
 if (-not (Test-Path $configPath)) { exit 2 }
@@ -30,13 +30,14 @@ for ($i=0; $i -lt 60; $i++) {
     Start-Sleep -Seconds 1
 }
 
-$caddy = Get-Command caddy.exe -ErrorAction SilentlyContinue
-if (-not $caddy) {
+$caddyPath = $settings['SOLVIA_CADDY_EXE']
+if (-not $caddyPath -or -not (Test-Path $caddyPath)) {
     $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
-    $caddy = Get-Command caddy.exe -ErrorAction SilentlyContinue
+    $caddyCommand = Get-Command caddy.exe -ErrorAction SilentlyContinue
+    $caddyPath = if ($caddyCommand) { $caddyCommand.Source } else { $null }
 }
 $caddyConfig = Join-Path $env:ProgramData 'QureMed\SOLVIA\local\Caddyfile'
 $https = Get-NetTCPConnection -State Listen -LocalPort 443 -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($caddy -and (Test-Path $caddyConfig) -and -not $https) {
-    Start-Process -FilePath $caddy.Source -ArgumentList @('run','--config',('"' + $caddyConfig + '"'),'--adapter','caddyfile') -WorkingDirectory (Split-Path $caddyConfig) -WindowStyle Hidden
+if ($caddyPath -and (Test-Path $caddyConfig) -and -not $https) {
+    Start-Process -FilePath $caddyPath -ArgumentList @('run','--config',('"' + $caddyConfig + '"'),'--adapter','caddyfile') -WorkingDirectory (Split-Path $caddyConfig) -WindowStyle Hidden
 }
