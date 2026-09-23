@@ -18,6 +18,8 @@ foreach ($line in [IO.File]::ReadAllLines($configPath)) {
     if ($i -gt 0) { $settings[$line.Substring(0,$i)]=$line.Substring($i+1) }
 }
 $settings['SOLVIA_SERVER_IP']=$ip
+$httpsPort = if ($settings['SOLVIA_HTTPS_PORT']) { $settings['SOLVIA_HTTPS_PORT'] } else { '8443' }
+$settings['SOLVIA_HTTPS_PORT']=$httpsPort
 [IO.File]::WriteAllLines($configPath,@($settings.GetEnumerator()|ForEach-Object{$_.Key+'='+$_.Value}),[Text.UTF8Encoding]::new($false))
 
 $localDir=Join-Path $programData 'local'
@@ -30,13 +32,20 @@ $caddyConfig=@"
         root "$caddyData"
     }
 }
-https://$ip {
+https://$ip`:$httpsPort {
     tls internal
     encode gzip
     reverse_proxy 127.0.0.1:8765
 }
 "@
 [IO.File]::WriteAllText((Join-Path $localDir 'Caddyfile'),$caddyConfig,[Text.UTF8Encoding]::new($false))
-Get-Process caddy -ErrorAction SilentlyContinue | Stop-Process -Force
+$caddyPidPath = Join-Path $localDir 'caddy.pid'
+if (Test-Path $caddyPidPath) {
+    $oldPid = [int](Get-Content $caddyPidPath -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($oldPid -gt 0) {
+        Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+    }
+    Remove-Item $caddyPidPath -Force -ErrorAction SilentlyContinue
+}
 & (Join-Path $InstallDir 'installer\Run-Server.ps1') -InstallDir $InstallDir
-Write-Host ('Нова адреса SOLVIA: https://' + $ip) -ForegroundColor Green
+Write-Host ('Нова адреса SOLVIA: https://' + $ip + ':' + $httpsPort) -ForegroundColor Green

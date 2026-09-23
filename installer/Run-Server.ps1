@@ -13,6 +13,7 @@ foreach ($line in [IO.File]::ReadAllLines($configPath)) {
 $databaseUrl = $settings['SOLVIA_DATABASE_URL']
 $serverIp = $settings['SOLVIA_SERVER_IP']
 $port = if ($settings['SOLVIA_API_PORT']) { $settings['SOLVIA_API_PORT'] } else { '8765' }
+$httpsPort = if ($settings['SOLVIA_HTTPS_PORT']) { $settings['SOLVIA_HTTPS_PORT'] } else { '8443' }
 if (-not $databaseUrl -or -not $serverIp) { exit 3 }
 
 $env:SOLVIA_DATABASE_URL = $databaseUrl
@@ -47,7 +48,9 @@ if (-not $caddyPath -or -not (Test-Path $caddyPath)) {
     $caddyPath = if ($caddyCommand) { $caddyCommand.Source } else { $null }
 }
 $caddyConfig = Join-Path $env:ProgramData 'QureMed\SOLVIA\local\Caddyfile'
-$https = Get-NetTCPConnection -State Listen -LocalPort 443 -ErrorAction SilentlyContinue | Select-Object -First 1
+$caddyPidPath = Join-Path $env:ProgramData 'QureMed\SOLVIA\local\caddy.pid'
+$https = Get-NetTCPConnection -State Listen -LocalPort ([int]$httpsPort) -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($caddyPath -and (Test-Path $caddyConfig) -and -not $https) {
-    Start-Process -FilePath $caddyPath -ArgumentList @('run','--config',('"' + $caddyConfig + '"'),'--adapter','caddyfile') -WorkingDirectory (Split-Path $caddyConfig) -WindowStyle Hidden
+    $caddyProcess = Start-Process -FilePath $caddyPath -ArgumentList @('run','--config',('"' + $caddyConfig + '"'),'--adapter','caddyfile') -WorkingDirectory (Split-Path $caddyConfig) -WindowStyle Hidden -PassThru
+    [IO.File]::WriteAllText($caddyPidPath, [string]$caddyProcess.Id)
 }

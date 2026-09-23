@@ -2,11 +2,11 @@
 
 ## Топологія
 
-`Android / Solvia.exe → HTTPS 443 (Caddy) → 127.0.0.1:8765 SolviaServer → 127.0.0.1:5432 PostgreSQL`.
+`Android / Solvia.exe → HTTPS 8443 (SOLVIA Caddy) → 127.0.0.1:8765 SolviaServer → 127.0.0.1:5432 PostgreSQL`.
 
 На серверному ПК desktop WebView2 може звертатися безпосередньо до loopback API. Android та інші клієнти у локальній мережі заходять тільки через Caddy HTTPS.
 
-PostgreSQL налаштований на `listen_addresses=localhost`; порт 5432 не відкривається у Windows Firewall. Caddy слухає 443, а firewall rule дозволяє доступ лише з `LocalSubnet` у Private network profile.
+PostgreSQL налаштований на `listen_addresses=localhost`; порт 5432 не відкривається у Windows Firewall. SOLVIA Caddy слухає 8443, а firewall rule дозволяє доступ лише з `LocalSubnet` у Private network profile. Це не конфліктує з RehaFlow, який може використовувати HTTPS 443 на тому самому ПК.
 
 ## Компоненти
 
@@ -18,7 +18,7 @@ PostgreSQL налаштований на `listen_addresses=localhost`; порт 
 
 ## Початкова ініціалізація
 
-Setup запитує пароль першого користувача `admin` і передає його серверу тільки через process environment `SOLVIA_ADMIN_PASSWORD` на час `--init`. Сервер хешує пароль PBKDF2-HMAC-SHA256 і зберігає лише hash+salt.
+Setup запитує логін і пароль першого адміністратора та передає їх серверу тільки через process environment `SOLVIA_ADMIN_LOGIN` і `SOLVIA_ADMIN_PASSWORD` на час `--init`. Сервер хешує пароль PBKDF2-HMAC-SHA256 і зберігає лише hash+salt.
 
 Окремий пароль PostgreSQL ролі `solvia` генерується випадково. Connection string зберігається в `C:\ProgramData\QureMed\SOLVIA\server.env`; файл ACL-обмежений системою, адміністраторами та користувачем, що встановив систему.
 
@@ -59,7 +59,7 @@ Android дозволяє тільки HTTPS, довіряє system + user CA sto
 
 ## Автозапуск
 
-Windows Task Scheduler task `SOLVIA Local Server` стартує від SYSTEM при завантаженні Windows. Він запускає loopback API і Caddy. Точний шлях до `caddy.exe` зберігається в server.env, тому автозапуск не залежить від user PATH.
+Windows Task Scheduler task `SOLVIA Local Server` стартує від SYSTEM при завантаженні Windows. Він запускає loopback API і окремий SOLVIA Caddy на 8443. PID цього Caddy зберігається окремо, тому мережевий repair SOLVIA не зупиняє Caddy RehaFlow. Точний шлях до `caddy.exe` зберігається в server.env, тому автозапуск не залежить від user PATH.
 
 ## Дані
 

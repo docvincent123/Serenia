@@ -197,6 +197,7 @@ $config = @(
     'SOLVIA_DATABASE_URL=' + $databaseUrl,
     'SOLVIA_SERVER_IP=' + $serverIp,
     'SOLVIA_API_PORT=8765',
+    'SOLVIA_HTTPS_PORT=8443',
     'SOLVIA_INSTALL_DIR=' + $InstallDir
 )
 [IO.File]::WriteAllLines($configPath, $config, [Text.UTF8Encoding]::new($false))
@@ -245,7 +246,7 @@ $caddyConfig = @"
         root "$caddyData"
     }
 }
-https://$serverIp {
+https://$serverIp`:8443 {
     tls internal
     encode gzip
     reverse_proxy 127.0.0.1:8765
@@ -256,7 +257,7 @@ https://$serverIp {
 if ($LASTEXITCODE -ne 0) { throw 'Помилка конфігурації локального HTTPS.' }
 
 Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
-New-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private | Out-Null
+New-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8443 -RemoteAddress LocalSubnet -Profile Private | Out-Null
 
 $runScript = Join-Path $InstallDir 'installer\Run-Server.ps1'
 $argument = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $runScript + '" -InstallDir "' + $InstallDir + '"'
@@ -275,7 +276,7 @@ if (Test-Path $rootCert) {
 
 Write-Host ''
 Write-Host 'SOLVIA встановлено.' -ForegroundColor Green
-Write-Host ('Сервер для телефонів: https://' + $serverIp) -ForegroundColor Green
+Write-Host ('Сервер для телефонів: https://' + $serverIp + ':8443') -ForegroundColor Green
 Write-Host ('Логін адміністратора: ' + $adminLogin) -ForegroundColor Green
 Write-Host 'Пароль адміністратора: той, який ви щойно задали.' -ForegroundColor Green
 $adminLogin = $null
