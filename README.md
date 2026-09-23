@@ -1,17 +1,17 @@
-# SOLVIA by QureMed — 0.1.0 MVP
+# SOLVIA by QureMed — 0.2.0 React Desktop
 
 Окремий продукт для психологічного реабілітаційного центру. Репозиторій має назву Serenia; назва програми — **SOLVIA**.
 
 ## Стек як у rehaflow-final
 
-- **Клієнт Windows:** C++20, Win32, Direct2D/DirectWrite, WinHTTP, CMake. Нативний EXE.
+- **Клієнт Windows:** C++20 Win32 shell + Microsoft Edge WebView2. У WebView2 працює **React 19 + Vite 8** інтерфейс. Electron не використовується.
 - **Сервер:** C++20, cpp-httplib, OpenSSL, SQLite у режимі WAL. Працює на ПК центру; дані зберігаються у `data/solvia.db`.
-- **Анкета пацієнта:** невелика HTML/JS сторінка, яку віддає сервер; основний клієнт не використовує браузер чи WebView.
-- Python використовується **лише в автоматизованих тестах**. Для запуску EXE Python, Node.js і Docker не потрібні.
+- **Анкета пацієнта:** окрема HTML/JS сторінка, яку віддає сервер за одноразовим посиланням.
+- Python використовується лише в автоматизованих API-тестах. Node.js потрібен лише для збірки React. Для запуску готового ZIP Python, Node.js і Docker не потрібні. На Windows потрібен WebView2 Runtime.
 
 ## Завантаження та перший запуск
 
-GitHub → **Actions → SOLVIA • Windows build and security tests → успішна збірка → Artifacts → SOLVIA-0.1.0-Windows-x64**. Розпакуйте ZIP у папку з правами на запис (наприклад, `C:\Solvia`).
+GitHub → **Actions → SOLVIA • Windows build and security tests → успішна збірка → Artifacts → SOLVIA-0.2.0-Windows-x64**. Розпакуйте ZIP у папку з правами на запис (наприклад, `C:\Solvia`).
 
 1. Для тестування виконайте `01-Demo-Setup.bat`: створить 4 ролі та покаже випадкові паролі. Збережіть їх. Для чистого запуску замість цього використайте `01-First-Run.bat`: буде тільки адміністратор.
 2. Запустіть `02-Start-Server.bat`, залиште вікно відкритим.
@@ -62,18 +62,22 @@ $env:SOLVIA_API = 'https://solvia.center.local:8765'
 
 Поки **не реалізовано:** оплати й пакети, SMS/Telegram/push, документи та юридичні згоди, повний мобільний кабінет, стандартизовані шкали, інтеграцію RehaFlow, інсталятор, самовідновлення пароля, редагування/деактивацію працівників, передачу пацієнта іншому психологу, адаптивний мобільний клієнт. Під ці модулі залишені точки розширення, а не імітація їх роботи.
 
-Нативний клієнт: Windows 10/11 x64, робоча область від 1280×780. Оновлення даних вручну (F5). Клієнт очікує мережеву відповідь синхронно з таймаутом. Записи консультацій у MVP незмінні; виправлення та версіонування — наступний етап.
+Клієнт: Windows 10/11 x64 + WebView2 Runtime, робоча область від 980×650. React-екрани оновлюють дані після робочих дій; календар і звіти мають явне оновлення. Записи консультацій у MVP незмінні; виправлення та версіонування — наступний етап.
 
 ## Збірка з коду
 
-Visual Studio 2022 (Desktop development with C++), CMake ≥3.24, vcpkg. Для тестів Python 3.11+.
+Visual Studio 2022 (Desktop development with C++), CMake ≥3.24, vcpkg, Node.js 22+, npm. Для тестів Python 3.11+.
 
 ```powershell
-cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+npm install --prefix frontend
+npm run build --prefix frontend
+cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-solvia -DVCPKG_OVERLAY_TRIPLETS=cmake/triplets -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
+New-Item -ItemType Directory -Force build/Release/ui | Out-Null
+Copy-Item frontend/dist/* build/Release/ui/ -Recurse -Force
 ```
 
-Результат: `build/Release/Solvia.exe`, `build/Release/SolviaServer.exe`.
+Результат: `build/Release/Solvia.exe`, `build/Release/SolviaServer.exe` і `build/Release/ui/`.
 
 Докладні правила — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Сценарії перевірки — [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
