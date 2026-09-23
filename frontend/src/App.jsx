@@ -1,0 +1,1382 @@
+import React, { useEffect, useMemo, useState } from 'react';
+
+const roleLabels = {
+  admin: 'Адміністратор',
+  reception: 'Реєстратура',
+  psychologist: 'Психолог',
+  director: 'Керівник центру'
+};
+
+const categoryTone = {
+  'Військовий/військова': 'olive',
+  'Ветеран/ветеранка': 'forest',
+  'Партнер/партнерка': 'sand',
+  'Дитина': 'sky',
+  'Інше': 'stone'
+};
+
+const icons = {
+  dashboard: '⌂',
+  calendar: '◫',
+  patients: '◎',
+  families: '⌘',
+  team: '◇',
+  rooms: '▦',
+  audit: '≡'
+};
+
+function localDate(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function monthStart() {
+  const d = new Date();
+  return localDate(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+
+function cleanBase(value) {
+  const text = String(value || '').trim().replace(/\/+$/, '');
+  const url = new URL(text);
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Адреса сервера має починатися з http:// або https://');
+  return text;
+}
+
+async function request(base, token, method, path, body) {
+  const headers = { Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+  let response;
+  try {
+    response = await fetch(`${cleanBase(base)}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+  } catch {
+    throw Object.assign(new Error('Немає зв’язку із сервером. Перевірте адресу та чи запущений SolviaServer.exe.'), { status: 0 });
+  }
+
+  const text = await response.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok) {
+    throw Object.assign(new Error(data.error || `Помилка сервера ${response.status}`), { status: response.status });
+  }
+  return data;
+}
+
+function navFor(role) {
+  if (role === 'admin') {
+    return [
+      ['dashboard', 'Огляд центру'],
+      ['calendar', 'Календар'],
+      ['patients', 'Пацієнти'],
+      ['families', 'Сім’ї'],
+      ['team', 'Команда'],
+      ['rooms', 'Кабінети'],
+      ['audit', 'Журнал дій']
+    ];
+  }
+  if (role === 'reception') return [['calendar', 'Календар'], ['patients', 'Пацієнти'], ['families', 'Сім’ї']];
+  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти']];
+  return [['dashboard', 'Огляд центру']];
+}
+
+function defaultPage(role) {
+  return role === 'admin' || role === 'director' ? 'dashboard' : 'calendar';
+}
+
+function Button({ children, variant = 'primary', className = '', ...props }) {
+  return <button className={`button ${variant} ${className}`} {...props}>{children}</button>;
+}
+
+function IconButton({ children, ...props }) {
+  return <button className="icon-button" {...props}>{children}</button>;
+}
+
+function Badge({ children, tone = 'stone' }) {
+  return <span className={`badge ${tone}`}>{children}</span>;
+}
+
+function Empty({ title, text }) {
+  return (
+    <div className="empty">
+      <div className="empty-mark">○</div>
+      <h3>{title}</h3>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function Spinner() {
+  return <div className="spinner" aria-label="Завантаження" />;
+}
+
+function Dialog({ title, subtitle, onClose, children, wide = false }) {
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="dialog-head">
+          <div>
+            <h2>{title}</h2>
+            {subtitle && <p>{subtitle}</p>}
+          </div>
+          <IconButton onClick={onClose} aria-label="Закрити">×</IconButton>
+        </div>
+        <div className="dialog-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, hint, children, full = false }) {
+  return (
+    <label className={`field ${full ? 'full' : ''}`}>
+      <span>{label}</span>
+      {children}
+      {hint && <small>{hint}</small>}
+    </label>
+  );
+}
+
+function PageHead({ eyebrow, title, subtitle, actions }) {
+  return (
+    <header className="page-head">
+      <div>
+        <div className="eyebrow">{eyebrow}</div>
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
+      </div>
+      {actions && <div className="page-actions">{actions}</div>}
+    </header>
+  );
+}
+
+function Login({ initialBase, onLogin }) {
+  const [server, setServer] = useState(initialBase);
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [showServer, setShowServer] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const base = cleanBase(server);
+      const result = await request(base, '', 'POST', '/api/login', { login, password });
+      onLogin(base, result);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="login-screen">
+      <section className="login-brand">
+        <div className="brand-orbit">
+          <div className="brand-core">S</div>
+        </div>
+        <div className="login-brand-copy">
+          <div className="eyebrow light">PSYCHOLOGICAL CARE PLATFORM</div>
+          <h1>Простір, де допомога має структуру.</h1>
+          <p>SOLVIA об’єднує реєстратуру, психологів і керівника центру, не змішуючи приватні записи з адміністративними даними.</p>
+        </div>
+        <div className="privacy-note">
+          <span>●</span>
+          <div>
+            <strong>Privacy by role</strong>
+            <small>Кожна роль бачить лише той обсяг інформації, який потрібен для роботи.</small>
+          </div>
+        </div>
+      </section>
+
+      <section className="login-panel">
+        <form className="login-card" onSubmit={submit}>
+          <div className="product">
+            <div className="product-mark">S</div>
+            <div>
+              <strong>SOLVIA</strong>
+              <span>by QureMed</span>
+            </div>
+          </div>
+
+          <div className="login-copy">
+            <h2>Вхід до центру</h2>
+            <p>Використайте персональний обліковий запис працівника.</p>
+          </div>
+
+          {error && <div className="alert error">{error}</div>}
+
+          <Field label="Логін" full>
+            <input value={login} onChange={(e) => setLogin(e.target.value)} autoFocus autoComplete="username" placeholder="Ваш логін" required />
+          </Field>
+
+          <Field label="Пароль" full>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••••••" required />
+          </Field>
+
+          <Button type="submit" className="login-submit" disabled={busy}>
+            {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
+          </Button>
+
+          <button type="button" className="server-toggle" onClick={() => setShowServer((v) => !v)}>
+            {showServer ? 'Сховати адресу сервера' : 'Налаштувати адресу сервера'}
+          </button>
+
+          {showServer && (
+            <Field label="Адреса SolviaServer" hint="На цьому ПК: http://127.0.0.1:8765" full>
+              <input value={server} onChange={(e) => setServer(e.target.value)} spellCheck="false" />
+            </Field>
+          )}
+
+          <div className="login-foot">Версія 0.2 • React Desktop</div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function Dashboard({ api }) {
+  const [stats, setStats] = useState(null);
+  const [from, setFrom] = useState(monthStart());
+  const [to, setTo] = useState(localDate());
+  const [error, setError] = useState('');
+
+  async function load() {
+    setError('');
+    try {
+      setStats(await api('GET', `/api/stats?from=${from}&to=${to}`));
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const cards = stats ? [
+    ['Усього пацієнтів', stats.total_patients, 'У базі центру'],
+    ['Нові звернення', stats.new_patients, 'За обраний період'],
+    ['Консультації', stats.consultations, 'Збережені психологами'],
+    ['Повторні прийоми', stats.repeat_visits, 'Пацієнти з попередньою історією'],
+    ['Скасовані записи', stats.appointments?.cancelled || 0, 'У календарі']
+  ] : [];
+
+  return (
+    <>
+      <PageHead
+        eyebrow="КЕРІВНИЦТВО"
+        title="Огляд центру"
+        subtitle="Операційна статистика без доступу до приватних нотаток психологів."
+        actions={
+          <div className="date-range">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <span>—</span>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <Button variant="secondary" onClick={load}>Оновити</Button>
+          </div>
+        }
+      />
+
+      {error && <div className="alert error">{error}</div>}
+      {!stats ? <Spinner /> : (
+        <>
+          <div className="stat-grid">
+            {cards.map(([label, value, hint], index) => (
+              <article className="stat-card" key={label}>
+                <div className="stat-index">0{index + 1}</div>
+                <strong>{value}</strong>
+                <h3>{label}</h3>
+                <p>{hint}</p>
+              </article>
+            ))}
+          </div>
+
+          <section className="surface">
+            <div className="section-head">
+              <div>
+                <div className="eyebrow">НАВАНТАЖЕННЯ КОМАНДИ</div>
+                <h2>Психологи</h2>
+              </div>
+              <Badge tone="forest">{stats.load?.length || 0} спеціалістів</Badge>
+            </div>
+
+            {!stats.load?.length ? <Empty title="Немає даних" text="Додайте психологів і записи в календар." /> : (
+              <div className="load-list">
+                {stats.load.map((item) => {
+                  const hours = Number(item.hours || 0);
+                  const width = Math.min(100, hours * 5);
+                  return (
+                    <div className="load-row" key={item.name}>
+                      <div className="avatar">{String(item.name || '?').slice(0, 1).toUpperCase()}</div>
+                      <div className="load-main">
+                        <div className="load-label">
+                          <strong>{item.name}</strong>
+                          <span>{item.appointments} записів · {hours} год</span>
+                        </div>
+                        <div className="progress"><span style={{ width: `${width}%` }} /></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </>
+  );
+}
+
+function Calendar({ api, role, openPatient }) {
+  const [date, setDate] = useState(localDate());
+  const [appointments, setAppointments] = useState([]);
+  const [meta, setMeta] = useState({ psychologists: [], rooms: [] });
+  const [patients, setPatients] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [dialog, setDialog] = useState('');
+  const [error, setError] = useState('');
+  const [slots, setSlots] = useState([]);
+  const [booking, setBooking] = useState({
+    psychologist_id: '',
+    room_id: '',
+    start: '09:00',
+    end: '10:00',
+    kind: 'individual',
+    patient_ids: []
+  });
+  const [slotForm, setSlotForm] = useState({ psychologist_id: '', room_id: '' });
+
+  const canSchedule = role === 'admin' || role === 'reception';
+
+  async function load(targetDate = date) {
+    setError('');
+    try {
+      const tasks = [api('GET', '/api/meta'), api('GET', `/api/appointments?date=${targetDate}`)];
+      if (canSchedule) tasks.push(api('GET', '/api/patients'));
+      const [m, a, p = []] = await Promise.all(tasks);
+      setMeta(m);
+      setAppointments(a);
+      setPatients(p);
+      setSelected(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => { load(date); }, [date]);
+
+  function openNew() {
+    setBooking({
+      psychologist_id: meta.psychologists?.[0]?.id || '',
+      room_id: meta.rooms?.[0]?.id || '',
+      start: '09:00',
+      end: '10:00',
+      kind: 'individual',
+      patient_ids: []
+    });
+    setDialog('booking');
+  }
+
+  function openEdit() {
+    if (!selected) return;
+    setBooking({
+      psychologist_id: selected.psychologist_id,
+      room_id: selected.room_id,
+      start: selected.start.slice(11, 16),
+      end: selected.end.slice(11, 16),
+      kind: selected.kind,
+      patient_ids: selected.patients.map((p) => p.id)
+    });
+    setDialog('edit');
+  }
+
+  async function saveBooking(e) {
+    e.preventDefault();
+    try {
+      const edit = dialog === 'edit';
+      let ids = booking.patient_ids.map(Number).filter(Boolean);
+      if (booking.kind === 'individual') ids = ids.slice(0, 1);
+      if (!ids.length) throw new Error('Оберіть хоча б одного пацієнта.');
+
+      const body = {
+        psychologist_id: Number(booking.psychologist_id),
+        room_id: Number(booking.room_id),
+        start: `${date}T${booking.start}`,
+        end: `${date}T${booking.end}`,
+        kind: booking.kind,
+        patient_ids: ids
+      };
+
+      await api(edit ? 'PATCH' : 'POST', edit ? `/api/appointments/${selected.id}` : '/api/appointments', body);
+      setDialog('');
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function cancelAppointment() {
+    if (!selected) return;
+    if (!window.confirm('Скасувати цей запис?')) return;
+    try {
+      await api('PATCH', `/api/appointments/${selected.id}`, { status: 'cancelled' });
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function findSlots(e) {
+    e.preventDefault();
+    try {
+      const result = await api(
+        'GET',
+        `/api/slots?date=${date}&psychologist_id=${slotForm.psychologist_id}&room_id=${slotForm.room_id}`
+      );
+      setSlots(result);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  const statusLabel = (status) => status === 'completed' ? 'Проведено' : status === 'cancelled' ? 'Скасовано' : 'Заплановано';
+  const statusTone = (status) => status === 'completed' ? 'forest' : status === 'cancelled' ? 'rose' : 'sky';
+
+  return (
+    <>
+      <PageHead
+        eyebrow={role === 'psychologist' ? 'МОЯ РОБОТА' : 'РОЗКЛАД ЦЕНТРУ'}
+        title={role === 'psychologist' ? 'Мій календар' : 'Календар центру'}
+        subtitle="Один простір для індивідуальних консультацій, групових занять, кабінетів і змін."
+        actions={
+          <>
+            <input className="date-control" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            {canSchedule && <Button variant="secondary" onClick={() => { setSlots([]); setSlotForm({ psychologist_id: meta.psychologists?.[0]?.id || '', room_id: meta.rooms?.[0]?.id || '' }); setDialog('slots'); }}>Вільні години</Button>}
+            {canSchedule && <Button onClick={openNew}>+ Новий запис</Button>}
+          </>
+        }
+      />
+
+      {error && <div className="alert error">{error}</div>}
+
+      <div className="calendar-layout">
+        <section className="surface calendar-surface">
+          <div className="section-head compact">
+            <div>
+              <div className="eyebrow">ДЕНЬ</div>
+              <h2>{date}</h2>
+            </div>
+            <Badge tone="stone">{appointments.length} подій</Badge>
+          </div>
+
+          {!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
+            <div className="appointment-list">
+              {appointments.map((item) => (
+                <button
+                  key={item.id}
+                  className={`appointment ${selected?.id === item.id ? 'selected' : ''} ${item.status}`}
+                  onClick={() => setSelected(item)}
+                >
+                  <div className="appointment-time">
+                    <strong>{item.start.slice(11, 16)}</strong>
+                    <span>{item.end.slice(11, 16)}</span>
+                  </div>
+                  <div className="appointment-main">
+                    <div className="appointment-top">
+                      <strong>{item.kind === 'group' ? 'Групове заняття' : item.patients?.[0]?.name || 'Консультація'}</strong>
+                      <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                    </div>
+                    {item.kind === 'group' && <p>{item.patients.map((p) => p.name).join(', ')}</p>}
+                    <div className="appointment-meta">
+                      <span>{item.psychologist}</span>
+                      <span>•</span>
+                      <span>{item.room}</span>
+                    </div>
+                    {role === 'psychologist' && item.patients?.length > 0 && (
+                      <div className="patient-chips">
+                        {item.patients.map((p) => (
+                          <span
+                            key={p.id}
+                            className="patient-chip"
+                            onClick={(e) => { e.stopPropagation(); openPatient(p.id); }}
+                          >
+                            {p.name} →
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <aside className="surface context-panel">
+          <div className="eyebrow">ДЕТАЛІ</div>
+          {!selected ? (
+            <div className="context-empty">
+              <div className="context-symbol">↗</div>
+              <h3>Оберіть запис</h3>
+              <p>Тут з’являться деталі зустрічі та доступні дії.</p>
+            </div>
+          ) : (
+            <div className="context-content">
+              <h2>{selected.kind === 'group' ? 'Групове заняття' : selected.patients?.[0]?.name}</h2>
+              <dl>
+                <div><dt>Час</dt><dd>{selected.start.slice(11, 16)} — {selected.end.slice(11, 16)}</dd></div>
+                <div><dt>Психолог</dt><dd>{selected.psychologist}</dd></div>
+                <div><dt>Кабінет</dt><dd>{selected.room}</dd></div>
+                <div><dt>Статус</dt><dd>{statusLabel(selected.status)}</dd></div>
+              </dl>
+              <div className="context-people">
+                <span>Учасники</span>
+                {selected.patients.map((p) => <strong key={p.id}>{p.name}</strong>)}
+              </div>
+              {canSchedule && selected.status === 'scheduled' && (
+                <div className="context-actions">
+                  <Button variant="secondary" onClick={openEdit}>Перенести / змінити</Button>
+                  <Button variant="danger" onClick={cancelAppointment}>Скасувати</Button>
+                </div>
+              )}
+            </div>
+          )}
+        </aside>
+      </div>
+
+      {(dialog === 'booking' || dialog === 'edit') && (
+        <Dialog title={dialog === 'edit' ? 'Змінити запис' : 'Новий запис'} subtitle={date} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={saveBooking}>
+            <Field label="Психолог">
+              <select value={booking.psychologist_id} onChange={(e) => setBooking({ ...booking, psychologist_id: e.target.value })} required>
+                {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Кабінет">
+              <select value={booking.room_id} onChange={(e) => setBooking({ ...booking, room_id: e.target.value })} required>
+                {meta.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Початок">
+              <input type="time" min="08:00" max="19:00" value={booking.start} onChange={(e) => setBooking({ ...booking, start: e.target.value })} required />
+            </Field>
+            <Field label="Завершення">
+              <input type="time" min="09:00" max="20:00" value={booking.end} onChange={(e) => setBooking({ ...booking, end: e.target.value })} required />
+            </Field>
+            <Field label="Тип зустрічі" full>
+              <select value={booking.kind} onChange={(e) => setBooking({ ...booking, kind: e.target.value })}>
+                <option value="individual">Індивідуальна консультація</option>
+                <option value="group">Групове заняття</option>
+              </select>
+            </Field>
+            <Field label={booking.kind === 'group' ? 'Учасники' : 'Пацієнт'} hint={booking.kind === 'group' ? 'Ctrl + клік для вибору кількох учасників.' : ''} full>
+              <select
+                multiple={booking.kind === 'group'}
+                size={booking.kind === 'group' ? 6 : 1}
+                value={booking.kind === 'group' ? booking.patient_ids.map(String) : String(booking.patient_ids[0] || '')}
+                onChange={(e) => {
+                  const values = booking.kind === 'group'
+                    ? [...e.target.selectedOptions].map((o) => Number(o.value))
+                    : [Number(e.target.value)];
+                  setBooking({ ...booking, patient_ids: values.filter(Boolean) });
+                }}
+                disabled={dialog === 'edit'}
+                required
+              >
+                {booking.kind !== 'group' && <option value="">Оберіть пацієнта</option>}
+                {patients.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.psychologist}</option>)}
+              </select>
+            </Field>
+            {dialog === 'edit' && <div className="alert info full-span">Учасники при перенесенні зберігаються без змін.</div>}
+            <div className="form-actions full-span">
+              <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
+              <Button type="submit">Зберегти запис</Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'slots' && (
+        <Dialog title="Вільні години" subtitle={date} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={findSlots}>
+            <Field label="Психолог">
+              <select value={slotForm.psychologist_id} onChange={(e) => setSlotForm({ ...slotForm, psychologist_id: e.target.value })} required>
+                {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Кабінет">
+              <select value={slotForm.room_id} onChange={(e) => setSlotForm({ ...slotForm, room_id: e.target.value })} required>
+                {meta.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </Field>
+            <div className="form-actions full-span"><Button type="submit">Показати слоти</Button></div>
+          </form>
+          {slots.length > 0 && (
+            <div className="slot-grid">
+              {slots.map((slot) => <button key={slot} className="slot" onClick={() => { setDialog(''); setBooking({ ...booking, start: slot, end: `${String(Number(slot.slice(0, 2)) + 1).padStart(2, '0')}:00` }); }}>{slot}</button>)}
+            </div>
+          )}
+          {slots.length === 0 && <p className="muted centered">Оберіть параметри та натисніть «Показати слоти».</p>}
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function Patients({ api, role, openPatient }) {
+  const [patients, setPatients] = useState([]);
+  const [families, setFamilies] = useState([]);
+  const [meta, setMeta] = useState({ psychologists: [], categories: [] });
+  const [search, setSearch] = useState('');
+  const [dialog, setDialog] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    name: '',
+    phone: '',
+    dob: '',
+    category: '',
+    psychologist_id: '',
+    family_id: '',
+    family_role: ''
+  });
+
+  const canCreate = role === 'admin' || role === 'reception';
+
+  async function load() {
+    setError('');
+    try {
+      const tasks = [api('GET', '/api/patients'), api('GET', '/api/meta')];
+      if (canCreate) tasks.push(api('GET', '/api/families'));
+      const [p, m, f = []] = await Promise.all(tasks);
+      setPatients(p);
+      setMeta(m);
+      setFamilies(f);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return patients;
+    return patients.filter((p) => [p.name, p.phone, p.category, p.psychologist, p.family].some((v) => String(v || '').toLowerCase().includes(q)));
+  }, [patients, search]);
+
+  function openCreate() {
+    setForm({
+      name: '',
+      phone: '',
+      dob: '',
+      category: meta.categories?.[0] || '',
+      psychologist_id: meta.psychologists?.[0]?.id || '',
+      family_id: '',
+      family_role: ''
+    });
+    setDialog(true);
+  }
+
+  async function createPatient(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/patients', {
+        name: form.name,
+        phone: form.phone,
+        dob: form.dob,
+        category: form.category,
+        psychologist_id: Number(form.psychologist_id),
+        family_id: form.family_id ? Number(form.family_id) : null,
+        family_role: form.family_role
+      });
+      setDialog(false);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  return (
+    <>
+      <PageHead
+        eyebrow={role === 'psychologist' ? 'МОЇ ПАЦІЄНТИ' : 'РЕЄСТРАТУРА'}
+        title={role === 'psychologist' ? 'Мої пацієнти' : 'Пацієнти'}
+        subtitle={role === 'psychologist' ? 'Тільки пацієнти, закріплені за вашим обліковим записом.' : 'Реєстраційні дані, сімейні зв’язки та призначений психолог.'}
+        actions={canCreate && <Button onClick={openCreate}>+ Додати пацієнта</Button>}
+      />
+
+      {error && <div className="alert error">{error}</div>}
+
+      <section className="surface">
+        <div className="toolbar">
+          <div className="search-box">
+            <span>⌕</span>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук за ПІБ, телефоном, категорією…" />
+          </div>
+          <Badge tone="stone">{filtered.length} записів</Badge>
+        </div>
+
+        {!filtered.length ? <Empty title="Нічого не знайдено" text="Спробуйте змінити запит або створіть нового пацієнта." /> : (
+          <div className="patient-table">
+            <div className="patient-table-head">
+              <span>Пацієнт</span>
+              <span>Категорія</span>
+              <span>Психолог</span>
+              <span>Сім’я</span>
+              <span />
+            </div>
+            {filtered.map((p) => (
+              <button className="patient-row" key={p.id} onClick={() => openPatient(p.id)}>
+                <span className="patient-identity">
+                  <span className="avatar small">{p.name.slice(0, 1).toUpperCase()}</span>
+                  <span><strong>{p.name}</strong><small>{p.phone}</small></span>
+                </span>
+                <span><Badge tone={categoryTone[p.category] || 'stone'}>{p.category}</Badge></span>
+                <span>{p.psychologist}</span>
+                <span>{p.family || '—'}</span>
+                <span className="row-arrow">→</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {dialog && (
+        <Dialog title="Новий пацієнт" subtitle="Реєстраційна картка" onClose={() => setDialog(false)} wide>
+          <form className="form-grid" onSubmit={createPatient}>
+            <Field label="ПІБ" full>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={150} />
+            </Field>
+            <Field label="Телефон">
+              <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+380…" required />
+            </Field>
+            <Field label="Дата народження">
+              <input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} required />
+            </Field>
+            <Field label="Категорія">
+              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
+                {meta.categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+            <Field label="Психолог">
+              <select value={form.psychologist_id} onChange={(e) => setForm({ ...form, psychologist_id: e.target.value })} required>
+                {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Сім’я">
+              <select value={form.family_id} onChange={(e) => setForm({ ...form, family_id: e.target.value })}>
+                <option value="">Без сімейного зв’язку</option>
+                {families.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Роль у сім’ї" hint="Напр.: військовий, партнерка, дитина.">
+              <input value={form.family_role} onChange={(e) => setForm({ ...form, family_role: e.target.value })} />
+            </Field>
+            <div className="form-actions full-span">
+              <Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button>
+              <Button type="submit">Створити пацієнта</Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function PatientCard({ api, role, patientId, back }) {
+  const [card, setCard] = useState(null);
+  const [error, setError] = useState('');
+  const [dialog, setDialog] = useState('');
+  const [consultDate, setConsultDate] = useState(localDate());
+  const [dayAppointments, setDayAppointments] = useState([]);
+  const [consultation, setConsultation] = useState({ appointment_id: '', note: '', goals: '', next_plan: '', homework: '' });
+  const [assessmentLink, setAssessmentLink] = useState('');
+
+  const isPsychologist = role === 'psychologist';
+
+  async function load() {
+    setError('');
+    try {
+      setCard(await api('GET', `/api/patients/${patientId}`));
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => { load(); }, [patientId]);
+
+  async function loadConsultationsForDay(date) {
+    try {
+      const apps = await api('GET', `/api/appointments?date=${date}`);
+      setDayAppointments(apps);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  function openConsultation() {
+    setConsultDate(localDate());
+    setConsultation({ appointment_id: '', note: '', goals: '', next_plan: '', homework: '' });
+    setDayAppointments([]);
+    setDialog('consultation');
+    loadConsultationsForDay(localDate());
+  }
+
+  const eligibleAppointments = useMemo(() => {
+    if (!card) return [];
+    const completed = new Set((card.consultations || []).map((c) => Number(c.appointment_id)));
+    return dayAppointments.filter((a) =>
+      a.status === 'scheduled' &&
+      !completed.has(Number(a.id)) &&
+      a.patients?.some((p) => Number(p.id) === Number(patientId))
+    );
+  }, [dayAppointments, card, patientId]);
+
+  async function saveConsultation(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/consultations', {
+        patient_id: Number(patientId),
+        appointment_id: Number(consultation.appointment_id),
+        note: consultation.note,
+        goals: consultation.goals,
+        next_plan: consultation.next_plan,
+        homework: consultation.homework
+      });
+      setDialog('');
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function assignAssessment() {
+    try {
+      const result = await api('POST', '/api/assessments', { patient_id: Number(patientId) });
+      const base = localStorage.getItem('solvia_api') || '';
+      const link = `${base}${result.link}`;
+      setAssessmentLink(link);
+      setDialog('assessment');
+      try { await navigator.clipboard.writeText(link); } catch {}
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  if (error && !card) {
+    return <>
+      <Button variant="ghost" onClick={back}>← Назад</Button>
+      <div className="alert error">{error}</div>
+    </>;
+  }
+  if (!card) return <Spinner />;
+
+  const assessments = card.assessments || [];
+  const completedAssessments = assessments.filter((a) => a.completed !== null && a.score !== null);
+
+  return (
+    <>
+      <div className="patient-card-top">
+        <button className="back-link" onClick={back}>← До списку</button>
+        <div className="patient-title">
+          <div className="avatar large">{card.name.slice(0, 1).toUpperCase()}</div>
+          <div>
+            <div className="eyebrow">КАРТКА ПАЦІЄНТА</div>
+            <h1>{card.name}</h1>
+            <div className="patient-subline">
+              <Badge tone={categoryTone[card.category] || 'stone'}>{card.category}</Badge>
+              <span>{card.phone}</span>
+              <span>Народження: {card.dob}</span>
+            </div>
+          </div>
+        </div>
+        {isPsychologist && (
+          <div className="page-actions">
+            <Button variant="secondary" onClick={assignAssessment}>Призначити анкету</Button>
+            <Button onClick={openConsultation}>+ Додати консультацію</Button>
+          </div>
+        )}
+      </div>
+
+      {error && <div className="alert error">{error}</div>}
+
+      <div className="patient-card-grid">
+        <section className="surface">
+          <div className="section-head compact">
+            <div>
+              <div className="eyebrow">РЕЄСТРАЦІЙНІ ДАНІ</div>
+              <h2>Профіль</h2>
+            </div>
+          </div>
+          <dl className="profile-list">
+            <div><dt>Телефон</dt><dd>{card.phone}</dd></div>
+            <div><dt>Дата народження</dt><dd>{card.dob}</dd></div>
+            <div><dt>Категорія</dt><dd>{card.category}</dd></div>
+            <div><dt>Сім’я</dt><dd>{card.family || 'Не вказано'}</dd></div>
+            <div><dt>Роль у сім’ї</dt><dd>{card.family_role || '—'}</dd></div>
+          </dl>
+        </section>
+
+        <section className="surface">
+          <div className="section-head compact">
+            <div>
+              <div className="eyebrow">ПРИВАТНІСТЬ</div>
+              <h2>{isPsychologist ? 'Доступ психолога' : 'Захищений розділ'}</h2>
+            </div>
+          </div>
+          <div className={`privacy-card ${isPsychologist ? 'allowed' : 'locked'}`}>
+            <div className="privacy-icon">{isPsychologist ? '✓' : '⌁'}</div>
+            <div>
+              <strong>{isPsychologist ? 'Приватні записи доступні' : 'Нотатки психолога приховані'}</strong>
+              <p>{isPsychologist ? 'Ви бачите записи лише цього пацієнта, який закріплений за вашим профілем.' : 'Реєстратура та адміністративні ролі не отримують текст консультацій.'}</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {isPsychologist && (
+        <>
+          <section className="surface">
+            <div className="section-head">
+              <div>
+                <div className="eyebrow">КЛІНІЧНИЙ ЩОДЕННИК</div>
+                <h2>Історія консультацій</h2>
+              </div>
+              <Badge tone="forest">{card.consultations?.length || 0} записів</Badge>
+            </div>
+
+            {!card.consultations?.length ? <Empty title="Ще немає консультацій" text="Після проведеної зустрічі додайте приватну нотатку, цілі та наступний план." /> : (
+              <div className="consultation-list">
+                {card.consultations.map((c) => (
+                  <article className="consultation-card" key={c.id}>
+                    <div className="consultation-date">{c.created?.replace('T', ' ')}</div>
+                    <div className="consultation-note">
+                      <div className="eyebrow">ПРИВАТНА НОТАТКА</div>
+                      <p>{c.note}</p>
+                    </div>
+                    <div className="consultation-grid">
+                      <div><span>Цілі роботи</span><p>{c.goals || '—'}</p></div>
+                      <div><span>Наступна консультація</span><p>{c.next_plan || '—'}</p></div>
+                      <div><span>Домашнє завдання</span><p>{c.homework || '—'}</p></div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="surface">
+            <div className="section-head">
+              <div>
+                <div className="eyebrow">САМОСПОСТЕРЕЖЕННЯ</div>
+                <h2>Динаміка анкет</h2>
+              </div>
+              <Badge tone="sky">{completedAssessments.length} завершено</Badge>
+            </div>
+
+            {!assessments.length ? <Empty title="Анкет ще немає" text="Призначте пацієнту коротку анкету самопочуття." /> : (
+              <div className="assessment-list">
+                {assessments.map((a, index) => {
+                  const previous = [...completedAssessments].filter((x) => x.id < a.id).at(-1);
+                  const diff = a.score !== null && previous?.score !== null ? Number(a.score) - Number(previous.score) : null;
+                  return (
+                    <div className="assessment-row" key={a.id}>
+                      <div>
+                        <strong>{a.completed ? 'Заповнено' : 'Очікує відповіді'}</strong>
+                        <span>{a.created?.replace('T', ' ')}</span>
+                      </div>
+                      <div className="assessment-score">
+                        {a.completed ? <><strong>{a.score}<small>/30</small></strong>{diff !== null && <Badge tone={diff >= 0 ? 'forest' : 'rose'}>{diff >= 0 ? '+' : ''}{diff}</Badge>}</> : <Badge tone="sand">Посилання активне</Badge>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="legal-note">«Самопочуття сьогодні» — авторський інструмент самоспостереження, а не валідована діагностична шкала.</p>
+          </section>
+        </>
+      )}
+
+      {dialog === 'consultation' && (
+        <Dialog title="Підсумок консультації" subtitle={card.name} onClose={() => setDialog('')} wide>
+          <form className="form-grid" onSubmit={saveConsultation}>
+            <Field label="Дата запису">
+              <input type="date" value={consultDate} onChange={(e) => { setConsultDate(e.target.value); setConsultation({ ...consultation, appointment_id: '' }); loadConsultationsForDay(e.target.value); }} />
+            </Field>
+            <Field label="Запис у календарі">
+              <select value={consultation.appointment_id} onChange={(e) => setConsultation({ ...consultation, appointment_id: e.target.value })} required>
+                <option value="">Оберіть проведений/поточний запис</option>
+                {eligibleAppointments.map((a) => <option key={a.id} value={a.id}>{a.start.slice(11, 16)} — {a.room}</option>)}
+              </select>
+            </Field>
+            {!eligibleAppointments.length && <div className="alert info full-span">На цю дату немає незавершеного запису цього пацієнта. Майбутню консультацію сервер не дозволить завершити достроково.</div>}
+            <Field label="Приватна нотатка" full>
+              <textarea rows="6" value={consultation.note} onChange={(e) => setConsultation({ ...consultation, note: e.target.value })} required />
+            </Field>
+            <Field label="Цілі роботи" full>
+              <textarea rows="3" value={consultation.goals} onChange={(e) => setConsultation({ ...consultation, goals: e.target.value })} />
+            </Field>
+            <Field label="План наступної консультації" full>
+              <textarea rows="3" value={consultation.next_plan} onChange={(e) => setConsultation({ ...consultation, next_plan: e.target.value })} />
+            </Field>
+            <Field label="Домашнє завдання" full>
+              <textarea rows="3" value={consultation.homework} onChange={(e) => setConsultation({ ...consultation, homework: e.target.value })} />
+            </Field>
+            <div className="form-actions full-span">
+              <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
+              <Button type="submit">Зберегти консультацію</Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'assessment' && (
+        <Dialog title="Анкету призначено" subtitle="Посилання діє 7 днів і приймає одну відповідь." onClose={() => setDialog('')}>
+          <div className="link-box">{assessmentLink}</div>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={async () => { try { await navigator.clipboard.writeText(assessmentLink); } catch {} }}>Скопіювати посилання</Button>
+            <Button onClick={() => setDialog('')}>Готово</Button>
+          </div>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function Families({ api }) {
+  const [families, setFamilies] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [name, setName] = useState('');
+  const [dialog, setDialog] = useState(false);
+  const [error, setError] = useState('');
+
+  async function load() {
+    try {
+      const [f, p] = await Promise.all([api('GET', '/api/families'), api('GET', '/api/patients')]);
+      setFamilies(f);
+      setPatients(p);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function createFamily(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/families', { name });
+      setName('');
+      setDialog(false);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  return (
+    <>
+      <PageHead eyebrow="СІМЕЙНА СИСТЕМА" title="Сім’ї" subtitle="Одна сім’я в системі, але приватні психологічні записи кожного учасника залишаються окремими." actions={<Button onClick={() => setDialog(true)}>+ Нова сім’я</Button>} />
+      {error && <div className="alert error">{error}</div>}
+      <div className="family-grid">
+        {families.map((f) => {
+          const members = patients.filter((p) => Number(p.family_id) === Number(f.id));
+          return (
+            <article className="family-card" key={f.id}>
+              <div className="family-symbol">⌂</div>
+              <h3>{f.name}</h3>
+              <p>{members.length} учасників</p>
+              <div className="family-members">
+                {members.length ? members.map((m) => <span key={m.id}>{m.name}<small>{m.family_role || m.category}</small></span>) : <small>Ще немає учасників</small>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {!families.length && <section className="surface"><Empty title="Сімей ще немає" text="Створіть сім’ю, а потім оберіть її в картці нового пацієнта." /></section>}
+
+      {dialog && (
+        <Dialog title="Нова сім’я" onClose={() => setDialog(false)}>
+          <form onSubmit={createFamily}>
+            <Field label="Назва сім’ї" full><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Напр. Родина Коваленків" required /></Field>
+            <div className="form-actions"><Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button><Button type="submit">Створити</Button></div>
+          </form>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function Team({ api }) {
+  const [users, setUsers] = useState([]);
+  const [dialog, setDialog] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ name: '', login: '', password: '', role: 'psychologist' });
+
+  async function load() {
+    try { setUsers(await api('GET', '/api/users')); } catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function createUser(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/users', form);
+      setDialog(false);
+      setForm({ name: '', login: '', password: '', role: 'psychologist' });
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  return (
+    <>
+      <PageHead eyebrow="АДМІНІСТРУВАННЯ" title="Команда центру" subtitle="Персональні облікові записи та ролі без спільних паролів." actions={<Button onClick={() => setDialog(true)}>+ Додати працівника</Button>} />
+      {error && <div className="alert error">{error}</div>}
+      <section className="surface">
+        <div className="team-grid">
+          {users.map((u) => (
+            <article className="team-card" key={u.id}>
+              <div className="avatar">{u.name.slice(0, 1).toUpperCase()}</div>
+              <div><strong>{u.name}</strong><span>@{u.login}</span></div>
+              <Badge tone={u.active ? 'forest' : 'stone'}>{roleLabels[u.role] || u.role}</Badge>
+            </article>
+          ))}
+        </div>
+      </section>
+      {dialog && (
+        <Dialog title="Новий працівник" onClose={() => setDialog(false)}>
+          <form className="form-grid" onSubmit={createUser}>
+            <Field label="ПІБ" full><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
+            <Field label="Логін"><input value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} required /></Field>
+            <Field label="Роль">
+              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                <option value="psychologist">Психолог</option>
+                <option value="reception">Реєстратура</option>
+                <option value="director">Керівник центру</option>
+                <option value="admin">Адміністратор</option>
+              </select>
+            </Field>
+            <Field label="Пароль" hint="Мінімум 12 символів." full><input type="password" minLength="12" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required /></Field>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button><Button type="submit">Створити акаунт</Button></div>
+          </form>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function Rooms({ api }) {
+  const [rooms, setRooms] = useState([]);
+  const [name, setName] = useState('');
+  const [dialog, setDialog] = useState(false);
+  const [error, setError] = useState('');
+
+  async function load() {
+    try {
+      const meta = await api('GET', '/api/meta');
+      setRooms(meta.rooms || []);
+    } catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function createRoom(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/rooms', { name });
+      setName('');
+      setDialog(false);
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  return (
+    <>
+      <PageHead eyebrow="ІНФРАСТРУКТУРА" title="Кабінети" subtitle="Приміщення, які беруть участь у перевірці конфліктів календаря." actions={<Button onClick={() => setDialog(true)}>+ Додати кабінет</Button>} />
+      {error && <div className="alert error">{error}</div>}
+      <div className="room-grid">
+        {rooms.map((r, i) => <article className="room-card" key={r.id}><span>0{i + 1}</span><div><strong>{r.name}</strong><small>Доступний для планування</small></div></article>)}
+      </div>
+      {dialog && (
+        <Dialog title="Новий кабінет" onClose={() => setDialog(false)}>
+          <form onSubmit={createRoom}>
+            <Field label="Назва" full><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Напр. Кабінет 4" required /></Field>
+            <div className="form-actions"><Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button><Button type="submit">Створити</Button></div>
+          </form>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function Audit({ api }) {
+  const [rows, setRows] = useState([]);
+  const [error, setError] = useState('');
+  async function load() {
+    try { setRows(await api('GET', '/api/audit')); } catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  return (
+    <>
+      <PageHead eyebrow="БЕЗПЕКА" title="Журнал дій" subtitle="Хто і коли працював із системою. Тексти психологічних нотаток у журнал не записуються." actions={<Button variant="secondary" onClick={load}>Оновити</Button>} />
+      {error && <div className="alert error">{error}</div>}
+      <section className="surface">
+        <div className="audit-table">
+          <div className="audit-head"><span>Час</span><span>Працівник</span><span>Дія</span><span>Об’єкт</span><span>ID</span></div>
+          {rows.map((r) => <div className="audit-row" key={r.id}><span>{r.created?.replace('T', ' ')}</span><strong>{r.actor || 'Система'}</strong><span>{r.event}</span><span>{r.entity}</span><span>#{r.entity_id}</span></div>)}
+        </div>
+        {!rows.length && <Empty title="Журнал порожній" text="Події з’являться після роботи користувачів." />}
+      </section>
+    </>
+  );
+}
+
+function Shell({ api, user, onLogout }) {
+  const [page, setPage] = useState(defaultPage(user.role));
+  const [patientId, setPatientId] = useState(null);
+  const navigation = navFor(user.role);
+
+  function openPatient(id) {
+    setPatientId(id);
+    setPage('patient-card');
+  }
+
+  function navigate(target) {
+    setPatientId(null);
+    setPage(target);
+  }
+
+  const content = (() => {
+    if (page === 'patient-card' && patientId) return <PatientCard api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} />;
+    if (page === 'dashboard') return <Dashboard api={api} />;
+    if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
+    if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} />;
+    if (page === 'families') return <Families api={api} />;
+    if (page === 'team') return <Team api={api} />;
+    if (page === 'rooms') return <Rooms api={api} />;
+    if (page === 'audit') return <Audit api={api} />;
+    return null;
+  })();
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div className="product-mark inverse">S</div>
+          <div><strong>SOLVIA</strong><span>by QureMed</span></div>
+        </div>
+
+        <nav>
+          <div className="nav-label">РОБОЧИЙ ПРОСТІР</div>
+          {navigation.map(([key, label]) => (
+            <button key={key} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
+              <span className="nav-icon">{icons[key]}</span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-spacer" />
+
+        <div className="sidebar-security">
+          <span className="security-dot" />
+          <div><strong>Локальний контур</strong><small>Дані центру на власному сервері</small></div>
+        </div>
+
+        <div className="user-card">
+          <div className="avatar inverse">{user.name.slice(0, 1).toUpperCase()}</div>
+          <div className="user-copy"><strong>{user.name}</strong><span>{roleLabels[user.role]}</span></div>
+          <IconButton onClick={onLogout} title="Вийти">↪</IconButton>
+        </div>
+      </aside>
+
+      <main className="workspace">
+        <div className="workspace-inner">{content}</div>
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  const queryBase = new URLSearchParams(window.location.search).get('api');
+  const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || 'http://127.0.0.1:8765');
+  const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
+  const [user, setUser] = useState(null);
+  const [booting, setBooting] = useState(Boolean(token));
+
+  useEffect(() => {
+    if (queryBase) {
+      try {
+        const base = cleanBase(queryBase);
+        localStorage.setItem('solvia_api', base);
+        setApiBase(base);
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setBooting(false);
+      return;
+    }
+    request(apiBase, token, 'GET', '/api/me')
+      .then((me) => setUser(me))
+      .catch(() => {
+        sessionStorage.removeItem('solvia_token');
+        setToken('');
+        setUser(null);
+      })
+      .finally(() => setBooting(false));
+  }, []);
+
+  function login(base, result) {
+    localStorage.setItem('solvia_api', base);
+    sessionStorage.setItem('solvia_token', result.token);
+    setApiBase(base);
+    setToken(result.token);
+    setUser(result.user);
+  }
+
+  async function logout() {
+    try { await request(apiBase, token, 'POST', '/api/logout'); } catch {}
+    sessionStorage.removeItem('solvia_token');
+    setToken('');
+    setUser(null);
+  }
+
+  async function api(method, path, body) {
+    try {
+      return await request(apiBase, token, method, path, body);
+    } catch (e) {
+      if (e.status === 401) {
+        sessionStorage.removeItem('solvia_token');
+        setToken('');
+        setUser(null);
+      }
+      throw e;
+    }
+  }
+
+  if (booting) {
+    return <div className="boot-screen"><div className="product-mark">S</div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
+  }
+
+  if (!user) return <Login initialBase={apiBase} onLogin={login} />;
+  return <Shell api={api} user={user} onLogout={logout} />;
+}
