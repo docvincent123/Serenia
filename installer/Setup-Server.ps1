@@ -1,6 +1,28 @@
 param([Parameter(Mandatory=$true)][string]$InstallDir)
 $ErrorActionPreference = 'Stop'
 
+$bootstrapLogDir = Join-Path $env:ProgramData 'QureMed\SOLVIA'
+New-Item -ItemType Directory -Force $bootstrapLogDir | Out-Null
+$installLogPath = Join-Path $bootstrapLogDir 'install.log'
+try {
+    Start-Transcript -Path $installLogPath -Append -Force | Out-Null
+} catch {
+    # Installation must still continue even if transcript cannot be started.
+}
+
+trap {
+    Write-Host ''
+    Write-Host 'SOLVIA: помилка налаштування сервера.' -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ''
+    Write-Host ('Повний журнал: ' + $installLogPath) -ForegroundColor Yellow
+    try { Stop-Transcript | Out-Null } catch {}
+    if ([Environment]::UserInteractive) {
+        Read-Host 'Натисніть Enter, щоб закрити це вікно'
+    }
+    exit 1
+}
+
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -259,3 +281,4 @@ Write-Host 'Пароль адміністратора: той, який ви щ�
 $adminLogin = $null
 Write-Host ''
 Write-Host 'Для Android встановіть QureMed-Local-CA.crt як довірений CA-сертифікат, а у застосунку введіть адресу сервера вище.'
+try { Stop-Transcript | Out-Null } catch {}
