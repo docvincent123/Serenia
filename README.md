@@ -69,8 +69,8 @@ $env:SOLVIA_API = 'https://solvia.center.local:8765'
 Visual Studio 2022 (Desktop development with C++), CMake ≥3.24, vcpkg, Node.js 22+, npm. Для тестів Python 3.11+.
 
 ```powershell
-npm install --prefix frontend
-npm run build --prefix frontend
+npm --prefix frontend install
+npm --prefix frontend run build
 cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-solvia -DVCPKG_OVERLAY_TRIPLETS=cmake/triplets -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
