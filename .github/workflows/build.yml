@@ -47,6 +47,8 @@ jobs:
           Copy-Item scripts/*.bat out/SOLVIA/
           Copy-Item README.md out/SOLVIA/
           Copy-Item docs out/SOLVIA/ -Recurse
+          New-Item -ItemType Directory -Force out/SOLVIA/licenses | Out-Null
+          Get-ChildItem build/vcpkg_installed/x64-windows-solvia/share -Filter copyright -Recurse | ForEach-Object { Copy-Item $_.FullName ("out/SOLVIA/licenses/" + $_.Directory.Name + ".txt") }
       - uses: actions/upload-artifact@v4
         with:
           name: SOLVIA-0.1.0-Windows-x64
