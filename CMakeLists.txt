@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
-find_package(unofficial-sqlite3 CONFIG REQUIRED)
+find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/server/schema.sql" SOLVIA_SCHEMA)
@@ -18,7 +18,7 @@ target_include_directories(SolviaServer PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gen
 target_link_libraries(SolviaServer PRIVATE
   nlohmann_json::nlohmann_json
   httplib::httplib
-  unofficial::sqlite3::sqlite3
+  PostgreSQL::PostgreSQL
   OpenSSL::Crypto
   OpenSSL::SSL
 )
