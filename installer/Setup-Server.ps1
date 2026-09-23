@@ -1,5 +1,5 @@
-$ErrorActionPreference = 'Stop'
 param([Parameter(Mandatory=$true)][string]$InstallDir)
+$ErrorActionPreference = 'Stop'
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -187,6 +187,12 @@ if (-not $caddy) {
     Refresh-Path
     $caddy = Get-Command caddy.exe -ErrorAction Stop
 }
+
+$settingsLines = [System.Collections.Generic.List[string]]::new()
+$settingsLines.AddRange([string[]][IO.File]::ReadAllLines($configPath))
+$settingsLines.Add('SOLVIA_CADDY_EXE=' + $caddy.Source)
+[IO.File]::WriteAllLines($configPath, $settingsLines, [Text.UTF8Encoding]::new($false))
+Protect-Path $configPath
 
 $caddyData = (Join-Path $localDir 'caddy-data').Replace('\','/')
 $caddyConfigPath = Join-Path $localDir 'Caddyfile'
