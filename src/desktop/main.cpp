@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <objbase.h>
+#include <shellapi.h>
 #include <wrl.h>
 #include <WebView2.h>
 
@@ -101,6 +102,37 @@ void createWebView(HWND hwnd) {
                                 return E_FAIL;
                             }
 
+                            EventRegistrationToken messageToken{};
+                            g_webview->add_WebMessageReceived(
+                                Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+                                    [](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                                        LPWSTR raw = nullptr;
+                                        if (FAILED(args->TryGetWebMessageAsString(&raw)) || !raw) return S_OK;
+                                        std::wstring message(raw);
+                                        CoTaskMemFree(raw);
+                                        if (message != L"backup" && message != L"restore") return S_OK;
+
+                                        const auto script = executableDirectory() / L"installer" /
+                                            (message == L"backup" ? L"Backup-Database.ps1" : L"Restore-Database.ps1");
+                                        if (!std::filesystem::exists(script)) {
+                                            MessageBoxW(g_window, L"Не знайдено скрипт обслуговування SOLVIA.", L"SOLVIA", MB_OK | MB_ICONERROR);
+                                            return S_OK;
+                                        }
+
+                                        std::wstring parameters = L"-NoProfile -ExecutionPolicy Bypass -File \"" + script.wstring() + L"\"";
+                                        auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(
+                                            g_window, L"runas", L"powershell.exe", parameters.c_str(),
+                                            executableDirectory().c_str(), SW_SHOWNORMAL
+                                        ));
+                                        if (result <= 32 && result != ERROR_CANCELLED) {
+                                            MessageBoxW(g_window, L"Не вдалося запустити обслуговування бази.", L"SOLVIA", MB_OK | MB_ICONERROR);
+                                        }
+                                        return S_OK;
+                                    }
+                                ).Get(),
+                                &messageToken
+                            );
+
                             ComPtr<ICoreWebView2Settings> settings;
                             if (SUCCEEDED(g_webview->get_Settings(&settings)) && settings) {
                                 settings->put_AreDefaultContextMenusEnabled(FALSE);
@@ -200,7 +232,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     HWND window = CreateWindowExW(
         0,
         wc.lpszClassName,
-        L"SOLVIA 1.1 by QureMed • Центр психологічної реабілітації",
+        L"SOLVIA by QureMed • Центр психологічної реабілітації",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
