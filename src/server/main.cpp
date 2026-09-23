@@ -194,10 +194,12 @@ if(args.count("--init")||args.count("--demo")){
         J users=J::array({J::array({"Administrator","admin","admin"}),J::array({"Reception","reception","reception"}),J::array({"Psychologist","psychologist","psychologist"}),J::array({"Director","director","director"})});
         for(auto&u:users){auto pw=randomToken().substr(0,20);app.db.query("INSERT INTO users(name,login,password,role) VALUES(?,?,?,?)",{u[0],u[1],hashPassword(pw),u[2]});std::cout<<u[1].get<std::string>()<<": "<<pw<<std::endl;}
     }else{
+        const char* rawLogin=std::getenv("SOLVIA_ADMIN_LOGIN");std::string login=rawLogin?rawLogin:"";
+        check(std::regex_match(login,std::regex("[A-Za-z0-9._-]{3,64}")),"SOLVIA_ADMIN_LOGIN must contain 3-64 safe characters");
         const char* raw=std::getenv("SOLVIA_ADMIN_PASSWORD");std::string pw=raw?raw:"";
         check(pw.size()>=12&&pw.size()<=128&&pw.find('\n')==std::string::npos&&pw.find('\r')==std::string::npos,"SOLVIA_ADMIN_PASSWORD must contain 12-128 characters");
         const char* rawName=std::getenv("SOLVIA_ADMIN_NAME");std::string name=rawName&&*rawName?rawName:"Administrator";
-        app.db.query("INSERT INTO users(name,login,password,role) VALUES(?,?,?,?)",{name,"admin",hashPassword(pw),"admin"});
+        app.db.query("INSERT INTO users(name,login,password,role) VALUES(?,?,?,?)",{name,login,hashPassword(pw),"admin"});
     }
     for(auto n:{"Кабінет 1","Кабінет 2","Групова зала"})app.db.query("INSERT INTO rooms(name) VALUES(?)",{n});
     for(auto n:{"payments","reminders","consents","patient_portal","rehaflow"})app.db.query("INSERT INTO module_settings(name) VALUES(?)",{n});
