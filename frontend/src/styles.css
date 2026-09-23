@@ -1063,3 +1063,64 @@ h1, h2, h3 { letter-spacing: -.025em; }
   .check-grid { grid-template-columns: 1fr; }
   .room-actions { flex-wrap: wrap; }
 }
+
+
+.discharge-print {
+  padding: 30px;
+  border: 1px solid #dfe7df;
+  border-radius: 16px;
+  background: #fff;
+  color: #172f27;
+}
+.discharge-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 18px;
+  margin-bottom: 26px;
+  border-bottom: 2px solid #1f654d;
+}
+.discharge-header strong { font-size: 19px; }
+.discharge-header p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.discharge-print > h1 { font-size: 27px; margin-bottom: 24px; }
+.discharge-print section { margin-top: 22px; }
+.discharge-print section h3 {
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #6b8177;
+  margin-bottom: 7px;
+}
+.discharge-print section p { white-space: pre-wrap; line-height: 1.65; }
+.discharge-print footer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin-top: 48px;
+  padding-top: 18px;
+  border-top: 1px solid #dfe7df;
+}
+.discharge-print footer small { grid-column: 1 / -1; color: var(--muted); }
+
+@media print {
+  body, html, #root { background: #fff !important; overflow: visible !important; }
+  .sidebar, .workspace-topbar, .patient-card-top, .page-head, .no-print,
+  .dialog-head, .dialog-backdrop::before { display: none !important; }
+  .dialog-backdrop {
+    position: static !important;
+    display: block !important;
+    background: white !important;
+    padding: 0 !important;
+  }
+  .dialog, .dialog.wide {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  .dialog-body { padding: 0 !important; }
+  .discharge-print { border: 0 !important; padding: 0 !important; }
+}
