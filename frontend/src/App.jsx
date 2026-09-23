@@ -1642,7 +1642,7 @@ function Settings({ api }) {
       {error && <div className="alert error">{error}</div>}
       {saved && <div className="alert info">{saved}</div>}
       <section className="surface">
-        <div className="section-head"><div><div className="eyebrow">РЕКВІЗИТИ</div><h2>Центр</h2></div><Badge tone="forest">SOLVIA 2.0</Badge></div>
+        <div className="section-head"><div><div className="eyebrow">РЕКВІЗИТИ</div><h2>Центр</h2></div><Badge tone="forest">SOLVIA 1.1.0</Badge></div>
         <form className="form-grid" onSubmit={save}>
           <Field label="Повна назва центру" full><input value={form.center_name} onChange={(e) => setForm({ ...form, center_name: e.target.value })} required /></Field>
           <Field label="Коротка назва"><input value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} /></Field>
@@ -1925,7 +1925,7 @@ function Shell({ api, user, onLogout }) {
 
         <div className="sidebar-spacer" />
         <div className="sidebar-version">
-          <strong>SOLVIA 2.0</strong>
+          <strong>SOLVIA 1.1.0</strong>
           <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
           <small>Support 24/7</small>
         </div>
