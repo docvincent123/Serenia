@@ -51,6 +51,13 @@ begin
       (Pos('SOLVIA_SETUP_PENDING=1', String(Text)) = 0);
 end;
 
+function ExistingPostgreSQL: Boolean;
+begin
+  Result :=
+    FileExists(ExpandConstant('{pf}\PostgreSQL\17\bin\psql.exe')) or
+    FileExists(ExpandConstant('{pf32}\PostgreSQL\17\bin\psql.exe'));
+end;
+
 procedure InitializeWizard;
 begin
   Configured := False;
@@ -70,7 +77,15 @@ begin
     Result := (Length(AccountPage.Values[0]) >= 3) and
       (Length(AccountPage.Values[1]) >= 12) and (Length(AccountPage.Values[1]) <= 128) and
       (AccountPage.Values[1] = AccountPage.Values[2]);
-    if not Result then MsgBox('Вкажіть логін, пароль від 12 до 128 символів та однакове підтвердження пароля.', mbError, MB_OK);
+    if not Result then begin
+      MsgBox('Вкажіть логін, пароль від 12 до 128 символів та однакове підтвердження пароля.', mbError, MB_OK);
+      Exit;
+    end;
+    if ExistingPostgreSQL and (Length(AccountPage.Values[3]) = 0) then begin
+      MsgBox('На цьому ПК уже встановлено PostgreSQL 17. Введіть пароль користувача postgres у останньому полі. Це пароль PostgreSQL, а не пароль адміністратора SOLVIA.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
   end;
 end;
 
