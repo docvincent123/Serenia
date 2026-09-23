@@ -1,0 +1,36 @@
+name: SOLVIA • Windows build and security tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure C++20 desktop and server
+        shell: pwsh
+        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static -DBUILD_TESTING=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+      - name: Build native executables
+        run: cmake --build build --config Release --parallel
+      - name: Test real API scenario and role isolation
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package portable application
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/SOLVIA | Out-Null
+          Copy-Item build/Release/Solvia.exe,build/Release/SolviaServer.exe out/SOLVIA/
+          Copy-Item scripts/*.bat out/SOLVIA/
+          Copy-Item README.md out/SOLVIA/
+          Copy-Item docs out/SOLVIA/ -Recurse
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SOLVIA-0.1.0-Windows-x64
+          path: out/SOLVIA/
+          retention-days: 14

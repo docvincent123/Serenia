@@ -1,0 +1,16 @@
+PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, login TEXT NOT NULL UNIQUE, password TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','reception','psychologist','director')), active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER REFERENCES users(id),csrf TEXT NOT NULL,expires REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS families(id INTEGER PRIMARY KEY,name TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS patients(id INTEGER PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL,dob TEXT NOT NULL,category TEXT NOT NULL,psychologist_id INTEGER NOT NULL REFERENCES users(id),family_id INTEGER REFERENCES families(id),family_role TEXT NOT NULL DEFAULT '',created TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS rooms(id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS appointments(id INTEGER PRIMARY KEY,psychologist_id INTEGER NOT NULL REFERENCES users(id),room_id INTEGER NOT NULL REFERENCES rooms(id),start TEXT NOT NULL,end TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('individual','group')),status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','cancelled','completed')),created TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS attendees(appointment_id INTEGER REFERENCES appointments(id),patient_id INTEGER REFERENCES patients(id),PRIMARY KEY(appointment_id,patient_id));
+CREATE TABLE IF NOT EXISTS consultations(id INTEGER PRIMARY KEY,patient_id INTEGER NOT NULL REFERENCES patients(id),psychologist_id INTEGER NOT NULL REFERENCES users(id),appointment_id INTEGER NOT NULL REFERENCES appointments(id),note TEXT NOT NULL,goals TEXT NOT NULL,next_plan TEXT NOT NULL,homework TEXT NOT NULL,created TEXT NOT NULL,UNIQUE(appointment_id,patient_id));
+CREATE TABLE IF NOT EXISTS assessments(id INTEGER PRIMARY KEY,patient_id INTEGER NOT NULL REFERENCES patients(id),psychologist_id INTEGER NOT NULL REFERENCES users(id),token TEXT NOT NULL UNIQUE,created TEXT NOT NULL,expires REAL NOT NULL,completed TEXT,answers TEXT,score INTEGER);
+CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,user_id INTEGER,event TEXT NOT NULL,entity TEXT NOT NULL,entity_id INTEGER,created TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS outbox(id INTEGER PRIMARY KEY,event TEXT NOT NULL,payload TEXT NOT NULL,created TEXT NOT NULL,processed TEXT);
+CREATE TABLE IF NOT EXISTS module_settings(name TEXT PRIMARY KEY,enabled INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_patient_psychologist ON patients(psychologist_id);
+CREATE INDEX IF NOT EXISTS idx_appointment_start ON appointments(start,end);
+CREATE INDEX IF NOT EXISTS idx_consultation_patient ON consultations(patient_id);
