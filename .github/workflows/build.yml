@@ -9,6 +9,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-2022
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,6 +22,15 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Test real API scenario and role isolation
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Smoke-test native windows for all four roles
+        shell: pwsh
+        run: ./tests/windows-ui.ps1 -BuildDir build/Release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SOLVIA-native-UI-check
+          path: out/ui/
+          if-no-files-found: ignore
       - name: Package portable application
         shell: pwsh
         run: |

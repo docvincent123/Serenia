@@ -14,7 +14,7 @@ target_include_directories(SolviaServer PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gen
 target_link_libraries(SolviaServer PRIVATE nlohmann_json::nlohmann_json httplib::httplib unofficial::sqlite3::sqlite3 OpenSSL::Crypto OpenSSL::SSL)
 target_compile_definitions(SolviaServer PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 if(WIN32)
-  add_executable(Solvia WIN32 src/desktop/main.cpp src/desktop/Api.cpp src/desktop/app.manifest)
+  add_executable(Solvia WIN32 src/desktop/main.cpp src/desktop/Api.cpp)
   target_compile_definitions(Solvia PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
   target_link_libraries(Solvia PRIVATE nlohmann_json::nlohmann_json d2d1 dwrite winhttp comctl32 shcore)
   if(MSVC)
