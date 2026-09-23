@@ -148,7 +148,26 @@ Write-Host ''
 Write-Host 'Створення першого адміністратора SOLVIA' -ForegroundColor Cyan
 
 $adminLogin = Read-Host 'Придумайте логін адміністратора'
-if ($adminLogin -notmatch '^[A-Za-z0-9._-]{3,64}
+if ($adminLogin -notmatch '^[A-Za-z0-9._-]{3,64}$') {
+    throw 'Логін адміністратора: 3-64 символи. Дозволені латинські літери, цифри, крапка, дефіс і підкреслення.'
+}
+
+$adminSecure = Read-Host 'Придумайте пароль адміністратора SOLVIA (мінімум 12 символів)' -AsSecureString
+$adminPassword = Get-PlainText $adminSecure
+
+$adminConfirmSecure = Read-Host 'Повторіть пароль адміністратора' -AsSecureString
+$adminConfirm = Get-PlainText $adminConfirmSecure
+
+if ($adminPassword.Length -lt 12 -or $adminPassword.Length -gt 128 -or $adminPassword -match "[\r\n]") {
+    throw 'Пароль адміністратора повинен містити 12-128 символів.'
+}
+if ($adminPassword -cne $adminConfirm) {
+    throw 'Паролі адміністратора не співпадають.'
+}
+
+$adminSecure = $null
+$adminConfirmSecure = $null
+$adminConfirm = $null
 
 $configPath = Join-Path $programData 'server.env'
 $databaseUrl = 'postgresql://solvia:' + $databasePassword + '@127.0.0.1:5432/solvia'
@@ -339,7 +358,8 @@ if (Test-Path $rootCert) {
 Write-Host ''
 Write-Host 'SOLVIA встановлено.' -ForegroundColor Green
 Write-Host ('Сервер для телефонів: https://' + $serverIp) -ForegroundColor Green
-Write-Host 'Логін адміністратора: admin' -ForegroundColor Green
+Write-Host ('Логін адміністратора: ' + $adminLogin) -ForegroundColor Green
 Write-Host 'Пароль адміністратора: той, який ви щойно задали.' -ForegroundColor Green
+$adminLogin = $null
 Write-Host ''
 Write-Host 'Для Android встановіть QureMed-Local-CA.crt як довірений CA-сертифікат, а у застосунку введіть адресу сервера вище.'
