@@ -15,7 +15,15 @@ using System;
 using System.Runtime.InteropServices;
 public static class Native {
  [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr h, int id);
- [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern bool SetWindowText(IntPtr h,string value);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode,EntryPoint="SendMessageTimeoutW")] static extern IntPtr SendTextMessage(IntPtr h,uint msg,IntPtr wp,string text,uint flags,uint timeout,out IntPtr result);
+ public static void SetWindowText(IntPtr h,string value) { IntPtr result; if(h==IntPtr.Zero || SendTextMessage(h,0x000C,IntPtr.Zero,value,2,5000,out result)==IntPtr.Zero) throw new Exception("Cannot set native input"); }
+ public delegate bool EnumCallback(IntPtr h,IntPtr l);
+ [DllImport("user32.dll")] static extern bool EnumWindows(EnumCallback f,IntPtr l);
+ [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr h,EnumCallback f,IntPtr l);
+ [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h,System.Text.StringBuilder s,int count);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h,System.Text.StringBuilder s,int count);
+ public static string DialogText(uint pid) { var texts=new System.Collections.Generic.List<string>(); EnumWindows((h,l)=>{uint p;GetWindowThreadProcessId(h,out p);var cls=new System.Text.StringBuilder(100);GetClassName(h,cls,100);if(p==pid && cls.ToString()=="#32770")EnumChildWindows(h,(c,z)=>{var cn=new System.Text.StringBuilder(100);GetClassName(c,cn,100);if(cn.ToString()=="Static"){var t=new System.Text.StringBuilder(2048);GetWindowText(c,t,2048);texts.Add(t.ToString());}return true;},IntPtr.Zero);return true;},IntPtr.Zero);return string.Join(" | ",texts); }
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr h,uint msg,IntPtr wp,IntPtr lp,uint flags,uint timeout,out IntPtr result);
  public static IntPtr SendMessage(IntPtr h,uint msg,IntPtr wp,IntPtr lp) { IntPtr result; if(SendMessageTimeout(h,msg,wp,lp,2,12000,out result)==IntPtr.Zero) throw new Exception("Native action timed out"); return result; }
  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h,IntPtr dc,uint flags);
@@ -52,7 +60,8 @@ try {
     if ($hwnd -eq [IntPtr]::Zero) { throw 'No native window' }
     [Native]::SetWindowText([Native]::GetDlgItem($hwnd,12),$role) | Out-Null
     [Native]::SetWindowText([Native]::GetDlgItem($hwnd,13),$passwords[$role]) | Out-Null
-    [Native]::SendMessage($hwnd,0x0111,[IntPtr]14,[IntPtr]::Zero) | Out-Null
+    try { [Native]::SendMessage($hwnd,0x0111,[IntPtr]14,[IntPtr]::Zero) | Out-Null }
+    catch { throw ("Native login failed: " + [Native]::DialogText($client.Id) + " / " + $_.Exception.Message) }
     Start-Sleep -Milliseconds 400
     if ([Native]::GetDlgItem($hwnd,50) -eq [IntPtr]::Zero) { throw "Login did not show native table: $role" }
     $rect=New-Object Native+RECT
