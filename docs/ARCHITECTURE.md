@@ -1,8 +1,8 @@
-# Архітектура SOLVIA 1.1
+# Архітектура SOLVIA 2.0
 
 ## Топологія
 
-`Android / Solvia.exe → HTTPS 8443 (SOLVIA Caddy) → 127.0.0.1:8765 SolviaServer → 127.0.0.1:5432 PostgreSQL`.
+`Android Kotlin / Solvia.exe → HTTPS 8443 (SOLVIA Caddy) → 127.0.0.1:8765 SolviaServer → 127.0.0.1:5432 PostgreSQL`.
 
 На серверному ПК desktop WebView2 може звертатися безпосередньо до loopback API. Android та інші клієнти у локальній мережі заходять тільки через Caddy HTTPS.
 
@@ -13,7 +13,7 @@ PostgreSQL налаштований на `listen_addresses=localhost`; порт 
 - `SolviaServer.exe`: C++20 API, RBAC, бізнес-правила, PostgreSQL.
 - `Solvia.exe`: Win32 + WebView2 оболонка.
 - `frontend/`: React/Vite UI для desktop і mobile viewport.
-- `android/`: Android WebView container із HTTPS-only політикою.
+- `android/`: повністю нативний Kotlin Android-клієнт без WebView, HTTPS-only.
 - `installer/`: PostgreSQL/Caddy/LAN setup, autostart, IP repair, Inno Setup recipe.
 
 ## Початкова ініціалізація
@@ -50,7 +50,7 @@ Audit записує actor/event/entity/id, але не текст психол�
 
 ## Android/TLS
 
-Android дозволяє тільки HTTPS, довіряє system + user CA store, не виконує `SslErrorHandler.proceed()` і блокує сторонні origins. Локальний CA Caddy експортується як `QureMed-Local-CA.crt` для встановлення на планшети центру.
+Android-клієнт працює напряму з REST API через HTTPS і довіряє system + user CA store; WebView у мобільному застосунку відсутній. Локальний CA Caddy експортується як `QureMed-Local-CA.crt` для встановлення на планшети центру.
 
 ## IP сервера
 
@@ -64,7 +64,7 @@ Windows Task Scheduler task `SOLVIA Local Server` стартує від SYSTEM �
 
 ## Дані
 
-PostgreSQL таблиці: `users`, `sessions`, `families`, `patients`, `rooms`, `appointments`, `attendees`, `consultations`, `shift_reports`, `assessments`, `audit`, `outbox`, `module_settings`.
+PostgreSQL таблиці: `users`, `sessions`, `shift_days`, `families`, `patients`, `rooms`, `appointments`, `attendees`, `consultations`, `shift_reports`, `assessments`, `admin_notes`, `discharge_summaries`, `backup_events`, `audit`, `outbox`, `module_settings`, `center_settings`.
 
 Конфлікт бронювання психолога, кабінету й пацієнта перевіряється сервером всередині транзакції. Унікальність consultation для appointment+patient також захищена constraint.
 
