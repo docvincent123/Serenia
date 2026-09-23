@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Solvia VERSION 0.3.0 LANGUAGES CXX)
+project(Solvia VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -62,3 +62,4 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration.py $<TARGET_FILE:SolviaServer>
   )
 endif()
+

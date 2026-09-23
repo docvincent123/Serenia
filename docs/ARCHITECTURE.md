@@ -1,4 +1,4 @@
-# Архітектура SOLVIA 0.3
+# Архітектура SOLVIA 1.1
 
 ## Топологія
 
@@ -75,3 +75,4 @@ PostgreSQL таблиці: `users`, `sessions`, `families`, `patients`, `rooms`,
 ## Майбутні модулі
 
 `module_settings`: payments, reminders, consents, patient_portal, rehaflow. `outbox` зарезервований для нагадувань та інтеграцій.
+

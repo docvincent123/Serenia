@@ -1,8 +1,11 @@
-param([Parameter(Mandatory=$true)][string]$InstallDir)
+﻿param([Parameter(Mandatory=$true)][string]$InstallDir)
 $ErrorActionPreference = 'Stop'
 
+try {
+$logDir = Join-Path $env:ProgramData 'QureMed\SOLVIA'
+Start-Transcript -Path (Join-Path $logDir 'server.log') -Append | Out-Null
 $configPath = Join-Path $env:ProgramData 'QureMed\SOLVIA\server.env'
-if (-not (Test-Path $configPath)) { exit 2 }
+if (-not (Test-Path $configPath)) { throw 'Server configuration not found' }
 
 $settings = @{}
 foreach ($line in [IO.File]::ReadAllLines($configPath)) {
@@ -14,23 +17,29 @@ $databaseUrl = $settings['SOLVIA_DATABASE_URL']
 $serverIp = $settings['SOLVIA_SERVER_IP']
 $port = if ($settings['SOLVIA_API_PORT']) { $settings['SOLVIA_API_PORT'] } else { '8765' }
 $httpsPort = if ($settings['SOLVIA_HTTPS_PORT']) { $settings['SOLVIA_HTTPS_PORT'] } else { '8443' }
-if (-not $databaseUrl -or -not $serverIp) { exit 3 }
+if (-not $databaseUrl -or -not $serverIp) { throw 'Incomplete server configuration' }
 
 $env:SOLVIA_DATABASE_URL = $databaseUrl
 $serverExe = Join-Path $InstallDir 'SolviaServer.exe'
 $uiDir = Join-Path $InstallDir 'ui'
 
 $existing = Get-NetTCPConnection -State Listen -LocalPort ([int]$port) -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $existing) {
+if ($existing) {
+    $owner = Get-Process -Id $existing.OwningProcess -ErrorAction Stop
+    if ($owner.Path -ne $serverExe) { throw 'API port is occupied by another application.' }
+    Stop-Process -Id $owner.Id -Force
+    $owner.WaitForExit(10000) | Out-Null
+}
+if ($true) {
     $args = @('--host','127.0.0.1','--port',$port,'--ui',('"' + $uiDir + '"'))
-    Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden
+    Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir 'api-output.log') -RedirectStandardError (Join-Path $logDir 'api-error.log')
 }
 
 $healthy = $false
 for ($i=0; $i -lt 40; $i++) {
     try {
         $response = Invoke-RestMethod -Uri ('http://127.0.0.1:' + $port + '/api/health') -TimeoutSec 2
-        if ($response.ok) { $healthy = $true; break }
+        if ($response.ok -and $response.version -eq '1.1.0') { $healthy = $true; break }
     } catch {}
     Start-Sleep -Milliseconds 500
 }
@@ -50,7 +59,23 @@ if (-not $caddyPath -or -not (Test-Path $caddyPath)) {
 $caddyConfig = Join-Path $env:ProgramData 'QureMed\SOLVIA\local\Caddyfile'
 $caddyPidPath = Join-Path $env:ProgramData 'QureMed\SOLVIA\local\caddy.pid'
 $https = Get-NetTCPConnection -State Listen -LocalPort ([int]$httpsPort) -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($https) {
+    $owner = Get-Process -Id $https.OwningProcess -ErrorAction Stop
+    if ($owner.Path -ne $caddyPath) { throw 'HTTPS port is occupied by another application.' }
+    Stop-Process -Id $owner.Id -Force
+    $owner.WaitForExit(10000) | Out-Null
+    $https = $null
+}
 if ($caddyPath -and (Test-Path $caddyConfig) -and -not $https) {
-    $caddyProcess = Start-Process -FilePath $caddyPath -ArgumentList @('run','--config',('"' + $caddyConfig + '"'),'--adapter','caddyfile') -WorkingDirectory (Split-Path $caddyConfig) -WindowStyle Hidden -PassThru
+    $caddyProcess = Start-Process -FilePath $caddyPath -ArgumentList @('run','--config',('"' + $caddyConfig + '"'),'--adapter','caddyfile') -WorkingDirectory (Split-Path $caddyConfig) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'https-output.log') -RedirectStandardError (Join-Path $logDir 'https-error.log')
     [IO.File]::WriteAllText($caddyPidPath, [string]$caddyProcess.Id)
+}
+
+
+} catch {
+    Write-Host ("SOLVIA startup failed: " + $_.Exception.Message)
+    exit 1
+} finally {
+    Remove-Item Env:SOLVIA_DATABASE_URL -ErrorAction SilentlyContinue
+    try { Stop-Transcript | Out-Null } catch {}
 }

@@ -26,7 +26,7 @@ jobs:
           node-version: '22'
 
       - name: Validate installer PowerShell
-        shell: pwsh
+        shell: powershell
         run: |
           $failed = $false
           Get-ChildItem installer/*.ps1 | ForEach-Object {
@@ -114,13 +114,13 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SOLVIA-0.3.0-Windows-x64-portable
+          name: SOLVIA-1.1.0-Windows-x64-portable
           path: out/SOLVIA/
           retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SOLVIA-0.3.0-Setup-EXE
+          name: SOLVIA-1.1.0-Setup-EXE
           path: out/installer/*.exe
           if-no-files-found: error
           retention-days: 14
@@ -165,3 +165,4 @@ jobs:
         env:
           SOLVIA_TEST_DATABASE_URL: postgresql://postgres:solvia_test_password@127.0.0.1:5432/solvia_test
         run: ctest --test-dir build-server --output-on-failure
+

@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$InstallDir)
+﻿param([Parameter(Mandatory=$true)][string]$InstallDir)
 $ErrorActionPreference = 'Stop'
 
 $programData = Join-Path $env:ProgramData 'QureMed\SOLVIA'
@@ -49,3 +49,4 @@ if (Test-Path $caddyPidPath) {
 }
 & (Join-Path $InstallDir 'installer\Run-Server.ps1') -InstallDir $InstallDir
 Write-Host ('Нова адреса SOLVIA: https://' + $ip + ':' + $httpsPort) -ForegroundColor Green
+

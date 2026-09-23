@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Parse installer scripts
-        shell: pwsh
+        shell: powershell
         run: |
           $failed = $false
           Get-ChildItem installer/*.ps1 | ForEach-Object {
@@ -30,3 +30,14 @@ jobs:
             }
           }
           if ($failed) { throw 'Installer PowerShell syntax validation failed' }
+
+      - name: Installer regression tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./tests/installer.ps1
+      - name: Compile wizard with fixture payload
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force out/SOLVIA | Out-Null
+          Set-Content out/SOLVIA/fixture.txt 'Compiler fixture only; not an installer release'
+          & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" installer/SOLVIA.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Wizard compilation failed' }

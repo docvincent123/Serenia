@@ -245,7 +245,7 @@ function Login({ initialBase, onLogin }) {
             </Field>
           )}
 
-          <div className="login-foot">Версія 0.3 • React Desktop + Mobile</div>
+          <div className="login-foot">Версія 1.1 • by QureMed</div>
         </form>
       </section>
     </div>
@@ -1573,3 +1573,4 @@ export default function App() {
   if (!user) return <Login initialBase={apiBase} onLogin={login} />;
   return <Shell api={api} user={user} onLogout={logout} />;
 }
+

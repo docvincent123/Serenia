@@ -1,28 +1,10 @@
-param([Parameter(Mandatory=$true)][string]$InstallDir)
+﻿param(
+    [Parameter(Mandatory=$true)][string]$InstallDir,
+    [string]$InputFile,
+    [switch]$NonInteractive
+)
 $ErrorActionPreference = 'Stop'
-
-$bootstrapLogDir = Join-Path $env:ProgramData 'QureMed\SOLVIA'
-New-Item -ItemType Directory -Force $bootstrapLogDir | Out-Null
-$installLogPath = Join-Path $bootstrapLogDir 'install.log'
-try {
-    Start-Transcript -Path $installLogPath -Append -Force | Out-Null
-} catch {
-    # Installation must still continue even if transcript cannot be started.
-}
-
-trap {
-    Write-Host ''
-    Write-Host 'SOLVIA: помилка налаштування сервера.' -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host ''
-    Write-Host ('Повний журнал: ' + $installLogPath) -ForegroundColor Yellow
-    try { Stop-Transcript | Out-Null } catch {}
-    if ([Environment]::UserInteractive) {
-        Read-Host 'Натисніть Enter, щоб закрити це вікно'
-    }
-    exit 1
-}
-
+. (Join-Path $PSScriptRoot 'Setup.Common.ps1')
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -82,160 +64,143 @@ function Get-ServerIp {
     if (-not $ip) { throw 'Не вдалося автоматично визначити IPv4 серверного ПК. Підключіть ПК до Wi-Fi/Ethernet центру та повторіть встановлення.' }
     return $ip
 }
-function Protect-Path([string]$path, [switch]$Container) {
-    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-    if ($Container) {
-        & icacls.exe $path /inheritance:r /grant:r "$($currentUser):(OI)(CI)(F)" '*S-1-5-18:(OI)(CI)(F)' '*S-1-5-32-544:(OI)(CI)(F)' | Out-Null
-    } else {
-        & icacls.exe $path /inheritance:r /grant:r "$($currentUser):(F)" '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
-    }
-    if ($LASTEXITCODE -ne 0) { throw "Не вдалося захистити $path" }
+function Install-Package([string]$Id, [string]$Override = '') {
+    Refresh-Path
+    $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+    if (-not $winget) { throw 'Не знайдено winget. Встановіть App Installer або PostgreSQL 17 і Caddy вручну та повторіть налаштування.' }
+    $packageArgs = @('install','--exact','--id',$Id,'--accept-package-agreements','--accept-source-agreements','--disable-interactivity')
+    if ($Override) { $packageArgs += @('--override',$Override) }
+    Invoke-SetupProcess -FilePath $winget.Source -Arguments $packageArgs -Sensitive | Out-Null
+    Refresh-Path
 }
 
-if (-not (Test-Administrator)) { throw 'Інсталятор SOLVIA потрібно запускати від імені адміністратора.' }
-if (-not (Test-Path (Join-Path $InstallDir 'SolviaServer.exe'))) { throw 'SolviaServer.exe не знайдено у папці встановлення.' }
-if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) { throw 'Потрібен Windows Package Manager (winget / App Installer).' }
-
+if (-not (Test-Administrator)) { throw 'Запустіть інсталятор або налаштування SOLVIA від імені адміністратора.' }
+$InstallDir = (Resolve-Path -LiteralPath $InstallDir).Path
+$serverExe = Join-Path $InstallDir 'SolviaServer.exe'
+if (-not (Test-Path -LiteralPath $serverExe)) { throw 'SolviaServer.exe не знайдено. Запустіть повний інсталятор SOLVIA 1.1.' }
 $programData = Join-Path $env:ProgramData 'QureMed\SOLVIA'
 $localDir = Join-Path $programData 'local'
-New-Item -ItemType Directory -Force $programData, $localDir | Out-Null
-Protect-Path $programData -Container
+New-Item -ItemType Directory -Force $programData,$localDir | Out-Null
+Protect-SetupPath -Path $programData -Container
+$configPath = Join-Path $programData 'server.env'
+$settings = Read-ServerSettings $configPath
+$existingDatabase = $settings['SOLVIA_DATABASE_URL']
+if ($existingDatabase -and $existingDatabase -match '\s+SOLVIA_') {
+    throw 'Попередній server.env містить об’єднані рядки. Збережіть копію та виправте кожен SOLVIA_параметр на окремому рядку. Дані PostgreSQL не змінено.'
+}
 
-Write-Host ''
-Write-Host 'SOLVIA by QureMed — налаштування серверного ПК' -ForegroundColor Cyan
-Write-Host 'PostgreSQL буде доступний тільки на цьому компютері. Телефони працюватимуть через HTTPS API.'
-Write-Host ''
+$adminLogin = ''
+$adminPassword = ''
+$postgresAdminPassword = ''
+if ($InputFile) {
+    $inputValues = [IO.File]::ReadAllLines($InputFile)
+    if ($inputValues.Count -ne 3) { throw 'Некоректні дані майстра встановлення.' }
+    $adminLogin,$adminPassword,$postgresAdminPassword = $inputValues
+    Remove-Item -LiteralPath $InputFile -Force
+    $inputValues = $null
+} elseif (-not $NonInteractive) {
+    if (-not $existingDatabase -or $settings['SOLVIA_SETUP_PENDING'] -eq '1') {
+        $adminLogin = Read-Host 'Логін першого адміністратора SOLVIA'
+        $adminPassword = Get-PlainText (Read-Host 'Пароль SOLVIA (12–128 символів)' -AsSecureString)
+        $confirm = Get-PlainText (Read-Host 'Повторіть пароль' -AsSecureString)
+        if ($adminPassword -cne $confirm) { throw 'Паролі не співпадають.' }
+        $confirm = $null
+    }
+}
+if (-not $existingDatabase) {
+    if ($adminLogin -notmatch '^[A-Za-z0-9._-]{3,64}$') { throw 'Логін: 3–64 латинські літери, цифри, крапка, дефіс або підкреслення.' }
+    if ([Text.Encoding]::UTF8.GetByteCount($adminPassword) -lt 12 -or [Text.Encoding]::UTF8.GetByteCount($adminPassword) -gt 128 -or $adminPassword -match '[\r\n]') { throw 'Пароль SOLVIA: 12–128 байтів UTF-8, без перенесень рядка.' }
+}
 
+Write-Host 'SOLVIA 1.1 — перевірка PostgreSQL' -ForegroundColor Cyan
 Refresh-Path
 $postgresBin = Find-PostgresBin
-$postgresAdminPassword = $null
+$installedPostgres = $false
 if (-not $postgresBin) {
-    Write-Host 'Встановлюємо PostgreSQL 17...'
+    if ($existingDatabase) { throw 'Не знайдено PostgreSQL для наявної конфігурації. Перевірте встановлення PostgreSQL; база не буде створюватися повторно.' }
     $postgresAdminPassword = New-HexSecret 24
-    $override = '--mode unattended --unattendedmodeui none --superpassword ' + $postgresAdminPassword + ' --serverport 5432'
-    & winget.exe install --exact --id PostgreSQL.PostgreSQL.17 --accept-package-agreements --accept-source-agreements --disable-interactivity --override $override
-    if ($LASTEXITCODE -ne 0) { throw "PostgreSQL installation failed: $LASTEXITCODE" }
-    Refresh-Path
+    Install-Package 'PostgreSQL.PostgreSQL.17' ('--mode unattended --unattendedmodeui none --superpassword ' + $postgresAdminPassword + ' --serverport 5432')
     $postgresBin = Find-PostgresBin
-    if (-not $postgresBin) { throw 'PostgreSQL встановлено, але psql.exe не знайдено. Перезавантажте Windows і повторіть інсталяцію.' }
-} else {
-    Write-Host 'PostgreSQL уже встановлений.' -ForegroundColor Green
-    $postgresAdminPassword = Get-PlainText (Read-Host 'Введіть пароль існуючого користувача PostgreSQL postgres' -AsSecureString)
+    if (-not $postgresBin) { throw 'PostgreSQL встановлено, але psql.exe не знайдено. Перезавантажте Windows і повторіть налаштування.' }
+    $installedPostgres = $true
 }
-
-$service = Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($service -and $service.Status -ne 'Running') {
-    Start-Service $service.Name
-    $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(45))
-}
-
+$env:PGCONNECT_TIMEOUT = '10'
 $psql = Join-Path $postgresBin 'psql.exe'
-$createdb = Join-Path $postgresBin 'createdb.exe'
-$databasePassword = New-HexSecret 24
-$env:PGPASSWORD = $postgresAdminPassword
-
-& $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -tAc 'SELECT 1' *> $null
-if ($LASTEXITCODE -ne 0) { throw 'Не вдалося підключитися до PostgreSQL. Перевірте пароль postgres.' }
-
-$role = & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='solvia'"
-if ([string]::IsNullOrWhiteSpace(($role | Out-String))) {
-    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE solvia LOGIN PASSWORD '$databasePassword'" *> $null
+if ($existingDatabase) {
+    Write-Host 'Зберігаємо наявну базу, пароль БД та облікові записи SOLVIA.'
+    $env:PGDATABASE = $existingDatabase
+    try { Invoke-SetupProcess $psql @('-w','-X','-v','ON_ERROR_STOP=1','-tAc','SELECT 1') -Sensitive | Out-Null }
+    catch {
+        if ($settings['SOLVIA_SETUP_PENDING'] -ne '1' -or -not $postgresAdminPassword) { throw }
+        Remove-Item Env:PGDATABASE -ErrorAction SilentlyContinue
+        $env:PGPASSWORD = $postgresAdminPassword
+        $recoveryArgs = @('-w','-X','-h','127.0.0.1','-p','5432','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1')
+        $dbExists = Invoke-SetupProcess $psql ($recoveryArgs + @('-tAc',"SELECT 1 FROM pg_database WHERE datname='solvia'")) -Sensitive
+        if ($dbExists) { throw 'Existing SOLVIA database could not be opened. Check the saved database credentials.' }
+        Invoke-SetupProcess (Join-Path $postgresBin 'createdb.exe') @('-w','-h','127.0.0.1','-p','5432','-U','postgres','-O','solvia','solvia') -Sensitive | Out-Null
+    }
+    finally { Remove-Item Env:PGDATABASE -ErrorAction SilentlyContinue }
+    $databaseUrl = $existingDatabase
 } else {
-    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE solvia WITH LOGIN PASSWORD '$databasePassword'" *> $null
+    if (-not $postgresAdminPassword -and -not $NonInteractive) {
+        $postgresAdminPassword = Get-PlainText (Read-Host 'Пароль існуючого користувача PostgreSQL postgres' -AsSecureString)
+    }
+    if (-not $postgresAdminPassword) { throw 'PostgreSQL уже є на ПК. Вкажіть пароль користувача postgres на сторінці майстра встановлення.' }
+    $env:PGPASSWORD = $postgresAdminPassword
+    $pgArgs = @('-w','-X','-h','127.0.0.1','-p','5432','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1')
+    Invoke-SetupProcess $psql ($pgArgs + @('-tAc','SELECT 1')) -Sensitive | Out-Null
+    $databasePassword = New-HexSecret 24
+    $role = Invoke-SetupProcess $psql ($pgArgs + @('-tAc',"SELECT 1 FROM pg_roles WHERE rolname='solvia'")) -Sensitive
+    # Do not rotate an existing database role without its saved configuration.
+    if ($role) { throw 'Користувач БД solvia вже існує, але server.env відсутній. Відновіть конфігурацію з копії, щоб зберегти пароль і доступ до даних.' }
+    Invoke-SetupProcess $psql ($pgArgs + @('-c',"CREATE ROLE solvia LOGIN PASSWORD '$databasePassword'")) -Sensitive | Out-Null
+    $databaseUrl = 'postgresql://solvia:' + $databasePassword + '@127.0.0.1:5432/solvia'
+    # Save credentials immediately so a retry after a later failure keeps this same role.
+    $settings['SOLVIA_DATABASE_URL'] = $databaseUrl
+    $settings['SOLVIA_SETUP_PENDING'] = '1'
+    Write-ServerSettings $configPath $settings
+    Protect-SetupPath $configPath
+    Invoke-SetupProcess (Join-Path $postgresBin 'createdb.exe') @('-w','-h','127.0.0.1','-p','5432','-U','postgres','-O','solvia','solvia') -Sensitive | Out-Null
+    if ($installedPostgres) {
+        Invoke-SetupProcess $psql ($pgArgs + @('-c',"ALTER SYSTEM SET listen_addresses TO 'localhost'")) -Sensitive | Out-Null
+        $service = Get-Service -Name 'postgresql*' | Where-Object { $_.Name -match '17' } | Select-Object -First 1
+        if ($service) { Restart-Service $service.Name; $service.WaitForStatus('Running',[TimeSpan]::FromSeconds(45)) }
+    }
 }
-if ($LASTEXITCODE -ne 0) { throw 'Не вдалося створити користувача БД SOLVIA.' }
-
-$db = & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='solvia'"
-if ([string]::IsNullOrWhiteSpace(($db | Out-String))) {
-    & $createdb -h 127.0.0.1 -p 5432 -U postgres -O solvia solvia
-    if ($LASTEXITCODE -ne 0) { throw 'Не вдалося створити базу solvia.' }
-} else {
-    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'ALTER DATABASE solvia OWNER TO solvia' *> $null
-}
-
-& $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET listen_addresses TO 'localhost'" *> $null
-if ($LASTEXITCODE -ne 0) { throw 'Не вдалося обмежити PostgreSQL локальним компютером.' }
-
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 $postgresAdminPassword = $null
 
-if ($service) {
-    Restart-Service $service.Name -Force
-    $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(45))
-}
-
-$serverIp = Get-ServerIp
-Write-Host ("LAN IP серверного ПК: " + $serverIp) -ForegroundColor Green
-Write-Host ''
-Write-Host 'Створення першого адміністратора SOLVIA' -ForegroundColor Cyan
-
-$adminLogin = Read-Host 'Придумайте логін адміністратора'
-if ($adminLogin -notmatch '^[A-Za-z0-9._-]{3,64}$') {
-    throw 'Логін адміністратора: 3-64 символи. Дозволені латинські літери, цифри, крапка, дефіс і підкреслення.'
-}
-
-$adminSecure = Read-Host 'Придумайте пароль адміністратора SOLVIA (мінімум 12 символів)' -AsSecureString
-$adminPassword = Get-PlainText $adminSecure
-
-$adminConfirmSecure = Read-Host 'Повторіть пароль адміністратора' -AsSecureString
-$adminConfirm = Get-PlainText $adminConfirmSecure
-
-if ($adminPassword.Length -lt 12 -or $adminPassword.Length -gt 128 -or $adminPassword -match "[\r\n]") {
-    throw 'Пароль адміністратора повинен містити 12-128 символів.'
-}
-if ($adminPassword -cne $adminConfirm) {
-    throw 'Паролі адміністратора не співпадають.'
-}
-
-$adminSecure = $null
-$adminConfirmSecure = $null
-$adminConfirm = $null
-
-$configPath = Join-Path $programData 'server.env'
-$databaseUrl = 'postgresql://solvia:' + $databasePassword + '@127.0.0.1:5432/solvia'
-$config = @(
-    'SOLVIA_DATABASE_URL=' + $databaseUrl,
-    'SOLVIA_SERVER_IP=' + $serverIp,
-    'SOLVIA_API_PORT=8765',
-    'SOLVIA_HTTPS_PORT=8443',
-    'SOLVIA_INSTALL_DIR=' + $InstallDir
-)
-[IO.File]::WriteAllLines($configPath, $config, [Text.UTF8Encoding]::new($false))
-Protect-Path $configPath
-
+Write-Host 'SOLVIA 1.1 — ініціалізація сервера' -ForegroundColor Cyan
 $env:SOLVIA_DATABASE_URL = $databaseUrl
 $env:SOLVIA_ADMIN_LOGIN = $adminLogin
 $env:SOLVIA_ADMIN_PASSWORD = $adminPassword
 $env:SOLVIA_ADMIN_NAME = 'Адміністратор'
-try {
-    & (Join-Path $InstallDir 'SolviaServer.exe') --init --ui (Join-Path $InstallDir 'ui')
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host 'База вже могла бути ініціалізована раніше. Перевіряємо запуск сервера...' -ForegroundColor Yellow
-    }
-} finally {
-    Remove-Item Env:SOLVIA_ADMIN_LOGIN -ErrorAction SilentlyContinue
-    Remove-Item Env:SOLVIA_ADMIN_PASSWORD -ErrorAction SilentlyContinue
-    Remove-Item Env:SOLVIA_ADMIN_NAME -ErrorAction SilentlyContinue
-    Remove-Item Env:SOLVIA_DATABASE_URL -ErrorAction SilentlyContinue
+try { Invoke-SetupProcess $serverExe @('--init','--ui',(Join-Path $InstallDir 'ui')) -Sensitive | Out-Null }
+finally {
+    foreach ($key in @('SOLVIA_ADMIN_LOGIN','SOLVIA_ADMIN_PASSWORD','SOLVIA_ADMIN_NAME','SOLVIA_DATABASE_URL')) { [Environment]::SetEnvironmentVariable($key,$null,'Process') }
     $adminPassword = $null
 }
 
+Write-Host 'SOLVIA 1.1 — локальний HTTPS' -ForegroundColor Cyan
 Refresh-Path
 $caddy = Get-Command caddy.exe -ErrorAction SilentlyContinue
-if (-not $caddy) {
-    Write-Host 'Встановлюємо локальний HTTPS (Caddy)...'
-    & winget.exe install --exact --id CaddyServer.Caddy --accept-package-agreements --accept-source-agreements --disable-interactivity
-    if ($LASTEXITCODE -ne 0) { throw 'Не вдалося встановити Caddy.' }
-    Refresh-Path
-    $caddy = Get-Command caddy.exe -ErrorAction Stop
+$stableCaddy = Join-Path $InstallDir 'bin\caddy.exe'
+if (-not (Test-Path -LiteralPath $stableCaddy)) {
+    if (-not $caddy) { Install-Package 'CaddyServer.Caddy'; $caddy = Get-Command caddy.exe -ErrorAction Stop }
+    New-Item -ItemType Directory -Force (Split-Path $stableCaddy) | Out-Null
+    Copy-Item -LiteralPath $caddy.Source -Destination $stableCaddy -Force
 }
-
-$settingsLines = [System.Collections.Generic.List[string]]::new()
-$settingsLines.AddRange([string[]][IO.File]::ReadAllLines($configPath))
-$settingsLines.Add('SOLVIA_CADDY_EXE=' + $caddy.Source)
-[IO.File]::WriteAllLines($configPath, $settingsLines, [Text.UTF8Encoding]::new($false))
-Protect-Path $configPath
-
+$serverIp = Get-ServerIp
+$settings['SOLVIA_DATABASE_URL'] = $databaseUrl
+$settings['SOLVIA_SERVER_IP'] = $serverIp
+$settings['SOLVIA_API_PORT'] = '8765'
+$settings['SOLVIA_HTTPS_PORT'] = '8443'
+$settings['SOLVIA_INSTALL_DIR'] = $InstallDir
+$settings['SOLVIA_CADDY_EXE'] = $stableCaddy
+$settings['SOLVIA_VERSION'] = '1.1.0'
+$settings['SOLVIA_SETUP_PENDING'] = '1'
+Write-ServerSettings $configPath $settings
+Protect-SetupPath $configPath
 $caddyData = (Join-Path $localDir 'caddy-data').Replace('\','/')
 $caddyConfigPath = Join-Path $localDir 'Caddyfile'
 $caddyConfig = @"
@@ -252,34 +217,37 @@ https://$serverIp`:8443 {
     reverse_proxy 127.0.0.1:8765
 }
 "@
-[IO.File]::WriteAllText($caddyConfigPath, $caddyConfig, [Text.UTF8Encoding]::new($false))
-& $caddy.Source validate --config $caddyConfigPath --adapter caddyfile
-if ($LASTEXITCODE -ne 0) { throw 'Помилка конфігурації локального HTTPS.' }
+[IO.File]::WriteAllText($caddyConfigPath,$caddyConfig,[Text.UTF8Encoding]::new($false))
+Invoke-SetupProcess $stableCaddy @('validate','--config',$caddyConfigPath,'--adapter','caddyfile') | Out-Null
 
 Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 New-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8443 -RemoteAddress LocalSubnet -Profile Private | Out-Null
-
 $runScript = Join-Path $InstallDir 'installer\Run-Server.ps1'
-$argument = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $runScript + '" -InstallDir "' + $InstallDir + '"'
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argument
+$argument = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $runScript + '" -InstallDir "' + $InstallDir + '"'
+$action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $argument
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName 'SOLVIA Local Server' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+$taskSettings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+Register-ScheduledTask -TaskName 'SOLVIA Local Server' -Action $action -Trigger $trigger -Principal $principal -Settings $taskSettings -Force | Out-Null
 Start-ScheduledTask -TaskName 'SOLVIA Local Server'
 
-$rootCert = Join-Path $localDir 'caddy-data\caddy\pki\authorities\local\root.crt'
-for ($i=0; $i -lt 30 -and -not (Test-Path $rootCert); $i++) { Start-Sleep -Seconds 1 }
-if (Test-Path $rootCert) {
-    Copy-Item $rootCert (Join-Path $InstallDir 'QureMed-Local-CA.crt') -Force
+$rootCert = Join-Path $localDir 'caddy-data\pki\authorities\local\root.crt'
+$ready = $false
+for ($i=0; $i -lt 60; $i++) {
+    try {
+        $response = Invoke-RestMethod 'http://127.0.0.1:8765/api/health' -TimeoutSec 2
+        $httpsListener = Get-NetTCPConnection -State Listen -LocalPort 8443 -ErrorAction SilentlyContinue
+        if ($response.ok -and $response.version -eq '1.1.0' -and $httpsListener -and (Test-Path $rootCert)) { $ready=$true; break }
+    } catch {}
+    Start-Sleep -Seconds 1
 }
-
-Write-Host ''
-Write-Host 'SOLVIA встановлено.' -ForegroundColor Green
-Write-Host ('Сервер для телефонів: https://' + $serverIp + ':8443') -ForegroundColor Green
-Write-Host ('Логін адміністратора: ' + $adminLogin) -ForegroundColor Green
-Write-Host 'Пароль адміністратора: той, який ви щойно задали.' -ForegroundColor Green
-$adminLogin = $null
-Write-Host ''
-Write-Host 'Для Android встановіть QureMed-Local-CA.crt як довірений CA-сертифікат, а у застосунку введіть адресу сервера вище.'
-try { Stop-Transcript | Out-Null } catch {}
+if (-not $ready) { throw 'Служба SOLVIA не запустила API 1.1 та HTTPS. Перегляньте install.log і server.log у ProgramData\QureMed\SOLVIA.' }
+$rootCert = Join-Path $localDir 'caddy-data\pki\authorities\local\root.crt'
+# Older Caddy installations can have an extra caddy directory.
+if (-not (Test-Path $rootCert)) { $rootCert = Join-Path $localDir 'caddy-data\caddy\pki\authorities\local\root.crt' }
+if (-not (Test-Path $rootCert)) { throw 'HTTPS запущено, але сертифікат центру ще не знайдено. Повторіть налаштування.' }
+Copy-Item $rootCert (Join-Path $InstallDir 'QureMed-Local-CA.crt') -Force
+$settings['SOLVIA_SETUP_PENDING'] = '0'
+Write-ServerSettings $configPath $settings
+Protect-SetupPath $configPath
+Write-Host ('SOLVIA 1.1 готова. Адреса для телефонів: https://' + $serverIp + ':8443') -ForegroundColor Green

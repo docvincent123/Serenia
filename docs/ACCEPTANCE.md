@@ -1,4 +1,4 @@
-# Приймання SOLVIA 0.3
+# Приймання SOLVIA 1.1
 
 CI має завершити два незалежні потоки: Windows/PostgreSQL та Android.
 
@@ -30,7 +30,7 @@ CI:
 3. кладе `ui/` поруч з EXE;
 4. запускає desktop smoke-test і перевіряє WebView2 child window;
 5. формує portable artifact;
-6. компілює Inno Setup у `SOLVIA-0.3.0-Setup-EXE`.
+6. компілює Inno Setup у `SOLVIA-1.1.0-Setup-EXE`.
 
 Ручне приймання інсталятора на чистому Windows ПК:
 - запуск від адміністратора;
@@ -57,3 +57,4 @@ CI має створити `SOLVIA-Android-test-APK` та пройти Android l
 8. Reception/admin/director не отримують приватний текст через API.
 
 Критерій релізу: green Windows build, green PostgreSQL integration tests, green Android build/lint і ручний LAN сценарій на реальному серверному ПК/Android-планшеті.
+

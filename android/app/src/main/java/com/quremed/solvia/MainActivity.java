@@ -201,7 +201,7 @@ public final class MainActivity extends Activity {
         webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         webSettings.setSupportMultipleWindows(false);
-        webSettings.setUserAgentString(webSettings.getUserAgentString() + " SolviaAndroid/0.3");
+        webSettings.setUserAgentString(webSettings.getUserAgentString() + " SolviaAndroid/1.1");
 
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         reload.setOnClickListener(v -> web.reload());
@@ -268,3 +268,4 @@ public final class MainActivity extends Activity {
         super.onDestroy();
     }
 }
+
