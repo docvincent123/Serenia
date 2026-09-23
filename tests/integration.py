@@ -1,4 +1,4 @@
-"""Exercise the real C++ HTTP server and persisted SQLite database, with synthetic data."""
+"""Exercise the real C++ HTTP server and PostgreSQL database, with synthetic data."""
 import concurrent.futures
 import datetime as dt
 import json
@@ -18,9 +18,10 @@ BINARY = str(pathlib.Path(sys.argv.pop(1)).resolve())
 class Scenario(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp = tempfile.TemporaryDirectory()
-        cls.db = str(pathlib.Path(cls.temp.name) / 'test.db')
-        output = subprocess.check_output([BINARY, '--db', cls.db, '--demo'], text=True, encoding='utf-8')
+        cls.database = os.environ.get('SOLVIA_TEST_DATABASE_URL', '')
+        if not cls.database:
+            raise RuntimeError('SOLVIA_TEST_DATABASE_URL is required')
+        output = subprocess.check_output([BINARY, '--database', cls.database, '--demo'], text=True, encoding='utf-8')
         cls.passwords = dict(line.split(': ', 1) for line in output.splitlines() if ': ' in line)
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0)); cls.port = s.getsockname()[1]
@@ -33,7 +34,7 @@ class Scenario(unittest.TestCase):
             cls.tokens[role] = body['token']
     @classmethod
     def start(cls):
-        cls.proc = subprocess.Popen([BINARY, '--db', cls.db, '--port', str(cls.port)], stdout=subprocess.DEVNULL)
+        cls.proc = subprocess.Popen([BINARY, '--database', cls.database, '--port', str(cls.port)], stdout=subprocess.DEVNULL)
         for _ in range(100):
             try:
                 cls.call('GET', '/api/me'); return
@@ -42,7 +43,7 @@ class Scenario(unittest.TestCase):
         raise RuntimeError('Server failed to start')
     @classmethod
     def tearDownClass(cls):
-        cls.proc.terminate(); cls.proc.wait(timeout=10); cls.temp.cleanup()
+        cls.proc.terminate(); cls.proc.wait(timeout=10)
     @classmethod
     def call(cls, method, path, body=None, token=None):
         headers={'Content-Type':'application/json'}
