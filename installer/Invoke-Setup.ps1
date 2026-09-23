@@ -20,6 +20,8 @@ try {
 } catch {
     $message = 'SOLVIA setup failed: ' + $_.Exception.Message
     Write-Host $message -ForegroundColor Red
+    # Release the transcript handle before appending a fallback error.
+    try { Stop-Transcript | Out-Null } catch {}
     try { Add-Content -LiteralPath $logPath -Value $message -Encoding UTF8 } catch {}
 } finally {
     if ($InputFile -and (Test-Path -LiteralPath $InputFile)) { Remove-Item -LiteralPath $InputFile -Force -ErrorAction SilentlyContinue }

@@ -128,8 +128,7 @@ $env:PGCONNECT_TIMEOUT = '10'
 $psql = Join-Path $postgresBin 'psql.exe'
 if ($existingDatabase) {
     Write-Host 'Зберігаємо наявну базу, пароль БД та облікові записи SOLVIA.'
-    $env:PGDATABASE = $existingDatabase
-    try { Invoke-SetupProcess $psql @('-w','-X','-v','ON_ERROR_STOP=1','-tAc','SELECT 1') -Sensitive | Out-Null }
+    try { Test-SolviaDatabase $psql $existingDatabase }
     catch {
         if ($settings['SOLVIA_SETUP_PENDING'] -ne '1' -or -not $postgresAdminPassword) { throw }
         Remove-Item Env:PGDATABASE -ErrorAction SilentlyContinue
@@ -139,7 +138,7 @@ if ($existingDatabase) {
         if ($dbExists) { throw 'Existing SOLVIA database could not be opened. Check the saved database credentials.' }
         Invoke-SetupProcess (Join-Path $postgresBin 'createdb.exe') @('-w','-h','127.0.0.1','-p','5432','-U','postgres','-O','solvia','solvia') -Sensitive | Out-Null
     }
-    finally { Remove-Item Env:PGDATABASE -ErrorAction SilentlyContinue }
+
     $databaseUrl = $existingDatabase
 } else {
     if (-not $postgresAdminPassword -and -not $NonInteractive) {
@@ -170,12 +169,14 @@ if ($existingDatabase) {
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 $postgresAdminPassword = $null
 
+Test-SolviaDatabase $psql $databaseUrl
+
 Write-Host 'SOLVIA 1.1 — ініціалізація сервера' -ForegroundColor Cyan
 $env:SOLVIA_DATABASE_URL = $databaseUrl
 $env:SOLVIA_ADMIN_LOGIN = $adminLogin
 $env:SOLVIA_ADMIN_PASSWORD = $adminPassword
 $env:SOLVIA_ADMIN_NAME = 'Адміністратор'
-try { Invoke-SetupProcess $serverExe @('--init','--ui',(Join-Path $InstallDir 'ui')) -Sensitive | Out-Null }
+try { Invoke-SetupProcess $serverExe @('--init','--ui',(Join-Path $InstallDir 'ui')) -Sensitive -DiagnosticErrors | Out-Null }
 finally {
     foreach ($key in @('SOLVIA_ADMIN_LOGIN','SOLVIA_ADMIN_PASSWORD','SOLVIA_ADMIN_NAME','SOLVIA_DATABASE_URL')) { [Environment]::SetEnvironmentVariable($key,$null,'Process') }
     $adminPassword = $null

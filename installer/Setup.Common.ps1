@@ -3,7 +3,7 @@ function ConvertTo-ProcessArgument([string]$Value) {
     '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
 function Invoke-SetupProcess {
-    param([string]$FilePath, [string[]]$Arguments, [int]$TimeoutSeconds = 900, [switch]$Sensitive)
+    param([string]$FilePath, [string[]]$Arguments, [int]$TimeoutSeconds = 900, [switch]$Sensitive, [switch]$DiagnosticErrors)
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = $FilePath
     $start.Arguments = (($Arguments | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join ' ')
@@ -30,6 +30,15 @@ function Invoke-SetupProcess {
             if ($errors) { Write-Host $errors.TrimEnd() }
         }
         if ($process.ExitCode -ne 0) {
+            if ($DiagnosticErrors -and $errors) {
+                $safeError = $errors
+                foreach ($key in @('PGPASSWORD','SOLVIA_ADMIN_PASSWORD','SOLVIA_DATABASE_URL')) {
+                    $secret = [Environment]::GetEnvironmentVariable($key,'Process')
+                    if ($secret) { $safeError = $safeError.Replace($secret,'[redacted]') }
+                }
+                $safeError = [regex]::Replace($safeError, '(?i)(postgres(?:ql)?://[^:\s/]+:)[^@\s]+@', '$1[redacted]@')
+                Write-Host $safeError.TrimEnd()
+            }
             throw ('Setup step failed: {0}, exit code {1}.' -f [IO.Path]::GetFileName($FilePath), $process.ExitCode)
         }
         return $output.Trim()
@@ -62,4 +71,16 @@ function Protect-SetupPath([string]$Path, [switch]$Container) {
     Invoke-SetupProcess -FilePath "$env:SystemRoot\System32\icacls.exe" -Arguments @(
         $Path, '/inheritance:r', '/grant:r', ('*S-1-5-18:' + $permissions), ('*S-1-5-32-544:' + $permissions)
     ) | Out-Null
+}
+
+function Test-SolviaDatabase([string]$Psql, [string]$DatabaseUrl) {
+    # Pass the URI without userinfo explicitly; keep its password out of argv/logs.
+    $uri = [Uri]$DatabaseUrl
+    $credentials = $uri.UserInfo -split ':',2
+    if ($credentials.Count -ne 2) { throw 'Invalid saved database connection.' }
+    $env:PGPASSWORD = [Uri]::UnescapeDataString($credentials[1])
+    $publicUri = [regex]::Replace($DatabaseUrl, '^(postgres(?:ql)?://)[^@]+@', '$1')
+    try {
+        Invoke-SetupProcess $Psql @('-w','-X','-U',[Uri]::UnescapeDataString($credentials[0]),'-d',$publicUri,'-v','ON_ERROR_STOP=1','-tAc','SELECT 1') -Sensitive -DiagnosticErrors | Out-Null
+    } finally { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue }
 }

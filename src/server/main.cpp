@@ -1,3 +1,8 @@
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 #include <libpq-fe.h>
@@ -20,6 +25,24 @@
 #include <cstdlib>
 #include "schema.h"
 using J=nlohmann::json;
+// Windows environment strings are UTF-16; getenv converts them through the
+// current ANSI code page, corrupting Ukrainian names and passwords.
+std::string environmentUtf8(const char* key) {
+#ifdef _WIN32
+    std::wstring wideKey(key, key + std::char_traits<char>::length(key));
+    const wchar_t* value = _wgetenv(wideKey.c_str());
+    if (!value || !*value) return {};
+    int length = static_cast<int>(wcslen(value));
+    int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, length, nullptr, 0, nullptr, nullptr);
+    if (!bytes) throw std::runtime_error("Invalid Unicode environment value");
+    std::string result(bytes, '\0');
+    WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, length, result.data(), bytes, nullptr, nullptr);
+    return result;
+#else
+    const char* value = std::getenv(key);
+    return value ? value : "";
+#endif
+}
 struct Error:std::runtime_error {int status; Error(int s,const std::string&m):runtime_error(m),status(s){}};
 void check(bool yes,const std::string&m,int status=400){if(!yes)throw Error(status,m);}
 long long epoch(){return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();}
@@ -82,6 +105,11 @@ explicit DB(const std::string&connection){
     if(!db||PQstatus(db)!=CONNECTION_OK){
         std::string message=db?PQerrorMessage(db):"PostgreSQL connection failed";
         if(db){PQfinish(db);db=nullptr;}
+        throw std::runtime_error(message);
+    }
+    if (PQsetClientEncoding(db, "UTF8") != 0) {
+        std::string message = PQerrorMessage(db);
+        PQfinish(db); db = nullptr;
         throw std::runtime_error(message);
     }
     exec(Schema);
@@ -185,8 +213,8 @@ std::cout<<"SOLVIA server: "<<host<<":"<<port<<std::endl;if(!server.listen(host,
 int main(int argc,char**argv){try{
 std::map<std::string,std::string> args;
 for(int i=1;i<argc;++i){std::string k=argv[i];if(k=="--init"||k=="--demo")args[k]="1";else if(i+1<argc)args[k]=argv[++i];else throw std::runtime_error("Missing argument");}
-const char* envDb=std::getenv("SOLVIA_DATABASE_URL");
-std::string database=args.count("--database")?args["--database"]:(envDb?envDb:"");
+auto envDb=environmentUtf8("SOLVIA_DATABASE_URL");
+std::string database=args.count("--database")?args["--database"]:envDb;
 check(!database.empty(),"SOLVIA_DATABASE_URL or --database is required");
 App app(database);
 if(args.count("--init")||args.count("--demo")){
@@ -200,11 +228,11 @@ if(args.count("--init")||args.count("--demo")){
         J users=J::array({J::array({"Administrator","admin","admin"}),J::array({"Reception","reception","reception"}),J::array({"Psychologist","psychologist","psychologist"}),J::array({"Director","director","director"})});
         for(auto&u:users){auto pw=randomToken().substr(0,20);app.db.query("INSERT INTO users(name,login,password,role) VALUES(?,?,?,?)",{u[0],u[1],hashPassword(pw),u[2]});std::cout<<u[1].get<std::string>()<<": "<<pw<<std::endl;}
     }else{
-        const char* rawLogin=std::getenv("SOLVIA_ADMIN_LOGIN");std::string login=rawLogin?rawLogin:"";
+        auto login=environmentUtf8("SOLVIA_ADMIN_LOGIN");
         check(std::regex_match(login,std::regex("[A-Za-z0-9._-]{3,64}")),"SOLVIA_ADMIN_LOGIN must contain 3-64 safe characters");
-        const char* raw=std::getenv("SOLVIA_ADMIN_PASSWORD");std::string pw=raw?raw:"";
+        auto pw=environmentUtf8("SOLVIA_ADMIN_PASSWORD");
         check(pw.size()>=12&&pw.size()<=128&&pw.find('\n')==std::string::npos&&pw.find('\r')==std::string::npos,"SOLVIA_ADMIN_PASSWORD must contain 12-128 characters");
-        const char* rawName=std::getenv("SOLVIA_ADMIN_NAME");std::string name=rawName&&*rawName?rawName:"Administrator";
+        auto name=environmentUtf8("SOLVIA_ADMIN_NAME");if(name.empty())name="Administrator";
         app.db.query("INSERT INTO users(name,login,password,role) VALUES(?,?,?,?)",{name,login,hashPassword(pw),"admin"});
     }
     for(auto n:{"Кабінет 1","Кабінет 2","Групова зала"})app.db.query("INSERT INTO rooms(name) VALUES(?)",{n});

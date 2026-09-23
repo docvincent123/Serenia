@@ -72,6 +72,10 @@ jobs:
       - name: Build native executables
         run: cmake --build build --config Release --parallel
 
+      - name: Verify Windows PostgreSQL initialization and Unicode
+        shell: powershell
+        run: ./tests/windows-bootstrap.ps1
+
       - name: Stage React UI beside desktop executable
         shell: pwsh
         run: |

@@ -37,6 +37,7 @@ try {
         try { Invoke-SetupProcess $exe @('-NoProfile','-File',(Join-Path $testDir 'Invoke-Setup.ps1'),'-InstallDir',$testDir,'-NonInteractive') } catch { $failed = $true }
         if (-not $failed) { throw 'Child parser failure returned success' }
         $log = Join-Path $testDir 'QureMed\SOLVIA\install.log'
+        if ((Get-Content $log -Raw) -match 'TerminatingError\(Add-Content\)') { throw 'Transcript file was appended while locked' }
         if (-not (Test-Path $log) -or (Get-Content $log -Raw) -notmatch 'SOLVIA setup failed') { throw 'Persistent error log missing' }
     } finally { $env:ProgramData = $oldData }
     Write-Host 'Installer regression tests passed on Windows PowerShell' $PSVersionTable.PSVersion
