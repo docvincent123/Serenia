@@ -7,6 +7,23 @@ const roleLabels = {
   director: 'Керівник центру'
 };
 
+const riskFlagOptions = [
+  ['anxiety', 'Тривога'],
+  ['depression', 'Депресивні прояви'],
+  ['ptsd', 'ПТСР / флешбеки'],
+  ['sleep', 'Порушення сну'],
+  ['panic', 'Панічні прояви'],
+  ['aggression', 'Агресія / дратівливість'],
+  ['family_conflict', 'Сімейний конфлікт'],
+  ['burnout', 'Емоційне виснаження'],
+  ['suicide', 'Суїцидальний ризик'],
+  ['harm_others', 'Ризик для оточення'],
+  ['urgent_followup', 'Терміновий повторний контакт'],
+  ['doctor_referral', 'Скерування до лікаря / психіатра'],
+  ['family_work', 'Потреба у сімейній роботі'],
+  ['group_work', 'Потреба у груповій терапії']
+];
+
 const categoryTone = {
   'Військовий/військова': 'olive',
   'Ветеран/ветеранка': 'forest',
@@ -842,7 +859,12 @@ function PatientCard({ api, role, patientId, back }) {
   const [dialog, setDialog] = useState('');
   const [consultDate, setConsultDate] = useState(localDate());
   const [dayAppointments, setDayAppointments] = useState([]);
-  const [consultation, setConsultation] = useState({ appointment_id: '', note: '', goals: '', next_plan: '', homework: '' });
+  const [consultation, setConsultation] = useState({
+    appointment_id: '', consultation_type: 'repeat', duration_minutes: 60,
+    request_text: '', state_text: '', work_done: '', note: '', goals: '',
+    next_plan: '', homework: '', recommendations: '', result_text: '',
+    risk_level: 'low', risk_flags: []
+  });
   const [assessmentLink, setAssessmentLink] = useState('');
 
   const isPsychologist = role === 'psychologist';
@@ -871,7 +893,12 @@ function PatientCard({ api, role, patientId, back }) {
 
   function openConsultation() {
     setConsultDate(localDate());
-    setConsultation({ appointment_id: '', note: '', goals: '', next_plan: '', homework: '' });
+    setConsultation({
+      appointment_id: '', consultation_type: 'repeat', duration_minutes: 60,
+      request_text: '', state_text: '', work_done: '', note: '', goals: '',
+      next_plan: '', homework: '', recommendations: '', result_text: '',
+      risk_level: 'low', risk_flags: []
+    });
     setDayAppointments([]);
     setDialog('consultation');
     loadConsultationsForDay(localDate());
@@ -896,13 +923,31 @@ function PatientCard({ api, role, patientId, back }) {
         note: consultation.note,
         goals: consultation.goals,
         next_plan: consultation.next_plan,
-        homework: consultation.homework
+        homework: consultation.homework,
+        consultation_type: consultation.consultation_type,
+        duration_minutes: Number(consultation.duration_minutes),
+        request_text: consultation.request_text,
+        state_text: consultation.state_text,
+        work_done: consultation.work_done,
+        recommendations: consultation.recommendations,
+        result_text: consultation.result_text,
+        risk_level: consultation.risk_level,
+        risk_flags: consultation.risk_flags
       });
       setDialog('');
       await load();
     } catch (e) {
       setError(e.message);
     }
+  }
+
+  function toggleRiskFlag(value) {
+    setConsultation((current) => ({
+      ...current,
+      risk_flags: current.risk_flags.includes(value)
+        ? current.risk_flags.filter((x) => x !== value)
+        : [...current.risk_flags, value]
+    }));
   }
 
   async function assignAssessment() {
