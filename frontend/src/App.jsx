@@ -1011,6 +1011,18 @@ function PatientCard({ api, role, patientId, back }) {
     } catch (e) { setError(e.message); }
   }
 
+  function printDischargeDocument() {
+    const previous = document.title;
+    document.title = `app.solvia · №${card.patient_no || '00000'}`;
+    const restore = () => {
+      document.title = previous;
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    window.print();
+    setTimeout(restore, 1500);
+  }
+
   function openPatientEdit() {
     setPatientEdit({
       name: card.name || '',
@@ -1362,33 +1374,53 @@ function PatientCard({ api, role, patientId, back }) {
         <Dialog title="Виписка пацієнта" subtitle="Попередній перегляд документа" onClose={() => { setDialog(''); setPrintDoc(null); }} wide>
           <article className="discharge-print">
             <header className="discharge-header">
-              <div>
+              <img className="discharge-logo" src={printDoc.center.logo_data || '/solvia-icon.png'} alt="Емблема" />
+              <div className="discharge-center-copy">
                 <strong>{printDoc.center.center_name || 'SOLVIA'}</strong>
-                <p>{[printDoc.center.address, printDoc.center.phone, printDoc.center.email].filter(Boolean).join(' · ')}</p>
+                {printDoc.center.address && <p>{printDoc.center.address}</p>}
+                <p>{[printDoc.center.phone, printDoc.center.email, printDoc.center.website].filter(Boolean).join(' · ')}</p>
               </div>
-              <div className="product-mark"><span className="solvia-glyph">S</span></div>
+              <div className="discharge-doc-number">№ {card.patient_no || '00000'}</div>
             </header>
-            <h1>Виписка психологічного супроводу</h1>
-            <dl className="profile-list">
+            <div className="discharge-title">
+              <div className="eyebrow">ПСИХОЛОГІЧНИЙ СУПРОВІД</div>
+              <h1>ВИПИСКА</h1>
+              <p>Дата формування: {printDoc.item.created?.slice(0, 10) || localDate()}</p>
+            </div>
+            <dl className="profile-list discharge-profile">
+              <div><dt>Номер пацієнта</dt><dd>№{card.patient_no || '00000'}</dd></div>
               <div><dt>Пацієнт</dt><dd>{card.name}</dd></div>
               <div><dt>Дата народження</dt><dd>{card.dob}</dd></div>
               <div><dt>Категорія</dt><dd>{card.category}</dd></div>
-              <div><dt>Період</dt><dd>{printDoc.item.date_from} — {printDoc.item.date_to}</dd></div>
-              <div><dt>Консультацій</dt><dd>{printDoc.item.consultation_count}</dd></div>
+              <div><dt>Період супроводу</dt><dd>{printDoc.item.date_from} — {printDoc.item.date_to}</dd></div>
+              <div><dt>Кількість консультацій</dt><dd>{printDoc.item.consultation_count}</dd></div>
             </dl>
             <section><h3>Підсумок психологічного супроводу</h3><p>{printDoc.item.summary}</p></section>
             <section><h3>Динаміка</h3><p>{printDoc.item.dynamics || '—'}</p></section>
             <section><h3>Рекомендації</h3><p>{printDoc.item.recommendations || '—'}</p></section>
             <section><h3>Подальший супровід</h3><p>{printDoc.item.followup || '—'}</p></section>
-            <footer>
-              <span>{printDoc.center.discharge_signatory || printDoc.item.author || ''}</span>
-              <span>____________________</span>
-              <small>{printDoc.center.document_footer || ''}</small>
+
+            <div className="signature-grid">
+              <div className="signature-block">
+                <strong>{printDoc.center.discharge_signatory || 'Психолог'}</strong>
+                <span>{printDoc.item.psychologist || '________________________'}</span>
+                <div className="signature-line">підпис</div>
+              </div>
+              <div className="signature-block">
+                <strong>{printDoc.center.head_title || 'Завідувач центру'}</strong>
+                <span>{printDoc.center.head_name || printDoc.center.director_name || '________________________'}</span>
+                <div className="signature-line">підпис</div>
+              </div>
+            </div>
+
+            <footer className="discharge-footer">
+              <span>app.solvia · №{card.patient_no || '00000'}</span>
+              <span>{printDoc.center.document_footer || ''}</span>
             </footer>
           </article>
           <div className="form-actions no-print">
             <Button type="button" variant="ghost" onClick={() => { setDialog(''); setPrintDoc(null); }}>Закрити</Button>
-            <Button type="button" onClick={() => window.print()}>Друк / Зберегти PDF</Button>
+            <Button type="button" onClick={printDischargeDocument}>Друк / Зберегти PDF</Button>
           </div>
         </Dialog>
       )}
