@@ -56,7 +56,7 @@ void fatal(const wchar_t* message) {
 }
 
 std::wstring launchUrl() {
-    std::wstring url = L"http://app.solvia.local/index.html";
+    std::wstring url = L"http://app.solvia/";
     const auto api = envValue(L"SOLVIA_API");
     if (!api.empty()) {
         url += L"?api=";
@@ -148,7 +148,7 @@ void createWebView(HWND hwnd) {
                             }
 
                             const HRESULT mapping = webview3->SetVirtualHostNameToFolderMapping(
-                                L"app.solvia.local",
+                                L"app.solvia",
                                 uiPath.c_str(),
                                 COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS
                             );
