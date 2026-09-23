@@ -898,6 +898,7 @@ function PatientCard({ api, role, patientId, back }) {
   const [assessmentLink, setAssessmentLink] = useState('');
   const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
   const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate(), summary: '', dynamics: '', recommendations: '', followup: '' });
+  const [printDoc, setPrintDoc] = useState(null);
 
   const isPsychologist = role === 'psychologist';
   const isAdmin = role === 'admin';
@@ -998,6 +999,14 @@ function PatientCard({ api, role, patientId, back }) {
       await api('POST', '/api/discharges', { patient_id: Number(patientId), ...discharge });
       setDialog('');
       await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function openDischargePrint(item) {
+    try {
+      const center = await api('GET', '/api/settings/center');
+      setPrintDoc({ item, center });
+      setDialog('print-discharge');
     } catch (e) { setError(e.message); }
   }
 
@@ -1188,7 +1197,7 @@ function PatientCard({ api, role, patientId, back }) {
               {card.discharges.map((d) => (
                 <div className="assessment-row" key={d.id}>
                   <div><strong>{d.date_from} — {d.date_to}</strong><span>{d.consultation_count} консультацій · {d.author}</span></div>
-                  <Badge tone="forest">Збережено</Badge>
+                  <Button variant="secondary" onClick={() => openDischargePrint(d)}>Перегляд / PDF</Button>
                 </div>
               ))}
             </div>
@@ -1304,6 +1313,41 @@ function PatientCard({ api, role, patientId, back }) {
             <Field label="Подальший супровід" full><textarea rows="4" value={discharge.followup} onChange={(e) => setDischarge({ ...discharge, followup: e.target.value })} /></Field>
             <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти виписку</Button></div>
           </form>
+        </Dialog>
+      )}
+
+      {dialog === 'print-discharge' && printDoc && (
+        <Dialog title="Виписка пацієнта" subtitle="Попередній перегляд документа" onClose={() => { setDialog(''); setPrintDoc(null); }} wide>
+          <article className="discharge-print">
+            <header className="discharge-header">
+              <div>
+                <strong>{printDoc.center.center_name || 'SOLVIA'}</strong>
+                <p>{[printDoc.center.address, printDoc.center.phone, printDoc.center.email].filter(Boolean).join(' · ')}</p>
+              </div>
+              <div className="product-mark"><span className="solvia-glyph">S</span></div>
+            </header>
+            <h1>Виписка психологічного супроводу</h1>
+            <dl className="profile-list">
+              <div><dt>Пацієнт</dt><dd>{card.name}</dd></div>
+              <div><dt>Дата народження</dt><dd>{card.dob}</dd></div>
+              <div><dt>Категорія</dt><dd>{card.category}</dd></div>
+              <div><dt>Період</dt><dd>{printDoc.item.date_from} — {printDoc.item.date_to}</dd></div>
+              <div><dt>Консультацій</dt><dd>{printDoc.item.consultation_count}</dd></div>
+            </dl>
+            <section><h3>Підсумок психологічного супроводу</h3><p>{printDoc.item.summary}</p></section>
+            <section><h3>Динаміка</h3><p>{printDoc.item.dynamics || '—'}</p></section>
+            <section><h3>Рекомендації</h3><p>{printDoc.item.recommendations || '—'}</p></section>
+            <section><h3>Подальший супровід</h3><p>{printDoc.item.followup || '—'}</p></section>
+            <footer>
+              <span>{printDoc.center.discharge_signatory || printDoc.item.author || ''}</span>
+              <span>____________________</span>
+              <small>{printDoc.center.document_footer || ''}</small>
+            </footer>
+          </article>
+          <div className="form-actions no-print">
+            <Button type="button" variant="ghost" onClick={() => { setDialog(''); setPrintDoc(null); }}>Закрити</Button>
+            <Button type="button" onClick={() => window.print()}>Друк / Зберегти PDF</Button>
+          </div>
         </Dialog>
       )}
 
