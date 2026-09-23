@@ -86,7 +86,7 @@ $configPath = Join-Path $programData 'server.env'
 $settings = Read-ServerSettings $configPath
 $existingDatabase = $settings['SOLVIA_DATABASE_URL']
 if ($existingDatabase -and $existingDatabase -match '\s+SOLVIA_') {
-    throw 'Попередній server.env містить об’єднані рядки. Збережіть копію та виправте кожен SOLVIA_параметр на окремому рядку. Дані PostgreSQL не змінено.'
+    throw 'Попередній server.env містить обʼєднані рядки. Збережіть копію та виправте кожен SOLVIA_параметр на окремому рядку. Дані PostgreSQL не змінено.'
 }
 
 $adminLogin = ''

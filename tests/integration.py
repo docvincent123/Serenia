@@ -22,6 +22,8 @@ class Scenario(unittest.TestCase):
         if not cls.database:
             raise RuntimeError('SOLVIA_TEST_DATABASE_URL is required')
         output = subprocess.check_output([BINARY, '--database', cls.database, '--demo'], text=True, encoding='utf-8')
+        # Re-running setup must preserve existing users and their credentials.
+        subprocess.check_call([BINARY, '--database', cls.database, '--init'])
         cls.passwords = dict(line.split(': ', 1) for line in output.splitlines() if ': ' in line)
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0)); cls.port = s.getsockname()[1]
@@ -148,3 +150,4 @@ class Scenario(unittest.TestCase):
         self.api(psy,'GET','/api/me',status=401)
 
 if __name__=='__main__': unittest.main()
+

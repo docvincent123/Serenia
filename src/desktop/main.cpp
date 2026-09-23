@@ -200,7 +200,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     HWND window = CreateWindowExW(
         0,
         wc.lpszClassName,
-        L"SOLVIA by QureMed • Центр психологічної реабілітації",
+        L"SOLVIA 1.1 by QureMed • Центр психологічної реабілітації",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -229,3 +229,4 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (SUCCEEDED(com)) CoUninitialize();
     return static_cast<int>(msg.wParam);
 }
+
