@@ -144,12 +144,117 @@ if ($service) {
 
 $serverIp = Get-ServerIp
 Write-Host ("LAN IP серверного ПК: " + $serverIp) -ForegroundColor Green
+Write-Host ''
+Write-Host 'Створення першого адміністратора SOLVIA' -ForegroundColor Cyan
 
-$adminSecure = Read-Host 'Створіть пароль адміністратора SOLVIA (мінімум 12 символів)' -AsSecureString
+$adminLogin = Read-Host 'Придумайте логін адміністратора'
+if ($adminLogin -notmatch '^[A-Za-z0-9._-]{3,64}
+
+$configPath = Join-Path $programData 'server.env'
+$databaseUrl = 'postgresql://solvia:' + $databasePassword + '@127.0.0.1:5432/solvia'
+$config = @(
+    'SOLVIA_DATABASE_URL=' + $databaseUrl,
+    'SOLVIA_SERVER_IP=' + $serverIp,
+    'SOLVIA_API_PORT=8765',
+    'SOLVIA_INSTALL_DIR=' + $InstallDir
+)
+[IO.File]::WriteAllLines($configPath, $config, [Text.UTF8Encoding]::new($false))
+Protect-Path $configPath
+
+$env:SOLVIA_DATABASE_URL = $databaseUrl
+$env:SOLVIA_ADMIN_LOGIN = $adminLogin
+$env:SOLVIA_ADMIN_PASSWORD = $adminPassword
+$env:SOLVIA_ADMIN_NAME = 'Адміністратор'
+try {
+    & (Join-Path $InstallDir 'SolviaServer.exe') --init --ui (Join-Path $InstallDir 'ui')
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host 'База вже могла бути ініціалізована раніше. Перевіряємо запуск сервера...' -ForegroundColor Yellow
+    }
+} finally {
+    Remove-Item Env:SOLVIA_ADMIN_LOGIN -ErrorAction SilentlyContinue
+    Remove-Item Env:SOLVIA_ADMIN_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:SOLVIA_ADMIN_NAME -ErrorAction SilentlyContinue
+    Remove-Item Env:SOLVIA_DATABASE_URL -ErrorAction SilentlyContinue
+    $adminPassword = $null
+}
+
+Refresh-Path
+$caddy = Get-Command caddy.exe -ErrorAction SilentlyContinue
+if (-not $caddy) {
+    Write-Host 'Встановлюємо локальний HTTPS (Caddy)...'
+    & winget.exe install --exact --id CaddyServer.Caddy --accept-package-agreements --accept-source-agreements --disable-interactivity
+    if ($LASTEXITCODE -ne 0) { throw 'Не вдалося встановити Caddy.' }
+    Refresh-Path
+    $caddy = Get-Command caddy.exe -ErrorAction Stop
+}
+
+$settingsLines = [System.Collections.Generic.List[string]]::new()
+$settingsLines.AddRange([string[]][IO.File]::ReadAllLines($configPath))
+$settingsLines.Add('SOLVIA_CADDY_EXE=' + $caddy.Source)
+[IO.File]::WriteAllLines($configPath, $settingsLines, [Text.UTF8Encoding]::new($false))
+Protect-Path $configPath
+
+$caddyData = (Join-Path $localDir 'caddy-data').Replace('\','/')
+$caddyConfigPath = Join-Path $localDir 'Caddyfile'
+$caddyConfig = @"
+{
+    admin off
+    auto_https disable_redirects
+    storage file_system {
+        root "$caddyData"
+    }
+}
+https://$serverIp {
+    tls internal
+    encode gzip
+    reverse_proxy 127.0.0.1:8765
+}
+"@
+[IO.File]::WriteAllText($caddyConfigPath, $caddyConfig, [Text.UTF8Encoding]::new($false))
+& $caddy.Source validate --config $caddyConfigPath --adapter caddyfile
+if ($LASTEXITCODE -ne 0) { throw 'Помилка конфігурації локального HTTPS.' }
+
+Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+New-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 443 -RemoteAddress LocalSubnet -Profile Private | Out-Null
+
+$runScript = Join-Path $InstallDir 'installer\Run-Server.ps1'
+$argument = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $runScript + '" -InstallDir "' + $InstallDir + '"'
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argument
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+Register-ScheduledTask -TaskName 'SOLVIA Local Server' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+Start-ScheduledTask -TaskName 'SOLVIA Local Server'
+
+$rootCert = Join-Path $localDir 'caddy-data\caddy\pki\authorities\local\root.crt'
+for ($i=0; $i -lt 30 -and -not (Test-Path $rootCert); $i++) { Start-Sleep -Seconds 1 }
+if (Test-Path $rootCert) {
+    Copy-Item $rootCert (Join-Path $InstallDir 'QureMed-Local-CA.crt') -Force
+}
+
+Write-Host ''
+Write-Host 'SOLVIA встановлено.' -ForegroundColor Green
+Write-Host ('Сервер для телефонів: https://' + $serverIp) -ForegroundColor Green
+Write-Host ('Логін адміністратора: ' + $adminLogin) -ForegroundColor Green
+Write-Host 'Пароль адміністратора: той, який ви щойно задали.' -ForegroundColor Green
+$adminLogin = $null
+Write-Host ''
+Write-Host 'Для Android встановіть QureMed-Local-CA.crt як довірений CA-сертифікат, а у застосунку введіть адресу сервера вище.'
+) {
+    throw 'Логін адміністратора: 3–64 символи, латинські літери, цифри, крапка, дефіс або підкреслення.'
+}
+
+$adminSecure = Read-Host 'Придумайте пароль адміністратора SOLVIA (мінімум 12 символів)' -AsSecureString
 $adminPassword = Get-PlainText $adminSecure
+$adminConfirmSecure = Read-Host 'Повторіть пароль адміністратора' -AsSecureString
+$adminConfirm = Get-PlainText $adminConfirmSecure
 if ($adminPassword.Length -lt 12 -or $adminPassword.Length -gt 128 -or $adminPassword -match "[\r\n]") {
     throw 'Пароль адміністратора повинен містити 12–128 символів.'
 }
+if ($adminPassword -cne $adminConfirm) {
+    throw 'Паролі адміністратора не співпадають.'
+}
+$adminConfirm = $null
 
 $configPath = Join-Path $programData 'server.env'
 $databaseUrl = 'postgresql://solvia:' + $databasePassword + '@127.0.0.1:5432/solvia'
