@@ -1032,3 +1032,34 @@ h1, h2, h3 { letter-spacing: -.025em; }
   .search-popover button > small { grid-column: 2; }
   .sidebar-version { display: none; }
 }
+
+
+/* SOLVIA 2.0 clinical */
+.check-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 8px; }
+.check-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid #dce5de;
+  border-radius: 11px;
+  background: #f8faf8;
+  cursor: pointer;
+}
+.check-chip input { width: auto; margin: 0; }
+.risk-strip { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0 14px; }
+.room-card { min-height: 150px; align-items: flex-start; position: relative; }
+.room-card-main { display: grid; gap: 6px; min-width: 0; }
+.room-card-main p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.room-actions { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.room-inactive { opacity: .64; filter: saturate(.7); }
+.maintenance-card { margin-top: 18px; }
+.backup-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.solvia-glyph { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-weight: 650; }
+.nav-icon { font-family: "Segoe UI Symbol", "Segoe UI", sans-serif; opacity: .9; }
+
+@media (max-width: 760px) {
+  .check-grid { grid-template-columns: 1fr; }
+  .room-actions { flex-wrap: wrap; }
+}
