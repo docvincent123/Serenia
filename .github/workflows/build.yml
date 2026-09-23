@@ -27,13 +27,15 @@ jobs:
 
       - name: Install React dependencies
         shell: pwsh
-        run: npm install --prefix frontend --no-audit --no-fund
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
 
       - name: Build React interface
         shell: pwsh
+        working-directory: frontend
         run: |
-          npm run build --prefix frontend
-          if (!(Test-Path frontend/dist/index.html)) { throw 'React build did not produce index.html' }
+          npm run build
+          if (!(Test-Path dist/index.html)) { throw 'React build did not produce index.html' }
 
       - uses: actions/cache/restore@v4
         with:
