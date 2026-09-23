@@ -62,6 +62,12 @@ class Scenario(unittest.TestCase):
         other=self.api(admin,'POST','/api/users',{'name':'Інший психолог','login':'other','password':'long-test-password','role':'psychologist'})['id']
         _,auth=self.call('POST','/api/login',{'login':'other','password':'long-test-password'})
         self.tokens['other']=auth['token']
+        managed=self.api(admin,'POST','/api/users',{'name':'Керований працівник','login':'managed','password':'managed-test-password','role':'reception'})['id']
+        self.api(admin,'PATCH',f'/api/users/{managed}',{'role':'psychologist','active':True})
+        managed_row=next(x for x in self.api(admin,'GET','/api/users') if x['id']==managed)
+        self.assertEqual(managed_row['role'],'psychologist')
+        self.assertTrue(managed_row['active'])
+        self.api(admin,'PATCH','/api/users/1',{'active':False},status=409)
         family=self.api(rec,'POST','/api/families',{'name':'Тестова сім’я'})['id']
         p={'name':'Тестовий Пацієнт','phone':'+380000000000','dob':'1990-01-01','category':'Ветеран/ветеранка','psychologist_id':3,'family_id':family,'family_role':'Військовий'}
         pid=self.api(rec,'POST','/api/patients',p)['id']
