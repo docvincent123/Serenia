@@ -1,4 +1,4 @@
-name: SOLVIA • React desktop build and security tests
+name: SOLVIA • Desktop installer and PostgreSQL tests
 
 on:
   push:
@@ -10,13 +10,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: solvia-${{ github.workflow }}-${{ github.ref }}
+  group: solvia-desktop-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   windows:
     runs-on: windows-2022
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -24,10 +24,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       - name: Install React dependencies
         shell: pwsh
@@ -44,22 +40,19 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
-          key: solvia-vcpkg-react-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
+          key: solvia-vcpkg-postgres-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
 
       - name: Configure C++20 server and WebView2 shell
         shell: pwsh
-        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-solvia -DVCPKG_OVERLAY_TRIPLETS="${{ github.workspace }}/cmake/triplets" -DBUILD_TESTING=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-solvia -DVCPKG_OVERLAY_TRIPLETS="${{ github.workspace }}/cmake/triplets" -DBUILD_TESTING=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 
       - uses: actions/cache/save@v4
         with:
           path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
-          key: solvia-vcpkg-react-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
+          key: solvia-vcpkg-postgres-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
 
       - name: Build native executables
         run: cmake --build build --config Release --parallel
-
-      - name: Test API scenario and role isolation
-        run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Stage React UI beside desktop executable
         shell: pwsh
@@ -87,13 +80,71 @@ jobs:
           Copy-Item scripts/*.bat out/SOLVIA/
           Copy-Item README.md out/SOLVIA/
           Copy-Item docs out/SOLVIA/ -Recurse
+          Copy-Item installer out/SOLVIA/ -Recurse
           New-Item -ItemType Directory -Force out/SOLVIA/licenses | Out-Null
           Get-ChildItem build/vcpkg_installed/x64-windows-solvia/share -Filter copyright -Recurse | ForEach-Object {
             Copy-Item $_.FullName ("out/SOLVIA/licenses/" + $_.Directory.Name + ".txt")
           }
 
+      - name: Build Windows installer EXE
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw 'Inno Setup compiler not found' }
+          & $iscc installer/SOLVIA.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup build failed' }
+
       - uses: actions/upload-artifact@v4
         with:
-          name: SOLVIA-0.2.0-Windows-x64
+          name: SOLVIA-0.3.0-Windows-x64-portable
           path: out/SOLVIA/
           retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SOLVIA-0.3.0-Setup-EXE
+          path: out/installer/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  postgres-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: solvia_test_password
+          POSTGRES_DB: solvia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d solvia_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Bootstrap vcpkg
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git /tmp/vcpkg
+          /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Configure server against PostgreSQL
+        run: cmake -S . -B build-server -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/tmp/vcpkg/scripts/buildsystems/vcpkg.cmake -DBUILD_TESTING=ON
+
+      - name: Build server
+        run: cmake --build build-server --target SolviaServer --parallel 2
+
+      - name: Run PostgreSQL privacy and workflow tests
+        env:
+          SOLVIA_TEST_DATABASE_URL: postgresql://postgres:solvia_test_password@127.0.0.1:5432/solvia_test
+        run: ctest --test-dir build-server --output-on-failure
