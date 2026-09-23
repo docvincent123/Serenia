@@ -239,6 +239,41 @@ class MainActivity : Activity() {
 
     private fun homeScreen() {
         backAction = null
+        val checking = root()
+        checking.addView(logo(64))
+        checking.addView(title("SOLVIA 2.0", 20f))
+        checking.addView(caption("Перевіряємо відкриття зміни…"))
+        setContentView(scroll(checking))
+        apiAsync("GET", "/api/shift-day") { result ->
+            val shift = result as JSONObject
+            if (shift.optBoolean("open", false)) renderHomeScreen()
+            else renderShiftGate(shift)
+        }
+    }
+
+    private fun renderShiftGate(shift: JSONObject) {
+        val body = root()
+        body.addView(logo())
+        body.addView(title("Зміна ще не відкрита"))
+        body.addView(caption("Дата: " + shift.optString("shift_date", LocalDate.now().toString())))
+        if (role == "admin") {
+            body.addView(caption("Підтвердіть відкриття робочої зміни. Після цього команда зможе працювати в SOLVIA."))
+            body.addView(primary("Підтвердити відкриття зміни") {
+                apiAsync("POST", "/api/shift-day", JSONObject().put("action", "open")) { homeScreen() }
+            })
+        } else {
+            body.addView(caption("Адміністратор має підтвердити відкриття зміни на сьогодні."))
+        }
+        body.addView(secondary("Перевірити ще раз") { homeScreen() })
+        body.addView(secondary("Вийти") {
+            token = ""
+            loginScreen()
+        })
+        setContentView(scroll(body))
+    }
+
+    private fun renderHomeScreen() {
+        backAction = null
         val outer = root()
         outer.addView(logo(64))
         val head = LinearLayout(this).apply {
