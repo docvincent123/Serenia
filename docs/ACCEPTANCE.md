@@ -1,4 +1,4 @@
-# Приймання SOLVIA 1.1
+# Приймання SOLVIA 2.0
 
 CI має завершити два незалежні потоки: Windows/PostgreSQL та Android.
 
@@ -30,7 +30,7 @@ CI:
 3. кладе `ui/` поруч з EXE;
 4. запускає desktop smoke-test і перевіряє WebView2 child window;
 5. формує portable artifact;
-6. компілює Inno Setup у `SOLVIA-1.1.0-Setup-EXE`.
+6. компілює Inno Setup у `SOLVIA-2.0.0-Setup-EXE`.
 
 Ручне приймання інсталятора на чистому Windows ПК:
 - запуск від адміністратора;
@@ -44,15 +44,15 @@ CI:
 
 ## Android
 
-CI має створити `SOLVIA-Android-test-APK` та пройти Android lint.
+CI має створити `SOLVIA-2.0.0-Android-test-APK` та пройти Android lint.
 
 Ручний сценарій:
 1. Android підключений до Wi-Fi центру.
 2. Встановлений `QureMed-Local-CA.crt`.
-3. У SOLVIA введена адреса `https://<server-ip>`.
-4. Психолог входить своїм логіном.
+3. У SOLVIA введена адреса `https://<server-ip>:8443`.
+4. Адміністратор підтверджує відкриття зміни; після цього психолог входить своїм логіном.
 5. Бачить власний календар та тільки своїх пацієнтів.
-6. Відкриває картку, додає consultation/note/goals/next plan/homework.
+6. Відкриває картку, додає структуровану консультацію, ризики, цілі, план і рекомендації.
 7. На desktop керівника змінюється агрегована статистика.
 8. Reception/admin/director не отримують приватний текст через API.
 
