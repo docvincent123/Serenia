@@ -1,5 +1,5 @@
 #define MyAppName "SOLVIA by QureMed"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "QureMed Industries"
 #define MyAppExeName "Solvia.exe"
 
@@ -20,6 +20,7 @@ SolidCompression=yes
 WizardStyle=modern
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\assets\solvia.ico
 
 [Files]
 Source: "..\out\SOLVIA\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -61,7 +62,7 @@ end;
 procedure InitializeWizard;
 begin
   Configured := False;
-  AccountPage := CreateInputQueryPage(wpSelectDir, 'SOLVIA 1.1 — налаштування центру',
+  AccountPage := CreateInputQueryPage(wpSelectDir, 'SOLVIA 2.0 — налаштування центру',
     'Обліковий запис адміністратора',
     'Для першого встановлення створіть адміністратора. При оновленні наявні облікові записи зберігаються. Пароль postgres потрібен лише для підключення до вже встановленого PostgreSQL без конфігурації SOLVIA.');
   AccountPage.Add('Логін адміністратора (латиниця, цифри, . _ -):', False);
@@ -97,11 +98,17 @@ var
   Progress: TOutputMarqueeProgressWizardPage;
   Retry: Boolean;
 begin
+  if CurStep = ssInstall then begin
+    Exec(ExpandConstant('{sys}\schtasks.exe'), '/End /TN ""SOLVIA Local Server""', '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM SolviaServer.exe', '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+    Sleep(900);
+    Exit;
+  end;
   if CurStep <> ssPostInstall then Exit;
   InputDir := ExpandConstant('{tmp}\solvia-private');
   InputPath := InputDir + '\setup-input.txt';
   LogPath := ExpandConstant('{commonappdata}\QureMed\SOLVIA\install.log');
-  Progress := CreateOutputMarqueeProgressPage('Налаштування SOLVIA 1.1', 'Встановлення PostgreSQL та запуск сервера можуть тривати кілька хвилин.');
+  Progress := CreateOutputMarqueeProgressPage('Налаштування SOLVIA 2.0', 'Встановлення PostgreSQL та запуск сервера можуть тривати кілька хвилин.');
   repeat
     Retry := False;
     Progress.Show;
