@@ -35,6 +35,7 @@ if(WIN32)
     unofficial::webview2::webview2
     ole32
     user32
+    shell32
   )
 
   if(MSVC)
