@@ -77,7 +77,6 @@ jobs:
           New-Item -ItemType Directory -Force out/SOLVIA | Out-Null
           Copy-Item build/Release/Solvia.exe,build/Release/SolviaServer.exe out/SOLVIA/
           Copy-Item build/Release/ui out/SOLVIA/ -Recurse
-          Copy-Item scripts/*.bat out/SOLVIA/
           Copy-Item README.md out/SOLVIA/
           Copy-Item docs out/SOLVIA/ -Recurse
           Copy-Item installer out/SOLVIA/ -Recurse
