@@ -16,14 +16,15 @@ const categoryTone = {
 };
 
 const icons = {
-  dashboard: '⌂',
-  calendar: '◫',
-  patients: '◎',
+  dashboard: '◈',
+  calendar: '▣',
+  patients: '◉',
   families: '⌘',
-  team: '◇',
+  team: '♢',
   rooms: '▦',
   reports: '▤',
-  audit: '≡'
+  audit: '☷',
+  settings: '⚙'
 };
 
 function localDate(date = new Date()) {
@@ -85,6 +86,7 @@ function navFor(role) {
       ['team', 'Команда'],
       ['rooms', 'Кабінети'],
       ['reports', 'Звіти психологів'],
+      ['settings', 'Налаштування'],
       ['audit', 'Журнал дій']
     ];
   }
@@ -663,7 +665,10 @@ function Patients({ api, role, openPatient }) {
     category: '',
     psychologist_id: '',
     family_id: '',
-    family_role: ''
+    family_role: '',
+    sex: '',
+    address: '',
+    admin_note: ''
   });
 
   const canCreate = role === 'admin' || role === 'reception';
@@ -698,7 +703,10 @@ function Patients({ api, role, openPatient }) {
       category: meta.categories?.[0] || '',
       psychologist_id: meta.psychologists?.[0]?.id || '',
       family_id: '',
-      family_role: ''
+      family_role: '',
+      sex: '',
+      address: '',
+      admin_note: ''
     });
     setDialog(true);
   }
@@ -713,7 +721,10 @@ function Patients({ api, role, openPatient }) {
         category: form.category,
         psychologist_id: Number(form.psychologist_id),
         family_id: form.family_id ? Number(form.family_id) : null,
-        family_role: form.family_role
+        family_role: form.family_role,
+        sex: form.sex,
+        address: form.address,
+        admin_note: form.admin_note
       });
       setDialog(false);
       await load();
@@ -798,6 +809,22 @@ function Patients({ api, role, openPatient }) {
             <Field label="Роль у сім’ї" hint="Напр.: військовий, партнерка, дитина.">
               <input value={form.family_role} onChange={(e) => setForm({ ...form, family_role: e.target.value })} />
             </Field>
+            <Field label="Стать">
+              <select value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value })}>
+                <option value="">Не вказано</option>
+                <option value="female">Жіноча</option>
+                <option value="male">Чоловіча</option>
+                <option value="other">Інше</option>
+              </select>
+            </Field>
+            <Field label="Адреса">
+              <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Населений пункт / адреса" />
+            </Field>
+            {role === 'admin' && (
+              <Field label="Службова примітка адміністратора" full>
+                <textarea rows="3" value={form.admin_note} onChange={(e) => setForm({ ...form, admin_note: e.target.value })} />
+              </Field>
+            )}
             <div className="form-actions full-span">
               <Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button>
               <Button type="submit">Створити пацієнта</Button>
@@ -1251,44 +1278,216 @@ function Team({ api }) {
 
 function Rooms({ api }) {
   const [rooms, setRooms] = useState([]);
-  const [name, setName] = useState('');
-  const [dialog, setDialog] = useState(false);
+  const [dialog, setDialog] = useState('');
+  const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
+  const emptyForm = { name: '', code: '', type: 'individual', capacity: 1, description: '', active: true };
+  const [form, setForm] = useState(emptyForm);
 
   async function load() {
-    try {
-      const meta = await api('GET', '/api/meta');
-      setRooms(meta.rooms || []);
-    } catch (e) { setError(e.message); }
+    try { setRooms(await api('GET', '/api/rooms')); }
+    catch (e) { setError(e.message); }
   }
   useEffect(() => { load(); }, []);
 
-  async function createRoom(e) {
+  function openCreate() {
+    setEditing(null);
+    setForm(emptyForm);
+    setDialog('create');
+  }
+  function openEdit(room) {
+    setEditing(room);
+    setForm({
+      name: room.name || '',
+      code: room.code || '',
+      type: room.type || 'individual',
+      capacity: Number(room.capacity || 1),
+      description: room.description || '',
+      active: Boolean(room.active)
+    });
+    setDialog('edit');
+  }
+  async function saveRoom(e) {
     e.preventDefault();
     try {
-      await api('POST', '/api/rooms', { name });
-      setName('');
-      setDialog(false);
+      const payload = { ...form, capacity: Number(form.capacity) };
+      if (dialog === 'create') await api('POST', '/api/rooms', payload);
+      else await api('PATCH', `/api/rooms/${editing.id}`, payload);
+      setDialog('');
       await load();
+    } catch (e) { setError(e.message); }
+  }
+  async function removeRoom(room) {
+    if (!window.confirm(`Видалити «${room.name}»? Якщо є активні записи, система не дозволить видалення.`)) return;
+    try {
+      await api('DELETE', `/api/rooms/${room.id}`, {});
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  const typeLabel = (type) => ({
+    individual: 'Індивідуальний',
+    family: 'Сімейний',
+    group: 'Групова зала',
+    child: 'Дитяча кімната',
+    sensory: 'Сенсорна кімната'
+  }[type] || type);
+
+  return (
+    <>
+      <PageHead
+        eyebrow="ІНФРАСТРУКТУРА"
+        title="Кабінети та кімнати"
+        subtitle="Створення, редагування, місткість, тип приміщення та виведення з планування."
+        actions={<Button onClick={openCreate}>+ Додати приміщення</Button>}
+      />
+      {error && <div className="alert error">{error}</div>}
+      <div className="room-grid">
+        {rooms.map((r, i) => (
+          <article className={`room-card ${r.active ? '' : 'room-inactive'}`} key={r.id}>
+            <span>{String(i + 1).padStart(2, '0')}</span>
+            <div className="room-card-main">
+              <strong>{r.name}</strong>
+              <small>{r.code ? `${r.code} · ` : ''}{typeLabel(r.type)} · до {r.capacity} ос.</small>
+              {r.description && <p>{r.description}</p>}
+            </div>
+            <div className="room-actions">
+              <Badge tone={r.active ? 'forest' : 'stone'}>{r.active ? 'Активний' : 'Неактивний'}</Badge>
+              <IconButton onClick={() => openEdit(r)} title="Редагувати">✎</IconButton>
+              <IconButton onClick={() => removeRoom(r)} title="Видалити">×</IconButton>
+            </div>
+          </article>
+        ))}
+      </div>
+      {!rooms.length && <section className="surface"><Empty title="Приміщень немає" text="Додайте перший кабінет або зал." /></section>}
+
+      {dialog && (
+        <Dialog title={dialog === 'create' ? 'Нове приміщення' : 'Редагування приміщення'} onClose={() => setDialog('')} wide>
+          <form className="form-grid" onSubmit={saveRoom}>
+            <Field label="Назва" full><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
+            <Field label="Код / номер"><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="101 / A-3" /></Field>
+            <Field label="Місткість"><input type="number" min="1" max="100" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} /></Field>
+            <Field label="Тип">
+              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                <option value="individual">Індивідуальний кабінет</option>
+                <option value="family">Сімейний кабінет</option>
+                <option value="group">Групова зала</option>
+                <option value="child">Дитяча кімната</option>
+                <option value="sensory">Сенсорна кімната</option>
+              </select>
+            </Field>
+            <Field label="Статус">
+              <select value={form.active ? 'active' : 'inactive'} onChange={(e) => setForm({ ...form, active: e.target.value === 'active' })}>
+                <option value="active">Активний</option>
+                <option value="inactive">Неактивний</option>
+              </select>
+            </Field>
+            <Field label="Опис" full><textarea rows="4" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+            <div className="form-actions full-span">
+              <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
+              <Button type="submit">Зберегти</Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function Settings({ api }) {
+  const empty = {
+    center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
+    director_name: '', admin_name: '', work_hours: '', document_footer: '', discharge_signatory: ''
+  };
+  const [form, setForm] = useState(empty);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState('');
+
+  async function load() {
+    try { setForm({ ...empty, ...(await api('GET', '/api/settings/center')) }); }
+    catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save(e) {
+    e.preventDefault();
+    try {
+      await api('PATCH', '/api/settings/center', form);
+      setSaved('Налаштування центру збережено.');
+      setTimeout(() => setSaved(''), 2500);
     } catch (e) { setError(e.message); }
   }
 
   return (
     <>
-      <PageHead eyebrow="ІНФРАСТРУКТУРА" title="Кабінети" subtitle="Приміщення, які беруть участь у перевірці конфліктів календаря." actions={<Button onClick={() => setDialog(true)}>+ Додати кабінет</Button>} />
+      <PageHead eyebrow="СИСТЕМА" title="Налаштування центру" subtitle="Ці дані використовуються у виписках, документах і шапці центру." />
       {error && <div className="alert error">{error}</div>}
-      <div className="room-grid">
-        {rooms.map((r, i) => <article className="room-card" key={r.id}><span>0{i + 1}</span><div><strong>{r.name}</strong><small>Доступний для планування</small></div></article>)}
-      </div>
-      {dialog && (
-        <Dialog title="Новий кабінет" onClose={() => setDialog(false)}>
-          <form onSubmit={createRoom}>
-            <Field label="Назва" full><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Напр. Кабінет 4" required /></Field>
-            <div className="form-actions"><Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button><Button type="submit">Створити</Button></div>
-          </form>
-        </Dialog>
-      )}
+      {saved && <div className="alert info">{saved}</div>}
+      <section className="surface">
+        <div className="section-head"><div><div className="eyebrow">РЕКВІЗИТИ</div><h2>Центр</h2></div><Badge tone="forest">SOLVIA 2.0</Badge></div>
+        <form className="form-grid" onSubmit={save}>
+          <Field label="Повна назва центру" full><input value={form.center_name} onChange={(e) => setForm({ ...form, center_name: e.target.value })} required /></Field>
+          <Field label="Коротка назва"><input value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} /></Field>
+          <Field label="Місто"><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+          <Field label="Адреса" full><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
+          <Field label="Телефон"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Field label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          <Field label="Сайт"><input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></Field>
+          <Field label="Режим роботи"><input value={form.work_hours} onChange={(e) => setForm({ ...form, work_hours: e.target.value })} placeholder="08:00–20:00" /></Field>
+          <Field label="Керівник"><input value={form.director_name} onChange={(e) => setForm({ ...form, director_name: e.target.value })} /></Field>
+          <Field label="Відповідальний адміністратор"><input value={form.admin_name} onChange={(e) => setForm({ ...form, admin_name: e.target.value })} /></Field>
+          <Field label="Підписант виписки"><input value={form.discharge_signatory} onChange={(e) => setForm({ ...form, discharge_signatory: e.target.value })} /></Field>
+          <Field label="Футер документів" full><textarea rows="3" value={form.document_footer} onChange={(e) => setForm({ ...form, document_footer: e.target.value })} /></Field>
+          <div className="form-actions full-span"><Button type="submit">Зберегти налаштування</Button></div>
+        </form>
+      </section>
+      <section className="surface maintenance-card">
+        <div className="section-head"><div><div className="eyebrow">ДАНІ</div><h2>Резервне копіювання</h2></div><Badge tone="sand">Admin only</Badge></div>
+        <p className="muted">Резервні копії та відновлення виконуються локально на серверному ПК. Модуль захищає RehaFlow: працює тільки з базою SOLVIA.</p>
+        <div className="backup-actions">
+          <Button variant="secondary" onClick={() => window.dispatchEvent(new CustomEvent('solvia-native-backup'))}>Створити backup</Button>
+          <Button variant="secondary" onClick={() => window.dispatchEvent(new CustomEvent('solvia-native-restore'))}>Відновити з backup</Button>
+        </div>
+      </section>
     </>
+  );
+}
+
+function GlobalSearch({ api, onPatient, onNavigate }) {
+  const [query, setQuery] = useState('');
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (query.trim().length < 2) { setResult(null); return; }
+    const timer = setTimeout(async () => {
+      setBusy(true);
+      try { setResult(await api('GET', `/api/search?q=${encodeURIComponent(query.trim())}`)); }
+      catch { setResult(null); }
+      finally { setBusy(false); }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const total = result ? Object.values(result).reduce((n, arr) => n + (arr?.length || 0), 0) : 0;
+  return (
+    <div className="global-search-wrap">
+      <div className="global-search">
+        <span>⌕</span>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Пошук пацієнта, сім’ї, працівника, кабінету…" />
+        {busy && <small>Пошук…</small>}
+      </div>
+      {result && (
+        <div className="search-popover">
+          <div className="search-popover-head"><strong>Результати</strong><span>{total}</span></div>
+          {result.patients?.map((p) => <button key={`p-${p.id}`} onClick={() => { onPatient(p.id); setQuery(''); setResult(null); }}><span>Пацієнт</span><strong>{p.name}</strong><small>{p.phone} · {p.category}</small></button>)}
+          {result.families?.map((x) => <button key={`f-${x.id}`} onClick={() => { onNavigate('families'); setQuery(''); setResult(null); }}><span>Сім’я</span><strong>{x.name}</strong></button>)}
+          {result.rooms?.map((x) => <button key={`r-${x.id}`} onClick={() => { onNavigate('rooms'); setQuery(''); setResult(null); }}><span>Кабінет</span><strong>{x.name}</strong><small>{x.code || x.type}</small></button>)}
+          {result.users?.map((x) => <button key={`u-${x.id}`} onClick={() => { onNavigate('team'); setQuery(''); setResult(null); }}><span>Працівник</span><strong>{x.name}</strong><small>{roleLabels[x.role] || x.role}</small></button>)}
+          {!total && <div className="search-empty">Нічого не знайдено</div>}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1443,15 +1642,8 @@ function Shell({ api, user, onLogout }) {
   const [patientId, setPatientId] = useState(null);
   const navigation = navFor(user.role);
 
-  function openPatient(id) {
-    setPatientId(id);
-    setPage('patient-card');
-  }
-
-  function navigate(target) {
-    setPatientId(null);
-    setPage(target);
-  }
+  function openPatient(id) { setPatientId(id); setPage('patient-card'); }
+  function navigate(target) { setPatientId(null); setPage(target); }
 
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} />;
@@ -1462,6 +1654,7 @@ function Shell({ api, user, onLogout }) {
     if (page === 'team') return <Team api={api} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports api={api} role={user.role} />;
+    if (page === 'settings') return <Settings api={api} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
   })();
@@ -1470,7 +1663,7 @@ function Shell({ api, user, onLogout }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="product-mark inverse">S</div>
+          <div className="product-mark inverse"><span className="solvia-glyph">S</span></div>
           <div><strong>SOLVIA</strong><span>by QureMed</span></div>
         </div>
 
@@ -1478,19 +1671,17 @@ function Shell({ api, user, onLogout }) {
           <div className="nav-label">РОБОЧИЙ ПРОСТІР</div>
           {navigation.map(([key, label]) => (
             <button key={key} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
-              <span className="nav-icon">{icons[key]}</span>
-              <span>{label}</span>
+              <span className="nav-icon">{icons[key]}</span><span>{label}</span>
             </button>
           ))}
         </nav>
 
         <div className="sidebar-spacer" />
-
-        <div className="sidebar-security">
-          <span className="security-dot" />
-          <div><strong>Локальний контур</strong><small>Дані центру на власному сервері</small></div>
+        <div className="sidebar-version">
+          <strong>SOLVIA 2.0</strong>
+          <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
+          <small>Support 24/7</small>
         </div>
-
         <div className="user-card">
           <div className="avatar inverse">{user.name.slice(0, 1).toUpperCase()}</div>
           <div className="user-copy"><strong>{user.name}</strong><span>{roleLabels[user.role]}</span></div>
@@ -1499,6 +1690,7 @@ function Shell({ api, user, onLogout }) {
       </aside>
 
       <main className="workspace">
+        <div className="workspace-topbar"><GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} /></div>
         <div className="workspace-inner">{content}</div>
       </main>
     </div>
