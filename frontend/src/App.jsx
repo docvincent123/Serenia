@@ -627,7 +627,17 @@ function Calendar({ api, role, openPatient }) {
           </form>
           {slots.length > 0 && (
             <div className="slot-grid">
-              {slots.map((slot) => <button key={slot} className="slot" onClick={() => { setDialog(''); setBooking({ ...booking, start: slot, end: `${String(Number(slot.slice(0, 2)) + 1).padStart(2, '0')}:00` }); }}>{slot}</button>)}
+              {slots.map((slot) => <button key={slot} className="slot" onClick={() => {
+                setBooking({
+                  psychologist_id: Number(slotForm.psychologist_id),
+                  room_id: Number(slotForm.room_id),
+                  start: slot,
+                  end: `${String(Number(slot.slice(0, 2)) + 1).padStart(2, '0')}:00`,
+                  kind: 'individual',
+                  patient_ids: []
+                });
+                setDialog('booking');
+              }}>{slot}</button>)}
             </div>
           )}
           {slots.length === 0 && <p className="muted centered">Оберіть параметри та натисніть «Показати слоти».</p>}
