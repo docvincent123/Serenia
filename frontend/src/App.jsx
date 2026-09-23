@@ -899,7 +899,9 @@ function PatientCard({ api, role, patientId, back }) {
   const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
   const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate(), summary: '', dynamics: '', recommendations: '', followup: '' });
   const [printDoc, setPrintDoc] = useState(null);
-  const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', address: '', status: 'active', admin_note: '' });
+  const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', admin_note: '' });
+  const [editMeta, setEditMeta] = useState({ psychologists: [], categories: [] });
+  const [editFamilies, setEditFamilies] = useState([]);
 
   const isPsychologist = role === 'psychologist';
   const isAdmin = role === 'admin';
@@ -1023,21 +1025,36 @@ function PatientCard({ api, role, patientId, back }) {
     setTimeout(restore, 1500);
   }
 
-  function openPatientEdit() {
-    setPatientEdit({
-      name: card.name || '',
-      phone: card.phone || '',
-      address: card.address || '',
-      status: card.status || 'active',
-      admin_note: card.admin_note || ''
-    });
-    setDialog('edit-patient');
+  async function openPatientEdit() {
+    try {
+      const [meta, families] = await Promise.all([api('GET', '/api/meta'), api('GET', '/api/families')]);
+      setEditMeta(meta);
+      setEditFamilies(families);
+      setPatientEdit({
+        name: card.name || '',
+        phone: card.phone || '',
+        dob: card.dob || '',
+        category: card.category || '',
+        psychologist_id: String(card.psychologist_id || ''),
+        family_id: card.family_id ? String(card.family_id) : '',
+        family_role: card.family_role || '',
+        sex: card.sex || '',
+        address: card.address || '',
+        status: card.status || 'active',
+        admin_note: card.admin_note || ''
+      });
+      setDialog('edit-patient');
+    } catch (e) { setError(e.message); }
   }
 
   async function savePatientEdit(e) {
     e.preventDefault();
     try {
-      await api('PATCH', `/api/patients/${patientId}`, patientEdit);
+      await api('PATCH', `/api/patients/${patientId}`, {
+        ...patientEdit,
+        psychologist_id: Number(patientEdit.psychologist_id),
+        family_id: patientEdit.family_id ? Number(patientEdit.family_id) : null
+      });
       setDialog('');
       await load();
     } catch (e) { setError(e.message); }
@@ -1356,6 +1373,29 @@ function PatientCard({ api, role, patientId, back }) {
           <form className="form-grid" onSubmit={savePatientEdit}>
             <Field label="ПІБ" full><input value={patientEdit.name} onChange={(e) => setPatientEdit({ ...patientEdit, name: e.target.value })} required /></Field>
             <Field label="Телефон"><input value={patientEdit.phone} onChange={(e) => setPatientEdit({ ...patientEdit, phone: e.target.value })} required /></Field>
+            <Field label="Дата народження"><input type="date" value={patientEdit.dob} onChange={(e) => setPatientEdit({ ...patientEdit, dob: e.target.value })} required /></Field>
+            <Field label="Категорія">
+              <select value={patientEdit.category} onChange={(e) => setPatientEdit({ ...patientEdit, category: e.target.value })}>
+                {(editMeta.categories || []).map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Field>
+            <Field label="Психолог">
+              <select value={patientEdit.psychologist_id} onChange={(e) => setPatientEdit({ ...patientEdit, psychologist_id: e.target.value })} required>
+                {(editMeta.psychologists || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Сім’я">
+              <select value={patientEdit.family_id} onChange={(e) => setPatientEdit({ ...patientEdit, family_id: e.target.value })}>
+                <option value="">Без сімейного зв’язку</option>
+                {editFamilies.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Роль у сім’ї"><input value={patientEdit.family_role} onChange={(e) => setPatientEdit({ ...patientEdit, family_role: e.target.value })} /></Field>
+            <Field label="Стать">
+              <select value={patientEdit.sex} onChange={(e) => setPatientEdit({ ...patientEdit, sex: e.target.value })}>
+                <option value="">Не вказано</option><option value="female">Жіноча</option><option value="male">Чоловіча</option><option value="other">Інше</option>
+              </select>
+            </Field>
             <Field label="Статус">
               <select value={patientEdit.status} onChange={(e) => setPatientEdit({ ...patientEdit, status: e.target.value })}>
                 <option value="active">Активний</option>
