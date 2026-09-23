@@ -111,32 +111,31 @@ $psql = Join-Path $postgresBin 'psql.exe'
 $createdb = Join-Path $postgresBin 'createdb.exe'
 $databasePassword = New-HexSecret 24
 $env:PGPASSWORD = $postgresAdminPassword
-try {
-    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -tAc 'SELECT 1' *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'Не вдалося підключитися до PostgreSQL. Перевірте пароль postgres.' }
 
-    $role = & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='solvia'"
-    if ([string]::IsNullOrWhiteSpace(($role | Out-String))) {
-        & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE solvia LOGIN PASSWORD '$databasePassword'" *> $null
-    } else {
-        & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE solvia WITH LOGIN PASSWORD '$databasePassword'" *> $null
-    }
-    if ($LASTEXITCODE -ne 0) { throw 'Не вдалося створити користувача БД SOLVIA.' }
+& $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -tAc 'SELECT 1' *> $null
+if ($LASTEXITCODE -ne 0) { throw 'Не вдалося підключитися до PostgreSQL. Перевірте пароль postgres.' }
 
-    $db = & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='solvia'"
-    if ([string]::IsNullOrWhiteSpace(($db | Out-String))) {
-        & $createdb -h 127.0.0.1 -p 5432 -U postgres -O solvia solvia
-        if ($LASTEXITCODE -ne 0) { throw 'Не вдалося створити базу solvia.' }
-    } else {
-        & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'ALTER DATABASE solvia OWNER TO solvia' *> $null
-    }
-
-    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET listen_addresses TO 'localhost'" *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'Не вдалося обмежити PostgreSQL локальним комп’ютером.' }
-} finally {
-    Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
-    $postgresAdminPassword = $null
+$role = & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='solvia'"
+if ([string]::IsNullOrWhiteSpace(($role | Out-String))) {
+    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE solvia LOGIN PASSWORD '$databasePassword'" *> $null
+} else {
+    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE solvia WITH LOGIN PASSWORD '$databasePassword'" *> $null
 }
+if ($LASTEXITCODE -ne 0) { throw 'Не вдалося створити користувача БД SOLVIA.' }
+
+$db = & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='solvia'"
+if ([string]::IsNullOrWhiteSpace(($db | Out-String))) {
+    & $createdb -h 127.0.0.1 -p 5432 -U postgres -O solvia solvia
+    if ($LASTEXITCODE -ne 0) { throw 'Не вдалося створити базу solvia.' }
+} else {
+    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'ALTER DATABASE solvia OWNER TO solvia' *> $null
+}
+
+& $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET listen_addresses TO 'localhost'" *> $null
+if ($LASTEXITCODE -ne 0) { throw 'Не вдалося обмежити PostgreSQL локальним комп’ютером.' }
+
+Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+$postgresAdminPassword = $null
 
 if ($service) {
     Restart-Service $service.Name -Force
