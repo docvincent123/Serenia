@@ -4,6 +4,8 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Build
+import android.provider.Settings
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -224,6 +226,8 @@ class MainActivity : Activity() {
                 .put("login", login.text.toString())
                 .put("password", password.text.toString())
                 .put("platform", "Android")
+                .put("device_id", Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "")
+                .put("device_name", (Build.MANUFACTURER + " " + Build.MODEL).trim())
             apiAsync("POST", "/api/login", payload) { result ->
                 val obj = result as JSONObject
                 token = obj.getString("token")
@@ -307,6 +311,7 @@ class MainActivity : Activity() {
         addTab("Календар") { calendarScreen() }
         addTab("Пацієнти") { patientsScreen() }
         if (role == "psychologist") addTab("Звіт") { reportScreen() }
+        if (role == "admin") addTab("Пристрої") { devicesScreen() }
         outer.addView(tabs)
         outer.addView(spacer())
         outer.addView(title("Робочий простір", 25f))
@@ -320,6 +325,25 @@ class MainActivity : Activity() {
         today.addView(primary("Мої пацієнти") { patientsScreen() })
         outer.addView(today)
         setContentView(scroll(outer))
+        if (role == "admin" || role == "psychologist") {
+            apiAsync("GET", "/api/reminders") { result ->
+                val reminders = result as JSONArray
+                if (reminders.length() > 0) {
+                    outer.addView(spacer())
+                    val box = card()
+                    box.addView(title("Найближчі записи", 18f))
+                    for (i in 0 until reminders.length().coerceAtMost(5)) {
+                        val item = reminders.getJSONObject(i)
+                        box.addView(caption(
+                            item.optString("start").takeLast(5) + " · " +
+                            item.optString("patients") + " · " +
+                            item.optString("psychologist")
+                        ))
+                    }
+                    outer.addView(box)
+                }
+            }
+        }
     }
 
     private fun topBar(label: String, back: () -> Unit): LinearLayout = LinearLayout(this).apply {
@@ -559,6 +583,56 @@ class MainActivity : Activity() {
                 }
                 .show()
         }
+    }
+
+    private fun devicesScreen() {
+        backAction = { homeScreen() }
+        val body = root()
+        body.addView(topBar("Активні пристрої", ::homeScreen))
+        body.addView(caption("Телефони, планшети та ПК з активним входом у SOLVIA."))
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(list)
+        setContentView(scroll(body))
+
+        fun load() {
+            apiAsync("GET", "/api/admin/sessions") { result ->
+                list.removeAllViews()
+                val sessions = result as JSONArray
+                if (sessions.length() == 0) {
+                    list.addView(caption("Активних сесій немає."))
+                    return@apiAsync
+                }
+                for (i in 0 until sessions.length()) {
+                    val session = sessions.getJSONObject(i)
+                    val box = card()
+                    box.addView(title(session.optString("device_name", session.optString("platform")), 17f))
+                    box.addView(caption(
+                        session.optString("name") + " · " +
+                        roleLabel(session.optString("role")) + " · " +
+                        session.optString("ip_address", "—")
+                    ))
+                    box.addView(caption(
+                        (if (session.optBoolean("online")) "Онлайн" else "Неактивний") +
+                        " · остання активність " + session.optString("last_seen", "—")
+                    ))
+                    box.addView(primary("Завершити сесію") {
+                        AlertDialog.Builder(this)
+                            .setTitle("Завершити сесію?")
+                            .setMessage(session.optString("name") + " · " + session.optString("device_name"))
+                            .setNegativeButton("Скасувати", null)
+                            .setPositiveButton("Завершити") { _, _ ->
+                                apiAsync("DELETE", "/api/admin/sessions/" + session.getString("session_id"), JSONObject()) {
+                                    load()
+                                }
+                            }
+                            .show()
+                    })
+                    list.addView(box)
+                    list.addView(spacer(8))
+                }
+            }
+        }
+        load()
     }
 
     private fun reportScreen() {
