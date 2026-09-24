@@ -69,6 +69,8 @@ class Scenario(unittest.TestCase):
         other=self.api(admin,'POST','/api/users',{'name':'Інший психолог','login':'other','phone':'+380501112233','password':'long-test-password','role':'psychologist'})['id']
         _,auth=self.call('POST','/api/login',{'login':'other','password':'long-test-password','platform':'Android'})
         self.tokens['other']=auth['token']
+        device_sessions=self.api(admin,'GET','/api/admin/sessions')
+        self.assertTrue(any(x['name']=='Інший психолог' and x['platform']=='Android' for x in device_sessions))
         managed=self.api(admin,'POST','/api/users',{'name':'Керований працівник','login':'managed','phone':'+380671234567','password':'managed-test-password','role':'reception'})['id']
         self.api(admin,'PATCH',f'/api/users/{managed}',{'role':'psychologist','phone':'+380679999999','active':True})
         managed_row=next(x for x in self.api(admin,'GET','/api/users') if x['id']==managed)
@@ -117,7 +119,7 @@ class Scenario(unittest.TestCase):
         self.assertEqual(admin_detail['patient_no'],created_patient['patient_no'])
         self.assertEqual(admin_detail['consultations'][0]['note'],note['note'])
         self.assertEqual(admin_detail['consultations'][0]['risk_level'],'moderate')
-        self.api(admin,'PATCH','/api/settings/center',{'center_name':'Тестовий центр','short_name':'SOLVIA','address':'Адреса','phone':'123','email':'test@example.com','website':'','city':'Місто','director_name':'Директор','admin_name':'Адмін','work_hours':'08:00-20:00','document_footer':'Футер','discharge_signatory':'Психолог','head_name':'Завідувач Тест','head_title':'Завідувач центру','logo_data':''})
+        self.api(admin,'PATCH','/api/settings/center',{'center_name':'Тестовий центр','short_name':'SOLVIA','address':'Адреса','phone':'123','email':'test@example.com','website':'','city':'Місто','director_name':'Директор','admin_name':'Адмін','work_hours':'08:00-20:00','document_footer':'Футер','discharge_signatory':'Психолог','head_name':'Завідувач Тест','head_title':'Завідувач центру','logo_data':'','appointment_reminder_minutes':30})
         self.assertEqual(self.api(admin,'GET','/api/settings/center')['center_name'],'Тестовий центр')
         search=self.api(admin,'GET','/api/search?q='+urllib.parse.quote('Тестовий'))
         self.assertTrue(any(x['id']==pid for x in search['patients']))
@@ -126,6 +128,9 @@ class Scenario(unittest.TestCase):
         self.api(admin,'DELETE',f'/api/rooms/{rid}',{})
         discharge=self.api(psy,'POST','/api/discharges',{'patient_id':pid,'date_from':day,'date_to':dt.date.today().isoformat(),'summary':'Підсумок','dynamics':'Динаміка','recommendations':'Рекомендації','followup':'Контроль'})
         self.assertEqual(discharge['patient']['id'],pid)
+        self.assertTrue(discharge['document_no'])
+        self.assertIn('Проведено 1 консультацій',discharge['summary'])
+        self.assertIn('Результат',discharge['dynamics'])
         discharge_detail=self.api(admin,'GET',f'/api/patients/{pid}')['discharges'][0]
         self.assertEqual(discharge_detail['psychologist'],'Psychologist')
 
@@ -169,12 +174,24 @@ class Scenario(unittest.TestCase):
         self.assertEqual(sorted(x[0] for x in results),[200,409])
         self.api(admin,'DELETE',f'/api/users/{other}/sessions',{})
         self.api('other','GET','/api/me',status=401)
-        self.api(admin,'POST','/api/shift-day',{'action':'close'})
+        closed=self.api(admin,'POST','/api/shift-day',{'action':'close'})
+        self.assertTrue(closed['sessions_terminated'])
         self.assertFalse(self.api(admin,'GET','/api/shift-day')['open'])
-        # Restart: the patient, notes, questionnaires and active sessions persist.
+        self.api(psy,'GET','/api/me',status=401)
+        self.api(rec,'GET','/api/me',status=401)
+        self.api(director,'GET','/api/me',status=401)
+
+        # Restart: data persist, while closed-shift staff sessions remain terminated.
         self.proc.terminate(); self.proc.wait(timeout=10); self.start()
+        admin_detail=self.api(admin,'GET',f'/api/patients/{pid}')
+        self.assertEqual(len(admin_detail['consultations']),2)
+        self.assertEqual(self.api(admin,'GET','/api/stats')['repeat_visits'],1)
+
+        _,psy_auth=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist'],'platform':'Android','device_id':'ci-psych','device_name':'CI Tablet'})
+        self.tokens[psy]=psy_auth['token']
+        self.api(psy,'GET','/api/patients',status=423)
+        self.api(admin,'POST','/api/shift-day',{'action':'open'})
         self.assertEqual(len(self.api(psy,'GET',f'/api/patients/{pid}')['consultations']),2)
-        self.assertEqual(self.api(director,'GET','/api/stats')['repeat_visits'],1)
         self.api(psy,'POST','/api/logout',{})
         self.api(psy,'GET','/api/me',status=401)
 
