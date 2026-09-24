@@ -122,12 +122,32 @@ function New-SolviaTaskSettings {
     # Servers must start on laptops too; Task Scheduler defaults prohibit battery starts.
     New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
 }
+function Get-SolviaCanonicalPath([string]$Path) {
+    if (-not ('Solvia.Setup.NativePaths' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+namespace Solvia.Setup {
+    public static class NativePaths {
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+        public static extern uint GetLongPathName(string path, StringBuilder buffer, uint capacity);
+    }
+}
+'@
+    }
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $buffer = New-Object Text.StringBuilder 32768
+    $length = [Solvia.Setup.NativePaths]::GetLongPathName($fullPath,$buffer,32768)
+    if ($length -gt 0 -and $length -lt 32768) { return $buffer.ToString() }
+    return $fullPath
+}
 function Stop-SolviaInstallationProcesses([string]$InstallDir) {
     $root = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
-    $ownedPaths = @((Join-Path $root 'SolviaServer.exe'), (Join-Path $root 'bin\caddy.exe'))
+    $ownedPaths = @((Get-SolviaCanonicalPath (Join-Path $root 'SolviaServer.exe')), (Get-SolviaCanonicalPath (Join-Path $root 'bin\caddy.exe')))
     # ExecutablePath also works when the installer host and child have different bitness.
     foreach ($candidate in @(Get-CimInstance Win32_Process -Filter "Name = 'SolviaServer.exe' OR Name = 'caddy.exe'" -ErrorAction Stop)) {
-        if ($candidate.ExecutablePath -and $ownedPaths -contains $candidate.ExecutablePath) {
+        if ($candidate.ExecutablePath -and $ownedPaths -contains (Get-SolviaCanonicalPath $candidate.ExecutablePath)) {
             $process = Get-Process -Id $candidate.ProcessId -ErrorAction SilentlyContinue
             if (-not $process) { continue }
             Write-Host ('Stopping SOLVIA process PID=' + $process.Id)
