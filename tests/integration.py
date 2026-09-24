@@ -119,8 +119,19 @@ class Scenario(unittest.TestCase):
         self.assertEqual(admin_detail['patient_no'],created_patient['patient_no'])
         self.assertEqual(admin_detail['consultations'][0]['note'],note['note'])
         self.assertEqual(admin_detail['consultations'][0]['risk_level'],'moderate')
-        self.api(admin,'PATCH','/api/settings/center',{'center_name':'Тестовий центр','short_name':'SOLVIA','address':'Адреса','phone':'123','email':'test@example.com','website':'','city':'Місто','director_name':'Директор','admin_name':'Адмін','work_hours':'08:00-20:00','document_footer':'Футер','discharge_signatory':'Психолог','head_name':'Завідувач Тест','head_title':'Завідувач центру','logo_data':'','appointment_reminder_minutes':30})
+        self.api(admin,'PATCH','/api/settings/center',{'center_name':'Тестовий центр','short_name':'SOLVIA','address':'Адреса','phone':'123','email':'test@example.com','website':'','city':'Місто','director_name':'Директор','admin_name':'Адмін','work_hours':'08:00-20:00','document_footer':'Футер','discharge_signatory':'Психолог','head_name':'Завідувач Тест','head_title':'Завідувач центру','logo_data':'','appointment_reminder_minutes':30,'connection_mode':'local','local_api_url':'https://192.168.1.100:8443','vps_api_url':'https://solvia.example.test','vps_name':'QureMed VPS'})
         self.assertEqual(self.api(admin,'GET','/api/settings/center')['center_name'],'Тестовий центр')
+        center_settings=self.api(admin,'GET','/api/settings/center')
+        self.assertEqual(center_settings['connection_mode'],'local')
+        self.assertEqual(center_settings['local_api_url'],'https://192.168.1.100:8443')
+        self.assertEqual(center_settings['vps_api_url'],'https://solvia.example.test')
+        bad_vps={**center_settings,'connection_mode':'vps','vps_api_url':'http://insecure.example.test'}
+        bad_vps.pop('id',None); bad_vps.pop('updated',None)
+        self.api(admin,'PATCH','/api/settings/center',bad_vps,status=400)
+        good_vps={**center_settings,'connection_mode':'vps','vps_api_url':'https://solvia.example.test'}
+        good_vps.pop('id',None); good_vps.pop('updated',None)
+        self.api(admin,'PATCH','/api/settings/center',good_vps)
+        self.assertEqual(self.api(admin,'GET','/api/settings/center')['connection_mode'],'vps')
         search=self.api(admin,'GET','/api/search?q='+urllib.parse.quote('Тестовий'))
         self.assertTrue(any(x['id']==pid for x in search['patients']))
         rid=self.api(admin,'POST','/api/rooms',{'name':'Тестова кімната','code':'T1','type':'family','capacity':4,'description':'Тест'})['id']
