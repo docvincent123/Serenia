@@ -1,5 +1,6 @@
 ﻿param([Parameter(Mandatory=$true)][string]$InstallDir)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Setup.Common.ps1')
 
 try {
 $logDir = Join-Path $env:ProgramData 'QureMed\SOLVIA'
@@ -34,16 +35,20 @@ $args = @('--host','127.0.0.1','--port',$port,'--ui',('"' + $uiDir + '"'))
 $serverProcess = Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'api-output.log') -RedirectStandardError (Join-Path $logDir 'api-error.log')
 
 $healthy = $false
-for ($i=0; $i -lt 40; $i++) {
+$apiDeadline = [DateTime]::UtcNow.AddSeconds(90)
+$healthError = ''
+while ([DateTime]::UtcNow -lt $apiDeadline) {
+    $serverProcess.Refresh()
+    if ($serverProcess.HasExited) { break }
     try {
-        $response = Invoke-RestMethod -Uri ('http://127.0.0.1:' + $port + '/api/health') -TimeoutSec 2
+        $response = Get-SolviaHealth -Port ([int]$port)
         if ($response.ok -and $response.version -eq '2.0.0') { $healthy = $true; break }
-    } catch {}
+    } catch { $healthError = $_.Exception.Message }
     Start-Sleep -Milliseconds 500
 }
 if (-not $healthy) {
     if ($serverProcess.HasExited) { throw ('SOLVIA API exited with code ' + $serverProcess.ExitCode + '. Check api-error.log.') }
-    throw 'SOLVIA API did not become healthy on localhost.'
+    throw ('SOLVIA API did not become healthy on localhost: ' + $healthError)
 }
 
 for ($i=0; $i -lt 60; $i++) {
@@ -76,6 +81,7 @@ if ($caddyPath -and (Test-Path $caddyConfig) -and -not $https) {
 
 # Keep the scheduled task alive. On some Windows systems child processes launched
 # from a scheduled task are terminated when the task host exits.
+if (-not $caddyProcess) { throw 'Caddy executable/configuration missing; HTTPS was not started.' }
 Write-Host ('SOLVIA supervisor active. API PID=' + $serverProcess.Id + '; Caddy PID=' + $caddyProcess.Id)
 while ($true) {
     Start-Sleep -Seconds 5
@@ -95,3 +101,4 @@ while ($true) {
     Remove-Item Env:SOLVIA_DATABASE_URL -ErrorAction SilentlyContinue
     try { Stop-Transcript | Out-Null } catch {}
 }
+

@@ -84,3 +84,36 @@ function Test-SolviaDatabase([string]$Psql, [string]$DatabaseUrl) {
         Invoke-SetupProcess $Psql @('-w','-X','-U',[Uri]::UnescapeDataString($credentials[0]),'-d',$publicUri,'-v','ON_ERROR_STOP=1','-tAc','SELECT 1') -Sensitive -DiagnosticErrors | Out-Null
     } finally { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue }
 }
+
+
+function Get-SolviaHealth([int]$Port = 8765) {
+    # Probe the service itself; CIM listener enumeration can fail independently.
+    $request = [Net.HttpWebRequest]::Create(('http://127.0.0.1:{0}/api/health' -f $Port))
+    $request.Proxy = $null
+    $request.Timeout = 2000
+    $request.ReadWriteTimeout = 2000
+    $request.AllowAutoRedirect = $false
+    $response = $null
+    $reader = $null
+    try {
+        $response = $request.GetResponse()
+        if ([int]$response.StatusCode -ne 200) { throw 'Health endpoint did not return HTTP 200.' }
+        $reader = New-Object IO.StreamReader($response.GetResponseStream(), [Text.Encoding]::UTF8)
+        $health = $reader.ReadToEnd() | ConvertFrom-Json
+        if ($health.ok -ne $true -or $health.version -ne '2.0.0') { throw ('Unexpected SOLVIA health/version: ' + [string]$health.version) }
+        return $health
+    } finally {
+        if ($reader) { $reader.Dispose() }
+        if ($response) { $response.Close() }
+        $request.Abort()
+    }
+}
+function Test-SolviaTcpPort([string]$Address, [int]$Port) {
+    $client = New-Object Net.Sockets.TcpClient
+    try {
+        $pending = $client.ConnectAsync($Address,$Port)
+        if (-not $pending.Wait(1500)) { return $false }
+        return $client.Connected
+    } catch { return $false }
+    finally { $client.Dispose() }
+}

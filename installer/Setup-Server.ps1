@@ -243,45 +243,31 @@ $ready = $false
 $lastHealthError = ''
 $lastState = ''
 
-# First Caddy start can take longer while the local CA is generated.
-for ($i=0; $i -lt 60; $i++) {
-    Start-Sleep -Milliseconds 750
-
-    $listener = Get-NetTCPConnection -State Listen -LocalPort 8765 -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $listener) {
-        $lastState = 'API listener 8765 not ready'
-        $taskInfo = Get-ScheduledTaskInfo -TaskName 'SOLVIA Local Server' -ErrorAction SilentlyContinue
-        if ($taskInfo -and $taskInfo.LastTaskResult -ne 0 -and $taskInfo.LastTaskResult -ne 267009) {
-            break
-        }
-        continue
-    }
-
+# Allow first boot/migrations and local CA creation; report the actual HTTP failure.
+$startupDeadline = [DateTime]::UtcNow.AddSeconds(120)
+while ([DateTime]::UtcNow -lt $startupDeadline) {
     try {
-        $responseText = & curl.exe --noproxy '*' --silent --show-error --max-time 2 'http://127.0.0.1:8765/api/health'
-        if ($LASTEXITCODE -eq 0 -and $responseText) {
-            $response = $responseText | ConvertFrom-Json
-            $httpsListener = Get-NetTCPConnection -State Listen -LocalPort 8443 -ErrorAction SilentlyContinue | Select-Object -First 1
-            $rootCert = $rootCertCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-
-            if ($response.ok -and $response.version -eq '2.0.0' -and $httpsListener -and $rootCert) {
-                $ready = $true
-                break
-            }
-
-            $lastState = 'health=' + [string]$response.ok +
-                '; version=' + [string]$response.version +
-                '; https8443=' + [string][bool]$httpsListener +
-                '; rootCert=' + [string][bool]$rootCert
-        }
+        $response = Get-SolviaHealth -Port 8765
+        $lastHealthError = ''
+        $httpsReady = Test-SolviaTcpPort -Address $serverIp -Port 8443
+        $rootCert = $rootCertCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if ($httpsReady -and $rootCert) { $ready = $true; break }
+        $lastState = 'API healthy; HTTPS reachable=' + $httpsReady + '; rootCert=' + [string][bool]$rootCert
     } catch {
         $lastHealthError = $_.Exception.Message
+        $lastState = 'API HTTP health request failed'
     }
+    Start-Sleep -Milliseconds 750
 }
 if (-not $ready) {
     $details = @()
     $taskInfo = Get-ScheduledTaskInfo -TaskName 'SOLVIA Local Server' -ErrorAction SilentlyContinue
-    if ($taskInfo) { $details += ('ScheduledTask LastTaskResult=' + $taskInfo.LastTaskResult) }
+    $task = Get-ScheduledTask -TaskName 'SOLVIA Local Server' -ErrorAction SilentlyContinue
+    if ($taskInfo) { $details += ('ScheduledTask State=' + $task.State + '; LastTaskResult=' + $taskInfo.LastTaskResult + '; LastRunTime=' + $taskInfo.LastRunTime) }
+    foreach ($logName in @('api-output.log','https-error.log')) {
+        $logFile = Join-Path $programData $logName
+        if (Test-Path $logFile) { $details += ($logName + ':' + [Environment]::NewLine + ((Get-Content $logFile -Encoding UTF8 -Tail 15) -join [Environment]::NewLine)) }
+    }
     if ($lastState) { $details += ('Startup state: ' + $lastState) }
     if (Test-Path $apiErrorLog) {
         $apiTail = (Get-Content $apiErrorLog -Encoding UTF8 -Tail 12 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
@@ -303,3 +289,4 @@ $settings['SOLVIA_SETUP_PENDING'] = '0'
 Write-ServerSettings $configPath $settings
 Protect-SetupPath $configPath
 Write-Host ('SOLVIA 2.0 готова. Адреса для телефонів: https://' + $serverIp + ':8443') -ForegroundColor Green
+

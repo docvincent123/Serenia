@@ -43,3 +43,9 @@ jobs:
           Set-Content out/SOLVIA/fixture.txt 'Compiler fixture only; not an installer release'
           & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" installer/SOLVIA.iss
           if ($LASTEXITCODE -ne 0) { throw 'Wizard compilation failed' }
+
+
+      - name: Check API startup health on Windows PowerShell 5.1
+        shell: powershell
+        timeout-minutes: 2
+        run: ./tests/startup-health.ps1
