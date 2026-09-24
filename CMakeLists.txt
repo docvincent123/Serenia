@@ -49,8 +49,23 @@ if(WIN32)
     shell32
   )
 
+  add_executable(SolviaServerConsole WIN32 src/desktop/main.cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/solvia.rc")
+  target_compile_definitions(SolviaServerConsole PRIVATE
+    UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00 SOLVIA_SERVER_CONSOLE=1
+  )
+  target_link_libraries(SolviaServerConsole PRIVATE
+    unofficial::webview2::webview2
+    ole32
+    user32
+    shell32
+  )
+
   if(MSVC)
     target_link_options(Solvia PRIVATE
+      "/MANIFEST:EMBED"
+      "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/src/desktop/app.manifest"
+    )
+    target_link_options(SolviaServerConsole PRIVATE
       "/MANIFEST:EMBED"
       "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/src/desktop/app.manifest"
     )
@@ -61,6 +76,9 @@ if(MSVC)
   target_compile_options(SolviaServer PRIVATE /utf-8 /W4)
   if(TARGET Solvia)
     target_compile_options(Solvia PRIVATE /utf-8 /W4)
+  endif()
+  if(TARGET SolviaServerConsole)
+    target_compile_options(SolviaServerConsole PRIVATE /utf-8 /W4)
   endif()
 else()
   target_compile_options(SolviaServer PRIVATE -Wall -Wextra -Wpedantic)
