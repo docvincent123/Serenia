@@ -1990,15 +1990,18 @@ function ServerConsole({ api, user, onLogout }) {
   );
 }
 
-function Settings({ api }) {
+function Settings({ api, apiBase, onSwitchApi }) {
   const empty = {
     center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
     director_name: '', admin_name: '', work_hours: '', document_footer: '', discharge_signatory: '',
-    head_name: '', head_title: 'Завідувач центру', logo_data: '', appointment_reminder_minutes: 30
+    head_name: '', head_title: 'Завідувач центру', logo_data: '', appointment_reminder_minutes: 30,
+    connection_mode: 'local', local_api_url: '', vps_api_url: '', vps_name: ''
   };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
+  const [connectionTest, setConnectionTest] = useState({ state: 'idle', message: '' });
+  const [activeSection, setActiveSection] = useState('center');
 
   async function load() {
     try { setForm({ ...empty, ...(await api('GET', '/api/settings/center')) }); }
@@ -2030,53 +2033,173 @@ function Settings({ api }) {
     } catch (e) { setError(e.message); }
   }
 
+  function selectedEndpoint() {
+    if (form.connection_mode === 'vps') return cleanBase(form.vps_api_url);
+    return cleanBase(form.local_api_url || apiBase);
+  }
+
+  async function testConnection() {
+    setConnectionTest({ state: 'busy', message: 'Перевіряємо з’єднання…' });
+    try {
+      const endpoint = selectedEndpoint();
+      const result = await request(endpoint, '', 'GET', '/api/health');
+      if (!result.ok) throw new Error('API відповів без статусу OK');
+      setConnectionTest({ state: 'ok', message: `SOLVIA ${result.version || '2.0'} доступна · ${endpoint}` });
+    } catch (e) {
+      setConnectionTest({ state: 'error', message: e.message });
+    }
+  }
+
+  function applyConnection() {
+    try {
+      const endpoint = selectedEndpoint();
+      if (!window.confirm(`Підключити цей ПК до ${endpoint}? Поточний сеанс буде завершено.`)) return;
+      onSwitchApi(endpoint);
+    } catch (e) {
+      setConnectionTest({ state: 'error', message: e.message });
+    }
+  }
+
   return (
     <>
-      <PageHead eyebrow="СИСТЕМА" title="Налаштування центру" subtitle="Реквізити, емблема та підписи автоматично використовуються у виписках." />
+      <PageHead
+        eyebrow="СИСТЕМА"
+        title="Налаштування SOLVIA"
+        subtitle="Центр, документи, підключення до локального сервера або VPS і технічне обслуговування."
+      />
       {error && <div className="alert error">{error}</div>}
       {saved && <div className="alert info">{saved}</div>}
-      <section className="surface">
-        <div className="section-head"><div><div className="eyebrow">РЕКВІЗИТИ</div><h2>Центр</h2></div><Badge tone="forest">SOLVIA 2.0</Badge></div>
-        <form className="form-grid" onSubmit={save}>
-          <Field label="Повна назва центру" full><input value={form.center_name} onChange={(e) => setForm({ ...form, center_name: e.target.value })} required /></Field>
-          <Field label="Коротка назва"><input value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} /></Field>
-          <Field label="Місто"><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
-          <Field label="Адреса" full><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
-          <Field label="Телефон"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-          <Field label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-          <Field label="Сайт"><input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></Field>
-          <Field label="Режим роботи"><input value={form.work_hours} onChange={(e) => setForm({ ...form, work_hours: e.target.value })} placeholder="08:00–20:00" /></Field>
-          <Field label="Керівник"><input value={form.director_name} onChange={(e) => setForm({ ...form, director_name: e.target.value })} /></Field>
-          <Field label="Відповідальний адміністратор"><input value={form.admin_name} onChange={(e) => setForm({ ...form, admin_name: e.target.value })} /></Field>
-          <Field label="ПІБ завідувача"><input value={form.head_name} onChange={(e) => setForm({ ...form, head_name: e.target.value })} placeholder="ПІБ для підпису" /></Field>
-          <Field label="Посада завідувача"><input value={form.head_title} onChange={(e) => setForm({ ...form, head_title: e.target.value })} placeholder="Завідувач центру" /></Field>
-          <Field label="Посада психолога у виписці"><input value={form.discharge_signatory} onChange={(e) => setForm({ ...form, discharge_signatory: e.target.value })} placeholder="Психолог" /></Field>
-          <Field label="Нагадування про запис, хв"><input type="number" min="5" max="240" value={form.appointment_reminder_minutes} onChange={(e) => setForm({ ...form, appointment_reminder_minutes: Number(e.target.value) })} /></Field>
-          <Field label="Футер документів" full><textarea rows="3" value={form.document_footer} onChange={(e) => setForm({ ...form, document_footer: e.target.value })} /></Field>
 
-          <div className="field full">
-            <span>Емблема центру для виписок</span>
-            <div className="logo-settings">
-              <img src={form.logo_data || '/solvia-icon.png'} alt="Емблема центру" />
-              <div>
-                <input type="file" accept="image/png,image/jpeg" onChange={(e) => chooseLogo(e.target.files?.[0])} />
-                <small>PNG/JPEG до 1 МБ. Якщо не завантажувати свою — використовується емблема SOLVIA.</small>
-                {form.logo_data && <Button type="button" variant="ghost" onClick={() => setForm({ ...form, logo_data: '' })}>Використовувати емблему SOLVIA</Button>}
+      <div className="settings-shell">
+        <aside className="settings-nav">
+          {[
+            ['center','Центр','Реквізити та бренд'],
+            ['documents','Документи','Виписки та підписи'],
+            ['connection','Підключення','Local / VPS'],
+            ['maintenance','Backup','Резервні копії']
+          ].map(([key,title,text]) => (
+            <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => setActiveSection(key)}>
+              <span>{key === 'center' ? '01' : key === 'documents' ? '02' : key === 'connection' ? '03' : '04'}</span>
+              <div><strong>{title}</strong><small>{text}</small></div>
+            </button>
+          ))}
+        </aside>
+
+        <div className="settings-content">
+          {(activeSection === 'center' || activeSection === 'documents') && (
+            <section className="surface settings-panel">
+              <div className="section-head">
+                <div>
+                  <div className="eyebrow">{activeSection === 'center' ? 'ПРОФІЛЬ ЦЕНТРУ' : 'ДОКУМЕНТИ'}</div>
+                  <h2>{activeSection === 'center' ? 'Реквізити та оформлення' : 'Виписки та підписи'}</h2>
+                </div>
+                <Badge tone="forest">SOLVIA 2.0</Badge>
               </div>
-            </div>
-          </div>
 
-          <div className="form-actions full-span"><Button type="submit">Зберегти налаштування</Button></div>
-        </form>
-      </section>
-      <section className="surface maintenance-card">
-        <div className="section-head"><div><div className="eyebrow">ДАНІ</div><h2>Резервне копіювання</h2></div><Badge tone="sand">Admin only</Badge></div>
-        <p className="muted">Резервні копії та відновлення виконуються локально на серверному ПК. Модуль працює тільки з базою SOLVIA і не змінює RehaFlow.</p>
-        <div className="backup-actions">
-          <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('backup')}>Створити backup</Button>
-          <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restore')}>Відновити з backup</Button>
+              <form className="form-grid" onSubmit={save}>
+                {activeSection === 'center' ? <>
+                  <Field label="Повна назва центру" full><input value={form.center_name} onChange={(e) => setForm({ ...form, center_name: e.target.value })} required /></Field>
+                  <Field label="Коротка назва"><input value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} /></Field>
+                  <Field label="Місто"><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+                  <Field label="Адреса" full><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
+                  <Field label="Телефон"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+                  <Field label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+                  <Field label="Сайт"><input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></Field>
+                  <Field label="Режим роботи"><input value={form.work_hours} onChange={(e) => setForm({ ...form, work_hours: e.target.value })} placeholder="08:00–20:00" /></Field>
+                  <Field label="Керівник"><input value={form.director_name} onChange={(e) => setForm({ ...form, director_name: e.target.value })} /></Field>
+                  <Field label="Відповідальний адміністратор"><input value={form.admin_name} onChange={(e) => setForm({ ...form, admin_name: e.target.value })} /></Field>
+                  <Field label="Нагадування про запис, хв"><input type="number" min="5" max="240" value={form.appointment_reminder_minutes} onChange={(e) => setForm({ ...form, appointment_reminder_minutes: Number(e.target.value) })} /></Field>
+                  <div className="field full">
+                    <span>Емблема центру</span>
+                    <div className="logo-settings">
+                      <img src={form.logo_data || '/solvia-icon.png'} alt="Емблема центру" />
+                      <div>
+                        <input type="file" accept="image/png,image/jpeg" onChange={(e) => chooseLogo(e.target.files?.[0])} />
+                        <small>PNG/JPEG до 1 МБ. Використовується у виписках і документах.</small>
+                        {form.logo_data && <Button type="button" variant="ghost" onClick={() => setForm({ ...form, logo_data: '' })}>Повернути емблему SOLVIA</Button>}
+                      </div>
+                    </div>
+                  </div>
+                </> : <>
+                  <Field label="ПІБ завідувача"><input value={form.head_name} onChange={(e) => setForm({ ...form, head_name: e.target.value })} placeholder="ПІБ для підпису" /></Field>
+                  <Field label="Посада завідувача"><input value={form.head_title} onChange={(e) => setForm({ ...form, head_title: e.target.value })} placeholder="Завідувач центру" /></Field>
+                  <Field label="Посада психолога у виписці"><input value={form.discharge_signatory} onChange={(e) => setForm({ ...form, discharge_signatory: e.target.value })} placeholder="Психолог" /></Field>
+                  <Field label="Футер документів" full><textarea rows="5" value={form.document_footer} onChange={(e) => setForm({ ...form, document_footer: e.target.value })} placeholder="Ліцензія, юридична інформація, контакти або примітка для друкованих документів." /></Field>
+                  <div className="document-preview full-span">
+                    <div className="document-preview-mark"><img src={form.logo_data || '/solvia-icon.png'} alt="" /></div>
+                    <div><small>ПОПЕРЕДНІЙ ВИГЛЯД</small><strong>{form.center_name || 'SOLVIA Center'}</strong><span>{form.head_title || 'Завідувач центру'} · {form.head_name || 'ПІБ'}</span></div>
+                  </div>
+                </>}
+                <div className="form-actions full-span"><Button type="submit">Зберегти зміни</Button></div>
+              </form>
+            </section>
+          )}
+
+          {activeSection === 'connection' && (
+            <section className="surface settings-panel">
+              <div className="section-head">
+                <div><div className="eyebrow">МЕРЕЖА</div><h2>Local / VPS підключення</h2></div>
+                <Badge tone={form.connection_mode === 'vps' ? 'sky' : 'forest'}>{form.connection_mode === 'vps' ? 'VPS' : 'LOCAL'}</Badge>
+              </div>
+
+              <div className="connection-mode-grid">
+                <button className={form.connection_mode === 'local' ? 'active' : ''} onClick={() => setForm({ ...form, connection_mode: 'local' })}>
+                  <span className="mode-icon">L</span><div><strong>Локальний сервер</strong><small>Сервер у мережі центру або на цьому ПК</small></div>
+                </button>
+                <button className={form.connection_mode === 'vps' ? 'active' : ''} onClick={() => setForm({ ...form, connection_mode: 'vps' })}>
+                  <span className="mode-icon">V</span><div><strong>VPS сервер</strong><small>Захищене HTTPS-підключення через інтернет</small></div>
+                </button>
+              </div>
+
+              <form className="form-grid" onSubmit={save}>
+                <Field label="Local API URL" full hint="Наприклад: https://192.168.1.100:8443">
+                  <input value={form.local_api_url} onChange={(e) => setForm({ ...form, local_api_url: e.target.value })} placeholder={apiBase || 'https://192.168.1.100:8443'} />
+                </Field>
+                <Field label="Назва VPS"><input value={form.vps_name} onChange={(e) => setForm({ ...form, vps_name: e.target.value })} placeholder="Напр. QureMed Cloud 1" /></Field>
+                <Field label="VPS API URL" hint="Тільки HTTPS">
+                  <input value={form.vps_api_url} onChange={(e) => setForm({ ...form, vps_api_url: e.target.value })} placeholder="https://solvia.example.com" />
+                </Field>
+
+                <div className="connection-current full-span">
+                  <div><span className="connection-led online" /><div><small>ЦЕЙ ПК ЗАРАЗ ПІДКЛЮЧЕНИЙ ДО</small><strong>{apiBase}</strong></div></div>
+                  <Badge tone={apiBase?.startsWith('https://') ? 'forest' : 'sand'}>{apiBase?.startsWith('https://') ? 'HTTPS' : 'HTTP'}</Badge>
+                </div>
+
+                {connectionTest.state !== 'idle' && (
+                  <div className={`connection-test full-span ${connectionTest.state}`}>
+                    <span className="connection-led" />
+                    <strong>{connectionTest.message}</strong>
+                  </div>
+                )}
+
+                <div className="form-actions full-span split-actions">
+                  <Button type="button" variant="secondary" onClick={testConnection} disabled={connectionTest.state === 'busy'}>Перевірити з’єднання</Button>
+                  <div>
+                    <Button type="submit" variant="secondary">Зберегти профіль</Button>
+                    <Button type="button" onClick={applyConnection}>Підключити цей ПК</Button>
+                  </div>
+                </div>
+              </form>
+
+              <div className="security-callout">
+                <strong>VPS працює тільки через HTTPS</strong>
+                <p>SOLVIA не зберігає пароль від VPS. У налаштуваннях зберігається лише адреса API. Авторизація користувачів залишається через персональні облікові записи SOLVIA.</p>
+              </div>
+            </section>
+          )}
+
+          {activeSection === 'maintenance' && (
+            <section className="surface settings-panel">
+              <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Backup / Restore</h2></div><Badge tone="sand">Admin only</Badge></div>
+              <div className="maintenance-grid">
+                <article><span>01</span><strong>Створити backup</strong><p>Ручна резервна копія PostgreSQL SOLVIA на серверному ПК.</p><Button onClick={() => window.chrome?.webview?.postMessage('backup')}>Створити backup</Button></article>
+                <article><span>02</span><strong>Відновити базу</strong><p>Відновлення SOLVIA з backup-файлу з окремим підтвердженням.</p><Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restore')}>Відновити з backup</Button></article>
+                <article><span>03</span><strong>Перезапустити сервер</strong><p>Перезапуск локального SolviaServer та перевірка health endpoint.</p><Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restart-server')}>Restart Server</Button></article>
+              </div>
+            </section>
+          )}
         </div>
-      </section>
+      </div>
     </>
   );
 }
