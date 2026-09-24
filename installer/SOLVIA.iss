@@ -19,7 +19,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 DisableProgramGroupPage=yes
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\solvia.ico
 SetupIconFile=..\assets\solvia.ico
 
 [Types]
@@ -33,6 +33,7 @@ Name: "server"; Description: "SOLVIA Server + Server Console"; Types: server ful
 
 [Files]
 Source: "Stop-Server.ps1"; Flags: dontcopy
+Source: "..\assets\solvia.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Setup.Common.ps1"; Flags: dontcopy
 Source: "..\out\SOLVIA\Solvia.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: client
 Source: "..\out\SOLVIA\SolviaServerConsole.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: server
