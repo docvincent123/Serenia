@@ -1031,7 +1031,7 @@ function PatientCard({ api, role, patientId, back }) {
 
   function printDischargeDocument() {
     const previous = document.title;
-    document.title = `app.solvia · №${card.patient_no || '00000'}`;
+    document.title = `Виписка №${printDoc?.item?.document_no || card.patient_no || '00000'} — ${card.name}`;
     const restore = () => {
       document.title = previous;
       window.removeEventListener('afterprint', restore);
@@ -1467,7 +1467,7 @@ function PatientCard({ api, role, patientId, back }) {
             </div>
 
             <footer className="discharge-footer">
-              <span>app.solvia · №{card.patient_no || '00000'}</span>
+              <span>{printDoc.center.center_name || 'SOLVIA'}</span>
               <span>{printDoc.center.document_footer || ''}</span>
             </footer>
           </article>
