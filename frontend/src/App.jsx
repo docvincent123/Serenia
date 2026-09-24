@@ -448,7 +448,7 @@ function Calendar({ api, role, openPatient }) {
     try {
       const edit = dialog === 'edit';
       let ids = booking.patient_ids.map(Number).filter(Boolean);
-      if (booking.kind === 'individual') ids = ids.slice(0, 1);
+      if (['individual','child','crisis'].includes(booking.kind)) ids = ids.slice(0, 1);
       if (!ids.length) throw new Error('Оберіть хоча б одного пацієнта.');
 
       const body = {
