@@ -56,7 +56,8 @@ try {
     Start-Sleep -Milliseconds 250
   }
   if (!(Test-Path $report) -or (Get-Content $report -Raw) -ne 'ready') {
-    throw 'React login form did not render; WebView creation alone is not success'
+    $detail = if (Test-Path $report) { Get-Content $report -Raw } else { 'No successful navigation/DOM readiness signal' }
+    throw ('React login form did not render: ' + $detail)
   }
   $rect = New-Object Native+RECT
   [Native]::GetWindowRect($hwnd, [ref]$rect) | Out-Null

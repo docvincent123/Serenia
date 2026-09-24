@@ -112,18 +112,6 @@ void createWebView(HWND hwnd) {
                                         if (FAILED(args->TryGetWebMessageAsString(&raw)) || !raw) return S_OK;
                                         std::wstring message(raw);
                                         CoTaskMemFree(raw);
-                                        if (message == L"solvia-ui-ready") {
-                                            const auto report = envValue(L"SOLVIA_UI_SMOKE_RESULT");
-                                            LPWSTR source = nullptr;
-                                            args->get_Source(&source);
-                                            const bool trusted = source && std::wstring(source).rfind(L"https://app.solvia.invalid/index.html", 0) == 0;
-                                            CoTaskMemFree(source);
-                                            if (trusted && !report.empty()) {
-                                                std::ofstream out{std::filesystem::path(report)};
-                                                out << "ready";
-                                            }
-                                            return S_OK;
-                                        }
                                         if (message != L"backup" && message != L"restore") return S_OK;
 
                                         const auto script = executableDirectory() / L"installer" /
@@ -179,21 +167,19 @@ void createWebView(HWND hwnd) {
                                         if (FAILED(args->get_IsSuccess(&success))) return S_OK;
                                         if (success) {
                                             if (!envValue(L"SOLVIA_UI_SMOKE_RESULT").empty()) {
-                                                // A browser child window also exists on Chromium error pages.
-                                                // Require the actual React login form to render.
-                                                g_webview->ExecuteScript(
-                                                    LR"JS((function(){let n=0;const t=setInterval(function(){
-                                                        const root=document.getElementById('root');
-                                                        if(root && root.childElementCount && document.querySelector('input[type="password"]')){
-                                                            clearInterval(t);window.chrome.webview.postMessage('solvia-ui-ready');
-                                                        }else if(++n>=100){clearInterval(t);}
-                                                    },100);})())JS", nullptr);
+                                                SetTimer(g_window, 2, 250, nullptr);
                                             }
                                             return S_OK;
                                         }
 
                                         COREWEBVIEW2_WEB_ERROR_STATUS status{};
                                         args->get_WebErrorStatus(&status);
+                                        const auto report = envValue(L"SOLVIA_UI_SMOKE_RESULT");
+                                        if (!report.empty()) {
+                                            std::ofstream out{std::filesystem::path(report)};
+                                            out << "navigation-error:" << static_cast<int>(status);
+                                            return S_OK;
+                                        }
                                         std::wstring message = L"Не вдалося завантажити локальний інтерфейс SOLVIA. WebView2 status: " +
                                             std::to_wstring(static_cast<int>(status)) +
                                             L". Файл: " + (executableDirectory() / L"ui" / L"index.html").wstring();
@@ -230,6 +216,23 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_window = hwnd;
             createWebView(hwnd);
             return 0;
+        case WM_TIMER:
+            if (wParam == 2 && g_webview) {
+                g_webview->ExecuteScript(
+                    LR"JS(location.origin==='https://app.solvia.invalid' && !!document.querySelector('#root input[type="password"]'))JS",
+                    Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+                        [](HRESULT result, LPCWSTR value) -> HRESULT {
+                            if (SUCCEEDED(result) && value && std::wstring(value) == L"true") {
+                                const auto report = envValue(L"SOLVIA_UI_SMOKE_RESULT");
+                                std::ofstream out{std::filesystem::path(report)};
+                                out << "ready";
+                                KillTimer(g_window, 2);
+                            }
+                            return S_OK;
+                        }).Get());
+                return 0;
+            }
+            break;
         case WM_SIZE:
             resizeWebView();
             return 0;
@@ -251,6 +254,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         default:
             return DefWindowProcW(hwnd, message, wParam, lParam);
     }
+    return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 }
 
