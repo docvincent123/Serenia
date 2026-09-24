@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS sessions(
   csrf TEXT NOT NULL,
   expires BIGINT NOT NULL,
   platform TEXT NOT NULL DEFAULT '',
+  device_id TEXT NOT NULL DEFAULT '',
+  device_name TEXT NOT NULL DEFAULT '',
+  ip_address TEXT NOT NULL DEFAULT '',
   created TEXT NOT NULL DEFAULT '',
   last_seen TEXT NOT NULL DEFAULT ''
 );
@@ -170,6 +173,7 @@ CREATE TABLE IF NOT EXISTS center_settings(
   head_name TEXT NOT NULL DEFAULT '',
   head_title TEXT NOT NULL DEFAULT 'Завідувач центру',
   logo_data TEXT NOT NULL DEFAULT '',
+  appointment_reminder_minutes INTEGER NOT NULL DEFAULT 30,
   updated TEXT NOT NULL DEFAULT ''
 );
 INSERT INTO center_settings(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
@@ -188,6 +192,8 @@ CREATE TABLE IF NOT EXISTS discharge_summaries(
   patient_id BIGINT NOT NULL REFERENCES patients(id),
   author_id BIGINT NOT NULL REFERENCES users(id),
   psychologist_id BIGINT REFERENCES users(id),
+  document_no TEXT NOT NULL DEFAULT '',
+  generated BOOLEAN NOT NULL DEFAULT TRUE,
   summary TEXT NOT NULL,
   dynamics TEXT NOT NULL DEFAULT '',
   recommendations TEXT NOT NULL DEFAULT '',
@@ -281,3 +287,16 @@ WHERE d.patient_id = p.id AND d.psychologist_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_shift_days_date ON shift_days(shift_date);
+
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS device_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS device_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS ip_address TEXT NOT NULL DEFAULT '';
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS appointment_reminder_minutes INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS document_no TEXT NOT NULL DEFAULT '';
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS generated BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_kind_check;
+ALTER TABLE appointments ADD CONSTRAINT appointments_kind_check CHECK(kind IN ('individual','group','family','child','crisis'));
+
+CREATE INDEX IF NOT EXISTS idx_sessions_seen ON sessions(last_seen);
+CREATE INDEX IF NOT EXISTS idx_appointments_psychologist_start ON appointments(psychologist_id,start);
