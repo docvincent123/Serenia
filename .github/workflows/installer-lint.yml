@@ -39,8 +39,15 @@ jobs:
         run: |
           node tools/materialize-brand.cjs
           if (!(Test-Path assets/solvia.ico)) { throw 'SOLVIA installer icon was not materialized' }
-          New-Item -ItemType Directory -Force out/SOLVIA | Out-Null
-          Set-Content out/SOLVIA/fixture.txt 'Compiler fixture only; not an installer release'
+          New-Item -ItemType Directory -Force out/SOLVIA,out/SOLVIA/ui,out/SOLVIA/installer,out/SOLVIA/docs,out/SOLVIA/licenses | Out-Null
+          Set-Content out/SOLVIA/Solvia.exe 'fixture'
+          Set-Content out/SOLVIA/SolviaServer.exe 'fixture'
+          Set-Content out/SOLVIA/SolviaServerConsole.exe 'fixture'
+          Set-Content out/SOLVIA/ui/index.html '<html>fixture</html>'
+          Set-Content out/SOLVIA/installer/fixture.ps1 '# fixture'
+          Set-Content out/SOLVIA/docs/fixture.txt 'fixture'
+          Set-Content out/SOLVIA/licenses/fixture.txt 'fixture'
+          Set-Content out/SOLVIA/README.md 'fixture'
           & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" installer/SOLVIA.iss
           if ($LASTEXITCODE -ne 0) { throw 'Wizard compilation failed' }
 
