@@ -22,19 +22,38 @@ DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\assets\solvia.ico
 
+[Types]
+Name: "client"; Description: "Робоче місце центру"
+Name: "server"; Description: "Сервер центру"
+Name: "full"; Description: "Сервер + робоче місце"; Flags: iscustom
+
+[Components]
+Name: "client"; Description: "SOLVIA Center — робоча програма"; Types: client full
+Name: "server"; Description: "SOLVIA Server + Server Console"; Types: server full
+
 [Files]
 Source: "Stop-Server.ps1"; Flags: dontcopy
 Source: "Setup.Common.ps1"; Flags: dontcopy
-Source: "..\out\SOLVIA\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\out\SOLVIA\Solvia.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: client
+Source: "..\out\SOLVIA\SolviaServerConsole.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: server
+Source: "..\out\SOLVIA\SolviaServer.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: server
+Source: "..\out\SOLVIA\ui\*"; DestDir: "{app}\ui"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: client server
+Source: "..\out\SOLVIA\installer\*"; DestDir: "{app}\installer"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: server
+Source: "..\out\SOLVIA\bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: server
+Source: "..\out\SOLVIA\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\out\SOLVIA\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\out\SOLVIA\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\SOLVIA"; Filename: "{app}\Solvia.exe"
-Name: "{autodesktop}\SOLVIA"; Filename: "{app}\Solvia.exe"
-
-Name: "{autoprograms}\Налаштувати SOLVIA"; Filename: "{app}\installer\Configure-SOLVIA.cmd"
+Name: "{autoprograms}\SOLVIA Center"; Filename: "{app}\Solvia.exe"; Components: client
+Name: "{autodesktop}\SOLVIA Center"; Filename: "{app}\Solvia.exe"; Components: client
+Name: "{autoprograms}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: server
+Name: "{autodesktop}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: server
+Name: "{autoprograms}\Налаштувати SOLVIA Server"; Filename: "{app}\installer\Configure-SOLVIA.cmd"; Components: server
 
 [Run]
-Filename: "{app}\Solvia.exe"; Description: "Запустити SOLVIA"; Flags: nowait postinstall skipifsilent; Check: IsServerConfigured
+Filename: "{app}\Solvia.exe"; Description: "Запустити SOLVIA Center"; Flags: nowait postinstall skipifsilent; Components: client; Check: IsServerConfigured
+Filename: "{app}\SolviaServerConsole.exe"; Description: "Відкрити SOLVIA Server Console"; Flags: nowait postinstall skipifsilent; Components: server; Check: IsServerConfigured
 
 [UninstallRun]
 Filename: "schtasks.exe"; Parameters: "/Delete /TN ""SOLVIA Local Server"" /F"; Flags: runhidden
@@ -44,6 +63,16 @@ Filename: "schtasks.exe"; Parameters: "/Delete /TN ""SOLVIA Local Server"" /F"; 
 var
   AccountPage: TInputQueryWizardPage;
   Configured: Boolean;
+
+function IsServerSelected: Boolean;
+begin
+  Result := WizardIsComponentSelected('server');
+end;
+
+function IsClientSelected: Boolean;
+begin
+  Result := WizardIsComponentSelected('client');
+end;
 
 function ExistingSetup: Boolean;
 var Text: AnsiString;
@@ -84,7 +113,7 @@ begin
       MsgBox('Вкажіть логін, пароль від 12 до 128 символів та однакове підтвердження пароля.', mbError, MB_OK);
       Exit;
     end;
-    if ExistingPostgreSQL and (Length(AccountPage.Values[3]) = 0) then begin
+    if IsServerSelected and ExistingPostgreSQL and (Length(AccountPage.Values[3]) = 0) then begin
       MsgBox('На цьому ПК уже встановлено PostgreSQL 17. Введіть пароль користувача postgres у останньому полі. Це пароль PostgreSQL, а не пароль адміністратора SOLVIA.', mbError, MB_OK);
       Result := False;
       Exit;
@@ -112,6 +141,10 @@ begin
     Exit;
   end;
   if CurStep <> ssPostInstall then Exit;
+  if not IsServerSelected then begin
+    Configured := True;
+    Exit;
+  end;
   InputDir := ExpandConstant('{tmp}\solvia-private');
   InputPath := InputDir + '\setup-input.txt';
   LogPath := ExpandConstant('{commonappdata}\QureMed\SOLVIA\install.log');
