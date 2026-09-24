@@ -57,11 +57,18 @@ void fatal(const wchar_t* message) {
 }
 
 std::wstring launchUrl() {
-    // Virtual host mapping serves files, not a directory index.
+#ifdef SOLVIA_SERVER_CONSOLE
+    std::wstring url = L"https://app.solvia.invalid/index.html?mode=server";
+#else
     std::wstring url = L"https://app.solvia.invalid/index.html";
+#endif
     const auto api = envValue(L"SOLVIA_API");
     if (!api.empty()) {
+#ifdef SOLVIA_SERVER_CONSOLE
+        url += L"&api=";
+#else
         url += L"?api=";
+#endif
         url += api;
     }
     return url;
@@ -112,10 +119,12 @@ void createWebView(HWND hwnd) {
                                         if (FAILED(args->TryGetWebMessageAsString(&raw)) || !raw) return S_OK;
                                         std::wstring message(raw);
                                         CoTaskMemFree(raw);
-                                        if (message != L"backup" && message != L"restore") return S_OK;
+                                        if (message != L"backup" && message != L"restore" && message != L"restart-server") return S_OK;
 
                                         const auto script = executableDirectory() / L"installer" /
-                                            (message == L"backup" ? L"Backup-Database.ps1" : L"Restore-Database.ps1");
+                                            (message == L"backup" ? L"Backup-Database.ps1" :
+                                             message == L"restore" ? L"Restore-Database.ps1" :
+                                             L"Restart-Server.ps1");
                                         if (!std::filesystem::exists(script)) {
                                             MessageBoxW(g_window, L"Не знайдено скрипт обслуговування SOLVIA.", L"SOLVIA", MB_OK | MB_ICONERROR);
                                             return S_OK;
@@ -273,7 +282,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(101));
     wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wc.lpfnWndProc = windowProc;
+#ifdef SOLVIA_SERVER_CONSOLE
+    wc.lpszClassName = L"SolviaServerConsoleShell";
+#else
     wc.lpszClassName = L"SolviaReactShell";
+#endif
 
     if (!RegisterClassW(&wc)) {
         if (SUCCEEDED(com)) CoUninitialize();
@@ -283,7 +296,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     HWND window = CreateWindowExW(
         0,
         wc.lpszClassName,
+#ifdef SOLVIA_SERVER_CONSOLE
+        L"SOLVIA Server Console • QureMed",
+#else
         L"SOLVIA by QureMed • Центр психологічної реабілітації",
+#endif
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
