@@ -174,6 +174,9 @@ CREATE TABLE IF NOT EXISTS center_settings(
   head_title TEXT NOT NULL DEFAULT 'Завідувач центру',
   logo_data TEXT NOT NULL DEFAULT '',
   appointment_reminder_minutes INTEGER NOT NULL DEFAULT 30,
+  connection_mode TEXT NOT NULL DEFAULT 'local',
+  vps_api_url TEXT NOT NULL DEFAULT '',
+  vps_name TEXT NOT NULL DEFAULT '',
   updated TEXT NOT NULL DEFAULT ''
 );
 INSERT INTO center_settings(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
@@ -300,3 +303,7 @@ ALTER TABLE appointments ADD CONSTRAINT appointments_kind_check CHECK(kind IN ('
 
 CREATE INDEX IF NOT EXISTS idx_sessions_seen ON sessions(last_seen);
 CREATE INDEX IF NOT EXISTS idx_appointments_psychologist_start ON appointments(psychologist_id,start);
+
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS connection_mode TEXT NOT NULL DEFAULT 'local';
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS vps_api_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS vps_name TEXT NOT NULL DEFAULT '';
