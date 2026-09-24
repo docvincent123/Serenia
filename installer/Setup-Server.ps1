@@ -228,8 +228,15 @@ $argument = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hid
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $argument
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-$taskSettings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+# Also runs on Retry: replace the previous supervisor and its owned children.
+Stop-SolviaServer $InstallDir
+foreach ($logName in @('server.log','api-output.log','api-error.log','https-output.log','https-error.log')) {
+    $oldLog = Join-Path $programData $logName
+    if (Test-Path $oldLog) { Move-Item -LiteralPath $oldLog -Destination ($oldLog + '.previous') -Force }
+}
+$taskSettings = New-SolviaTaskSettings
 Register-ScheduledTask -TaskName 'SOLVIA Local Server' -Action $action -Trigger $trigger -Principal $principal -Settings $taskSettings -Force | Out-Null
+Enable-ScheduledTask -TaskName 'SOLVIA Local Server' | Out-Null
 Start-ScheduledTask -TaskName 'SOLVIA Local Server'
 
 $rootCertCandidates = @(

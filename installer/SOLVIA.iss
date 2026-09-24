@@ -23,6 +23,8 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\assets\solvia.ico
 
 [Files]
+Source: "Stop-Server.ps1"; Flags: dontcopy
+Source: "Setup.Common.ps1"; Flags: dontcopy
 Source: "..\out\SOLVIA\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
@@ -99,9 +101,14 @@ var
   Retry: Boolean;
 begin
   if CurStep = ssInstall then begin
-    Exec(ExpandConstant('{sys}\schtasks.exe'), '/End /TN ""SOLVIA Local Server""', '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
-    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM SolviaServer.exe', '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
-    Sleep(900);
+    ExtractTemporaryFile('Stop-Server.ps1');
+    ExtractTemporaryFile('Setup.Common.ps1');
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\Stop-Server.ps1') + '" -InstallDir "' + ExpandConstant('{app}') + '"',
+      '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+      RaiseException('Cannot stop the previous SOLVIA server. Restart Windows and retry setup.');
+    if ExitCode <> 0 then
+      RaiseException('Previous SOLVIA server did not stop. Restart Windows and retry setup.');
     Exit;
   end;
   if CurStep <> ssPostInstall then Exit;
@@ -153,3 +160,4 @@ function GetCustomSetupExitCode: Integer;
 begin
   if Configured then Result := 0 else Result := 1;
 end;
+

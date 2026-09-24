@@ -117,3 +117,35 @@ function Test-SolviaTcpPort([string]$Address, [int]$Port) {
     } catch { return $false }
     finally { $client.Dispose() }
 }
+
+function New-SolviaTaskSettings {
+    # Servers must start on laptops too; Task Scheduler defaults prohibit battery starts.
+    New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+}
+function Stop-SolviaInstallationProcesses([string]$InstallDir) {
+    $root = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
+    $ownedPaths = @((Join-Path $root 'SolviaServer.exe'), (Join-Path $root 'bin\caddy.exe'))
+    foreach ($process in @(Get-Process -Name SolviaServer,caddy -ErrorAction SilentlyContinue)) {
+        # Never kill another installation or RehaFlow's Caddy by image name.
+        if ($process.Path -and $ownedPaths -contains $process.Path) {
+            Write-Host ('Stopping SOLVIA process PID=' + $process.Id)
+            Stop-Process -Id $process.Id -Force -ErrorAction Stop
+            if (-not $process.WaitForExit(10000)) { throw 'Previous SOLVIA process did not stop.' }
+        }
+    }
+}
+function Stop-SolviaServer([string]$InstallDir) {
+    $task = Get-ScheduledTask -TaskName 'SOLVIA Local Server' -ErrorAction SilentlyContinue
+    if ($task) {
+        Disable-ScheduledTask -TaskName 'SOLVIA Local Server' | Out-Null
+        Stop-ScheduledTask -TaskName 'SOLVIA Local Server' -ErrorAction Stop
+        $deadline = [DateTime]::UtcNow.AddSeconds(20)
+        do {
+            $task = Get-ScheduledTask -TaskName 'SOLVIA Local Server'
+            if ($task.State -notin @('Running','Queued')) { break }
+            if ([DateTime]::UtcNow -ge $deadline) { throw 'Previous SOLVIA scheduled task did not stop; restart Windows before retrying setup.' }
+            Start-Sleep -Milliseconds 250
+        } while ($true)
+    }
+    Stop-SolviaInstallationProcesses $InstallDir
+}

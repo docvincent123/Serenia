@@ -49,3 +49,8 @@ jobs:
         shell: powershell
         timeout-minutes: 2
         run: ./tests/startup-health.ps1
+
+      - name: Check scheduled task power policy and scoped process restart
+        shell: powershell
+        timeout-minutes: 2
+        run: ./tests/startup-task.ps1
