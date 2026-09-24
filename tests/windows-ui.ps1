@@ -33,6 +33,8 @@ public static class Native {
 '@
 
 Remove-Item Env:SOLVIA_API -ErrorAction SilentlyContinue
+$report = Join-Path (Resolve-Path 'out/ui').Path ('react-ready-' + [guid]::NewGuid() + '.txt')
+$env:SOLVIA_UI_SMOKE_RESULT = $report
 $client = Start-Process "$bin/Solvia.exe" -PassThru
 try {
   $hwnd = [IntPtr]::Zero
@@ -47,7 +49,15 @@ try {
   if ($hwnd -eq [IntPtr]::Zero) { throw 'No SOLVIA desktop window' }
   if (![Native]::HasWebView($hwnd)) { throw 'WebView2 child window was not created' }
 
-  Start-Sleep -Seconds 2
+  $readyDeadline = [DateTime]::UtcNow.AddSeconds(30)
+  while (!(Test-Path $report) -and [DateTime]::UtcNow -lt $readyDeadline) {
+    $client.Refresh()
+    if ($client.HasExited) { throw 'Desktop exited before React login rendered' }
+    Start-Sleep -Milliseconds 250
+  }
+  if (!(Test-Path $report) -or (Get-Content $report -Raw) -ne 'ready') {
+    throw 'React login form did not render; WebView creation alone is not success'
+  }
   $rect = New-Object Native+RECT
   [Native]::GetWindowRect($hwnd, [ref]$rect) | Out-Null
   $width = [Math]::Max(1, $rect.Right - $rect.Left)
@@ -62,5 +72,6 @@ try {
   $bitmap.Dispose()
   Write-Host 'WebView2 React login shell opened successfully.'
 } finally {
+  Remove-Item Env:SOLVIA_UI_SMOKE_RESULT -ErrorAction SilentlyContinue
   if ($client -and !$client.HasExited) { Stop-Process -Id $client.Id -Force }
 }

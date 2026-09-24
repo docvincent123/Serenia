@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <string>
 #include <cstdlib>
+#include <fstream>
 
 using Microsoft::WRL::Callback;
 using Microsoft::WRL::ComPtr;
@@ -56,7 +57,8 @@ void fatal(const wchar_t* message) {
 }
 
 std::wstring launchUrl() {
-    std::wstring url = L"https://app.solvia.invalid/";
+    // Virtual host mapping serves files, not a directory index.
+    std::wstring url = L"https://app.solvia.invalid/index.html";
     const auto api = envValue(L"SOLVIA_API");
     if (!api.empty()) {
         url += L"?api=";
@@ -110,6 +112,18 @@ void createWebView(HWND hwnd) {
                                         if (FAILED(args->TryGetWebMessageAsString(&raw)) || !raw) return S_OK;
                                         std::wstring message(raw);
                                         CoTaskMemFree(raw);
+                                        if (message == L"solvia-ui-ready") {
+                                            const auto report = envValue(L"SOLVIA_UI_SMOKE_RESULT");
+                                            LPWSTR source = nullptr;
+                                            args->get_Source(&source);
+                                            const bool trusted = source && std::wstring(source).rfind(L"https://app.solvia.invalid/index.html", 0) == 0;
+                                            CoTaskMemFree(source);
+                                            if (trusted && !report.empty()) {
+                                                std::ofstream out{std::filesystem::path(report)};
+                                                out << "ready";
+                                            }
+                                            return S_OK;
+                                        }
                                         if (message != L"backup" && message != L"restore") return S_OK;
 
                                         const auto script = executableDirectory() / L"installer" /
@@ -162,13 +176,27 @@ void createWebView(HWND hwnd) {
                                 Callback<ICoreWebView2NavigationCompletedEventHandler>(
                                     [](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
                                         BOOL success = FALSE;
-                                        if (FAILED(args->get_IsSuccess(&success)) || success) return S_OK;
+                                        if (FAILED(args->get_IsSuccess(&success))) return S_OK;
+                                        if (success) {
+                                            if (!envValue(L"SOLVIA_UI_SMOKE_RESULT").empty()) {
+                                                // A browser child window also exists on Chromium error pages.
+                                                // Require the actual React login form to render.
+                                                g_webview->ExecuteScript(
+                                                    LR"JS((function(){let n=0;const t=setInterval(function(){
+                                                        const root=document.getElementById('root');
+                                                        if(root && root.childElementCount && document.querySelector('input[type="password"]')){
+                                                            clearInterval(t);window.chrome.webview.postMessage('solvia-ui-ready');
+                                                        }else if(++n>=100){clearInterval(t);}
+                                                    },100);})())JS", nullptr);
+                                            }
+                                            return S_OK;
+                                        }
 
                                         COREWEBVIEW2_WEB_ERROR_STATUS status{};
                                         args->get_WebErrorStatus(&status);
                                         std::wstring message = L"Не вдалося завантажити локальний інтерфейс SOLVIA. WebView2 status: " +
                                             std::to_wstring(static_cast<int>(status)) +
-                                            L". Перевстановіть актуальну збірку SOLVIA 2.0.";
+                                            L". Файл: " + (executableDirectory() / L"ui" / L"index.html").wstring();
                                         MessageBoxW(g_window, message.c_str(), L"SOLVIA", MB_OK | MB_ICONERROR);
                                         return S_OK;
                                     }
