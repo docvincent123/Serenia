@@ -2294,13 +2294,16 @@ function Audit({ api }) {
   );
 }
 
-function Shell({ api, user, onLogout }) {
+function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
   const [page, setPage] = useState(defaultPage(user.role));
   const [patientId, setPatientId] = useState(null);
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
+  const [health, setHealth] = useState({ online: true, version: '2.0.0' });
   const navigation = navFor(user.role);
+  const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
+  const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
   function openPatient(id) { setPatientId(id); setPage('patient-card'); }
   function navigate(target) { setPatientId(null); setPage(target); }
@@ -2323,6 +2326,20 @@ function Shell({ api, user, onLogout }) {
   }
 
   useEffect(() => { loadShift(); }, []);
+  useEffect(() => {
+    let alive = true;
+    async function ping() {
+      try {
+        const result = await api('GET', '/api/health');
+        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.0.0' });
+      } catch {
+        if (alive) setHealth({ online: false, version: '' });
+      }
+    }
+    ping();
+    const timer = setInterval(ping, 30000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [apiBase]);
 
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} />;
@@ -2334,7 +2351,7 @@ function Shell({ api, user, onLogout }) {
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports api={api} role={user.role} />;
     if (page === 'devices') return <Devices api={api} />;
-    if (page === 'settings') return <Settings api={api} />;
+    if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
   })();
@@ -2378,7 +2395,19 @@ function Shell({ api, user, onLogout }) {
             {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={() => changeShift('close')}>Завершити зміну</Button>}
           </div>
         )}
-        {!locked && <><ReminderBar api={api} role={user.role} /><div className="workspace-topbar"><GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} /></div></>}
+        {!locked && <>
+          <ReminderBar api={api} role={user.role} />
+          <div className="workspace-topbar">
+            <div className="topbar-context">
+              <div><small>РОБОЧИЙ ПРОСТІР</small><strong>{activePageLabel}</strong></div>
+              <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase}>
+                <span className="connection-led" />
+                <div><strong>{connectionKind}</strong><small>{health.online ? `SOLVIA ${health.version}` : 'Немає зв’язку'}</small></div>
+              </div>
+            </div>
+            <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />
+          </div>
+        </>}
         <div className="workspace-inner">
           {shiftError && <div className="alert error">{shiftError}</div>}
           {!shift ? <Spinner /> : locked ? (
@@ -2467,12 +2496,21 @@ export default function App() {
     }
   }
 
+  function switchApi(nextBase) {
+    const clean = cleanBase(nextBase);
+    localStorage.setItem('solvia_api', clean);
+    sessionStorage.removeItem('solvia_token');
+    setApiBase(clean);
+    setToken('');
+    setUser(null);
+  }
+
   if (booting) {
     return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
   }
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} />;
   if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} />;
-  return <Shell api={api} user={user} onLogout={logout} />;
+  return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
 }
 
