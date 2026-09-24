@@ -41,7 +41,8 @@ const icons = {
   rooms: '▦',
   reports: '▤',
   audit: '☷',
-  settings: '⚙'
+  settings: '⚙',
+  devices: '◫'
 };
 
 function localDate(date = new Date()) {
@@ -55,6 +56,16 @@ function monthStart() {
   const d = new Date();
   return localDate(new Date(d.getFullYear(), d.getMonth(), 1));
 }
+function deviceIdentity() {
+  let id = localStorage.getItem('solvia_device_id');
+  if (!id) {
+    id = globalThis.crypto?.randomUUID?.() || `win-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem('solvia_device_id', id);
+  }
+  const platform = navigator.userAgentData?.platform || navigator.platform || 'Windows';
+  return { device_id: id, device_name: `SOLVIA · ${platform}`, platform: 'Windows' };
+}
+
 
 function cleanBase(value) {
   const text = String(value || '').trim().replace(/\/+$/, '');
@@ -103,6 +114,7 @@ function navFor(role) {
       ['team', 'Команда'],
       ['rooms', 'Кабінети'],
       ['reports', 'Звіти психологів'],
+      ['devices', 'Пристрої'],
       ['settings', 'Налаштування'],
       ['audit', 'Журнал дій']
     ];
@@ -196,7 +208,7 @@ function Login({ initialBase, onLogin }) {
     setError('');
     try {
       const base = cleanBase(server);
-      const result = await request(base, '', 'POST', '/api/login', { login, password, platform: 'Windows' });
+      const result = await request(base, '', 'POST', '/api/login', { login, password, ...deviceIdentity() });
       onLogin(base, result);
     } catch (e) {
       setError(e.message);
