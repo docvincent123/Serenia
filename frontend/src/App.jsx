@@ -1812,6 +1812,166 @@ function Rooms({ api }) {
   );
 }
 
+function Devices({ api }) {
+  const [sessions, setSessions] = useState([]);
+  const [error, setError] = useState('');
+
+  async function load() {
+    try { setSessions(await api('GET', '/api/admin/sessions')); setError(''); }
+    catch (e) { setError(e.message); }
+  }
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function terminate(session) {
+    if (!window.confirm(`Завершити сесію «${session.name}» на пристрої «${session.device_name || session.platform}»?`)) return;
+    try {
+      await api('DELETE', `/api/admin/sessions/${session.session_id}`, {});
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  const online = sessions.filter((x) => x.online).length;
+  return (
+    <>
+      <PageHead
+        eyebrow="БЕЗПЕКА ТА ПРИСТРОЇ"
+        title="Активні пристрої"
+        subtitle="Телефони, планшети та ПК, на яких зараз є активний вхід у SOLVIA."
+        actions={<Button variant="secondary" onClick={load}>Оновити</Button>}
+      />
+      {error && <div className="alert error">{error}</div>}
+      <div className="stat-grid">
+        <article className="stat-card"><strong>{sessions.length}</strong><h3>Активних сесій</h3><p>До завершення входу або 8 годин</p></article>
+        <article className="stat-card"><strong>{online}</strong><h3>Онлайн зараз</h3><p>Активність протягом останніх 2 хвилин</p></article>
+        <article className="stat-card"><strong>{sessions.filter((x) => x.platform === 'Android').length}</strong><h3>Телефони / планшети</h3><p>Android-клієнти</p></article>
+        <article className="stat-card"><strong>{sessions.filter((x) => x.platform === 'Windows').length}</strong><h3>ПК</h3><p>Windows-клієнти</p></article>
+      </div>
+      <section className="surface">
+        <div className="device-list">
+          {sessions.map((s) => (
+            <article className="device-card" key={s.session_id}>
+              <div className={`device-status ${s.online ? 'online' : ''}`} />
+              <div className="device-main">
+                <strong>{s.device_name || s.platform || 'Невідомий пристрій'}</strong>
+                <span>{s.name} · {roleLabels[s.role] || s.role}</span>
+                <small>{s.platform} · IP {s.ip_address || '—'} · остання активність {s.last_seen?.replace('T',' ') || '—'}</small>
+              </div>
+              <Badge tone={s.online ? 'forest' : 'stone'}>{s.online ? 'Онлайн' : 'Неактивний'}</Badge>
+              <Button variant="danger" onClick={() => terminate(s)}>Завершити сесію</Button>
+            </article>
+          ))}
+        </div>
+        {!sessions.length && <Empty title="Активних пристроїв немає" text="Після входу працівника його ПК, телефон або планшет з’явиться тут." />}
+      </section>
+    </>
+  );
+}
+
+function ReminderBar({ api, role }) {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    if (!['admin','psychologist'].includes(role)) return undefined;
+    let alive = true;
+    async function load() {
+      try {
+        const value = await api('GET', '/api/reminders');
+        if (alive) setItems(value);
+      } catch {}
+    }
+    load();
+    const timer = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [role]);
+
+  if (!items.length) return null;
+  return (
+    <div className="reminder-strip">
+      <strong>Найближчі записи:</strong>
+      {items.slice(0,3).map((x) => (
+        <span key={x.id}>{x.start?.slice(11,16)} · {x.patients} · {x.psychologist}</span>
+      ))}
+      {items.length > 3 && <small>+{items.length - 3}</small>}
+    </div>
+  );
+}
+
+function ServerConsole({ api, user, onLogout }) {
+  const [sessions, setSessions] = useState([]);
+  const [shift, setShift] = useState(null);
+  const [reminders, setReminders] = useState([]);
+  const [center, setCenter] = useState(null);
+  const [error, setError] = useState('');
+
+  async function load() {
+    try {
+      const [s, sh, r, ce] = await Promise.all([
+        api('GET','/api/admin/sessions'),
+        api('GET','/api/shift-day'),
+        api('GET','/api/reminders'),
+        api('GET','/api/settings/center')
+      ]);
+      setSessions(s); setShift(sh); setReminders(r); setCenter(ce); setError('');
+    } catch (e) { setError(e.message); }
+  }
+  useEffect(() => {
+    load();
+    const timer=setInterval(load,30000);
+    return ()=>clearInterval(timer);
+  }, []);
+
+  async function terminate(session) {
+    if (!window.confirm(`Завершити сесію ${session.name} на ${session.device_name || session.platform}?`)) return;
+    try { await api('DELETE', `/api/admin/sessions/${session.session_id}`, {}); await load(); }
+    catch(e){ setError(e.message); }
+  }
+
+  if (user.role !== 'admin') {
+    return <div className="server-console"><div className="alert error">Server Console доступна тільки адміністратору.</div><Button onClick={onLogout}>Вийти</Button></div>;
+  }
+
+  return (
+    <div className="server-console">
+      <header className="server-console-head">
+        <div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console</strong><span>{center?.center_name || 'QureMed'}</span></div></div>
+        <div className="page-actions">
+          <Button variant="secondary" onClick={load}>Оновити</Button>
+          <Button variant="ghost" onClick={onLogout}>Вийти</Button>
+        </div>
+      </header>
+      {error && <div className="alert error">{error}</div>}
+      <div className="server-status-grid">
+        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>127.0.0.1:8765 · SOLVIA 2.0</p></article>
+        <article className="stat-card"><strong>{shift?.open ? 'OPEN' : 'CLOSED'}</strong><h3>Робоча зміна</h3><p>{shift?.shift_date || localDate()}</p></article>
+        <article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Онлайн пристроїв</h3><p>{sessions.length} активних сесій</p></article>
+        <article className="stat-card"><strong>{reminders.length}</strong><h3>Найближчих записів</h3><p>Нагадування психологам і адміну</p></article>
+      </div>
+      <section className="surface">
+        <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Сервер центру</h2></div><Badge tone="forest">Local</Badge></div>
+        <div className="backup-actions">
+          <Button onClick={() => window.chrome?.webview?.postMessage('backup')}>Створити backup</Button>
+          <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restore')}>Відновити БД</Button>
+          <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restart-server')}>Перезапустити сервер</Button>
+        </div>
+      </section>
+      <section className="surface">
+        <div className="section-head"><div><div className="eyebrow">ПІДКЛЮЧЕННЯ</div><h2>Телефони, планшети та ПК</h2></div><Badge tone="stone">{sessions.length}</Badge></div>
+        <div className="device-list">
+          {sessions.map((s) => <article className="device-card" key={s.session_id}>
+            <div className={`device-status ${s.online ? 'online':''}`} />
+            <div className="device-main"><strong>{s.device_name || s.platform}</strong><span>{s.name} · {roleLabels[s.role]}</span><small>{s.ip_address || '—'} · {s.last_seen?.replace('T',' ')}</small></div>
+            <Badge tone={s.online?'forest':'stone'}>{s.online?'Онлайн':'Очікує'}</Badge>
+            <Button variant="danger" onClick={() => terminate(s)}>Завершити</Button>
+          </article>)}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Settings({ api }) {
   const empty = {
     center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
