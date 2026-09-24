@@ -56,7 +56,7 @@ Filename: "{app}\Solvia.exe"; Description: "Запустити SOLVIA Center"; F
 Filename: "{app}\SolviaServerConsole.exe"; Description: "Відкрити SOLVIA Server Console"; Flags: nowait postinstall skipifsilent; Components: server; Check: IsServerConfigured
 
 [UninstallRun]
-Filename: "schtasks.exe"; Parameters: "/Delete /TN ""SOLVIA Local Server"" /F"; Flags: runhidden
+Filename: "schtasks.exe"; Parameters: "/Delete /TN ""SOLVIA Local Server"" /F"; Flags: runhidden; Components: server
 
 
 [Code]
@@ -102,10 +102,15 @@ begin
   AccountPage.Add('Пароль наявного PostgreSQL (користувач postgres):', True);
 end;
 
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = AccountPage.ID) and (not IsServerSelected);
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if (CurPageID = AccountPage.ID) and not ExistingSetup then begin
+  if (CurPageID = AccountPage.ID) and not ExistingSetup and IsServerSelected then begin
     Result := (Length(AccountPage.Values[0]) >= 3) and
       (Length(AccountPage.Values[1]) >= 12) and (Length(AccountPage.Values[1]) <= 128) and
       (AccountPage.Values[1] = AccountPage.Values[2]);
