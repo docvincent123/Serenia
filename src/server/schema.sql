@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS center_settings(
   logo_data TEXT NOT NULL DEFAULT '',
   appointment_reminder_minutes INTEGER NOT NULL DEFAULT 30,
   connection_mode TEXT NOT NULL DEFAULT 'local',
+  local_api_url TEXT NOT NULL DEFAULT '',
   vps_api_url TEXT NOT NULL DEFAULT '',
   vps_name TEXT NOT NULL DEFAULT '',
   updated TEXT NOT NULL DEFAULT ''
@@ -307,3 +308,4 @@ CREATE INDEX IF NOT EXISTS idx_appointments_psychologist_start ON appointments(p
 ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS connection_mode TEXT NOT NULL DEFAULT 'local';
 ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS vps_api_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS vps_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS local_api_url TEXT NOT NULL DEFAULT '';
