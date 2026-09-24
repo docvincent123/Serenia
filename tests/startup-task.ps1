@@ -13,6 +13,8 @@ try {
     Copy-Item $exe (Join-Path $other 'SolviaServer.exe')
     $owned = Start-Process $exe -PassThru -WindowStyle Hidden
     $foreign = Start-Process (Join-Path $other 'SolviaServer.exe') -PassThru -WindowStyle Hidden
+    Start-Sleep -Milliseconds 500
+    Get-CimInstance Win32_Process -Filter "Name = 'SolviaServer.exe'" | Select-Object ProcessId,ExecutablePath | Format-Table | Out-Host
     Stop-SolviaInstallationProcesses $root
     $owned.Refresh(); $foreign.Refresh()
     if (-not $owned.HasExited) { throw 'Old server still running' }

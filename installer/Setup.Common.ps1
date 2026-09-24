@@ -125,9 +125,11 @@ function New-SolviaTaskSettings {
 function Stop-SolviaInstallationProcesses([string]$InstallDir) {
     $root = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
     $ownedPaths = @((Join-Path $root 'SolviaServer.exe'), (Join-Path $root 'bin\caddy.exe'))
-    foreach ($process in @(Get-Process -Name SolviaServer,caddy -ErrorAction SilentlyContinue)) {
-        # Never kill another installation or RehaFlow's Caddy by image name.
-        if ($process.Path -and $ownedPaths -contains $process.Path) {
+    # ExecutablePath also works when the installer host and child have different bitness.
+    foreach ($candidate in @(Get-CimInstance Win32_Process -Filter "Name = 'SolviaServer.exe' OR Name = 'caddy.exe'" -ErrorAction Stop)) {
+        if ($candidate.ExecutablePath -and $ownedPaths -contains $candidate.ExecutablePath) {
+            $process = Get-Process -Id $candidate.ProcessId -ErrorAction SilentlyContinue
+            if (-not $process) { continue }
             Write-Host ('Stopping SOLVIA process PID=' + $process.Id)
             Stop-Process -Id $process.Id -Force -ErrorAction Stop
             if (-not $process.WaitForExit(10000)) { throw 'Previous SOLVIA process did not stop.' }
