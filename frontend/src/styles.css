@@ -1282,3 +1282,87 @@ h1, h2, h3 { letter-spacing: -.025em; }
   .signature-grid { break-inside: avoid; }
   .discharge-footer { break-inside: avoid; }
 }
+
+
+/* SOLVIA devices and server console */
+.reminder-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 42px;
+  padding: 8px 22px;
+  background: #173f34;
+  color: #f4f8f5;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  font-size: 12px;
+}
+.reminder-strip strong { color: #b7dbc8; }
+.reminder-strip span {
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: rgba(255,255,255,.08);
+}
+.reminder-strip small { opacity: .72; }
+
+.device-list { display: grid; gap: 10px; }
+.device-card {
+  display: grid;
+  grid-template-columns: 12px minmax(0,1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid #dce6df;
+  border-radius: 14px;
+  background: #fff;
+}
+.device-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #9baaa3;
+  box-shadow: 0 0 0 4px rgba(155,170,163,.13);
+}
+.device-status.online {
+  background: #2f8f68;
+  box-shadow: 0 0 0 4px rgba(47,143,104,.14);
+}
+.device-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.device-main strong { font-size: 14px; color: #17392f; }
+.device-main span { font-size: 12px; color: #5d746a; }
+.device-main small { font-size: 10px; color: #87978f; overflow-wrap: anywhere; }
+
+.server-console {
+  min-height: 100vh;
+  padding: 24px;
+  background: #f2f6f3;
+}
+.server-console-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+  padding: 16px 18px;
+  border: 1px solid #dbe6de;
+  border-radius: 16px;
+  background: white;
+}
+.server-console-head .product { margin: 0; }
+.server-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.server-console .surface { margin-bottom: 18px; }
+
+@media (max-width: 900px) {
+  .server-status-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .device-card { grid-template-columns: 12px minmax(0,1fr) auto; }
+  .device-card .button { grid-column: 2 / -1; justify-self: start; }
+}
