@@ -633,6 +633,9 @@ function Calendar({ api, role, openPatient }) {
             <Field label="Тип зустрічі" full>
               <select value={booking.kind} onChange={(e) => setBooking({ ...booking, kind: e.target.value })}>
                 <option value="individual">Індивідуальна консультація</option>
+                <option value="family">Сімейна консультація</option>
+                <option value="child">Дитяча консультація</option>
+                <option value="crisis">Кризова консультація</option>
                 <option value="group">Групове заняття</option>
               </select>
             </Field>
@@ -909,7 +912,7 @@ function PatientCard({ api, role, patientId, back }) {
   });
   const [assessmentLink, setAssessmentLink] = useState('');
   const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
-  const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate(), summary: '', dynamics: '', recommendations: '', followup: '' });
+  const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate() });
   const [printDoc, setPrintDoc] = useState(null);
   const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', admin_note: '' });
   const [editMeta, setEditMeta] = useState({ psychologists: [], categories: [] });
@@ -1011,8 +1014,9 @@ function PatientCard({ api, role, patientId, back }) {
   async function saveDischarge(e) {
     e.preventDefault();
     try {
-      await api('POST', '/api/discharges', { patient_id: Number(patientId), ...discharge });
-      setDialog('');
+      const result = await api('POST', '/api/discharges', { patient_id: Number(patientId), ...discharge });
+      setPrintDoc({ item: { ...result, date_from: discharge.date_from, date_to: discharge.date_to, created: localDate(), psychologist: result.psychologist }, center: result.center });
+      setDialog('print-discharge');
       await load();
     } catch (e) { setError(e.message); }
   }
@@ -1369,13 +1373,10 @@ function PatientCard({ api, role, patientId, back }) {
       {dialog === 'discharge' && (
         <Dialog title="Сформувати виписку" subtitle={card.name} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveDischarge}>
-            <Field label="Початок періоду"><input type="date" value={discharge.date_from} onChange={(e) => setDischarge({ ...discharge, date_from: e.target.value })} /></Field>
-            <Field label="Кінець періоду"><input type="date" value={discharge.date_to} onChange={(e) => setDischarge({ ...discharge, date_to: e.target.value })} /></Field>
-            <Field label="Підсумок психологічного супроводу" full><textarea rows="6" value={discharge.summary} onChange={(e) => setDischarge({ ...discharge, summary: e.target.value })} required /></Field>
-            <Field label="Динаміка" full><textarea rows="4" value={discharge.dynamics} onChange={(e) => setDischarge({ ...discharge, dynamics: e.target.value })} /></Field>
-            <Field label="Рекомендації" full><textarea rows="4" value={discharge.recommendations} onChange={(e) => setDischarge({ ...discharge, recommendations: e.target.value })} /></Field>
-            <Field label="Подальший супровід" full><textarea rows="4" value={discharge.followup} onChange={(e) => setDischarge({ ...discharge, followup: e.target.value })} /></Field>
-            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти виписку</Button></div>
+            <Field label="Початок періоду"><input type="date" value={discharge.date_from} onChange={(e) => setDischarge({ ...discharge, date_from: e.target.value })} required /></Field>
+            <Field label="Кінець періоду"><input type="date" value={discharge.date_to} onChange={(e) => setDischarge({ ...discharge, date_to: e.target.value })} required /></Field>
+            <div className="alert info full-span">SOLVIA сама сформує підсумок, динаміку, рекомендації та подальший супровід із завершених консультацій за цей період. Психолог повторно нічого не переписує.</div>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Сформувати виписку</Button></div>
           </form>
         </Dialog>
       )}
@@ -1432,7 +1433,7 @@ function PatientCard({ api, role, patientId, back }) {
                 {printDoc.center.address && <p>{printDoc.center.address}</p>}
                 <p>{[printDoc.center.phone, printDoc.center.email, printDoc.center.website].filter(Boolean).join(' · ')}</p>
               </div>
-              <div className="discharge-doc-number">№ {card.patient_no || '00000'}</div>
+              <div className="discharge-doc-number">Виписка № {printDoc.item.document_no || card.patient_no || '00000'}</div>
             </header>
             <div className="discharge-title">
               <div className="eyebrow">ПСИХОЛОГІЧНИЙ СУПРОВІД</div>
@@ -1455,13 +1456,13 @@ function PatientCard({ api, role, patientId, back }) {
             <div className="signature-grid">
               <div className="signature-block">
                 <strong>{printDoc.center.discharge_signatory || 'Психолог'}</strong>
-                <span>{printDoc.item.psychologist || '________________________'}</span>
-                <div className="signature-line">підпис</div>
+                <span>{printDoc.item.psychologist || card.psychologist || '________________________'}</span>
+                <div className="signature-line">підпис / дата</div>
               </div>
               <div className="signature-block">
                 <strong>{printDoc.center.head_title || 'Завідувач центру'}</strong>
                 <span>{printDoc.center.head_name || printDoc.center.director_name || '________________________'}</span>
-                <div className="signature-line">підпис</div>
+                <div className="signature-line">підпис / дата</div>
               </div>
             </div>
 
@@ -1976,7 +1977,7 @@ function Settings({ api }) {
   const empty = {
     center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
     director_name: '', admin_name: '', work_hours: '', document_footer: '', discharge_signatory: '',
-    head_name: '', head_title: 'Завідувач центру', logo_data: ''
+    head_name: '', head_title: 'Завідувач центру', logo_data: '', appointment_reminder_minutes: 30
   };
   const [form, setForm] = useState(empty);
   const [error, setError] = useState('');
@@ -2033,6 +2034,7 @@ function Settings({ api }) {
           <Field label="ПІБ завідувача"><input value={form.head_name} onChange={(e) => setForm({ ...form, head_name: e.target.value })} placeholder="ПІБ для підпису" /></Field>
           <Field label="Посада завідувача"><input value={form.head_title} onChange={(e) => setForm({ ...form, head_title: e.target.value })} placeholder="Завідувач центру" /></Field>
           <Field label="Посада психолога у виписці"><input value={form.discharge_signatory} onChange={(e) => setForm({ ...form, discharge_signatory: e.target.value })} placeholder="Психолог" /></Field>
+          <Field label="Нагадування про запис, хв"><input type="number" min="5" max="240" value={form.appointment_reminder_minutes} onChange={(e) => setForm({ ...form, appointment_reminder_minutes: Number(e.target.value) })} /></Field>
           <Field label="Футер документів" full><textarea rows="3" value={form.document_footer} onChange={(e) => setForm({ ...form, document_footer: e.target.value })} /></Field>
 
           <div className="field full">
@@ -2314,6 +2316,7 @@ function Shell({ api, user, onLogout }) {
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports api={api} role={user.role} />;
+    if (page === 'devices') return <Devices api={api} />;
     if (page === 'settings') return <Settings api={api} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
@@ -2358,7 +2361,7 @@ function Shell({ api, user, onLogout }) {
             {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={() => changeShift('close')}>Завершити зміну</Button>}
           </div>
         )}
-        {!locked && <div className="workspace-topbar"><GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} /></div>}
+        {!locked && <><ReminderBar api={api} role={user.role} /><div className="workspace-topbar"><GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} /></div></>}
         <div className="workspace-inner">
           {shiftError && <div className="alert error">{shiftError}</div>}
           {!shift ? <Spinner /> : locked ? (
@@ -2385,7 +2388,9 @@ function Shell({ api, user, onLogout }) {
 }
 
 export default function App() {
-  const queryBase = new URLSearchParams(window.location.search).get('api');
+  const params = new URLSearchParams(window.location.search);
+  const queryBase = params.get('api');
+  const appMode = params.get('mode') || 'center';
   const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? 'http://127.0.0.1:8765' : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
@@ -2450,6 +2455,7 @@ export default function App() {
   }
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} />;
+  if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} />;
   return <Shell api={api} user={user} onLogout={logout} />;
 }
 
