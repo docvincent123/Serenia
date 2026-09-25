@@ -1050,7 +1050,7 @@ function PatientCard({ api, role, patientId, back }) {
 
   function printDischargeDocument() {
     const previous = document.title;
-    document.title = `Виписка №${printDoc?.item?.document_no || card.patient_no || '00000'} — ${card.name}`;
+    document.title = `Виписка №${printDoc?.item?.document_no || printDoc?.item?.patient_no_snapshot || card.patient_no || '00000'} — ${printDoc?.item?.patient_name || card.name}`;
     const restore = () => {
       document.title = previous;
       window.removeEventListener('afterprint', restore);
@@ -2041,6 +2041,9 @@ function Settings({ api, apiBase, onSwitchApi }) {
       const apiUrl = preferred === 'vps'
         ? cleanBase(form.vps_api_url)
         : cleanBase(form.local_api_url || apiBase);
+      if (/127\.0\.0\.1|localhost/i.test(apiUrl)) {
+        throw new Error('Для телефона потрібна LAN-адреса серверного ПК, а не 127.0.0.1. Вкажіть Local API URL, наприклад http://192.168.1.100:8765.');
+      }
       const config = {
         format: 'quremed.solvia.mobile',
         version: 1,
