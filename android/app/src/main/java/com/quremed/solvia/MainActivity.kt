@@ -637,6 +637,7 @@ class MainActivity : Activity() {
                 for (j in 0 until patients.length()) {
                     if (patients.getJSONObject(j).optLong("id") == patientId) {
                         eligible.add(appointment)
+                        break
                     }
                 }
             }
@@ -648,48 +649,121 @@ class MainActivity : Activity() {
 
             val wrap = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), 0, dp(12), 0)
+                setPadding(dp(12), dp(6), dp(12), dp(18))
+                setBackgroundColor(bg)
             }
+            val scroll = ScrollView(this).apply { addView(wrap) }
+
+            wrap.addView(title(patientName, 20f))
+            wrap.addView(caption("Усі поля нижче передаються в API SOLVIA та зберігаються у PostgreSQL на серверному ПК."))
+
             val appointmentSpinner = Spinner(this)
             val appointmentLabels = eligible.map {
                 it.optString("start").takeLast(5) + " · " + it.optString("room")
             }
-            appointmentSpinner.adapter = ArrayAdapter(
-                this,
-                android.R.layout.simple_spinner_dropdown_item,
-                appointmentLabels
-            )
+            appointmentSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, appointmentLabels)
 
+            val typeValues = listOf("primary", "repeat", "crisis", "individual", "family", "child", "group")
+            val typeLabels = listOf("Первинна", "Повторна", "Кризова", "Індивідуальна", "Сімейна", "Дитяча", "Групова")
             val typeSpinner = Spinner(this)
-            val types = listOf("primary", "repeat", "crisis", "individual", "family", "child", "group")
-            typeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, types)
+            typeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, typeLabels)
 
+            val riskValues = listOf("low", "moderate", "high", "critical")
+            val riskLabels = listOf("Низький", "Помірний", "Високий", "Критичний")
             val riskSpinner = Spinner(this)
-            val risks = listOf("low", "moderate", "high", "critical")
-            riskSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, risks)
+            riskSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, riskLabels)
 
-            val note = edit("Нотатка")
-            val goals = edit("Цілі роботи")
-            val next = edit("План наступної консультації")
-            val homework = edit("Домашнє завдання")
-            val recommendations = edit("Рекомендації")
+            val duration = edit("Тривалість, хв").apply {
+                setText("60")
+                inputType = InputType.TYPE_CLASS_NUMBER
+            }
+            val requestText = edit("Запит / причина звернення").apply { minLines = 2 }
+            val stateText = edit("Стан на початку консультації").apply { minLines = 2 }
+            val workDone = edit("Що було проведено").apply { minLines = 3 }
+            val note = edit("Приватна нотатка психолога").apply { minLines = 3 }
+            val goals = edit("Цілі роботи").apply { minLines = 2 }
+            val next = edit("План наступної консультації").apply { minLines = 2 }
+            val homework = edit("Домашнє завдання").apply { minLines = 2 }
+            val recommendations = edit("Рекомендації").apply { minLines = 2 }
+            val resultText = edit("Результат / динаміка").apply { minLines = 2 }
 
-            wrap.addView(caption(patientName))
+            val flagValues = listOf(
+                "anxiety" to "Тривога",
+                "depression" to "Депресивні прояви",
+                "ptsd" to "ПТСР / флешбеки",
+                "sleep" to "Порушення сну",
+                "panic" to "Панічні прояви",
+                "aggression" to "Агресія / дратівливість",
+                "suicide" to "Суїцидальний ризик",
+                "harm_others" to "Ризик для оточення",
+                "urgent_followup" to "Терміновий повторний контакт",
+                "doctor_referral" to "Скерування до лікаря / психіатра"
+            )
+            val flagChecks = flagValues.map { pair ->
+                CheckBox(this).apply {
+                    text = pair.second
+                    setTextColor(ink)
+                    textSize = 13f
+                }
+            }
+
+            fun addGap() = wrap.addView(spacer(8))
+            wrap.addView(caption("Запис у календарі"))
             wrap.addView(appointmentSpinner)
+            addGap()
+            wrap.addView(caption("Тип консультації"))
             wrap.addView(typeSpinner)
-            wrap.addView(riskSpinner)
+            addGap()
+            wrap.addView(duration)
+            addGap()
+            wrap.addView(requestText)
+            addGap()
+            wrap.addView(stateText)
+            addGap()
+            wrap.addView(workDone)
+            addGap()
             wrap.addView(note)
+            addGap()
             wrap.addView(goals)
+            addGap()
             wrap.addView(next)
+            addGap()
             wrap.addView(homework)
+            addGap()
             wrap.addView(recommendations)
+            addGap()
+            wrap.addView(resultText)
+            addGap()
+            wrap.addView(caption("Рівень ризику"))
+            wrap.addView(riskSpinner)
+            addGap()
+            wrap.addView(title("Важливі позначки", 16f))
+            flagChecks.forEach { wrap.addView(it) }
 
-            AlertDialog.Builder(this)
+            val dialog = AlertDialog.Builder(this)
                 .setTitle("Підсумок консультації")
-                .setView(wrap)
+                .setView(scroll)
                 .setNegativeButton("Скасувати", null)
-                .setPositiveButton("Зберегти") { _, _ ->
+                .setPositiveButton("Зберегти", null)
+                .create()
+
+            dialog.setOnShowListener {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    val minutes = duration.text.toString().toIntOrNull() ?: 0
+                    if (note.text.toString().isBlank()) {
+                        Toast.makeText(this, "Заповніть приватну нотатку психолога.", Toast.LENGTH_LONG).show()
+                        return@setOnClickListener
+                    }
+                    if (minutes !in 10..480) {
+                        Toast.makeText(this, "Тривалість має бути від 10 до 480 хвилин.", Toast.LENGTH_LONG).show()
+                        return@setOnClickListener
+                    }
+
                     val appointment = eligible[appointmentSpinner.selectedItemPosition]
+                    val flags = JSONArray()
+                    flagChecks.forEachIndexed { index, check ->
+                        if (check.isChecked) flags.put(flagValues[index].first)
+                    }
                     val payload = JSONObject()
                         .put("patient_id", patientId)
                         .put("appointment_id", appointment.getLong("id"))
@@ -698,19 +772,24 @@ class MainActivity : Activity() {
                         .put("next_plan", next.text.toString())
                         .put("homework", homework.text.toString())
                         .put("recommendations", recommendations.text.toString())
-                        .put("consultation_type", types[typeSpinner.selectedItemPosition])
-                        .put("duration_minutes", 60)
-                        .put("request_text", "")
-                        .put("state_text", "")
-                        .put("work_done", "")
-                        .put("result_text", "")
-                        .put("risk_level", risks[riskSpinner.selectedItemPosition])
-                        .put("risk_flags", JSONArray())
+                        .put("consultation_type", typeValues[typeSpinner.selectedItemPosition])
+                        .put("duration_minutes", minutes)
+                        .put("request_text", requestText.text.toString())
+                        .put("state_text", stateText.text.toString())
+                        .put("work_done", workDone.text.toString())
+                        .put("result_text", resultText.text.toString())
+                        .put("risk_level", riskValues[riskSpinner.selectedItemPosition])
+                        .put("risk_flags", flags)
+
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
                     apiAsync("POST", "/api/consultations", payload) {
+                        dialog.dismiss()
+                        Toast.makeText(this, "Консультацію збережено в SOLVIA.", Toast.LENGTH_LONG).show()
                         patientScreen(patientId)
                     }
                 }
-                .show()
+            }
+            dialog.show()
         }
     }
 
