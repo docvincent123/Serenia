@@ -196,6 +196,11 @@ CREATE TABLE IF NOT EXISTS discharge_summaries(
   patient_id BIGINT NOT NULL REFERENCES patients(id),
   author_id BIGINT NOT NULL REFERENCES users(id),
   psychologist_id BIGINT REFERENCES users(id),
+  psychologist_name TEXT NOT NULL DEFAULT '',
+  patient_name TEXT NOT NULL DEFAULT '',
+  patient_no_snapshot TEXT NOT NULL DEFAULT '',
+  patient_dob TEXT NOT NULL DEFAULT '',
+  patient_category TEXT NOT NULL DEFAULT '',
   document_no TEXT NOT NULL DEFAULT '',
   generated BOOLEAN NOT NULL DEFAULT TRUE,
   summary TEXT NOT NULL,
@@ -309,3 +314,24 @@ ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS connection_mode TEXT NOT NU
 ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS vps_api_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS vps_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS local_api_url TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS psychologist_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS patient_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS patient_no_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS patient_dob TEXT NOT NULL DEFAULT '';
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS patient_category TEXT NOT NULL DEFAULT '';
+
+UPDATE discharge_summaries d
+SET patient_name = p.name,
+    patient_no_snapshot = p.patient_no,
+    patient_dob = p.dob,
+    patient_category = p.category
+FROM patients p
+WHERE d.patient_id = p.id
+  AND (d.patient_name = '' OR d.patient_no_snapshot = '');
+
+UPDATE discharge_summaries d
+SET psychologist_name = u.name
+FROM users u
+WHERE d.psychologist_id = u.id
+  AND d.psychologist_name = '';
