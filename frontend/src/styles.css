@@ -2032,3 +2032,323 @@ input:focus, select:focus, textarea:focus {
   .maintenance-grid { grid-template-columns: 1fr; }
   .connection-mode-grid { grid-template-columns: 1fr; }
 }
+
+
+/* SOLVIA patient cards + footer polish */
+.sidebar {
+  min-width: 0;
+}
+.sidebar-spacer {
+  min-height: 16px;
+}
+.sidebar-support {
+  margin: 8px 4px 10px;
+  padding: 12px;
+  border: 1px solid rgba(173,219,188,.14);
+  border-radius: 15px;
+  background:
+    linear-gradient(145deg, rgba(123,194,148,.10), rgba(255,255,255,.035));
+  overflow: hidden;
+}
+.sidebar-support-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.sidebar-support-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.sidebar-support-head strong {
+  color: rgba(255,255,255,.92);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.sidebar-support-head small {
+  color: #9cc9aa;
+  font-size: 8px;
+  line-height: 1.2;
+}
+.support-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7fd09a;
+  box-shadow: 0 0 0 5px rgba(127,208,154,.09);
+}
+.sidebar-support > a {
+  display: block;
+  margin-top: 9px;
+  color: rgba(222,241,229,.58);
+  font-size: 8.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.sidebar-support > a:hover {
+  color: white;
+}
+
+.patient-card-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 13px;
+}
+.patient-list-card {
+  position: relative;
+  min-width: 0;
+  min-height: 205px;
+  overflow: hidden;
+  border: 1px solid #d5e4da;
+  border-radius: 18px;
+  padding: 17px;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(74,148,107,.09), transparent 32%),
+    linear-gradient(160deg, #ffffff, #f5faf7);
+  color: var(--ink);
+  box-shadow: 0 12px 30px rgba(22,70,51,.055);
+  cursor: pointer;
+  transition: transform .17s ease, box-shadow .17s ease, border-color .17s ease;
+}
+.patient-list-card:hover {
+  transform: translateY(-2px);
+  border-color: #9dc5ae;
+  box-shadow: 0 18px 42px rgba(24,91,65,.10);
+}
+.patient-card-accent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, #2f8a63, #77bd91);
+}
+.patient-card-head {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  gap: 11px;
+  align-items: center;
+}
+.patient-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, #d9efe2, #ecf7f0);
+  color: #1d684a;
+  box-shadow: inset 0 0 0 1px #cce4d5;
+}
+.patient-card-name {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.patient-card-name > small {
+  color: #86a092;
+  font-size: 8px;
+  letter-spacing: .11em;
+  font-weight: 800;
+}
+.patient-card-name > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #173b2e;
+  font-size: 14px;
+}
+.patient-card-name > span {
+  color: #74877e;
+  font-size: 10px;
+}
+.patient-card-arrow {
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: #3e7d60;
+  background: #e8f3ed;
+  font-size: 13px;
+}
+.patient-card-tags {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 0 10px;
+}
+.patient-card-meta {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #e3ece6;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.patient-card-meta > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.patient-card-meta small {
+  color: #8aa096;
+  font-size: 7px;
+  letter-spacing: .12em;
+  font-weight: 800;
+}
+.patient-card-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #49645a;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.patient-card-top {
+  border: 1px solid #d2e2d8;
+  border-radius: 21px;
+  padding: 20px;
+  margin-bottom: 18px;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(76,155,112,.12), transparent 28%),
+    linear-gradient(145deg, #f7fbf8, #edf6f0);
+  box-shadow: 0 15px 38px rgba(21,82,57,.07);
+}
+.patient-title .avatar.large {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  color: #fff;
+  background: linear-gradient(145deg, #267654, #1a5b41);
+  box-shadow: 0 12px 27px rgba(24,94,65,.18);
+}
+.patient-subline {
+  row-gap: 6px;
+}
+.patient-card-grid .surface {
+  border-color: #d6e5db;
+}
+.profile-list div {
+  border-bottom-color: #e4ede7;
+}
+
+.surface {
+  border-color: rgba(200,220,207,.96);
+}
+.surface:hover {
+  border-color: rgba(184,211,193,.98);
+}
+.stat-card {
+  border-color: #d5e4da;
+}
+.stat-card > strong {
+  color: #176149;
+}
+.badge.forest {
+  background: #dff1e6;
+  color: #176246;
+}
+.button.secondary {
+  background: #e8f2ec;
+  color: #215f47;
+  border-color: #d4e5da;
+}
+.button.secondary:hover {
+  background: #dcece2;
+}
+.toolbar {
+  background: linear-gradient(90deg, rgba(233,244,237,.75), rgba(255,255,255,.45));
+  border-radius: 15px;
+  padding: 10px;
+}
+
+.discharge-print {
+  max-width: 900px;
+  margin: 0 auto;
+  border-color: #cfded4;
+  box-shadow: 0 18px 55px rgba(21,65,49,.06);
+}
+.discharge-header {
+  align-items: center;
+  border-bottom: 2px solid #236b50;
+}
+.discharge-center-copy strong {
+  color: #164832;
+  letter-spacing: .01em;
+}
+.discharge-title h1 {
+  color: #173e30;
+}
+.discharge-print section {
+  break-inside: avoid;
+}
+.discharge-print section h3 {
+  color: #356c57;
+}
+.discharge-print section p {
+  margin-bottom: 0;
+}
+.discharge-profile {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f6faf7;
+  border: 1px solid #e0e9e3;
+}
+.signature-block {
+  min-width: 0;
+}
+.discharge-footer {
+  align-items: flex-start;
+}
+.discharge-footer span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1320px) {
+  .patient-card-list {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+}
+@media (max-width: 880px) {
+  .patient-card-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 13mm 14mm;
+  }
+  .discharge-print {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    font-size: 10.5pt;
+  }
+  .discharge-header {
+    padding-bottom: 8mm;
+    margin-bottom: 7mm;
+  }
+  .discharge-title {
+    margin: 7mm 0;
+  }
+  .discharge-profile {
+    padding: 4mm;
+    background: #fff !important;
+  }
+  .discharge-print section {
+    margin-top: 5mm;
+  }
+  .signature-grid {
+    margin-top: 12mm;
+  }
+}
