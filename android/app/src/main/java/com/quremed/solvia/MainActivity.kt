@@ -490,11 +490,22 @@ class MainActivity : Activity() {
     private fun calendarScreen(date: String = LocalDate.now().toString()) {
         backAction = { homeScreen() }
         val body = root()
-        body.addView(topBar("Мій календар", ::homeScreen))
+        body.addView(topBar(if (role == "psychologist") "Мій календар" else "Календар центру", ::homeScreen))
         val dateInput = edit("YYYY-MM-DD").apply { setText(date) }
         body.addView(dateInput)
-        body.addView(primary("Показати день") { calendarScreen(dateInput.text.toString()) })
-        body.addView(spacer())
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        actions.addView(primary("Показати день") { calendarScreen(dateInput.text.toString()) },
+            LinearLayout.LayoutParams(0, dp(46), 1f))
+        if (role == "admin" || role == "reception") {
+            actions.addView(spacer(8))
+            actions.addView(primary("+ Новий запис") { newBookingDialog(dateInput.text.toString()) },
+                LinearLayout.LayoutParams(0, dp(46), 1f))
+        }
+        body.addView(actions)
+        body.addView(spacer(12))
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(list)
         setContentView(scroll(body))
@@ -507,8 +518,14 @@ class MainActivity : Activity() {
                 val item = rows.getJSONObject(i)
                 val patients = item.optJSONArray("patients") ?: JSONArray()
                 val box = card()
+                box.background = rounded(if (item.optString("status") == "completed") Color.rgb(235, 245, 239) else Color.WHITE, 17, line)
                 box.addView(title(item.optString("start").takeLast(5) + " — " + item.optString("end").takeLast(5), 18f))
-                box.addView(caption(item.optString("room") + " · " + statusLabel(item.optString("status"))))
+                box.addView(caption(
+                    item.optString("psychologist") + " · " +
+                    item.optString("room") + " · " +
+                    statusLabel(item.optString("status"))
+                ))
+                if (item.optString("note").isNotBlank()) box.addView(caption("Примітка: " + item.optString("note")))
                 for (j in 0 until patients.length()) {
                     val patient = patients.getJSONObject(j)
                     val patientId = patient.getLong("id")
@@ -516,7 +533,100 @@ class MainActivity : Activity() {
                     box.addView(secondary(patientName + " →") { patientScreen(patientId) })
                 }
                 list.addView(box)
-                list.addView(spacer(8))
+                list.addView(spacer(9))
+            }
+        }
+    }
+
+    private fun newBookingDialog(date: String) {
+        io.execute {
+            try {
+                val meta = request("GET", "/api/meta") as JSONObject
+                val patients = request("GET", "/api/patients") as JSONArray
+                runOnUiThread {
+                    val psychologists = meta.optJSONArray("psychologists") ?: JSONArray()
+                    val rooms = meta.optJSONArray("rooms") ?: JSONArray()
+                    if (psychologists.length() == 0 || rooms.length() == 0 || patients.length() == 0) {
+                        showError("Для запису потрібні психолог, кабінет і хоча б один пацієнт.")
+                        return@runOnUiThread
+                    }
+
+                    val wrap = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp(12), dp(4), dp(12), dp(16))
+                        setBackgroundColor(bg)
+                    }
+                    val scroll = ScrollView(this).apply { addView(wrap) }
+                    wrap.addView(caption("Дата: $date"))
+
+                    val patientSpinner = Spinner(this)
+                    val patientLabels = (0 until patients.length()).map {
+                        val p = patients.getJSONObject(it)
+                        "№" + p.optString("patient_no", "—") + " · " + p.optString("name")
+                    }
+                    patientSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, patientLabels)
+
+                    val psychologistSpinner = Spinner(this)
+                    val psychologistLabels = (0 until psychologists.length()).map { psychologists.getJSONObject(it).optString("name") }
+                    psychologistSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, psychologistLabels)
+
+                    val roomSpinner = Spinner(this)
+                    val roomLabels = (0 until rooms.length()).map { rooms.getJSONObject(it).optString("name") }
+                    roomSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, roomLabels)
+
+                    val kinds = listOf("individual", "family", "child", "crisis", "group")
+                    val kindLabels = listOf("Індивідуальна", "Сімейна", "Дитяча", "Кризова", "Групова")
+                    val kindSpinner = Spinner(this)
+                    kindSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, kindLabels)
+
+                    val statuses = listOf("scheduled", "confirmed", "draft")
+                    val statusLabels = listOf("Заплановано", "Підтверджено", "Чернетка")
+                    val statusSpinner = Spinner(this)
+                    statusSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, statusLabels)
+
+                    val startTime = edit("Початок HH:MM").apply { setText("09:00") }
+                    val endTime = edit("Кінець HH:MM").apply { setText("10:00") }
+                    val note = edit("Примітка до запису").apply { minLines = 2 }
+
+                    wrap.addView(caption("Пацієнт")); wrap.addView(patientSpinner); wrap.addView(spacer(7))
+                    wrap.addView(caption("Психолог")); wrap.addView(psychologistSpinner); wrap.addView(spacer(7))
+                    wrap.addView(caption("Кабінет")); wrap.addView(roomSpinner); wrap.addView(spacer(7))
+                    wrap.addView(caption("Тип")); wrap.addView(kindSpinner); wrap.addView(spacer(7))
+                    wrap.addView(caption("Статус")); wrap.addView(statusSpinner); wrap.addView(spacer(7))
+                    wrap.addView(startTime); wrap.addView(spacer(7)); wrap.addView(endTime); wrap.addView(spacer(7)); wrap.addView(note)
+
+                    val dialog = AlertDialog.Builder(this)
+                        .setTitle("Новий запис до психолога")
+                        .setView(scroll)
+                        .setNegativeButton("Скасувати", null)
+                        .setPositiveButton("Зберегти", null)
+                        .create()
+                    dialog.setOnShowListener {
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                            val patient = patients.getJSONObject(patientSpinner.selectedItemPosition)
+                            val psychologist = psychologists.getJSONObject(psychologistSpinner.selectedItemPosition)
+                            val room = rooms.getJSONObject(roomSpinner.selectedItemPosition)
+                            val payload = JSONObject()
+                                .put("psychologist_id", psychologist.getLong("id"))
+                                .put("room_id", room.getLong("id"))
+                                .put("start", date + "T" + startTime.text.toString().trim())
+                                .put("end", date + "T" + endTime.text.toString().trim())
+                                .put("kind", kinds[kindSpinner.selectedItemPosition])
+                                .put("status", statuses[statusSpinner.selectedItemPosition])
+                                .put("note", note.text.toString())
+                                .put("patient_ids", JSONArray().put(patient.getLong("id")))
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                            apiAsync("POST", "/api/appointments", payload) {
+                                dialog.dismiss()
+                                Toast.makeText(this, "Запис збережено в календарі.", Toast.LENGTH_LONG).show()
+                                calendarScreen(date)
+                            }
+                        }
+                    }
+                    dialog.show()
+                }
+            } catch (e: Exception) {
+                runOnUiThread { showError(e.message ?: "Не вдалося завантажити дані для запису") }
             }
         }
     }
@@ -525,6 +635,10 @@ class MainActivity : Activity() {
         backAction = { homeScreen() }
         val body = root()
         body.addView(topBar(if (role == "psychologist") "Мої пацієнти" else "Пацієнти", ::homeScreen))
+        if (role == "admin" || role == "reception") {
+            body.addView(primary("+ Додати пацієнта") { newPatientDialog() })
+            body.addView(spacer(10))
+        }
         val search = edit("Пошук за №, ПІБ, телефоном, категорією")
         body.addView(search)
         body.addView(spacer())
@@ -548,11 +662,15 @@ class MainActivity : Activity() {
                     if (query.isNotBlank() && !hay.contains(query.lowercase())) continue
                     val patientId = patient.getLong("id")
                     val box = card()
+                    box.background = rounded(Color.WHITE, 17, line)
                     box.setOnClickListener { patientScreen(patientId) }
-                    box.addView(title(patient.optString("name"), 17f))
-                    box.addView(caption("№" + patient.optString("patient_no", "—") + " · " + patient.optString("category") + " · " + patient.optString("phone")))
+                    box.addView(caption("ПАЦІЄНТ · №" + patient.optString("patient_no", "—")))
+                    box.addView(title(patient.optString("name"), 18f))
+                    box.addView(caption(patient.optString("category") + " · " + patient.optString("phone")))
+                    val psychologist = patient.optString("psychologist")
+                    if (psychologist.isNotBlank()) box.addView(caption("Психолог: $psychologist"))
                     list.addView(box)
-                    list.addView(spacer(8))
+                    list.addView(spacer(9))
                 }
             }
 
@@ -564,6 +682,97 @@ class MainActivity : Activity() {
                 }
                 override fun afterTextChanged(s: Editable?) {}
             })
+        }
+    }
+
+    private fun newPatientDialog() {
+        io.execute {
+            try {
+                val meta = request("GET", "/api/meta") as JSONObject
+                val families = request("GET", "/api/families") as JSONArray
+                runOnUiThread {
+                    val psychologists = meta.optJSONArray("psychologists") ?: JSONArray()
+                    val categories = meta.optJSONArray("categories") ?: JSONArray()
+                    if (psychologists.length() == 0) {
+                        showError("Спочатку додайте активного психолога.")
+                        return@runOnUiThread
+                    }
+                    val wrap = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp(12), dp(4), dp(12), dp(16))
+                        setBackgroundColor(bg)
+                    }
+                    val scroll = ScrollView(this).apply { addView(wrap) }
+
+                    val name = edit("ПІБ")
+                    val phone = edit("Телефон")
+                    val dob = edit("Дата народження YYYY-MM-DD")
+                    val categorySpinner = Spinner(this)
+                    categorySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
+                        (0 until categories.length()).map { categories.getString(it) })
+                    val psychologistSpinner = Spinner(this)
+                    psychologistSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
+                        (0 until psychologists.length()).map { psychologists.getJSONObject(it).optString("name") })
+                    val familySpinner = Spinner(this)
+                    val familyLabels = mutableListOf("Без сімейного зв’язку")
+                    for (i in 0 until families.length()) familyLabels.add(families.getJSONObject(i).optString("name"))
+                    familySpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, familyLabels)
+                    val sexValues = listOf("", "female", "male", "other")
+                    val sexSpinner = Spinner(this)
+                    sexSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
+                        listOf("Не вказано", "Жіноча", "Чоловіча", "Інше"))
+                    val familyRole = edit("Роль у сім’ї")
+                    val address = edit("Адреса")
+                    val adminNote = edit("Службова примітка").apply { minLines = 2 }
+
+                    listOf(name, phone, dob).forEach { wrap.addView(it); wrap.addView(spacer(7)) }
+                    wrap.addView(caption("Категорія")); wrap.addView(categorySpinner); wrap.addView(spacer(7))
+                    wrap.addView(caption("Психолог")); wrap.addView(psychologistSpinner); wrap.addView(spacer(7))
+                    wrap.addView(caption("Сім’я")); wrap.addView(familySpinner); wrap.addView(spacer(7))
+                    wrap.addView(familyRole); wrap.addView(spacer(7))
+                    wrap.addView(caption("Стать")); wrap.addView(sexSpinner); wrap.addView(spacer(7))
+                    wrap.addView(address)
+                    if (role == "admin") { wrap.addView(spacer(7)); wrap.addView(adminNote) }
+
+                    val dialog = AlertDialog.Builder(this)
+                        .setTitle("Новий пацієнт")
+                        .setView(scroll)
+                        .setNegativeButton("Скасувати", null)
+                        .setPositiveButton("Створити", null)
+                        .create()
+                    dialog.setOnShowListener {
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                            if (name.text.toString().isBlank() || phone.text.toString().isBlank() || dob.text.toString().isBlank()) {
+                                Toast.makeText(this, "Заповніть ПІБ, телефон і дату народження.", Toast.LENGTH_LONG).show()
+                                return@setOnClickListener
+                            }
+                            val psy = psychologists.getJSONObject(psychologistSpinner.selectedItemPosition)
+                            val payload = JSONObject()
+                                .put("name", name.text.toString())
+                                .put("phone", phone.text.toString())
+                                .put("dob", dob.text.toString())
+                                .put("category", categories.getString(categorySpinner.selectedItemPosition))
+                                .put("psychologist_id", psy.getLong("id"))
+                                .put("family_role", familyRole.text.toString())
+                                .put("sex", sexValues[sexSpinner.selectedItemPosition])
+                                .put("address", address.text.toString())
+                                .put("admin_note", if (role == "admin") adminNote.text.toString() else "")
+                            if (familySpinner.selectedItemPosition == 0) payload.put("family_id", JSONObject.NULL)
+                            else payload.put("family_id", families.getJSONObject(familySpinner.selectedItemPosition - 1).getLong("id"))
+
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                            apiAsync("POST", "/api/patients", payload) {
+                                dialog.dismiss()
+                                Toast.makeText(this, "Пацієнта створено.", Toast.LENGTH_LONG).show()
+                                patientsScreen()
+                            }
+                        }
+                    }
+                    dialog.show()
+                }
+            } catch (e: Exception) {
+                runOnUiThread { showError(e.message ?: "Не вдалося завантажити форму пацієнта") }
+            }
         }
     }
 
