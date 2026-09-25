@@ -825,7 +825,13 @@ class MainActivity : Activity() {
                         text = consultation.optString("note")
                         textSize = 15f
                         setTextColor(ink)
+                        setTypeface(typeface, Typeface.BOLD)
                     })
+                    if (consultation.optString("request_text").isNotBlank()) box.addView(caption("Запит: " + consultation.optString("request_text")))
+                    if (consultation.optString("state_text").isNotBlank()) box.addView(caption("Стан: " + consultation.optString("state_text")))
+                    if (consultation.optString("work_done").isNotBlank()) box.addView(caption("Проведено: " + consultation.optString("work_done")))
+                    if (consultation.optString("result_text").isNotBlank()) box.addView(caption("Динаміка: " + consultation.optString("result_text")))
+                    if (consultation.optString("recommendations").isNotBlank()) box.addView(caption("Рекомендації: " + consultation.optString("recommendations")))
                     box.addView(caption("План: " + consultation.optString("next_plan", "—")))
                     content.addView(box)
                     content.addView(spacer(8))
@@ -1054,9 +1060,10 @@ class MainActivity : Activity() {
 
     private fun reportScreen() {
         backAction = { homeScreen() }
+        val day = LocalDate.now().toString()
         val body = root()
         body.addView(topBar("Звіт за зміну", ::homeScreen))
-        body.addView(caption(LocalDate.now().toString()))
+        body.addView(caption(day + " · дані зберігаються у PostgreSQL сервера"))
 
         val summary = edit("Підсумок роботи за зміну").apply { minLines = 4 }
         val incidents = edit("Важливі події / ризики").apply { minLines = 3 }
@@ -1075,14 +1082,29 @@ class MainActivity : Activity() {
         }
 
         body.addView(summary)
+        body.addView(spacer(7))
         body.addView(incidents)
+        body.addView(spacer(7))
         body.addView(handover)
+        body.addView(spacer(7))
         body.addView(critical)
         body.addView(notifyAdmin)
         body.addView(notifyDirector)
-        body.addView(primary("Зберегти звіт") {
+
+        val statusCard = card()
+        statusCard.background = rounded(forestSoft, 15, line)
+        val statusText = caption("Перевіряємо, чи є вже збережений звіт…")
+        statusCard.addView(statusText)
+        body.addView(statusCard)
+        body.addView(spacer(10))
+
+        body.addView(primary("Зберегти / оновити звіт") {
+            if (summary.text.toString().isBlank()) {
+                Toast.makeText(this, "Заповніть підсумок роботи.", Toast.LENGTH_LONG).show()
+                return@primary
+            }
             val payload = JSONObject()
-                .put("shift_date", LocalDate.now().toString())
+                .put("shift_date", day)
                 .put("summary", summary.text.toString())
                 .put("incidents", incidents.text.toString())
                 .put("handover", handover.text.toString())
@@ -1092,15 +1114,27 @@ class MainActivity : Activity() {
 
             apiAsync("POST", "/api/shift-reports", payload) { result ->
                 val count = (result as JSONObject).optInt("consultations_count")
-                Toast.makeText(
-                    this,
-                    "Звіт збережено · консультацій: " + count,
-                    Toast.LENGTH_LONG
-                ).show()
-                homeScreen()
+                Toast.makeText(this, "Звіт збережено · консультацій: $count", Toast.LENGTH_LONG).show()
+                reportScreen()
             }
         })
         setContentView(scroll(body))
+
+        apiAsync("GET", "/api/shift-reports?from=$day&to=$day") { result ->
+            val rows = result as JSONArray
+            if (rows.length() > 0) {
+                val current = rows.getJSONObject(0)
+                summary.setText(current.optString("summary"))
+                incidents.setText(current.optString("incidents"))
+                handover.setText(current.optString("handover"))
+                critical.isChecked = current.optBoolean("critical_cases")
+                notifyAdmin.isChecked = current.optBoolean("notify_admin")
+                notifyDirector.isChecked = current.optBoolean("notify_director")
+                statusText.text = "Звіт уже збережений · консультацій: " + current.optInt("consultations_count") + " · можна редагувати"
+            } else {
+                statusText.text = "Звіт за сьогодні ще не подано."
+            }
+        }
     }
 
     private fun roleLabel(value: String): String = when (value) {
