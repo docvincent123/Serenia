@@ -833,24 +833,26 @@ function Patients({ api, role, openPatient }) {
         </div>
 
         {!filtered.length ? <Empty title="Нічого не знайдено" text="Спробуйте змінити запит або створіть нового пацієнта." /> : (
-          <div className="patient-table">
-            <div className="patient-table-head">
-              <span>Пацієнт</span>
-              <span>Категорія</span>
-              <span>Психолог</span>
-              <span>Сім’я</span>
-              <span />
-            </div>
+          <div className="patient-card-list">
             {filtered.map((p) => (
-              <button className="patient-row" key={p.id} onClick={() => openPatient(p.id)}>
-                <span className="patient-identity">
-                  <span className="avatar small">{p.name.slice(0, 1).toUpperCase()}</span>
-                  <span><strong>{p.name}</strong><small>№{p.patient_no || '—'} · {p.phone}</small></span>
+              <button className="patient-list-card" key={p.id} onClick={() => openPatient(p.id)}>
+                <span className="patient-card-accent" />
+                <span className="patient-card-head">
+                  <span className="avatar patient-avatar">{p.name.slice(0, 1).toUpperCase()}</span>
+                  <span className="patient-card-name">
+                    <small>ПАЦІЄНТ · №{p.patient_no || '—'}</small>
+                    <strong>{p.name}</strong>
+                    <span>{p.phone}</span>
+                  </span>
+                  <span className="patient-card-arrow">↗</span>
                 </span>
-                <span><Badge tone={categoryTone[p.category] || 'stone'}>{p.category}</Badge></span>
-                <span>{p.psychologist}</span>
-                <span>{p.family || '—'}</span>
-                <span className="row-arrow">→</span>
+                <span className="patient-card-tags">
+                  <Badge tone={categoryTone[p.category] || 'stone'}>{p.category}</Badge>
+                </span>
+                <span className="patient-card-meta">
+                  <span><small>ПСИХОЛОГ</small><strong>{p.psychologist || 'Не призначено'}</strong></span>
+                  <span><small>СІМ’Я</small><strong>{p.family || 'Без сімейного зв’язку'}</strong></span>
+                </span>
               </button>
             ))}
           </div>
@@ -1450,7 +1452,7 @@ function PatientCard({ api, role, patientId, back }) {
                 {printDoc.center.address && <p>{printDoc.center.address}</p>}
                 <p>{[printDoc.center.phone, printDoc.center.email, printDoc.center.website].filter(Boolean).join(' · ')}</p>
               </div>
-              <div className="discharge-doc-number">Виписка № {printDoc.item.document_no || card.patient_no || '00000'}</div>
+              <div className="discharge-doc-number">Виписка № {printDoc.item.document_no || printDoc.item.patient_no_snapshot || card.patient_no || '00000'}</div>
             </header>
             <div className="discharge-title">
               <div className="eyebrow">ПСИХОЛОГІЧНИЙ СУПРОВІД</div>
@@ -1458,10 +1460,10 @@ function PatientCard({ api, role, patientId, back }) {
               <p>Дата формування: {printDoc.item.created?.slice(0, 10) || localDate()}</p>
             </div>
             <dl className="profile-list discharge-profile">
-              <div><dt>Номер пацієнта</dt><dd>№{card.patient_no || '00000'}</dd></div>
-              <div><dt>Пацієнт</dt><dd>{card.name}</dd></div>
-              <div><dt>Дата народження</dt><dd>{card.dob}</dd></div>
-              <div><dt>Категорія</dt><dd>{card.category}</dd></div>
+              <div><dt>Номер пацієнта</dt><dd>№{printDoc.item.patient_no_snapshot || card.patient_no || '00000'}</dd></div>
+              <div><dt>Пацієнт</dt><dd>{printDoc.item.patient_name || card.name}</dd></div>
+              <div><dt>Дата народження</dt><dd>{printDoc.item.patient_dob || card.dob}</dd></div>
+              <div><dt>Категорія</dt><dd>{printDoc.item.patient_category || card.category}</dd></div>
               <div><dt>Період супроводу</dt><dd>{printDoc.item.date_from} — {printDoc.item.date_to}</dd></div>
               <div><dt>Кількість консультацій</dt><dd>{printDoc.item.consultation_count}</dd></div>
             </dl>
@@ -1473,7 +1475,7 @@ function PatientCard({ api, role, patientId, back }) {
             <div className="signature-grid">
               <div className="signature-block">
                 <strong>{printDoc.center.discharge_signatory || 'Психолог'}</strong>
-                <span>{printDoc.item.psychologist || card.psychologist || '________________________'}</span>
+                <span>{printDoc.item.psychologist_name || printDoc.item.psychologist || card.psychologist || '________________________'}</span>
                 <div className="signature-line">підпис / дата</div>
               </div>
               <div className="signature-block">
@@ -2033,6 +2035,36 @@ function Settings({ api, apiBase, onSwitchApi }) {
     } catch (e) { setError(e.message); }
   }
 
+  function downloadMobileConfig() {
+    try {
+      const preferred = form.connection_mode === 'vps' ? 'vps' : 'local';
+      const apiUrl = preferred === 'vps'
+        ? cleanBase(form.vps_api_url)
+        : cleanBase(form.local_api_url || apiBase);
+      const config = {
+        format: 'quremed.solvia.mobile',
+        version: 1,
+        center: form.center_name || 'SOLVIA',
+        preferred,
+        api_url: apiUrl,
+        http_url: apiUrl.startsWith('http://') ? apiUrl : '',
+        https_url: apiUrl.startsWith('https://') ? apiUrl : '',
+        generated: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json;charset=utf-8' });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = 'SOLVIA-Mobile.solvia';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+    } catch (e) {
+      setConnectionTest({ state: 'error', message: e.message });
+    }
+  }
+
   function selectedEndpoint() {
     if (form.connection_mode === 'vps') return cleanBase(form.vps_api_url);
     return cleanBase(form.local_api_url || apiBase);
@@ -2175,6 +2207,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
                 <div className="form-actions full-span split-actions">
                   <Button type="button" variant="secondary" onClick={testConnection} disabled={connectionTest.state === 'busy'}>Перевірити з’єднання</Button>
                   <div>
+                    <Button type="button" variant="secondary" onClick={downloadMobileConfig}>Файл для телефону</Button>
                     <Button type="submit" variant="secondary">Зберегти профіль</Button>
                     <Button type="button" onClick={applyConnection}>Підключити цей ПК</Button>
                   </div>
@@ -2499,10 +2532,12 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         </nav>
 
         <div className="sidebar-spacer" />
-        <div className="sidebar-version">
-          <strong>SOLVIA 2.0</strong>
+        <div className="sidebar-support">
+          <div className="sidebar-support-head">
+            <span className="support-dot" />
+            <div><strong>QureMed Support</strong><small>24/7 · SOLVIA 2.0</small></div>
+          </div>
           <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
-          <small>Support 24/7</small>
         </div>
         <div className="user-card">
           <div className="avatar inverse">{user.name.slice(0, 1).toUpperCase()}</div>
