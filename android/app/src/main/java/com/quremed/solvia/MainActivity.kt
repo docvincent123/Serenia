@@ -2,7 +2,10 @@ package com.quremed.solvia
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Build
 import android.provider.Settings
@@ -35,11 +38,15 @@ import java.util.concurrent.Executors
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("solvia_settings", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
+    private val openConfigRequest = 4101
 
-    private val bg = Color.rgb(244, 247, 243)
-    private val ink = Color.rgb(21, 58, 48)
-    private val muted = Color.rgb(103, 123, 114)
-    private val forest = Color.rgb(31, 101, 77)
+    private val bg = Color.rgb(239, 246, 242)
+    private val ink = Color.rgb(17, 52, 41)
+    private val muted = Color.rgb(99, 122, 112)
+    private val forest = Color.rgb(24, 103, 76)
+    private val forestDark = Color.rgb(14, 73, 53)
+    private val forestSoft = Color.rgb(228, 241, 234)
+    private val line = Color.rgb(211, 226, 217)
 
     private var server = ""
     private var token = ""
@@ -51,15 +58,36 @@ class MainActivity : Activity() {
         super.onCreate(state)
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         server = prefs.getString("server", "") ?: ""
-        if (server.isBlank()) setupScreen() else loginScreen()
+        if (intent?.data != null) {
+            importServerConfig(intent.data!!)
+        } else if (server.isBlank()) setupScreen() else loginScreen()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
+    private fun rounded(color: Int, radius: Int = 16, stroke: Int? = null): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+            stroke?.let { setStroke(dp(1), it) }
+        }
+
+    private fun isPrivateHost(host: String): Boolean {
+        val h = host.lowercase()
+        if (h == "localhost" || h == "127.0.0.1") return true
+        val parts = h.split(".")
+        if (parts.size != 4) return false
+        val nums = parts.mapNotNull { it.toIntOrNull() }
+        if (nums.size != 4 || nums.any { it !in 0..255 }) return false
+        return nums[0] == 10 ||
+            (nums[0] == 192 && nums[1] == 168) ||
+            (nums[0] == 172 && nums[1] in 16..31)
+    }
+
     private fun root(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(bg)
-        setPadding(dp(18), dp(18), dp(18), dp(24))
+        setPadding(dp(18), dp(20), dp(18), dp(30))
     }
 
     private fun logo(size: Int = 82): ImageView = ImageView(this).apply {
@@ -73,6 +101,7 @@ class MainActivity : Activity() {
         text = value
         textSize = size
         setTextColor(ink)
+        setTypeface(typeface, Typeface.BOLD)
         setPadding(0, dp(8), 0, dp(10))
     }
 
@@ -88,9 +117,9 @@ class MainActivity : Activity() {
         textSize = 16f
         setTextColor(ink)
         setHintTextColor(Color.GRAY)
-        setPadding(dp(14), dp(12), dp(14), dp(12))
+        setPadding(dp(14), dp(13), dp(14), dp(13))
         if (password) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        backgroundTintList = android.content.res.ColorStateList.valueOf(forest)
+        background = rounded(Color.WHITE, 13, line)
     }
 
     private fun primary(label: String, action: () -> Unit): Button = Button(this).apply {
@@ -98,7 +127,9 @@ class MainActivity : Activity() {
         isAllCaps = false
         textSize = 14f
         setTextColor(Color.WHITE)
-        setBackgroundColor(forest)
+        setTypeface(typeface, Typeface.BOLD)
+        setPadding(dp(14), dp(10), dp(14), dp(10))
+        background = rounded(forest, 13)
         setOnClickListener { action() }
     }
 
@@ -106,15 +137,18 @@ class MainActivity : Activity() {
         text = label
         isAllCaps = false
         textSize = 13f
-        setTextColor(ink)
+        setTextColor(forestDark)
+        setTypeface(typeface, Typeface.BOLD)
+        setPadding(dp(12), dp(10), dp(12), dp(10))
+        background = rounded(forestSoft, 13, line)
         setOnClickListener { action() }
     }
 
     private fun card(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(15), dp(13), dp(15), dp(13))
-        setBackgroundColor(Color.WHITE)
-        elevation = dp(1).toFloat()
+        setPadding(dp(16), dp(15), dp(16), dp(15))
+        background = rounded(Color.WHITE, 17, line)
+        elevation = dp(2).toFloat()
     }
 
     private fun scroll(content: View): ScrollView = ScrollView(this).apply {
@@ -136,17 +170,32 @@ class MainActivity : Activity() {
 
     private fun normalize(value: String): String {
         var raw = value.trim()
-        if (!raw.contains("://")) raw = "https://" + raw
+        require(raw.isNotBlank())
+        if (!raw.contains("://")) {
+            val possibleHost = raw.substringBefore(':').trim()
+            raw = if (isPrivateHost(possibleHost)) "http://$raw" else "https://$raw"
+        }
         val uri = URI(raw)
-        require(uri.scheme.equals("https", true) && uri.host != null && uri.userInfo == null)
-        require(uri.query == null && uri.fragment == null && (uri.path.isNullOrEmpty() || uri.path == "/"))
+        val scheme = uri.scheme?.lowercase()
+        val host = uri.host ?: throw IllegalArgumentException("Не знайдено IP/host")
+        require(scheme == "http" || scheme == "https")
+        require(uri.userInfo == null && uri.query == null && uri.fragment == null)
+        require(uri.path.isNullOrEmpty() || uri.path == "/")
         require(uri.port == -1 || uri.port in 1..65535)
-        val port = if (uri.port == 443) -1 else uri.port
-        return URI("https", null, uri.host.lowercase(), port, null, null, null).toString().trimEnd('/')
+        if (scheme == "http") require(isPrivateHost(host)) {
+            "HTTP дозволений тільки для локальної приватної IP-адреси"
+        }
+        val port = when {
+            uri.port != -1 -> uri.port
+            scheme == "http" && isPrivateHost(host) -> 8765
+            scheme == "https" && isPrivateHost(host) -> 8443
+            else -> -1
+        }
+        return URI(scheme, null, host.lowercase(), port, null, null, null).toString().trimEnd('/')
     }
 
-    private fun request(method: String, path: String, body: JSONObject? = null): Any {
-        val connection = URL(server + path).openConnection() as HttpURLConnection
+    private fun requestAt(base: String, method: String, path: String, body: JSONObject? = null): Any {
+        val connection = URL(base + path).openConnection() as HttpURLConnection
         connection.requestMethod = method
         connection.connectTimeout = 6000
         connection.readTimeout = 12000
@@ -157,19 +206,20 @@ class MainActivity : Activity() {
             connection.setRequestProperty("Content-Type", "application/json")
             connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
         }
-
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
         val parsed: Any = if (text.isBlank()) JSONObject() else JSONTokener(text).nextValue()
-
         if (code !in 200..299) {
             val message = (parsed as? JSONObject)?.optString("error")?.takeIf { it.isNotBlank() }
-                ?: "Помилка сервера " + code
+                ?: "Помилка сервера $code"
             throw IllegalStateException(message)
         }
         return parsed
     }
+
+    private fun request(method: String, path: String, body: JSONObject? = null): Any =
+        requestAt(server, method, path, body)
 
     private fun apiAsync(method: String, path: String, body: JSONObject? = null, ok: (Any) -> Unit) {
         io.execute {
@@ -177,8 +227,62 @@ class MainActivity : Activity() {
                 val result = request(method, path, body)
                 runOnUiThread { ok(result) }
             } catch (e: Exception) {
-                runOnUiThread { showError(e.message ?: "Помилка підключення") }
+                runOnUiThread {
+                    val message = e.message ?: "Помилка підключення"
+                    if (message.contains("Увійдіть у систему", true)) {
+                        token = ""
+                        Toast.makeText(this, "Сесію завершено. Увійдіть знову.", Toast.LENGTH_LONG).show()
+                        loginScreen()
+                    } else {
+                        showError(message)
+                    }
+                }
             }
+        }
+    }
+
+    private fun openServerConfigFile() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, openConfigRequest)
+    }
+
+    private fun importServerConfig(uri: android.net.Uri) {
+        io.execute {
+            try {
+                val text = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                    ?: throw IllegalStateException("Не вдалося прочитати файл")
+                val json = JSONObject(text)
+                require(json.optString("format") == "quremed.solvia.mobile") { "Це не файл підключення SOLVIA" }
+                val candidate = normalize(
+                    json.optString("api_url").ifBlank {
+                        json.optString("http_url").ifBlank { json.optString("https_url") }
+                    }
+                )
+                val health = requestAt(candidate, "GET", "/api/health") as JSONObject
+                require(health.optBoolean("ok")) { "Сервер не підтвердив готовність" }
+                server = candidate
+                prefs.edit().putString("server", server).apply()
+                runOnUiThread {
+                    Toast.makeText(this, "Сервер SOLVIA підключено: $server", Toast.LENGTH_LONG).show()
+                    loginScreen()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    showError("Не вдалося імпортувати підключення: " + (e.message ?: "невідома помилка"))
+                    setupScreen()
+                }
+            }
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == openConfigRequest && resultCode == RESULT_OK && data?.data != null) {
+            importServerConfig(data.data!!)
         }
     }
 
@@ -186,25 +290,50 @@ class MainActivity : Activity() {
         backAction = null
         val body = root()
         body.addView(logo())
-        body.addView(title("SOLVIA by QureMed", 18f))
-        body.addView(title("Підключення до центру"))
-        body.addView(caption("Введіть HTTPS-адресу серверного ПК. SOLVIA використовує порт 8443."))
-        val address = edit("https://192.168.1.100:8443").apply {
-            setText(if (server.isBlank()) "https://192.168.1.100:8443" else server)
+        body.addView(title("Підключення до SOLVIA", 27f))
+        body.addView(caption("Найпростіше — відкрити файл SOLVIA-Mobile.solvia, створений серверним ПК. IP і порт підтягнуться автоматично."))
+
+        val importCard = card()
+        importCard.background = rounded(forestSoft, 17, line)
+        importCard.addView(title("Автоматичне підключення", 18f))
+        importCard.addView(caption("На серверному ПК файл знаходиться у Public Documents → QureMed → SOLVIA. Скопіюйте його на телефон або планшет."))
+        importCard.addView(primary("Відкрити файл SOLVIA-Mobile.solvia") { openServerConfigFile() })
+        body.addView(importCard)
+        body.addView(spacer(14))
+
+        body.addView(title("Або введіть адресу вручну", 18f))
+        body.addView(caption("Локально можна: 192.168.1.100 або http://192.168.1.100:8765. Для VPS використовуйте тільки https://."))
+        val address = edit("192.168.1.100").apply {
+            setText(server)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         }
         body.addView(address)
-        body.addView(spacer())
-        body.addView(caption("На планшеті має бути встановлений QureMed-Local-CA.crt як довірений CA-сертифікат."))
-        body.addView(primary("Підключитися") {
+        body.addView(spacer(8))
+        body.addView(primary("Перевірити та підключитися") {
+            val previous = server
             try {
-                server = normalize(address.text.toString())
-                prefs.edit().putString("server", server).apply()
-                loginScreen()
-            } catch (_: Exception) {
-                showError("Вкажіть коректну HTTPS-адресу, наприклад https://192.168.1.100:8443")
+                val candidate = normalize(address.text.toString())
+                io.execute {
+                    try {
+                        val health = requestAt(candidate, "GET", "/api/health") as JSONObject
+                        require(health.optBoolean("ok")) { "Сервер не готовий" }
+                        server = candidate
+                        prefs.edit().putString("server", server).apply()
+                        runOnUiThread {
+                            Toast.makeText(this, "Підключено · SOLVIA " + health.optString("version", "2.0"), Toast.LENGTH_LONG).show()
+                            loginScreen()
+                        }
+                    } catch (e: Exception) {
+                        server = previous
+                        runOnUiThread { showError(e.message ?: "Немає зв’язку із сервером") }
+                    }
+                }
+            } catch (e: Exception) {
+                showError(e.message ?: "Вкажіть коректну адресу сервера")
             }
         })
+        body.addView(spacer(10))
+        body.addView(caption("Примітка: HTTP дозволяється тільки для приватної локальної мережі. Для доступу через інтернет/VPS SOLVIA вимагає HTTPS."))
         setContentView(scroll(body))
     }
 
