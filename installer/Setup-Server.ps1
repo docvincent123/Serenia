@@ -222,7 +222,9 @@ https://$serverIp`:8443 {
 Invoke-SetupProcess $stableCaddy @('validate','--config',$caddyConfigPath,'--adapter','caddyfile') | Out-Null
 
 Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTP API' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 New-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8443 -RemoteAddress LocalSubnet -Profile Private | Out-Null
+New-NetFirewallRule -DisplayName 'SOLVIA Local HTTP API' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8765 -RemoteAddress LocalSubnet -Profile Private | Out-Null
 $runScript = Join-Path $InstallDir 'installer\Run-Server.ps1'
 $argument = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $runScript + '" -InstallDir "' + $InstallDir + '"'
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $argument
@@ -292,8 +294,29 @@ if (-not $rootCert) {
 }
 if (-not $rootCert) { throw 'HTTPS запущено, але сертифікат центру ще не знайдено. Повторіть налаштування.' }
 Copy-Item $rootCert (Join-Path $InstallDir 'QureMed-Local-CA.crt') -Force
+
+$mobileConfigDir = Join-Path $env:PUBLIC 'Documents\QureMed\SOLVIA'
+New-Item -ItemType Directory -Force $mobileConfigDir | Out-Null
+$mobileConfigPath = Join-Path $mobileConfigDir 'SOLVIA-Mobile.solvia'
+$mobileConfig = [ordered]@{
+    format = 'quremed.solvia.mobile'
+    version = 1
+    center = 'SOLVIA'
+    preferred = 'http'
+    api_url = ('http://' + $serverIp + ':8765')
+    http_url = ('http://' + $serverIp + ':8765')
+    https_url = ('https://' + $serverIp + ':8443')
+    generated = [DateTime]::UtcNow.ToString('o')
+}
+[IO.File]::WriteAllText(
+    $mobileConfigPath,
+    ($mobileConfig | ConvertTo-Json -Depth 4),
+    [Text.UTF8Encoding]::new($false)
+)
+
 $settings['SOLVIA_SETUP_PENDING'] = '0'
 Write-ServerSettings $configPath $settings
 Protect-SetupPath $configPath
-Write-Host ('SOLVIA 2.0 готова. Адреса для телефонів: https://' + $serverIp + ':8443') -ForegroundColor Green
+Write-Host ('SOLVIA 2.0 готова. LAN HTTP: http://' + $serverIp + ':8765; HTTPS: https://' + $serverIp + ':8443') -ForegroundColor Green
+Write-Host ('Файл мобільного підключення: ' + $mobileConfigPath) -ForegroundColor Green
 
