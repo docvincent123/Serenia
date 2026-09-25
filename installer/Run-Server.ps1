@@ -31,7 +31,7 @@ if ($existing) {
     Stop-Process -Id $owner.Id -Force
     $owner.WaitForExit(10000) | Out-Null
 }
-$args = @('--host','127.0.0.1','--port',$port,'--ui',('"' + $uiDir + '"'))
+$args = @('--host','0.0.0.0','--port',$port,'--ui',('"' + $uiDir + '"'))
 $serverProcess = Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'api-output.log') -RedirectStandardError (Join-Path $logDir 'api-error.log')
 
 $healthy = $false
