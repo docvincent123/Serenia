@@ -1,0 +1,43 @@
+plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
+
+android {
+    namespace 'com.quremed.solvia'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.quremed.solvia'
+        minSdk 26
+        targetSdk 35
+        versionCode 20
+        versionName '2.0.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.test'
+            versionNameSuffix '-test'
+        }
+    }
+}
+
+
+def solviaBrandSource = rootProject.file('../assets/solvia-icon.png.b64')
+def solviaBrandTarget = file('src/main/res/drawable/solvia_icon.png')
+
+tasks.register('materializeSolviaBrand') {
+    inputs.file(solviaBrandSource)
+    outputs.file(solviaBrandTarget)
+    doLast {
+        solviaBrandTarget.parentFile.mkdirs()
+        solviaBrandTarget.bytes = solviaBrandSource.text.trim().decodeBase64()
+    }
+}
+tasks.named('preBuild').configure { dependsOn('materializeSolviaBrand') }

@@ -10,3 +10,5 @@ data/
 .vs/
 __pycache__/
 vcpkg_installed/
+frontend/node_modules/
+frontend/dist/

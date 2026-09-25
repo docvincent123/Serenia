@@ -1,5 +1,20 @@
 {
   "name": "solvia",
-  "version-string": "0.1.0",
-  "dependencies": ["nlohmann-json", {"name":"cpp-httplib","features":["openssl"]}, "sqlite3", "openssl"]
+  "version-string": "2.0.0",
+  "dependencies": [
+    "nlohmann-json",
+    {
+      "name": "cpp-httplib",
+      "features": [
+        "openssl"
+      ]
+    },
+    "openssl",
+    {
+      "name": "webview2",
+      "platform": "windows"
+    },
+    "libpq"
+  ]
 }
+
