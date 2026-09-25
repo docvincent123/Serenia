@@ -140,7 +140,10 @@ class Scenario(unittest.TestCase):
         discharge=self.api(psy,'POST','/api/discharges',{'patient_id':pid,'date_from':day,'date_to':dt.date.today().isoformat(),'summary':'Підсумок','dynamics':'Динаміка','recommendations':'Рекомендації','followup':'Контроль'})
         self.assertEqual(discharge['patient']['id'],pid)
         self.assertTrue(discharge['document_no'])
-        self.assertIn('Проведено 1 консультацій',discharge['summary'])
+        self.assertEqual(discharge['patient_name'],'Тестовий Пацієнт')
+        self.assertEqual(discharge['patient_no_snapshot'],created_patient['patient_no'])
+        self.assertEqual(discharge['psychologist_name'],'Psychologist')
+        self.assertIn('проведено 1 консультацію',discharge['summary'])
         self.assertIn('Результат',discharge['dynamics'])
         discharge_detail=self.api(admin,'GET',f'/api/patients/{pid}')['discharges'][0]
         self.assertEqual(discharge_detail['psychologist'],'Psychologist')
