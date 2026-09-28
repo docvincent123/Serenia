@@ -54,6 +54,9 @@ sudo solvia-admin health
 sudo solvia-admin status
 sudo solvia-admin logs
 sudo solvia-admin restart
+sudo solvia-admin version
+sudo solvia-admin check-update
+sudo solvia-admin update
 sudo solvia-admin backup
 sudo solvia-admin backups
 sudo solvia-admin db-status
@@ -69,7 +72,25 @@ sudo solvia-admin restore /path/backup.dump
 
 ## 5. Оновлення, зміна адреси, перенесення
 
-Розпакуйте новий успішно перевірений пакет і знову запустіть `sudo bash install.sh`. Облікові записи та дані зберігаються, перед міграціями створюється `pre-update-*.dump`. Попередній виконуваний файл і UI залишаються під `/opt/solvia` з суфіксом `.previous`; автоматичного відкочування змін схеми немає.
+Після першого встановлення пакета з updater більше не потрібно вручну завантажувати кожний Linux tar.gz. Перевірка нової версії:
+
+```bash
+sudo solvia-admin check-update
+```
+
+Оновлення:
+
+```bash
+sudo solvia-admin update
+```
+
+Updater читає останній GitHub Release SOLVIA, завантажує Linux-пакет і окремий SHA-256, перевіряє контрольну суму, створює backup, запускає штатний installer поверх існуючої системи та після оновлення виконує HTTPS health-check. Облікові записи, PostgreSQL-база, CA та адреса сервера зберігаються.
+
+У меню програм для **SOLVIA Admin** також є дія **«Оновити SOLVIA»**. Вона відкриває термінал і запускає той самий updater з `sudo`.
+
+Для публікації нової серверної версії використовується GitHub Actions workflow **SOLVIA Linux Release**. Версія має збігатися з `project(Solvia VERSION ...)` у CMake. Workflow збирає пакет на чистій Ubuntu, проходить install/backup/restore/upgrade test, створює GitHub Release і додає `.tar.gz` та `.sha256`.
+
+Ручне повторне `sudo bash install.sh` залишається запасним способом оновлення. Перед міграціями інсталятор створює `pre-update-*.dump`. Попередній виконуваний файл і UI залишаються під `/opt/solvia` з суфіксом `.previous`; автоматичного відкочування змін схеми немає.
 
 При зміні LAN-адреси повторіть установлення з новою адресою:
 
