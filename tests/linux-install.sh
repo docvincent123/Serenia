@@ -41,7 +41,8 @@ PY
 sudo solvia-admin backup
 sudo solvia-admin db-status
 sudo solvia-admin doctor
-sudo test "$(sudo -u solvia psql -X -p 55432 -d solvia -Atc \"SELECT count(*) FROM backup_events WHERE action='backup' AND status='success'\")" -ge 1
+backup_events=$(sudo -u solvia psql -X -p 55432 -d solvia -Atc "SELECT count(*) FROM backup_events WHERE action='backup' AND status='success'")
+test "$backup_events" -ge 1
 backup=$(sudo find /var/backups/solvia -name 'solvia-*.dump' | sort | tail -1)
 printf 'ВІДНОВИТИ\n' | sudo solvia-admin restore "$backup"
 # Upgrade is unattended after initial setup and preserves accounts and CA.
