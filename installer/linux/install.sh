@@ -13,7 +13,7 @@ source /etc/os-release
   echo 'Цей пакет підтримує Ubuntu 24.04 / elementary OS 8 (x86_64).'; exit 1;
 }
 package=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-[[ -f $package/SolviaServer && -f $package/ui/index.html && -f $package/solvia-admin-app && -f $package/solvia-admin.desktop ]] || { echo 'Розпакуйте весь Linux-пакет поруч з install.sh'; exit 1; }
+[[ -f $package/SolviaServer && -f $package/ui/index.html && -f $package/solvia-admin-app && -f $package/solvia-admin.desktop && -f $package/solvia-updater && -f $package/VERSION ]] || { echo 'Розпакуйте весь Linux-пакет поруч з install.sh'; exit 1; }
 cd "$package"
 sha256sum --check SHA256SUMS
 export DEBIAN_FRONTEND=noninteractive
@@ -79,6 +79,7 @@ install -d -m 0755 /opt/solvia
 # Keep the previous application for diagnosis; do not roll back migrated schemas automatically.
 if [[ -f /opt/solvia/SolviaServer ]]; then cp -a /opt/solvia/SolviaServer /opt/solvia/SolviaServer.previous; fi
 install -m 0755 SolviaServer /opt/solvia/SolviaServer
+install -m 0644 VERSION /opt/solvia/VERSION
 rm -rf /opt/solvia/ui.previous
 if [[ -d /opt/solvia/ui ]]; then mv /opt/solvia/ui /opt/solvia/ui.previous; fi
 cp -r ui /opt/solvia/ui
@@ -94,6 +95,7 @@ chmod 0644 /etc/solvia/address
 chown root:solvia /etc/solvia/server.env
 chown root:root /etc/solvia/address
 install -m 0755 solvia-admin /usr/local/sbin/solvia-admin
+install -m 0755 solvia-updater /usr/local/sbin/solvia-updater
 install -m 0755 solvia-admin-app /usr/local/bin/solvia-admin-app
 install -m 0644 solvia-admin.desktop /usr/share/applications/solvia-admin.desktop
 if [[ -f /opt/solvia/ui/solvia-icon.png ]]; then
@@ -111,6 +113,7 @@ systemctl restart solvia.service
 /usr/local/sbin/solvia-admin health
 printf '\nSOLVIA готова: https://%s:8443\n' "$ip"
 echo 'Linux Admin: відкрийте «SOLVIA Admin» у меню програм або виконайте solvia-admin-app.'
+echo 'Оновлення: sudo solvia-admin check-update / sudo solvia-admin update'
 echo 'Сертифікат для ПК/Android: /etc/solvia/ca/QureMed-Local-CA.crt'
 openssl x509 -in /etc/solvia/ca/QureMed-Local-CA.crt -noout -fingerprint -sha256
 echo 'Установіть довіру тільки до цього CA. Збережіть його відбиток для звірки.'
