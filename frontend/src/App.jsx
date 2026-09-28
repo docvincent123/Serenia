@@ -2516,6 +2516,306 @@ function Reports({ api, role }) {
   );
 }
 
+
+function SignaturePad({ value, onChange }) {
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+
+  useEffect(() => {
+    if (!value || !canvasRef.current) return;
+    const image = new Image();
+    image.onload = () => {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    };
+    image.src = value;
+  }, []);
+
+  function position(e) {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  function start(e) {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    canvas.setPointerCapture?.(e.pointerId);
+    const ctx = canvas.getContext('2d');
+    const p = position(e);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    drawing.current = true;
+  }
+
+  function move(e) {
+    if (!drawing.current) return;
+    e.preventDefault();
+    const ctx = canvasRef.current.getContext('2d');
+    const p = position(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+
+  function end(e) {
+    if (!drawing.current) return;
+    drawing.current = false;
+    e.preventDefault();
+    onChange(canvasRef.current.toDataURL('image/png'));
+  }
+
+  function clear() {
+    const canvas = canvasRef.current;
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    onChange('');
+  }
+
+  return (
+    <div className="signature-pad-wrap">
+      <canvas
+        ref={canvasRef}
+        width="900"
+        height="240"
+        className="signature-pad"
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+      />
+      <div className="signature-pad-foot">
+        <small>Підпис пальцем або стилусом</small>
+        <Button type="button" variant="ghost" onClick={clear}>Очистити</Button>
+      </div>
+    </div>
+  );
+}
+
+function Workload({ api }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+
+  async function load() {
+    setError('');
+    try { setData(await api('GET', '/api/workload')); }
+    catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  return (
+    <>
+      <PageHead
+        eyebrow="КОМАНДА"
+        title="Контроль завантаження психологів"
+        subtitle="Активні пацієнти, консультації, відміни, середня тривалість і вільний час на сьогодні."
+        actions={<Button variant="secondary" onClick={load}>Оновити</Button>}
+      />
+      {error && <div className="alert error">{error}</div>}
+      {!data ? <Spinner /> : (
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">ПОТОЧНИЙ ТИЖДЕНЬ</div><h2>Навантаження команди</h2></div>
+            <Badge tone="forest">{data.items?.length || 0} психологів</Badge>
+          </div>
+          {!data.items?.length ? <Empty title="Немає психологів" text="Додайте активних психологів у команду центру." /> : (
+            <div className="workload-grid">
+              {data.items.map((x) => (
+                <article className="workload-card" key={x.id}>
+                  <div className="workload-card-head">
+                    <div className="avatar">{String(x.name || '?').slice(0,1).toUpperCase()}</div>
+                    <div><strong>{x.name}</strong><small>Тиждень від {data.week_start}</small></div>
+                  </div>
+                  <div className="metric-grid">
+                    <div><strong>{x.active_patients}</strong><span>активних пацієнтів</span></div>
+                    <div><strong>{x.consultations_today}</strong><span>консультацій сьогодні</span></div>
+                    <div><strong>{x.consultations_week}</strong><span>консультацій за тиждень</span></div>
+                    <div><strong>{x.free_hours_today}</strong><span>вільних годин сьогодні</span></div>
+                    <div><strong>{x.cancellations_week}</strong><span>відмін за тиждень</span></div>
+                    <div><strong>{x.avg_duration_minutes}</strong><span>середня тривалість, хв</span></div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
+function Supervisions({ api, role, user }) {
+  const [items, setItems] = useState([]);
+  const [meta, setMeta] = useState({ psychologists: [] });
+  const [dialog, setDialog] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ psychologist_id: '', scheduled_at: localDate() + 'T10:00', duration_minutes: 60, topic: '' });
+  const [edit, setEdit] = useState({ case_summary: '', recommendations: '', status: 'scheduled' });
+  const leader = role === 'admin' || role === 'director';
+
+  async function load() {
+    setError('');
+    try {
+      const tasks = [api('GET', '/api/supervisions')];
+      if (leader) tasks.push(api('GET', '/api/meta'));
+      const [rows, m = { psychologists: [] }] = await Promise.all(tasks);
+      setItems(rows); setMeta(m);
+    } catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  function openCreate() {
+    setForm({ psychologist_id: meta.psychologists?.[0]?.id || '', scheduled_at: localDate() + 'T10:00', duration_minutes: 60, topic: '' });
+    setDialog('create');
+  }
+
+  async function create(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/supervisions', {
+        psychologist_id: Number(form.psychologist_id),
+        supervisor_id: Number(user.id),
+        scheduled_at: form.scheduled_at,
+        duration_minutes: Number(form.duration_minutes),
+        topic: form.topic
+      });
+      setDialog(''); await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  function openEdit(item) {
+    setSelected(item);
+    setEdit({ case_summary: item.case_summary || '', recommendations: item.recommendations || '', status: item.status || 'scheduled' });
+    setDialog('edit');
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault();
+    try {
+      const body = role === 'psychologist'
+        ? { case_summary: edit.case_summary }
+        : { case_summary: edit.case_summary, recommendations: edit.recommendations, status: edit.status };
+      await api('PATCH', '/api/supervisions/' + selected.id, body);
+      setDialog(''); setSelected(null); await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  return (
+    <>
+      <PageHead
+        eyebrow="ПРОФЕСІЙНА ПІДТРИМКА"
+        title={leader ? 'Супервізії психологів' : 'Мої супервізії'}
+        subtitle={leader ? 'Планування супервізій і фіксація рекомендацій без персональних даних пацієнта.' : 'Додавайте лише деідентифікований опис випадку — без ПІБ, телефону, адреси чи номера картки.'}
+        actions={leader && <Button onClick={openCreate}>+ Запланувати</Button>}
+      />
+      {error && <div className="alert error">{error}</div>}
+      <section className="surface">
+        {!items.length ? <Empty title="Супервізій ще немає" text="Заплановані зустрічі з’являться тут." /> : (
+          <div className="consultation-list">
+            {items.map((x) => (
+              <article className="consultation-card" key={x.id}>
+                <div className="section-head compact">
+                  <div>
+                    <div className="eyebrow">{x.scheduled_at?.replace('T',' ')} · {x.duration_minutes} хв</div>
+                    <h3>{x.psychologist}</h3>
+                  </div>
+                  <Badge tone={x.status === 'completed' ? 'forest' : x.status === 'cancelled' ? 'rose' : 'sand'}>{x.status}</Badge>
+                </div>
+                <p><strong>Тема:</strong> {x.topic || '—'}</p>
+                <p><strong>Супервізор:</strong> {x.supervisor}</p>
+                {x.case_summary && <p><strong>Деідентифікований випадок:</strong> {x.case_summary}</p>}
+                {x.recommendations && <p><strong>Рекомендації:</strong> {x.recommendations}</p>}
+                <div className="form-actions"><Button variant="secondary" onClick={() => openEdit(x)}>{role === 'psychologist' ? 'Додати випадок' : 'Відкрити / завершити'}</Button></div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {dialog === 'create' && leader && (
+        <Dialog title="Нова супервізія" subtitle="Планування зустрічі" onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={create}>
+            <Field label="Психолог" full>
+              <select value={form.psychologist_id} onChange={(e) => setForm({ ...form, psychologist_id: e.target.value })} required>
+                {(meta.psychologists || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Дата і час"><input type="datetime-local" value={form.scheduled_at} onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })} required /></Field>
+            <Field label="Тривалість, хв"><input type="number" min="30" max="240" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: e.target.value })} /></Field>
+            <Field label="Тема" full><input value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="Напрям супервізії" /></Field>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Запланувати</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'edit' && selected && (
+        <Dialog title="Супервізія" subtitle={selected.psychologist + ' · ' + (selected.scheduled_at || '').replace('T',' ')} onClose={() => setDialog('')} wide>
+          <form className="form-grid" onSubmit={saveEdit}>
+            <Field label="Деідентифікований опис випадку" hint="Не вказуйте ПІБ, телефон, адресу, номер картки або інші прямі ідентифікатори." full>
+              <textarea rows="7" value={edit.case_summary} onChange={(e) => setEdit({ ...edit, case_summary: e.target.value })} />
+            </Field>
+            {leader && <>
+              <Field label="Рекомендації супервізора" full><textarea rows="6" value={edit.recommendations} onChange={(e) => setEdit({ ...edit, recommendations: e.target.value })} /></Field>
+              <Field label="Статус">
+                <select value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value })}>
+                  <option value="scheduled">Заплановано</option>
+                  <option value="completed">Завершено</option>
+                  <option value="cancelled">Скасовано</option>
+                </select>
+              </Field>
+            </>}
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти</Button></div>
+          </form>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function Archive({ api, openPatient }) {
+  const [rows, setRows] = useState([]);
+  const [error, setError] = useState('');
+  async function load() {
+    try { setRows(await api('GET', '/api/patients?status=archived')); setError(''); }
+    catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  return (
+    <>
+      <PageHead eyebrow="ІСТОРІЯ ЦЕНТРУ" title="Архів пацієнтів" subtitle="Завершені курси не видаляються. При повторному зверненні відкривається новий курс у тій самій картці." actions={<Button variant="secondary" onClick={load}>Оновити</Button>} />
+      {error && <div className="alert error">{error}</div>}
+      <section className="surface">
+        {!rows.length ? <Empty title="Архів порожній" text="Після завершення курсу картка пацієнта з’явиться тут." /> : (
+          <div className="patient-card-list">
+            {rows.map((p) => (
+              <button className="patient-list-card" key={p.id} onClick={() => openPatient(p.id)}>
+                <span className="patient-card-accent" />
+                <span className="patient-card-head">
+                  <span className="avatar patient-avatar">{p.name.slice(0,1).toUpperCase()}</span>
+                  <span className="patient-card-name"><small>АРХІВ · №{p.patient_no}</small><strong>{p.name}</strong><span>{p.phone}</span></span>
+                  <span className="patient-card-arrow">↗</span>
+                </span>
+                <span className="patient-card-meta">
+                  <span><small>КАТЕГОРІЯ</small><strong>{p.category}</strong></span>
+                  <span><small>ПСИХОЛОГ</small><strong>{p.psychologist}</strong></span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
 function Audit({ api }) {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
