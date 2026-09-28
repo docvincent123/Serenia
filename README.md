@@ -6,14 +6,15 @@ SOLVIA — локальна система для приватного псих�
 
 Основний варіант встановлення: **Ubuntu 24.04 / elementary OS 8 x86_64 → Windows-клієнти та Android у LAN**. Покроково: [docs/LINUX.md](docs/LINUX.md).
 
-- Linux artifact: **SOLVIA-2.0.0-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`.
+- Linux artifact: **SOLVIA-2.0.0-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **SOLVIA Admin** у меню Linux.
 - Windows artifact: **SOLVIA-2.0.0-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
 - Сервер: C++20, PostgreSQL, HTTPS/8443, systemd, щоденні резервні копії.
+- Linux Admin: окремий desktop launcher з ізольованим вікном браузера, автоматичною перевіркою локального API та імпортом локального CA у NSS-сховище користувача.
 - Windows: Win32/WebView2 + React, без PostgreSQL на клієнтському ПК.
 - Android: окремий Kotlin-клієнт тієї самої бази через API.
 - Старий режим Windows-сервера залишається додатковим варіантом інсталятора; він не потрібен для Linux.
 
-На Linux немає залежності від Windows Task Scheduler або Caddy. Збірка перевіряє встановлення, HTTPS-вхід, backup/restore, повторне встановлення та основний сценарій із розмежуванням доступів.
+На Linux немає залежності від Windows Task Scheduler або Caddy. Збірка перевіряє встановлення, HTTPS-вхід, Linux Admin launcher, системний CA, admin-only діагностику БД, backup/restore, повторне встановлення та основний сценарій із розмежуванням доступів.
 
 ## Ролі
 
