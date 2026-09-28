@@ -1279,10 +1279,13 @@ function PatientCard({ api, role, patientId, back }) {
 
   async function previewDocument(id) {
     try {
-      const docs = await api('GET', '/api/patients/' + patientId + '/documents');
+      const [docs, center] = await Promise.all([
+        api('GET', '/api/patients/' + patientId + '/documents'),
+        api('GET', '/api/settings/center')
+      ]);
       const item = docs.find((x) => Number(x.id) === Number(id));
       if (!item) throw new Error('Документ не знайдено');
-      setDocumentPreview(item);
+      setDocumentPreview({ ...item, center });
       setDialog('print-document');
     } catch (e) { setError(e.message); }
   }
@@ -1594,6 +1597,100 @@ function PatientCard({ api, role, patientId, back }) {
             </div>
           )}
         </section>
+      )}
+
+
+      {dialog === 'document' && canManageDocuments && (
+        <Dialog title="Документ / згода" subtitle={card.name} onClose={() => setDialog('')} wide>
+          <form className="form-grid" onSubmit={saveDocument}>
+            <Field label="Тип документа">
+              <select value={documentForm.document_type} onChange={(e) => changeDocumentType(e.target.value)}>
+                <option value="informed_consent">Інформована згода</option>
+                <option value="data_processing">Обробка персональних даних</option>
+                <option value="center_rules">Правила центру</option>
+                <option value="family_consent">Сімейна консультація</option>
+                <option value="service_refusal">Відмова від послуги</option>
+                <option value="other">Інший документ</option>
+              </select>
+            </Field>
+            <Field label="Статус">
+              <select value={documentForm.status} onChange={(e) => setDocumentForm({ ...documentForm, status: e.target.value })}>
+                <option value="signed">Підписано</option>
+                <option value="refused">Відмова</option>
+              </select>
+            </Field>
+            <Field label="Назва" full><input value={documentForm.title} onChange={(e) => setDocumentForm({ ...documentForm, title: e.target.value })} required /></Field>
+            <Field label="Текст документа" full><textarea rows="8" value={documentForm.content} onChange={(e) => setDocumentForm({ ...documentForm, content: e.target.value })} /></Field>
+            <Field label="ПІБ підписанта" full><input value={documentForm.signed_by_name} onChange={(e) => setDocumentForm({ ...documentForm, signed_by_name: e.target.value })} /></Field>
+            {documentForm.status === 'signed' && (
+              <div className="field full">
+                <span>Підпис пацієнта / представника</span>
+                <SignaturePad value={documentForm.signature_data} onChange={(signature_data) => setDocumentForm({ ...documentForm, signature_data })} />
+              </div>
+            )}
+            <div className="alert info full-span">Після збереження підпис і текст документа залишаються в картці. Кнопка «Перегляд / PDF» формує друковану версію для збереження у PDF.</div>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти документ</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'print-document' && documentPreview && (
+        <Dialog title={documentPreview.title} subtitle="Підписаний документ" onClose={() => { setDialog(''); setDocumentPreview(null); }} wide>
+          <article className="consent-print">
+            <header>
+              <img src={documentPreview.center?.logo_data || '/solvia-icon.png'} alt="SOLVIA" />
+              <div><strong>{documentPreview.center?.center_name || 'SOLVIA Center'}</strong><span>{documentPreview.center?.address || ''}</span></div>
+            </header>
+            <div className="consent-title"><div className="eyebrow">ДОКУМЕНТ ПАЦІЄНТА · №{card.patient_no}</div><h1>{documentPreview.title}</h1></div>
+            <p className="consent-body">{documentPreview.content || '—'}</p>
+            <dl className="profile-list">
+              <div><dt>Пацієнт</dt><dd>{card.name}</dd></div>
+              <div><dt>Статус</dt><dd>{documentPreview.status}</dd></div>
+              <div><dt>Підписант</dt><dd>{documentPreview.signed_by_name || '—'}</dd></div>
+              <div><dt>Дата</dt><dd>{documentPreview.signed_at?.replace('T',' ')}</dd></div>
+            </dl>
+            {documentPreview.signature_data && <div className="saved-signature"><img src={documentPreview.signature_data} alt="Підпис" /><span>підпис</span></div>}
+            <footer>{documentPreview.center?.document_footer || 'SOLVIA by QureMed'}</footer>
+          </article>
+          <div className="form-actions no-print"><Button variant="ghost" onClick={() => { setDialog(''); setDocumentPreview(null); }}>Закрити</Button><Button onClick={printDocument}>Друк / Зберегти PDF</Button></div>
+        </Dialog>
+      )}
+
+      {dialog === 'referral' && (
+        <Dialog title="Нове направлення" subtitle={card.name} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={saveReferral}>
+            <Field label="Куди направити">
+              <select value={referralForm.destination_type} onChange={(e) => setReferralForm({ ...referralForm, destination_type: e.target.value })}>
+                {referralDestinationOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Field>
+            <Field label="Заклад / спеціаліст"><input value={referralForm.destination_name} onChange={(e) => setReferralForm({ ...referralForm, destination_name: e.target.value })} placeholder="Необов’язково" /></Field>
+            <Field label="Причина / мета направлення" full><textarea rows="5" value={referralForm.reason} onChange={(e) => setReferralForm({ ...referralForm, reason: e.target.value })} /></Field>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Створити направлення</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'archive-course' && canManageCourse && activeCourse && (
+        <Dialog title="Завершити курс" subtitle={'Курс №' + activeCourse.course_no + ' · ' + card.name} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={archiveActiveCourse}>
+            <Field label="Дата завершення"><input type="date" value={courseClose.ended_at} onChange={(e) => setCourseClose({ ...courseClose, ended_at: e.target.value })} required /></Field>
+            <Field label="Підсумок курсу" full><textarea rows="6" value={courseClose.outcome} onChange={(e) => setCourseClose({ ...courseClose, outcome: e.target.value })} placeholder="Організаційний підсумок курсу без дублювання приватних нотаток." /></Field>
+            <div className="alert info full-span">Після завершення картка перейде в архів. Консультації, документи, направлення й попередня історія залишаться в базі.</div>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Завершити й архівувати</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'new-course' && canManageCourse && !activeCourse && (
+        <Dialog title="Новий курс" subtitle={'Повторне звернення · ' + card.name} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={startNewCourse}>
+            <Field label="Дата початку"><input type="date" value={courseForm.started_at} onChange={(e) => setCourseForm({ ...courseForm, started_at: e.target.value })} required /></Field>
+            <Field label="Причина повторного звернення" full><textarea rows="5" value={courseForm.reason} onChange={(e) => setCourseForm({ ...courseForm, reason: e.target.value })} /></Field>
+            <div className="alert info full-span">Створиться наступний курс у цій самій картці. Попередні курси та документи не змінюються.</div>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Відкрити новий курс</Button></div>
+          </form>
+        </Dialog>
       )}
 
       {dialog === 'consultation' && (
