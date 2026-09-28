@@ -8,6 +8,10 @@ printf 'admin\nАдміністратор CI\nCI-password-long-2026\nCI-password
 sudo systemctl is-enabled solvia solvia-backup.timer solvia-certificate.timer
 sudo systemctl is-active solvia
 sudo solvia-admin health
+sudo test -x /usr/local/bin/solvia-admin-app
+sudo test -f /usr/share/applications/solvia-admin.desktop
+sudo desktop-file-validate /usr/share/applications/solvia-admin.desktop
+sudo test -f /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
 # Peer auth and socket-only DB, no database TCP exposure.
 test "$(sudo -u postgres psql -X -p 55432 -Atc 'SHOW listen_addresses')" = ''
 sudo test "$(sudo stat -c %a /etc/solvia/ca/ca.key)" = 600
@@ -25,9 +29,19 @@ with client.open(base+'/index.html') as r:
     assert b'id="root"' in r.read()
 request=urllib.request.Request(base+'/api/login', data=json.dumps({'login':'admin','password':'CI-password-long-2026'}).encode(), headers={'Content-Type':'application/json'})
 with client.open(request) as r:
-    assert json.load(r)['user']['name']=='Адміністратор CI'
+    login=json.load(r)
+    assert login['user']['name']=='Адміністратор CI'
+token=login['token']
+request=urllib.request.Request(base+'/api/admin/system', headers={'Authorization':'Bearer '+token})
+with client.open(request) as r:
+    system=json.load(r)
+    assert system['database']['name']=='solvia'
+    assert int(system['counts']['users']) >= 1
 PY
 sudo solvia-admin backup
+sudo solvia-admin db-status
+sudo solvia-admin doctor
+sudo test "$(sudo -u solvia psql -X -p 55432 -d solvia -Atc \"SELECT count(*) FROM backup_events WHERE action='backup' AND status='success'\")" -ge 1
 backup=$(sudo find /var/backups/solvia -name 'solvia-*.dump' | sort | tail -1)
 printf 'ВІДНОВИТИ\n' | sudo solvia-admin restore "$backup"
 # Upgrade is unattended after initial setup and preserves accounts and CA.
