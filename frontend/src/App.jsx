@@ -842,6 +842,9 @@ function Patients({ api, role, openPatient }) {
     family_role: '',
     sex: '',
     address: '',
+    referral_source: '',
+    referral_source_details: '',
+    course_reason: '',
     admin_note: ''
   });
 
@@ -880,6 +883,9 @@ function Patients({ api, role, openPatient }) {
       family_role: '',
       sex: '',
       address: '',
+      referral_source: '',
+      referral_source_details: '',
+      course_reason: '',
       admin_note: ''
     });
     setDialog(true);
@@ -898,6 +904,9 @@ function Patients({ api, role, openPatient }) {
         family_role: form.family_role,
         sex: form.sex,
         address: form.address,
+        referral_source: form.referral_source,
+        referral_source_details: form.referral_source_details,
+        course_reason: form.course_reason,
         admin_note: form.admin_note
       });
       setDialog(false);
@@ -995,6 +1004,18 @@ function Patients({ api, role, openPatient }) {
             </Field>
             <Field label="Адреса">
               <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Населений пункт / адреса" />
+            </Field>
+            <Field label="Звідки направлений / звернувся">
+              <select value={form.referral_source} onChange={(e) => setForm({ ...form, referral_source: e.target.value })}>
+                <option value="">Не вказано</option>
+                {referralSourceOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Field>
+            <Field label="Деталі направлення">
+              <input value={form.referral_source_details} onChange={(e) => setForm({ ...form, referral_source_details: e.target.value })} placeholder="Заклад, підрозділ, лікар…" />
+            </Field>
+            <Field label="Причина початку курсу" full>
+              <textarea rows="3" value={form.course_reason} onChange={(e) => setForm({ ...form, course_reason: e.target.value })} placeholder="Коротко: запит / причина звернення" />
             </Field>
             {role === 'admin' && (
               <Field label="Службова примітка адміністратора" full>
