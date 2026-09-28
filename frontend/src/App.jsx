@@ -1052,9 +1052,24 @@ function PatientCard({ api, role, patientId, back }) {
   const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', admin_note: '' });
   const [editMeta, setEditMeta] = useState({ psychologists: [], categories: [] });
   const [editFamilies, setEditFamilies] = useState([]);
+  const [documentForm, setDocumentForm] = useState({
+    document_type: 'informed_consent',
+    title: documentTemplates.informed_consent.title,
+    content: documentTemplates.informed_consent.content,
+    status: 'signed',
+    signed_by_name: '',
+    signature_data: ''
+  });
+  const [documentPreview, setDocumentPreview] = useState(null);
+  const [referralForm, setReferralForm] = useState({ destination_type: 'Психіатр', destination_name: '', reason: '', status: 'recommended' });
+  const [courseForm, setCourseForm] = useState({ started_at: localDate(), reason: '' });
+  const [courseClose, setCourseClose] = useState({ ended_at: localDate(), outcome: '' });
 
   const isPsychologist = role === 'psychologist';
   const isAdmin = role === 'admin';
+  const isReception = role === 'reception';
+  const canManageCourse = isAdmin || isReception;
+  const canManageDocuments = isAdmin || isReception || isPsychologist;
   const canReadConsultations = isPsychologist || isAdmin;
 
   async function load() {
@@ -1223,6 +1238,106 @@ function PatientCard({ api, role, patientId, back }) {
     } catch (e) {
       setError(e.message);
     }
+  }
+
+
+  function openDocumentDialog(type = 'informed_consent') {
+    const template = documentTemplates[type] || documentTemplates.other;
+    setDocumentForm({
+      document_type: type,
+      title: template.title,
+      content: template.content,
+      status: type === 'service_refusal' ? 'refused' : 'signed',
+      signed_by_name: card?.name || '',
+      signature_data: ''
+    });
+    setDialog('document');
+  }
+
+  function changeDocumentType(type) {
+    const template = documentTemplates[type] || documentTemplates.other;
+    setDocumentForm((current) => ({
+      ...current,
+      document_type: type,
+      title: template.title,
+      content: template.content,
+      status: type === 'service_refusal' ? 'refused' : 'signed',
+      signature_data: ''
+    }));
+  }
+
+  async function saveDocument(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/patients/' + patientId + '/documents', documentForm);
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function previewDocument(id) {
+    try {
+      const docs = await api('GET', '/api/patients/' + patientId + '/documents');
+      const item = docs.find((x) => Number(x.id) === Number(id));
+      if (!item) throw new Error('Документ не знайдено');
+      setDocumentPreview(item);
+      setDialog('print-document');
+    } catch (e) { setError(e.message); }
+  }
+
+  function printDocument() {
+    const previous = document.title;
+    document.title = (documentPreview?.title || 'Документ SOLVIA') + ' — ' + card.name;
+    const restore = () => {
+      document.title = previous;
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    window.print();
+    setTimeout(restore, 1500);
+  }
+
+  async function saveReferral(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/patients/' + patientId + '/referrals', referralForm);
+      setReferralForm({ destination_type: 'Психіатр', destination_name: '', reason: '', status: 'recommended' });
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function setReferralStatus(id, status) {
+    try {
+      await api('PATCH', '/api/referrals/' + id, { status });
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function startNewCourse(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/patients/' + patientId + '/courses', courseForm);
+      setCourseForm({ started_at: localDate(), reason: '' });
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function archiveActiveCourse(e) {
+    e.preventDefault();
+    const activeCourse = (card.courses || []).find((x) => x.status === 'active');
+    if (!activeCourse) { setError('Активного курсу немає.'); return; }
+    try {
+      await api('PATCH', '/api/courses/' + activeCourse.id, {
+        status: 'archived',
+        ended_at: courseClose.ended_at,
+        outcome: courseClose.outcome
+      });
+      setCourseClose({ ended_at: localDate(), outcome: '' });
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
   }
 
   if (error && !card) {
