@@ -205,7 +205,7 @@ jobs:
           chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
           bash -n out/SOLVIA-Linux/install.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
           cd out/SOLVIA-Linux
-          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          find . -type f ! -name SHA256SUMS ! -name LINUX.md -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 
       - name: Verify Linux install, HTTPS, backup, restore and upgrade
         timeout-minutes: 8
