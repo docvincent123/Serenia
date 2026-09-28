@@ -13,12 +13,12 @@ source /etc/os-release
   echo 'Цей пакет підтримує Ubuntu 24.04 / elementary OS 8 (x86_64).'; exit 1;
 }
 package=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-[[ -f $package/SolviaServer && -f $package/ui/index.html ]] || { echo 'Розпакуйте весь Linux-пакет поруч з install.sh'; exit 1; }
+[[ -f $package/SolviaServer && -f $package/ui/index.html && -f $package/solvia-admin-app && -f $package/solvia-admin.desktop ]] || { echo 'Розпакуйте весь Linux-пакет поруч з install.sh'; exit 1; }
 cd "$package"
 sha256sum --check SHA256SUMS
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3
+apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 xdg-utils libnss3-tools desktop-file-utils
 libraries=$(ldd ./SolviaServer)
 printf '%s\n' "$libraries"
 if grep -q 'not found' <<< "$libraries"; then echo 'Відсутні бібліотеки сервера'; exit 1; fi
@@ -90,14 +90,23 @@ printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\n' "$SOLVIA_DATABASE_URL" "$ip"
 chmod 0640 /etc/solvia/server.env /etc/solvia/address
 chown root:solvia /etc/solvia/server.env /etc/solvia/address
 install -m 0755 solvia-admin /usr/local/sbin/solvia-admin
+install -m 0755 solvia-admin-app /usr/local/bin/solvia-admin-app
+install -m 0644 solvia-admin.desktop /usr/share/applications/solvia-admin.desktop
+if [[ -f /opt/solvia/ui/solvia-icon.png ]]; then
+  install -D -m 0644 /opt/solvia/ui/solvia-icon.png /usr/share/icons/hicolor/256x256/apps/solvia-admin.png
+fi
 install -m 0755 renew-certificate.sh /opt/solvia/renew-certificate.sh
 /opt/solvia/renew-certificate.sh --force
+install -D -m 0644 /etc/solvia/ca/QureMed-Local-CA.crt /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
+update-ca-certificates >/dev/null
+update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 install -m 0644 ./*.service ./*.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now solvia.service solvia-certificate.timer solvia-backup.timer
 systemctl restart solvia.service
 /usr/local/sbin/solvia-admin health
 printf '\nSOLVIA готова: https://%s:8443\n' "$ip"
+echo 'Linux Admin: відкрийте «SOLVIA Admin» у меню програм або виконайте solvia-admin-app.'
 echo 'Сертифікат для ПК/Android: /etc/solvia/ca/QureMed-Local-CA.crt'
 openssl x509 -in /etc/solvia/ca/QureMed-Local-CA.crt -noout -fingerprint -sha256
 echo 'Установіть довіру тільки до цього CA. Збережіть його відбиток для звірки.'
