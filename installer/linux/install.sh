@@ -27,7 +27,7 @@ install -d -m 0700 /etc/solvia/ca /var/backups/solvia
 install -d -m 0750 -o solvia -g solvia /var/lib/solvia
 if [[ ! -d /etc/postgresql/16/solvia ]]; then
   pg_createcluster 16 solvia --port 55432 -- --auth-local=peer --auth-host=scram-sha-256
-  pg_conftool 16 solvia set listen_addresses "''"
+  pg_conftool 16 solvia set listen_addresses ""
 fi
 # Refuse unexpected shared/custom cluster configuration instead of changing it.
 [[ $(pg_conftool -s 16 solvia show port) == 55432 ]] || { echo 'Unexpected SOLVIA PostgreSQL port'; exit 1; }
@@ -66,13 +66,14 @@ ip = ipaddress.IPv4Address(sys.argv[1])
 if ip.is_unspecified or ip.is_multicast or ip.is_loopback or not any(ip in ipaddress.ip_network(n) for n in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16')):
     raise SystemExit('Потрібна приватна IPv4-адреса LAN')
 PY
-# Snapshot before migrations; a failed update never deletes or silently replaces data.
+# Stop writers before the update snapshot and migrations.
+systemctl stop solvia.service 2>/dev/null || true
+# A failed update never deletes or silently replaces data.
 if [[ $count != 0 ]]; then
   snapshot="/var/backups/solvia/pre-update-$(date -u +%Y%m%dT%H%M%S).dump"
   runuser -u solvia -- /usr/lib/postgresql/16/bin/pg_dump -Fc "$SOLVIA_DATABASE_URL" > "$snapshot"
   chmod 0600 "$snapshot"
 fi
-systemctl stop solvia.service 2>/dev/null || true
 install -d -m 0755 /opt/solvia
 # Keep the previous application for diagnosis; do not roll back migrated schemas automatically.
 if [[ -f /opt/solvia/SolviaServer ]]; then cp -a /opt/solvia/SolviaServer /opt/solvia/SolviaServer.previous; fi

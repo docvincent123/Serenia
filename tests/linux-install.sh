@@ -38,5 +38,5 @@ test "$ca_before" = "$ca_after"
 test "$(sudo -u solvia psql -X -p 55432 -d solvia -Atc 'SELECT count(*) FROM users')" = 1
 sudo solvia-admin restart
 # Failed TLS verification must never be bypassed; certificate contains the LAN SAN.
-openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_ip "$SOLVIA_SERVER_IP" /etc/solvia/tls/server.crt
+sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_ip "$SOLVIA_SERVER_IP" /etc/solvia/tls/server.crt
 printf 'Linux install, HTTPS login, backup, restore and upgrade passed\n'
