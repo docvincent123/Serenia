@@ -10,10 +10,11 @@ rm -f /etc/systemd/system/solvia.service /etc/systemd/system/solvia-backup.servi
       /etc/systemd/system/solvia-certificate.service /etc/systemd/system/solvia-certificate.timer
 systemctl daemon-reload
 
-rm -f /usr/local/sbin/solvia-admin /usr/local/bin/solvia-admin-app
+rm -f /usr/local/sbin/solvia-admin /usr/local/sbin/solvia-updater /usr/local/bin/solvia-admin-app
 rm -f /usr/share/applications/solvia-admin.desktop
 rm -f /usr/share/icons/hicolor/256x256/apps/solvia-admin.png
 rm -f /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
+rm -rf /usr/local/share/solvia
 command -v update-ca-certificates >/dev/null 2>&1 && update-ca-certificates >/dev/null || true
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 
