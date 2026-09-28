@@ -4,6 +4,15 @@ umask 077
 [[ $EUID == 0 ]] || { echo 'Використайте sudo solvia-admin'; exit 1; }
 install -d -m 0700 -o root -g root /run/solvia-admin
 export SOLVIA_DATABASE_URL='host=/var/run/postgresql port=55432 dbname=solvia user=solvia'
+
+record_event() {
+  local action=${1:-unknown} path=${2:-} status=${3:-success} details=${4:-}
+  runuser -u solvia -- psql -X "$SOLVIA_DATABASE_URL" -v ON_ERROR_STOP=1 \
+    -v action="$action" -v path="$path" -v status="$status" -v details="$details" \
+    -c "INSERT INTO backup_events(user_id,action,path,status,details,created) VALUES(NULL, :'action', :'path', :'status', :'details', to_char(clock_timestamp(),'YYYY-MM-DD"T"HH24:MI:SSOF'))" \
+    >/dev/null 2>&1 || true
+}
+
 case ${1:-help} in
   health)
     ip=$(cat /etc/solvia/address)
@@ -19,11 +28,19 @@ case ${1:-help} in
   restart) systemctl restart solvia; "$0" health ;;
   backup)
     exec 7>/run/solvia-admin/backup.lock; flock 7
-    target="/var/backups/solvia/solvia-$(date -u +%Y%m%dT%H%M%S)-$$.dump"
+    target="/var/backups/solvia/solvia-$(date -u +%Y%m%dT%H%M%S)-$.dump"
     trap 'rm -f "${target}.partial"' EXIT
-    runuser -u solvia -- /usr/lib/postgresql/16/bin/pg_dump -Fc "$SOLVIA_DATABASE_URL" > "$target.partial"
-    /usr/lib/postgresql/16/bin/pg_restore --list "$target.partial" >/dev/null
+    if ! runuser -u solvia -- /usr/lib/postgresql/16/bin/pg_dump -Fc "$SOLVIA_DATABASE_URL" > "$target.partial"; then
+      record_event backup "$target" failed "pg_dump failed"
+      exit 1
+    fi
+    if ! /usr/lib/postgresql/16/bin/pg_restore --list "$target.partial" >/dev/null; then
+      record_event backup "$target" failed "archive verification failed"
+      exit 1
+    fi
     mv "$target.partial" "$target"
+    chmod 0600 "$target"
+    record_event backup "$target" success "verified PostgreSQL custom-format archive"
     echo "$target"
     # No silent retention deletion: operators archive copies and manage available space.
     ;;
@@ -42,6 +59,26 @@ case ${1:-help} in
       }
     runuser -u solvia --preserve-environment -- /opt/solvia/SolviaServer --init
     systemctl start solvia
-    "$0" health ;;
-  *) echo 'sudo solvia-admin {health|status|logs|restart|backup|restore FILE}' ;;
+    "$0" health
+    record_event restore "$2" success "database restored and HTTPS health check passed" ;;
+  backups)
+    find /var/backups/solvia -maxdepth 1 -type f -name '*.dump' -printf '%TY-%Tm-%Td %TH:%TM  %10s bytes  %p\n' | sort -r ;;
+  db-status)
+    runuser -u solvia -- psql -X "$SOLVIA_DATABASE_URL" -At <<'SQL'
+SELECT 'database=' || current_database();
+SELECT 'postgres=' || current_setting('server_version');
+SELECT 'size=' || pg_size_pretty(pg_database_size(current_database()));
+SELECT 'patients=' || count(*) FROM patients;
+SELECT 'users=' || count(*) FROM users;
+SELECT 'consultations=' || count(*) FROM consultations;
+SELECT 'sessions=' || count(*) FROM sessions WHERE expires > extract(epoch from now())::bigint;
+SQL
+    ;;
+  doctor)
+    echo '== HTTPS =='; "$0" health
+    echo '== SERVICE =='; systemctl is-active solvia postgresql@16-solvia
+    echo '== DATABASE =='; "$0" db-status
+    echo '== BACKUPS =='; "$0" backups | head -5
+    ;;
+  *) echo 'sudo solvia-admin {health|status|logs|restart|backup|backups|db-status|doctor|restore FILE}' ;;
 esac
