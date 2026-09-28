@@ -1,0 +1,7 @@
+[Unit]
+Description=SOLVIA daily PostgreSQL backup
+After=postgresql@16-solvia.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/solvia-admin backup
+UMask=0077

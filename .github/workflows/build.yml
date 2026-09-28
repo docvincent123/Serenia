@@ -48,6 +48,9 @@ jobs:
         working-directory: frontend
         run: npm install --no-audit --no-fund
 
+      - name: Check connection address validation
+        run: node tests/connection.mjs
+
       - name: Build React interface
         shell: pwsh
         working-directory: frontend
@@ -131,7 +134,7 @@ jobs:
           retention-days: 14
 
   postgres-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     services:
       postgres:
@@ -171,3 +174,46 @@ jobs:
           SOLVIA_TEST_DATABASE_URL: postgresql://postgres:solvia_test_password@127.0.0.1:5432/solvia_test
         run: ctest --test-dir build-server --output-on-failure
 
+
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build Linux browser interface
+        run: |
+          npm --prefix frontend install --no-audit --no-fund
+          npm --prefix frontend run build
+          node tests/connection.mjs
+
+      - name: Stage Linux server installer
+        run: |
+          mkdir -p out/SOLVIA-Linux/ui out/SOLVIA-Linux/licenses
+          cp build-server/SolviaServer out/SOLVIA-Linux/
+          cp -r frontend/dist/. out/SOLVIA-Linux/ui/
+          cp installer/linux/* out/SOLVIA-Linux/
+          cp docs/LINUX.md out/SOLVIA-Linux/
+          find build-server/vcpkg_installed/x64-linux/share -name copyright -exec sh -c 'cp "$1" "out/SOLVIA-Linux/licenses/$(basename "$(dirname "$1")").txt"' _ {} \;
+          chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin
+          cd out/SOLVIA-Linux
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+
+      - name: Verify Linux install, HTTPS, backup, restore and upgrade
+        timeout-minutes: 8
+        run: bash tests/linux-install.sh out/SOLVIA-Linux
+
+      - name: Linux diagnostics
+        if: failure()
+        run: |
+          sudo journalctl -u solvia -u postgresql@16-solvia -n 100 --no-pager || true
+          sudo pg_lsclusters || true
+
+      - name: Archive Linux package
+        run: tar -C out -czf out/SOLVIA-2.0.0-Linux-x64.tar.gz SOLVIA-Linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SOLVIA-2.0.0-Linux-x64-installer
+          path: out/SOLVIA-2.0.0-Linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 14

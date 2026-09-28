@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { cleanBase } from './connection.mjs';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -80,16 +81,9 @@ function deviceIdentity() {
     localStorage.setItem('solvia_device_id', id);
   }
   const platform = navigator.userAgentData?.platform || navigator.platform || 'Windows';
-  return { device_id: id, device_name: `SOLVIA · ${platform}`, platform: 'Windows' };
+  return { device_id: id, device_name: `SOLVIA · ${platform}`, platform: window.chrome?.webview ? 'Windows' : platform };
 }
 
-
-function cleanBase(value) {
-  const text = String(value || '').trim().replace(/\/+$/, '');
-  const url = new URL(text);
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Адреса сервера має починатися з http:// або https://');
-  return text;
-}
 
 async function request(base, token, method, path, body) {
   const headers = { Accept: 'application/json' };
@@ -101,10 +95,11 @@ async function request(base, token, method, path, body) {
     response = await fetch(`${cleanBase(base)}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body)
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(15000)
     });
   } catch {
-    throw Object.assign(new Error('Немає зв’язку із сервером. Перевірте адресу та чи запущений SolviaServer.exe.'), { status: 0 });
+    throw Object.assign(new Error('Немає зв’язку із сервером. Перевірте адресу Linux/Windows-сервера, мережу центру та довіру до його CA-сертифіката.'), { status: 0 });
   }
 
   const text = await response.text();
@@ -215,7 +210,21 @@ function Login({ initialBase, onLogin }) {
   const [server, setServer] = useState(initialBase);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [showServer, setShowServer] = useState(false);
+  const [showServer, setShowServer] = useState(!initialBase);
+  const [connection, setConnection] = useState('');
+  const [checking, setChecking] = useState(false);
+
+  async function checkConnection() {
+    setChecking(true); setConnection(''); setError('');
+    try {
+      const base = cleanBase(server);
+      const health = await request(base, '', 'GET', '/api/health');
+      if (health.ok !== true || !health.version) throw new Error('За цією адресою немає SOLVIA API.');
+      localStorage.setItem('solvia_api', base);
+      setConnection(`Сервер SOLVIA ${health.version} доступний · ${health.platform || 'HTTPS'}`);
+    } catch (e) { setError(e.message); }
+    finally { setChecking(false); }
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -279,7 +288,7 @@ function Login({ initialBase, onLogin }) {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••••••" required />
           </Field>
 
-          <Button type="submit" className="login-submit" disabled={busy}>
+          <Button type="submit" className="login-submit" disabled={busy || !server.trim()}>
             {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
           </Button>
 
@@ -288,9 +297,14 @@ function Login({ initialBase, onLogin }) {
           </button>
 
           {showServer && (
-            <Field label="Адреса SolviaServer" hint="На цьому ПК: http://127.0.0.1:8765" full>
-              <input value={server} onChange={(e) => setServer(e.target.value)} spellCheck="false" />
-            </Field>
+            <>
+              <Field label="Адреса сервера центру" hint="Linux-сервер: https://192.168.1.105:8443. Адресу покаже інсталятор сервера." full>
+                <input value={server} onChange={(e) => { setServer(e.target.value); setConnection(''); }} spellCheck="false" placeholder="https://192.168.1.105:8443" />
+              </Field>
+              <Button type="button" variant="secondary" onClick={checkConnection} disabled={checking}>{checking ? 'Перевіряємо…' : 'Перевірити та зберегти адресу'}</Button>
+              <p>Перед підключенням установіть CA-сертифікат, отриманий від адміністратора вашого Linux-сервера.</p>
+              {connection && <div className="alert" role="status">{connection}</div>}
+            </>
           )}
 
           <div className="login-foot">Версія 2.0 • by QureMed</div>
@@ -1919,7 +1933,26 @@ function ReminderBar({ api, role }) {
   );
 }
 
-function ServerConsole({ api, user, onLogout }) {
+function ServerMaintenance({ api, apiBase }) {
+  const [platform, setPlatform] = useState('');
+  useEffect(() => { api('GET', '/api/health').then(h => setPlatform(h.platform || 'unknown')).catch(() => setPlatform('offline')); }, [apiBase]);
+  let localWindows = false;
+  try { localWindows = platform === 'windows' && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(apiBase).hostname) && !!window.chrome?.webview; } catch {}
+  if (!localWindows) return <div className="maintenance-grid">
+    <article><strong>Сервер {platform === 'linux' ? 'Linux' : 'центру'}</strong><p>{apiBase}</p><p>Обслуговування виконує адміністратор на самому сервері.</p></article>
+    {platform === 'linux' && <>
+      <article><strong>Резервні копії</strong><p>Щодня о 02:00 за часом сервера. Зберігайте окрему копію на іншому носії.</p><code>sudo solvia-admin backup</code><p>/var/backups/solvia</p></article>
+      <article><strong>Стан та відновлення</strong><p><code>sudo solvia-admin health</code></p><p><code>sudo solvia-admin restore /path/backup.dump</code></p><p>Відновлення потребує підтвердження на сервері.</p></article>
+    </>}
+  </div>;
+  return <div className="backup-actions">
+    <Button onClick={() => window.chrome.webview.postMessage('backup')}>Створити backup</Button>
+    <Button variant="secondary" onClick={() => window.chrome.webview.postMessage('restore')}>Відновити БД</Button>
+    <Button variant="secondary" onClick={() => window.chrome.webview.postMessage('restart-server')}>Перезапустити сервер</Button>
+  </div>;
+}
+
+function ServerConsole({ api, user, onLogout, apiBase }) {
   const [sessions, setSessions] = useState([]);
   const [shift, setShift] = useState(null);
   const [reminders, setReminders] = useState([]);
@@ -1964,18 +1997,14 @@ function ServerConsole({ api, user, onLogout }) {
       </header>
       {error && <div className="alert error">{error}</div>}
       <div className="server-status-grid">
-        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>127.0.0.1:8765 · SOLVIA 2.0</p></article>
+        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.0</p></article>
         <article className="stat-card"><strong>{shift?.open ? 'OPEN' : 'CLOSED'}</strong><h3>Робоча зміна</h3><p>{shift?.shift_date || localDate()}</p></article>
         <article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Онлайн пристроїв</h3><p>{sessions.length} активних сесій</p></article>
         <article className="stat-card"><strong>{reminders.length}</strong><h3>Найближчих записів</h3><p>Нагадування психологам і адміну</p></article>
       </div>
       <section className="surface">
         <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Сервер центру</h2></div><Badge tone="forest">Local</Badge></div>
-        <div className="backup-actions">
-          <Button onClick={() => window.chrome?.webview?.postMessage('backup')}>Створити backup</Button>
-          <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restore')}>Відновити БД</Button>
-          <Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restart-server')}>Перезапустити сервер</Button>
-        </div>
+        <ServerMaintenance api={api} apiBase={apiBase} />
       </section>
       <section className="surface">
         <div className="section-head"><div><div className="eyebrow">ПІДКЛЮЧЕННЯ</div><h2>Телефони, планшети та ПК</h2></div><Badge tone="stone">{sessions.length}</Badge></div>
@@ -2042,7 +2071,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
         ? cleanBase(form.vps_api_url)
         : cleanBase(form.local_api_url || apiBase);
       if (/127\.0\.0\.1|localhost/i.test(apiUrl)) {
-        throw new Error('Для телефона потрібна LAN-адреса серверного ПК, а не 127.0.0.1. Вкажіть Local API URL, наприклад http://192.168.1.100:8765.');
+        throw new Error('Для телефона потрібна LAN-адреса серверного ПК, а не 127.0.0.1. Вкажіть Local API URL, наприклад https://192.168.1.100:8443.');
       }
       const config = {
         format: 'quremed.solvia.mobile',
@@ -2227,11 +2256,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
           {activeSection === 'maintenance' && (
             <section className="surface settings-panel">
               <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Backup / Restore</h2></div><Badge tone="sand">Admin only</Badge></div>
-              <div className="maintenance-grid">
-                <article><span>01</span><strong>Створити backup</strong><p>Ручна резервна копія PostgreSQL SOLVIA на серверному ПК.</p><Button onClick={() => window.chrome?.webview?.postMessage('backup')}>Створити backup</Button></article>
-                <article><span>02</span><strong>Відновити базу</strong><p>Відновлення SOLVIA з backup-файлу з окремим підтвердженням.</p><Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restore')}>Відновити з backup</Button></article>
-                <article><span>03</span><strong>Перезапустити сервер</strong><p>Перезапуск локального SolviaServer та перевірка health endpoint.</p><Button variant="secondary" onClick={() => window.chrome?.webview?.postMessage('restart-server')}>Restart Server</Button></article>
-              </div>
+              <ServerMaintenance api={api} apiBase={apiBase} />
             </section>
           )}
         </div>
@@ -2598,8 +2623,8 @@ export default function App() {
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');
   const appMode = params.get('mode') || 'center';
-  const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? 'http://127.0.0.1:8765' : window.location.origin;
-  const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || runtimeBase);
+  const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? '' : window.location.origin;
+  const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || params.get('default_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(Boolean(token));
@@ -2671,7 +2696,8 @@ export default function App() {
   }
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} />;
-  if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} />;
+  if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} />;
   return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
 }
+
 

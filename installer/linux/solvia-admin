@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+[[ $EUID == 0 ]] || { echo 'Використайте sudo solvia-admin'; exit 1; }
+export SOLVIA_DATABASE_URL='host=/var/run/postgresql port=55432 dbname=solvia user=solvia'
+case ${1:-help} in
+  health)
+    ip=$(cat /etc/solvia/address)
+    for attempt in {1..30}; do
+      if curl --silent --show-error --fail --noproxy '*' --connect-timeout 2 --max-time 4 \
+        --cacert /etc/solvia/ca/QureMed-Local-CA.crt "https://$ip:8443/api/health" \
+        | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True; print("SOLVIA HTTPS OK", d["version"])' 2>/dev/null; then exit 0; fi
+      sleep 1
+    done
+    journalctl -u solvia -n 40 --no-pager; exit 1 ;;
+  status) systemctl status solvia --no-pager ;;
+  logs) journalctl -u solvia -n 100 --no-pager ;;
+  restart) systemctl restart solvia; "$0" health ;;
+  backup)
+    exec 7>/run/lock/solvia-backup.lock; flock 7
+    target="/var/backups/solvia/solvia-$(date -u +%Y%m%dT%H%M%S)-$$.dump"
+    trap 'rm -f "${target}.partial"' EXIT
+    runuser -u solvia -- /usr/lib/postgresql/16/bin/pg_dump -Fc "$SOLVIA_DATABASE_URL" > "$target.partial"
+    /usr/lib/postgresql/16/bin/pg_restore --list "$target.partial" >/dev/null
+    mv "$target.partial" "$target"
+    echo "$target"
+    # No silent retention deletion: operators archive copies and manage available space.
+    ;;
+  restore)
+    [[ $# == 2 && -f $2 ]] || { echo 'sudo solvia-admin restore /path/backup.dump'; exit 1; }
+    /usr/lib/postgresql/16/bin/pg_restore --list "$2" >/dev/null
+    read -r -p 'Відновлення замінить дані центру. Введіть ВІДНОВИТИ: ' confirm
+    [[ $confirm == ВІДНОВИТИ ]] || exit 1
+    exec 9>/run/lock/solvia-install.lock; flock -n 9
+    systemctl stop solvia
+    "$0" backup
+    # Root opens the archive; postgres can read stdin even from a private directory.
+    runuser -u postgres -- /usr/lib/postgresql/16/bin/pg_restore -p 55432 -d solvia --role=solvia --no-owner --no-privileges \
+      --clean --if-exists --single-transaction --exit-on-error < "$2" || {
+        echo 'Відновлення скасовано транзакцією; сервер залишено зупиненим для перевірки.'; exit 1;
+      }
+    runuser -u solvia --preserve-environment -- /opt/solvia/SolviaServer --init
+    systemctl start solvia
+    "$0" health ;;
+  *) echo 'sudo solvia-admin {health|status|logs|restart|backup|restore FILE}' ;;
+esac

@@ -23,7 +23,7 @@ UninstallDisplayIcon={app}\solvia.ico
 SetupIconFile=..\assets\solvia.ico
 
 [Types]
-Name: "client"; Description: "Робоче місце центру"
+Name: "client"; Description: "Робоче місце — підключення до Linux-сервера"
 Name: "server"; Description: "Сервер центру"
 Name: "full"; Description: "Сервер + робоче місце"; Flags: iscustom
 
@@ -32,6 +32,7 @@ Name: "client"; Description: "SOLVIA Center — робоча програма"; 
 Name: "server"; Description: "SOLVIA Server + Server Console"; Types: server full
 
 [Files]
+Source: "Trust-Server-Certificate.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; Components: client
 Source: "Stop-Server.ps1"; Flags: dontcopy
 Source: "..\assets\solvia.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Setup.Common.ps1"; Flags: dontcopy
@@ -52,6 +53,8 @@ Name: "{autoprograms}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConso
 Name: "{autodesktop}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: server
 Name: "{autoprograms}\Налаштувати SOLVIA Server"; Filename: "{app}\installer\Configure-SOLVIA.cmd"; Components: server
 
+Name: "{autoprograms}\Довірити сертифікат сервера SOLVIA"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Trust-Server-Certificate.ps1"""; Components: client
+
 [Run]
 Filename: "{app}\Solvia.exe"; Description: "Запустити SOLVIA Center"; Flags: nowait postinstall skipifsilent; Components: client; Check: IsServerConfigured
 Filename: "{app}\SolviaServerConsole.exe"; Description: "Відкрити SOLVIA Server Console"; Flags: nowait postinstall skipifsilent; Components: server; Check: IsServerConfigured
@@ -63,6 +66,7 @@ Filename: "schtasks.exe"; Parameters: "/Delete /TN ""SOLVIA Local Server"" /F"; 
 [Code]
 var
   AccountPage: TInputQueryWizardPage;
+  ConnectionPage: TInputQueryWizardPage;
   Configured: Boolean;
 
 function IsServerSelected: Boolean;
@@ -94,7 +98,11 @@ end;
 procedure InitializeWizard;
 begin
   Configured := False;
-  AccountPage := CreateInputQueryPage(wpSelectDir, 'SOLVIA 2.0 — налаштування центру',
+  ConnectionPage := CreateInputQueryPage(wpSelectComponents, 'Підключення до Linux-сервера',
+    'Адреса сервера центру',
+    'Укажіть HTTPS-адресу, яку показав Linux-інсталятор, наприклад https://192.168.1.105:8443. Поле можна залишити порожнім і налаштувати при вході. Після встановлення імпортуйте сертифікат сервера через ярлик «Довірити сертифікат сервера SOLVIA».');
+  ConnectionPage.Add('Адреса HTTPS:', False);
+  AccountPage := CreateInputQueryPage(ConnectionPage.ID, 'SOLVIA 2.0 — налаштування центру',
     'Обліковий запис адміністратора',
     'Для першого встановлення створіть адміністратора. При оновленні наявні облікові записи зберігаються. Пароль postgres потрібен лише для підключення до вже встановленого PostgreSQL без конфігурації SOLVIA.');
   AccountPage.Add('Логін адміністратора (латиниця, цифри, . _ -):', False);
@@ -105,12 +113,24 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := (PageID = AccountPage.ID) and (not IsServerSelected);
+  Result := ((PageID = AccountPage.ID) and (not IsServerSelected)) or
+    ((PageID = ConnectionPage.ID) and (not IsClientSelected or IsServerSelected));
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+  if (CurPageID = ConnectionPage.ID) and (Trim(ConnectionPage.Values[0]) <> '') then begin
+    Result := (Pos('https://', Lowercase(Trim(ConnectionPage.Values[0]))) = 1) and
+      (Pos(' ', Trim(ConnectionPage.Values[0])) = 0) and
+      (Pos('@', ConnectionPage.Values[0]) = 0) and
+      (Pos('?', ConnectionPage.Values[0]) = 0) and
+      (Pos('#', ConnectionPage.Values[0]) = 0);
+    if not Result then begin
+      MsgBox('Укажіть HTTPS-адресу сервера без логіна, пароля та параметрів.', mbError, MB_OK);
+      Exit;
+    end;
+  end;
   if (CurPageID = AccountPage.ID) and not ExistingSetup and IsServerSelected then begin
     Result := (Length(AccountPage.Values[0]) >= 3) and
       (Length(AccountPage.Values[1]) >= 12) and (Length(AccountPage.Values[1]) <= 128) and
@@ -135,7 +155,7 @@ var
   Progress: TOutputMarqueeProgressWizardPage;
   Retry: Boolean;
 begin
-  if CurStep = ssInstall then begin
+  if (CurStep = ssInstall) and IsServerSelected then begin
     ExtractTemporaryFile('Stop-Server.ps1');
     ExtractTemporaryFile('Setup.Common.ps1');
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
@@ -147,6 +167,13 @@ begin
     Exit;
   end;
   if CurStep <> ssPostInstall then Exit;
+  if IsClientSelected then begin
+    if IsServerSelected then
+      SaveStringToFile(ExpandConstant('{app}\client-server.txt'), 'http://127.0.0.1:8765', False)
+    else if Trim(ConnectionPage.Values[0]) <> '' then
+      if not SaveStringToFile(ExpandConstant('{app}\client-server.txt'), Trim(ConnectionPage.Values[0]), False) then
+        RaiseException('Cannot save server address');
+  end;
   if not IsServerSelected then begin
     Configured := True;
     Exit;
@@ -199,4 +226,5 @@ function GetCustomSetupExitCode: Integer;
 begin
   if Configured then Result := 0 else Result := 1;
 end;
+
 

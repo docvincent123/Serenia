@@ -62,14 +62,28 @@ std::wstring launchUrl() {
 #else
     std::wstring url = L"https://app.solvia.invalid/index.html";
 #endif
-    const auto api = envValue(L"SOLVIA_API");
+    auto api = envValue(L"SOLVIA_API");
+    bool defaultAddress = api.empty();
+    if (defaultAddress) {
+        std::wifstream config(executableDirectory() / L"client-server.txt");
+        std::getline(config, api);
+        if (!api.empty() && api.back() == L'\r') api.pop_back();
+    }
     if (!api.empty()) {
 #ifdef SOLVIA_SERVER_CONSOLE
-        url += L"&api=";
+        url += defaultAddress ? L"&default_api=" : L"&api=";
 #else
-        url += L"?api=";
+        url += defaultAddress ? L"?default_api=" : L"?api=";
 #endif
-        url += api;
+        // Encode the query value; configuration cannot inject mode/other parameters.
+        for (wchar_t ch : api) {
+            if ((ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z') ||
+                (ch >= L'0' && ch <= L'9') || ch == L'.' || ch == L'-' || ch == L'_') url += ch;
+            else if (ch < 128) {
+                constexpr wchar_t hex[] = L"0123456789ABCDEF";
+                url += L'%'; url += hex[(ch >> 4) & 15]; url += hex[ch & 15];
+            }
+        }
     }
     return url;
 }
@@ -115,6 +129,11 @@ void createWebView(HWND hwnd) {
                             g_webview->add_WebMessageReceived(
                                 Callback<ICoreWebView2WebMessageReceivedEventHandler>(
                                     [](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                                        LPWSTR source = nullptr;
+                                        if (FAILED(args->get_Source(&source)) || !source) return S_OK;
+                                        const bool trusted = std::wstring(source).rfind(L"https://app.solvia.invalid/", 0) == 0;
+                                        CoTaskMemFree(source);
+                                        if (!trusted) return S_OK;
                                         LPWSTR raw = nullptr;
                                         if (FAILED(args->TryGetWebMessageAsString(&raw)) || !raw) return S_OK;
                                         std::wstring message(raw);
@@ -329,4 +348,5 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (SUCCEEDED(com)) CoUninitialize();
     return static_cast<int>(msg.wParam);
 }
+
 
