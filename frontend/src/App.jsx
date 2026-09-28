@@ -1846,7 +1846,7 @@ function PatientCard({ api, role, patientId, back }) {
             <Field label="Деталі направлення">
               <input value={patientEdit.referral_source_details} onChange={(e) => setPatientEdit({ ...patientEdit, referral_source_details: e.target.value })} />
             </Field>
-            <Field label="Службова примітка" full><textarea rows="4" value={patientEdit.admin_note} onChange={(e) => setPatientEdit({ ...patientEdit, admin_note: e.target.value })} /></Field>
+            {isAdmin && <Field label="Службова примітка" full><textarea rows="4" value={patientEdit.admin_note} onChange={(e) => setPatientEdit({ ...patientEdit, admin_note: e.target.value })} /></Field>}
             <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти зміни</Button></div>
           </form>
         </Dialog>
