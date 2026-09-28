@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 umask 077
 [[ $EUID == 0 ]] || { echo 'Використайте sudo solvia-admin'; exit 1; }
+install -d -m 0700 -o root -g root /run/solvia-admin
 export SOLVIA_DATABASE_URL='host=/var/run/postgresql port=55432 dbname=solvia user=solvia'
 case ${1:-help} in
   health)
@@ -17,7 +18,7 @@ case ${1:-help} in
   logs) journalctl -u solvia -n 100 --no-pager ;;
   restart) systemctl restart solvia; "$0" health ;;
   backup)
-    exec 7>/run/lock/solvia-backup.lock; flock 7
+    exec 7>/run/solvia-admin/backup.lock; flock 7
     target="/var/backups/solvia/solvia-$(date -u +%Y%m%dT%H%M%S)-$$.dump"
     trap 'rm -f "${target}.partial"' EXIT
     runuser -u solvia -- /usr/lib/postgresql/16/bin/pg_dump -Fc "$SOLVIA_DATABASE_URL" > "$target.partial"
@@ -31,7 +32,7 @@ case ${1:-help} in
     /usr/lib/postgresql/16/bin/pg_restore --list "$2" >/dev/null
     read -r -p 'Відновлення замінить дані центру. Введіть ВІДНОВИТИ: ' confirm
     [[ $confirm == ВІДНОВИТИ ]] || exit 1
-    exec 9>/run/lock/solvia-install.lock; flock -n 9
+    exec 9>/run/solvia-admin/install.lock; flock -n 9
     systemctl stop solvia
     "$0" backup
     # Root opens the archive; postgres can read stdin even from a private directory.

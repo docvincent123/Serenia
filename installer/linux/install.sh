@@ -5,7 +5,8 @@ umask 027
 export LC_ALL=C.UTF-8
 trap 'echo "Встановлення зупинено (рядок $LINENO). База не видалена. Журнал: journalctl -u solvia -n 60" >&2' ERR
 [[ $EUID == 0 ]] || { echo 'Запустіть: sudo bash install.sh'; exit 1; }
-exec 9>/run/lock/solvia-install.lock
+install -d -m 0700 -o root -g root /run/solvia-admin
+exec 9>/run/solvia-admin/install.lock
 flock -n 9 || { echo 'Інше встановлення вже працює'; exit 1; }
 source /etc/os-release
 [[ ${UBUNTU_CODENAME:-${VERSION_CODENAME:-}} == noble && $(uname -m) == x86_64 ]] || {

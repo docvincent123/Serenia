@@ -2623,7 +2623,7 @@ export default function App() {
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');
   const appMode = params.get('mode') || 'center';
-  const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? '' : window.location.origin;
+  const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? (appMode === 'server' ? 'http://127.0.0.1:8765' : '') : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || params.get('default_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
   const [user, setUser] = useState(null);

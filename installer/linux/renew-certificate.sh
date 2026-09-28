@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
-exec 8>/run/lock/solvia-certificate.lock
+install -d -m 0700 -o root -g root /run/solvia-admin
+exec 8>/run/solvia-admin/certificate.lock
 flock 8
 ca=/etc/solvia/ca
 tls=/etc/solvia/tls
