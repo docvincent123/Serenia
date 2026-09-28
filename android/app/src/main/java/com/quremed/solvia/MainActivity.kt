@@ -58,6 +58,11 @@ class MainActivity : Activity() {
         super.onCreate(state)
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         server = prefs.getString("server", "") ?: ""
+        if (server.startsWith("http://", ignoreCase = true)) {
+            server = ""
+            prefs.edit().remove("server").apply()
+            Toast.makeText(this, "SOLVIA оновлено для HTTPS. Імпортуйте новий файл підключення або введіть адресу https:// сервера.", Toast.LENGTH_LONG).show()
+        }
         if (intent?.data != null) {
             importServerConfig(intent.data!!)
         } else if (server.isBlank()) setupScreen() else loginScreen()
@@ -72,17 +77,6 @@ class MainActivity : Activity() {
             stroke?.let { setStroke(dp(1), it) }
         }
 
-    private fun isPrivateHost(host: String): Boolean {
-        val h = host.lowercase()
-        if (h == "localhost" || h == "127.0.0.1") return true
-        val parts = h.split(".")
-        if (parts.size != 4) return false
-        val nums = parts.mapNotNull { it.toIntOrNull() }
-        if (nums.size != 4 || nums.any { it !in 0..255 }) return false
-        return nums[0] == 10 ||
-            (nums[0] == 192 && nums[1] == 168) ||
-            (nums[0] == 172 && nums[1] in 16..31)
-    }
 
     private fun root(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -170,28 +164,27 @@ class MainActivity : Activity() {
 
     private fun normalize(value: String): String {
         var raw = value.trim()
-        require(raw.isNotBlank())
-        if (!raw.contains("://")) {
-            val possibleHost = raw.substringBefore(':').trim()
-            raw = if (isPrivateHost(possibleHost)) "http://$raw" else "https://$raw"
-        }
+        require(raw.isNotBlank()) { "Вкажіть HTTPS-адресу сервера" }
+        if (!raw.contains("://")) raw = "https://$raw"
         val uri = URI(raw)
         val scheme = uri.scheme?.lowercase()
         val host = uri.host ?: throw IllegalArgumentException("Не знайдено IP/host")
-        require(scheme == "http" || scheme == "https")
+        require(scheme == "https") { "SOLVIA передає дані тільки через HTTPS. Установіть сертифікат сервера й введіть https:// адресу." }
         require(uri.userInfo == null && uri.query == null && uri.fragment == null)
         require(uri.path.isNullOrEmpty() || uri.path == "/")
         require(uri.port == -1 || uri.port in 1..65535)
-        if (scheme == "http") require(isPrivateHost(host)) {
-            "HTTP дозволений тільки для локальної приватної IP-адреси"
-        }
-        val port = when {
-            uri.port != -1 -> uri.port
-            scheme == "http" && isPrivateHost(host) -> 8765
-            scheme == "https" && isPrivateHost(host) -> 8443
-            else -> -1
-        }
-        return URI(scheme, null, host.lowercase(), port, null, null, null).toString().trimEnd('/')
+        val port = if (uri.port != -1) uri.port else if (isPrivateIpv4(host)) 8443 else -1
+        return URI("https", null, host.lowercase(), port, null, null, null).toString().trimEnd('/')
+    }
+
+    private fun isPrivateIpv4(host: String): Boolean {
+        val parts = host.split(".")
+        if (parts.size != 4) return false
+        val nums = parts.mapNotNull { it.toIntOrNull() }
+        if (nums.size != 4 || nums.any { it !in 0..255 }) return false
+        return nums[0] == 10 ||
+            (nums[0] == 192 && nums[1] == 168) ||
+            (nums[0] == 172 && nums[1] in 16..31)
     }
 
     private fun requestAt(base: String, method: String, path: String, body: JSONObject? = null): Any {
@@ -257,9 +250,7 @@ class MainActivity : Activity() {
                 val json = JSONObject(text)
                 require(json.optString("format") == "quremed.solvia.mobile") { "Це не файл підключення SOLVIA" }
                 val candidate = normalize(
-                    json.optString("api_url").ifBlank {
-                        json.optString("http_url").ifBlank { json.optString("https_url") }
-                    }
+                    json.optString("https_url").ifBlank { json.optString("api_url") }
                 )
                 val health = requestAt(candidate, "GET", "/api/health") as JSONObject
                 require(health.optBoolean("ok")) { "Сервер не підтвердив готовність" }
@@ -302,7 +293,7 @@ class MainActivity : Activity() {
         body.addView(spacer(14))
 
         body.addView(title("Або введіть адресу вручну", 18f))
-        body.addView(caption("Локально можна: 192.168.1.100 або http://192.168.1.100:8765. Для VPS використовуйте тільки https://."))
+        body.addView(caption("Введіть адресу https:// сервера центру, наприклад https://192.168.1.100:8443. Спершу встановіть сертифікат CA сервера на планшет."))
         val address = edit("192.168.1.100").apply {
             setText(server)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
@@ -333,7 +324,7 @@ class MainActivity : Activity() {
             }
         })
         body.addView(spacer(10))
-        body.addView(caption("Примітка: HTTP дозволяється тільки для приватної локальної мережі. Для доступу через інтернет/VPS SOLVIA вимагає HTTPS."))
+        body.addView(caption("SOLVIA завжди передає дані через HTTPS. Якщо з’єднання не захищене чинним сертифікатом центру, застосунок відмовить у підключенні."))
         setContentView(scroll(body))
     }
 
@@ -1165,3 +1156,4 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 }
+

@@ -1,4 +1,4 @@
-﻿# Shared helpers; compatible with Windows PowerShell 5.1.
+﻿﻿# Shared helpers; compatible with Windows PowerShell 5.1.
 function ConvertTo-ProcessArgument([string]$Value) {
     '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
@@ -170,4 +170,11 @@ function Stop-SolviaServer([string]$InstallDir) {
         } while ($true)
     }
     Stop-SolviaInstallationProcesses $InstallDir
+}
+
+
+function Get-SolviaApiProcessArguments([string]$Port, [string]$UiDirectory) {
+    # The raw HTTP API handles credentials and health checks from this PC only.
+    # Caddy is the sole LAN listener and terminates HTTPS on port 8443.
+    return @('--host','127.0.0.1','--port',$Port,'--ui',('"' + $UiDirectory + '"'))
 }

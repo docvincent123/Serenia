@@ -6,7 +6,7 @@
 
 На серверному ПК desktop WebView2 може звертатися безпосередньо до loopback API. Android та інші клієнти у локальній мережі заходять тільки через Caddy HTTPS.
 
-PostgreSQL налаштований на `listen_addresses=localhost`; порт 5432 не відкривається у Windows Firewall. SOLVIA Caddy слухає 8443, а firewall rule дозволяє доступ лише з `LocalSubnet` у Private network profile. Це не конфліктує з RehaFlow, який може використовувати HTTPS 443 на тому самому ПК.
+PostgreSQL слухає тільки loopback; порт 5432 не відкривається у Windows Firewall. На Windows SolviaServer слухає тільки `127.0.0.1:8765`; firewall дозволяє LAN лише до Caddy HTTPS 8443 із `LocalSubnet` у Private network profile. Порт 8765 не відкривається в LAN. Це не конфліктує з RehaFlow, який може використовувати HTTPS 443 на тому самому ПК.
 
 ## Компоненти
 
@@ -75,4 +75,5 @@ PostgreSQL таблиці: `users`, `sessions`, `shift_days`, `families`, `patie
 ## Майбутні модулі
 
 `module_settings`: payments, reminders, consents, patient_portal, rehaflow. `outbox` зарезервований для нагадувань та інтеграцій.
+
 

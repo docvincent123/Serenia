@@ -59,6 +59,19 @@ class Scenario(unittest.TestCase):
         code, result=self.call(method,path,body,self.tokens.get(role))
         self.assertEqual(code,status,result)
         return result
+    def test_plain_http_must_not_bind_to_the_lan(self):
+        # Windows exposes LAN traffic through Caddy HTTPS only. Regression guard
+        # for accidentally starting the raw HTTP API on 0.0.0.0 without TLS.
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+        result = subprocess.run(
+            [BINARY, '--database', self.database, '--host', '0.0.0.0', '--port', str(port)],
+            capture_output=True, text=True, encoding='utf-8', timeout=20
+        )
+        self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+        self.assertIn('Direct LAN access is disabled; use the local HTTPS reverse proxy', result.stderr)
+
     def test_end_to_end_and_privacy(self):
         self.api(None,'GET','/api/patients',status=401)
         admin='admin'; rec='reception'; psy='psychologist'; director='director'
@@ -210,3 +223,4 @@ class Scenario(unittest.TestCase):
         self.api(psy,'GET','/api/me',status=401)
 
 if __name__=='__main__': unittest.main()
+

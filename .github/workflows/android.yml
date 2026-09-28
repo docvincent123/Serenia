@@ -32,6 +32,8 @@ jobs:
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" 'platforms;android-35' 'build-tools;34.0.0'
+      - name: Verify HTTPS only Android enrollment and network config
+        run: python3 tests/mobile-security-config.py
       - name: Build SOLVIA test APK and lint
         working-directory: android
         run: gradle --no-daemon :app:assembleDebug :app:lintDebug
@@ -47,3 +49,4 @@ jobs:
           name: SOLVIA-2.0.0-Android-lint
           path: android/app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
+

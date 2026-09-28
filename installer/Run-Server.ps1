@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory=$true)][string]$InstallDir)
+﻿﻿param([Parameter(Mandatory=$true)][string]$InstallDir)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Setup.Common.ps1')
 
@@ -31,7 +31,8 @@ if ($existing) {
     Stop-Process -Id $owner.Id -Force
     $owner.WaitForExit(10000) | Out-Null
 }
-$args = @('--host','0.0.0.0','--port',$port,'--ui',('"' + $uiDir + '"'))
+$args = Get-SolviaApiProcessArguments -Port $port -UiDirectory $uiDir
+Write-Host ('SOLVIA API bound to 127.0.0.1:' + $port + '; LAN HTTPS is provided by Caddy on ' + $httpsPort)
 $serverProcess = Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'api-output.log') -RedirectStandardError (Join-Path $logDir 'api-error.log')
 
 $healthy = $false
@@ -101,4 +102,5 @@ while ($true) {
     Remove-Item Env:SOLVIA_DATABASE_URL -ErrorAction SilentlyContinue
     try { Stop-Transcript | Out-Null } catch {}
 }
+
 
