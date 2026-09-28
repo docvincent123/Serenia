@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+[[ $EUID == 0 ]] || { echo 'Використайте sudo solvia-admin update'; exit 1; }
+
+repo='docvincent123/Serenia'
+api="https://api.github.com/repos/$repo/releases/latest"
+installed_file=/opt/solvia/VERSION
+installed='0.0.0'
+[[ ! -r $installed_file ]] || installed=$(tr -d '[:space:]' < "$installed_file")
+
+release_json=$(mktemp)
+work=''
+cleanup() {
+  rm -f "$release_json"
+  [[ -z $work ]] || rm -rf "$work"
+}
+trap cleanup EXIT
+
+curl --fail --silent --show-error --location \
+  --connect-timeout 10 --max-time 30 \
+  -H 'Accept: application/vnd.github+json' \
+  -H 'User-Agent: SOLVIA-Updater' \
+  "$api" -o "$release_json"
+
+readarray -t meta < <(python3 - "$release_json" <<'PY'
+import json, re, sys
+data=json.load(open(sys.argv[1], encoding='utf-8'))
+tag=str(data.get('tag_name','')).strip()
+version=tag[1:] if tag.startswith('v') else tag
+assets=data.get('assets') or []
+pkg=''
+sha=''
+for a in assets:
+    name=str(a.get('name',''))
+    url=str(a.get('browser_download_url',''))
+    if re.fullmatch(r'SOLVIA-[0-9A-Za-z._+-]+-Linux-x64\.tar\.gz', name):
+        pkg=url
+    elif re.fullmatch(r'SOLVIA-[0-9A-Za-z._+-]+-Linux-x64\.tar\.gz\.sha256', name):
+        sha=url
+print(version)
+print(pkg)
+print(sha)
+PY
+)
+
+latest=${meta[0]:-}
+package_url=${meta[1]:-}
+checksum_url=${meta[2]:-}
+
+[[ $latest =~ ^[0-9]+([.][0-9]+){1,3}([+-][0-9A-Za-z.-]+)?$ ]] || {
+  echo 'Latest GitHub Release has an invalid SOLVIA version.' >&2
+  exit 1
+}
+[[ -n $package_url && -n $checksum_url ]] || {
+  echo 'Latest GitHub Release does not contain the Linux installer and SHA-256 file.' >&2
+  exit 1
+}
+
+echo "Installed SOLVIA: $installed"
+echo "Latest release:   $latest"
+
+if ! dpkg --compare-versions "$latest" gt "$installed"; then
+  echo 'SOLVIA is already up to date.'
+  exit 0
+fi
+
+if [[ ${1:-check} == check ]]; then
+  echo "Update available: $installed -> $latest"
+  exit 10
+fi
+
+[[ ${1:-} == apply ]] || {
+  echo 'Internal updater usage: solvia-updater {check|apply}' >&2
+  exit 2
+}
+
+read -r -p "Update SOLVIA $installed -> $latest? [y/N]: " answer
+[[ $answer == y || $answer == Y ]] || { echo 'Cancelled.'; exit 0; }
+
+install -d -m 0700 -o root -g root /run/solvia-admin
+exec 8>/run/solvia-admin/update.lock
+flock -n 8 || { echo 'Another SOLVIA update is already running.'; exit 1; }
+
+work=$(mktemp -d /tmp/solvia-update.XXXXXX)
+archive="$work/SOLVIA-$latest-Linux-x64.tar.gz"
+checksum="$archive.sha256"
+
+echo 'Downloading release...'
+curl --fail --show-error --location --connect-timeout 10 --max-time 300 "$package_url" -o "$archive"
+curl --fail --show-error --location --connect-timeout 10 --max-time 60 "$checksum_url" -o "$checksum"
+
+expected=$(awk '{print $1; exit}' "$checksum")
+[[ $expected =~ ^[0-9a-fA-F]{64}$ ]] || { echo 'Invalid release checksum file.' >&2; exit 1; }
+actual=$(sha256sum "$archive" | awk '{print $1}')
+[[ ${actual,,} == ${expected,,} ]] || { echo 'Downloaded package SHA-256 mismatch.' >&2; exit 1; }
+
+mkdir "$work/unpack"
+tar -xzf "$archive" -C "$work/unpack"
+package_dir="$work/unpack/SOLVIA-Linux"
+[[ -x "$package_dir/install.sh" || -f "$package_dir/install.sh" ]] || { echo 'Invalid SOLVIA Linux package.' >&2; exit 1; }
+[[ -f "$package_dir/VERSION" ]] || { echo 'Package VERSION missing.' >&2; exit 1; }
+package_version=$(tr -d '[:space:]' < "$package_dir/VERSION")
+[[ $package_version == "$latest" ]] || { echo 'Release/package version mismatch.' >&2; exit 1; }
+
+echo 'Creating pre-update backup...'
+/usr/local/sbin/solvia-admin backup >/dev/null
+
+export SOLVIA_SERVER_IP
+SOLVIA_SERVER_IP=$(cat /etc/solvia/address)
+echo 'Installing update...'
+bash "$package_dir/install.sh" </dev/null
+
+new_version=$(tr -d '[:space:]' < /opt/solvia/VERSION)
+[[ $new_version == "$latest" ]] || { echo 'Installed version verification failed.' >&2; exit 1; }
+
+/usr/local/sbin/solvia-admin health
+echo "SOLVIA updated successfully to $new_version."
