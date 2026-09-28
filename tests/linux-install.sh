@@ -12,7 +12,7 @@ sudo test -x /usr/local/bin/solvia-admin-app
 sudo test -f /usr/share/applications/solvia-admin.desktop
 sudo desktop-file-validate /usr/share/applications/solvia-admin.desktop
 sudo test -f /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
-sudo -u nobody test -r /etc/solvia/address
+sudo -u nobody test -r /usr/local/share/solvia/address
 sudo -u nobody test -r /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
 # Peer auth and socket-only DB, no database TCP exposure.
 test "$(sudo -u postgres psql -X -p 55432 -Atc 'SHOW listen_addresses')" = ''
