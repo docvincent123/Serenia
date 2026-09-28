@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ADDRESS_FILE=/etc/solvia/address
+ADDRESS_FILE=/usr/local/share/solvia/address
 CA_FILE=/usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
 
 if [[ ! -r "$ADDRESS_FILE" ]]; then
