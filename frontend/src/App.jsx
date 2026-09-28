@@ -1935,6 +1935,7 @@ function ReminderBar({ api, role }) {
 
 function ServerMaintenance({ api, apiBase }) {
   const [platform, setPlatform] = useState('');
+  const [serverVersion, setServerVersion] = useState('');
   const [system, setSystem] = useState(null);
   const [systemError, setSystemError] = useState('');
 
@@ -1942,6 +1943,7 @@ function ServerMaintenance({ api, apiBase }) {
     try {
       const health = await api('GET', '/api/health');
       setPlatform(health.platform || 'unknown');
+      setServerVersion(health.version || '');
       if (health.platform === 'linux') {
         setSystem(await api('GET', '/api/admin/system'));
       }
@@ -1974,6 +1976,13 @@ function ServerMaintenance({ api, apiBase }) {
         <small>
           {system ? `${system.counts?.patients ?? 0} пацієнтів · ${system.counts?.consultations ?? 0} консультацій · ${system.counts?.discharges ?? 0} виписок` : 'Завантаження статистики…'}
         </small>
+      </article>
+      <article>
+        <strong>Оновлення SOLVIA</strong>
+        <p>Встановлена версія: <b>{serverVersion || '—'}</b></p>
+        <p><code>sudo solvia-admin check-update</code></p>
+        <p><code>sudo solvia-admin update</code></p>
+        <small>Або скористайтесь дією «Оновити SOLVIA» у меню програми Linux.</small>
       </article>
       <article>
         <strong>Резервні копії</strong>
