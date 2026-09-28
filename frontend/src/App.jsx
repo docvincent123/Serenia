@@ -1935,16 +1935,62 @@ function ReminderBar({ api, role }) {
 
 function ServerMaintenance({ api, apiBase }) {
   const [platform, setPlatform] = useState('');
-  useEffect(() => { api('GET', '/api/health').then(h => setPlatform(h.platform || 'unknown')).catch(() => setPlatform('offline')); }, [apiBase]);
+  const [system, setSystem] = useState(null);
+  const [systemError, setSystemError] = useState('');
+
+  async function loadSystem() {
+    try {
+      const health = await api('GET', '/api/health');
+      setPlatform(health.platform || 'unknown');
+      if (health.platform === 'linux') {
+        setSystem(await api('GET', '/api/admin/system'));
+      }
+      setSystemError('');
+    } catch (e) {
+      setPlatform('offline');
+      setSystemError(e.message);
+    }
+  }
+
+  useEffect(() => { loadSystem(); }, [apiBase]);
+
   let localWindows = false;
   try { localWindows = platform === 'windows' && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(apiBase).hostname) && !!window.chrome?.webview; } catch {}
+
   if (!localWindows) return <div className="maintenance-grid">
-    <article><strong>Сервер {platform === 'linux' ? 'Linux' : 'центру'}</strong><p>{apiBase}</p><p>Обслуговування виконує адміністратор на самому сервері.</p></article>
+    <article>
+      <strong>Сервер {platform === 'linux' ? 'Linux' : 'центру'}</strong>
+      <p>{apiBase}</p>
+      <p>{platform === 'linux' ? 'systemd + PostgreSQL + HTTPS. Критичні root-операції виконуються локально на сервері.' : 'Обслуговування виконує адміністратор на сервері.'}</p>
+      <Button variant="secondary" onClick={loadSystem}>Оновити діагностику</Button>
+      {systemError && <p className="danger-text">{systemError}</p>}
+    </article>
+
     {platform === 'linux' && <>
-      <article><strong>Резервні копії</strong><p>Щодня о 02:00 за часом сервера. Зберігайте окрему копію на іншому носії.</p><code>sudo solvia-admin backup</code><p>/var/backups/solvia</p></article>
-      <article><strong>Стан та відновлення</strong><p><code>sudo solvia-admin health</code></p><p><code>sudo solvia-admin restore /path/backup.dump</code></p><p>Відновлення потребує підтвердження на сервері.</p></article>
+      <article>
+        <strong>PostgreSQL</strong>
+        <p>{system?.database?.name || 'solvia'} · {system?.database?.size || '—'}</p>
+        <p>PostgreSQL {system?.database?.version || '—'}</p>
+        <small>
+          {system ? `${system.counts?.patients ?? 0} пацієнтів · ${system.counts?.consultations ?? 0} консультацій · ${system.counts?.discharges ?? 0} виписок` : 'Завантаження статистики…'}
+        </small>
+      </article>
+      <article>
+        <strong>Резервні копії</strong>
+        <p>Автоматично щодня о 02:00. Для ручної перевіреної копії:</p>
+        <code>sudo solvia-admin backup</code>
+        <p><code>sudo solvia-admin backups</code></p>
+        <small>{system?.backups?.[0] ? `Остання подія: ${system.backups[0].status} · ${String(system.backups[0].created || '').replace('T',' ')}` : 'Історії backup ще немає.'}</small>
+      </article>
+      <article>
+        <strong>Діагностика / відновлення</strong>
+        <p><code>sudo solvia-admin doctor</code></p>
+        <p><code>sudo solvia-admin restore /path/backup.dump</code></p>
+        <small>Restore навмисно вимагає sudo та ручне підтвердження на Linux-сервері.</small>
+      </article>
     </>}
   </div>;
+
   return <div className="backup-actions">
     <Button onClick={() => window.chrome.webview.postMessage('backup')}>Створити backup</Button>
     <Button variant="secondary" onClick={() => window.chrome.webview.postMessage('restore')}>Відновити БД</Button>
