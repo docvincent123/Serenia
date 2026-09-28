@@ -335,3 +335,80 @@ SET psychologist_name = u.name
 FROM users u
 WHERE d.psychologist_id = u.id
   AND d.psychologist_name = '';
+
+
+-- SOLVIA 2.1: courses, referrals, signed documents and staff supervision.
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS referral_source TEXT NOT NULL DEFAULT '';
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS referral_source_details TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS patient_courses(
+  id BIGSERIAL PRIMARY KEY,
+  patient_id BIGINT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  course_no INTEGER NOT NULL,
+  psychologist_id BIGINT NOT NULL REFERENCES users(id),
+  started_at TEXT NOT NULL,
+  ended_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','archived')),
+  reason TEXT NOT NULL DEFAULT '',
+  outcome TEXT NOT NULL DEFAULT '',
+  created_by BIGINT REFERENCES users(id),
+  created TEXT NOT NULL,
+  UNIQUE(patient_id,course_no)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_courses_one_active
+  ON patient_courses(patient_id) WHERE status='active';
+CREATE INDEX IF NOT EXISTS idx_patient_courses_patient ON patient_courses(patient_id,id DESC);
+
+INSERT INTO patient_courses(patient_id,course_no,psychologist_id,started_at,ended_at,status,reason,outcome,created_by,created)
+SELECT p.id,1,p.psychologist_id,p.created,NULL,
+       CASE WHEN p.status='active' THEN 'active'
+            WHEN p.status='archived' THEN 'archived'
+            ELSE 'completed' END,
+       'Початковий курс','',NULL,p.created
+FROM patients p
+WHERE NOT EXISTS (SELECT 1 FROM patient_courses c WHERE c.patient_id=p.id);
+
+CREATE TABLE IF NOT EXISTS patient_referrals(
+  id BIGSERIAL PRIMARY KEY,
+  patient_id BIGINT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  destination_type TEXT NOT NULL,
+  destination_name TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'recommended' CHECK(status IN ('recommended','sent','completed','cancelled')),
+  created_by BIGINT NOT NULL REFERENCES users(id),
+  created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patient_referrals_patient ON patient_referrals(patient_id,id DESC);
+
+CREATE TABLE IF NOT EXISTS patient_documents(
+  id BIGSERIAL PRIMARY KEY,
+  patient_id BIGINT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  document_type TEXT NOT NULL CHECK(document_type IN ('informed_consent','data_processing','center_rules','family_consent','service_refusal','other')),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN ('signed','refused')),
+  signed_by_name TEXT NOT NULL DEFAULT '',
+  signature_data TEXT NOT NULL DEFAULT '',
+  signed_at TEXT NOT NULL,
+  created_by BIGINT NOT NULL REFERENCES users(id),
+  created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patient_documents_patient ON patient_documents(patient_id,id DESC);
+
+CREATE TABLE IF NOT EXISTS supervisions(
+  id BIGSERIAL PRIMARY KEY,
+  psychologist_id BIGINT NOT NULL REFERENCES users(id),
+  supervisor_id BIGINT NOT NULL REFERENCES users(id),
+  scheduled_at TEXT NOT NULL,
+  duration_minutes INTEGER NOT NULL DEFAULT 60,
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','completed','cancelled')),
+  topic TEXT NOT NULL DEFAULT '',
+  case_summary TEXT NOT NULL DEFAULT '',
+  recommendations TEXT NOT NULL DEFAULT '',
+  created_by BIGINT NOT NULL REFERENCES users(id),
+  created TEXT NOT NULL,
+  updated TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_supervisions_psychologist_date ON supervisions(psychologist_id,scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_supervisions_supervisor_date ON supervisions(supervisor_id,scheduled_at);
