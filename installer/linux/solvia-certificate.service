@@ -1,0 +1,5 @@
+[Unit]
+Description=Renew SOLVIA LAN TLS certificate
+[Service]
+Type=oneshot
+ExecStart=/opt/solvia/renew-certificate.sh

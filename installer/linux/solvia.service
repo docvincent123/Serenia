@@ -1,0 +1,29 @@
+[Unit]
+Description=SOLVIA rehabilitation center HTTPS server
+Requires=postgresql@16-solvia.service
+After=network-online.target postgresql@16-solvia.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=solvia
+Group=solvia
+EnvironmentFile=/etc/solvia/server.env
+WorkingDirectory=/opt/solvia
+ExecStart=/opt/solvia/SolviaServer --host ${SOLVIA_HOST} --port 8443 --ui /opt/solvia/ui --cert /etc/solvia/tls/server.crt --key /etc/solvia/tls/server.key
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/solvia
+
+[Install]
+WantedBy=multi-user.target
