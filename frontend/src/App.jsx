@@ -1049,7 +1049,7 @@ function PatientCard({ api, role, patientId, back }) {
   const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
   const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate() });
   const [printDoc, setPrintDoc] = useState(null);
-  const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', admin_note: '' });
+  const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', referral_source: '', referral_source_details: '', admin_note: '' });
   const [editMeta, setEditMeta] = useState({ psychologists: [], categories: [] });
   const [editFamilies, setEditFamilies] = useState([]);
   const [documentForm, setDocumentForm] = useState({
@@ -1207,6 +1207,8 @@ function PatientCard({ api, role, patientId, back }) {
         sex: card.sex || '',
         address: card.address || '',
         status: card.status || 'active',
+        referral_source: card.referral_source || '',
+        referral_source_details: card.referral_source_details || '',
         admin_note: card.admin_note || ''
       });
       setDialog('edit-patient');
@@ -1702,7 +1704,7 @@ function PatientCard({ api, role, patientId, back }) {
         </Dialog>
       )}
 
-      {dialog === 'edit-patient' && isAdmin && (
+      {dialog === 'edit-patient' && (isAdmin || isReception) && (
         <Dialog title="Редагувати профіль пацієнта" subtitle={card.name} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={savePatientEdit}>
             <Field label="ПІБ" full><input value={patientEdit.name} onChange={(e) => setPatientEdit({ ...patientEdit, name: e.target.value })} required /></Field>
@@ -1738,6 +1740,15 @@ function PatientCard({ api, role, patientId, back }) {
               </select>
             </Field>
             <Field label="Адреса" full><input value={patientEdit.address} onChange={(e) => setPatientEdit({ ...patientEdit, address: e.target.value })} /></Field>
+            <Field label="Звідки звернувся / направлений">
+              <select value={patientEdit.referral_source} onChange={(e) => setPatientEdit({ ...patientEdit, referral_source: e.target.value })}>
+                <option value="">Не вказано</option>
+                {referralSourceOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Field>
+            <Field label="Деталі направлення">
+              <input value={patientEdit.referral_source_details} onChange={(e) => setPatientEdit({ ...patientEdit, referral_source_details: e.target.value })} />
+            </Field>
             <Field label="Службова примітка" full><textarea rows="4" value={patientEdit.admin_note} onChange={(e) => setPatientEdit({ ...patientEdit, admin_note: e.target.value })} /></Field>
             <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти зміни</Button></div>
           </form>
