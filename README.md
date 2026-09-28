@@ -10,6 +10,7 @@ SOLVIA — локальна система для приватного псих�
 - Windows artifact: **SOLVIA-2.0.0-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
 - Сервер: C++20, PostgreSQL, HTTPS/8443, systemd, щоденні резервні копії.
 - Linux Admin: окремий desktop launcher з ізольованим вікном браузера, автоматичною перевіркою локального API та імпортом локального CA у NSS-сховище користувача.
+- Linux updater: `sudo solvia-admin check-update` / `sudo solvia-admin update` або дія «Оновити SOLVIA» у меню програми; оновлення береться з перевіреного GitHub Release зі SHA-256 і pre-update backup.
 - Windows: Win32/WebView2 + React, без PostgreSQL на клієнтському ПК.
 - Android: окремий Kotlin-клієнт тієї самої бази через API.
 - Старий режим Windows-сервера залишається додатковим варіантом інсталятора; він не потрібен для Linux.
