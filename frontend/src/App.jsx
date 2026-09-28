@@ -339,10 +339,17 @@ function Dashboard({ api }) {
 
   const cards = stats ? [
     ['Усього пацієнтів', stats.total_patients, 'У базі центру'],
+    ['Активні пацієнти', stats.active_patients, 'Зараз проходять супровід'],
+    ['Архів', stats.archived_patients, 'Завершені та архівовані картки'],
     ['Нові звернення', stats.new_patients, 'За обраний період'],
     ['Консультації', stats.consultations, 'Збережені психологами'],
-    ['Повторні прийоми', stats.repeat_visits, 'Пацієнти з попередньою історією'],
-    ['Скасовані записи', stats.appointments?.cancelled || 0, 'У календарі']
+    ['Середня тривалість', stats.avg_duration_minutes + ' хв', 'Консультації за період'],
+    ['Активні курси', stats.active_courses, 'Поточні курси супроводу'],
+    ['Завершені курси', stats.completed_courses, 'За обраний період'],
+    ['Підписані документи', stats.signed_documents, 'Згоди та документи'],
+    ['Направлення', stats.outgoing_referrals, 'Створено за період'],
+    ['Супервізії', stats.supervisions_completed, 'Завершено за період'],
+    ['Неявки', stats.appointments?.no_show || 0, 'За обраний період']
   ] : [];
 
   return (
@@ -405,6 +412,23 @@ function Dashboard({ api }) {
               </div>
             )}
           </section>
+
+          <div className="analytics-grid">
+            <section className="surface">
+              <div className="section-head"><div><div className="eyebrow">СТРУКТУРА ЗВЕРНЕНЬ</div><h2>Категорії пацієнтів</h2></div></div>
+              <div className="analytics-list">
+                {(stats.categories || []).map((x) => <div key={x.category}><span>{x.category}</span><strong>{x.n}</strong></div>)}
+                {!stats.categories?.length && <span className="muted">Даних ще немає.</span>}
+              </div>
+            </section>
+            <section className="surface">
+              <div className="section-head"><div><div className="eyebrow">НАПРАВЛЕННЯ В ЦЕНТР</div><h2>Звідки приходять пацієнти</h2></div></div>
+              <div className="analytics-list">
+                {(stats.referral_sources || []).map((x) => <div key={x.source}><span>{x.source}</span><strong>{x.n}</strong></div>)}
+                {!stats.referral_sources?.length && <span className="muted">Даних ще немає.</span>}
+              </div>
+            </section>
+          </div>
         </>
       )}
     </>
@@ -2895,6 +2919,9 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports api={api} role={user.role} />;
+    if (page === 'workload') return <Workload api={api} />;
+    if (page === 'supervisions') return <Supervisions api={api} role={user.role} user={user} />;
+    if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
     if (page === 'devices') return <Devices api={api} />;
     if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
     if (page === 'audit') return <Audit api={api} />;
