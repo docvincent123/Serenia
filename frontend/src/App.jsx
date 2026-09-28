@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
 
 const roleLabels = {
@@ -57,6 +57,9 @@ function AppIcon({ name, size = 18 }) {
     rooms: <><path d="M4 21V4a1 1 0 0 1 1-1h11v18"/><path d="M16 8h4v13M8 7h4M8 11h4M8 15h4"/><path d="M3 21h18"/></>,
     reports: <><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
     devices: <><rect x="3" y="4" width="13" height="10" rx="2"/><path d="M8 20h3M9.5 14v6"/><rect x="17" y="8" width="4" height="9" rx="1"/></>,
+    workload: <><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/><path d="M2 21h22"/></>,
+    supervisions: <><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 21a6 6 0 0 1 12 0M13 21a5 5 0 0 1 9 0"/><path d="M14 4l2 2 4-4"/></>,
+    archive: <><path d="M4 7h16v14H4z"/><path d="M3 3h18v4H3zM9 12h6"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H10v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V10h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3H14v.1a1.7 1.7 0 0 0 1.1 1.6 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.37.34.71.6 1 .28.3.67.46 1.1.46h.1V14h-.1a1.7 1.7 0 0 0-1.7 1z"/></>,
     audit: <><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></>
   };
@@ -126,14 +129,17 @@ function navFor(role) {
       ['team', 'Команда'],
       ['rooms', 'Кабінети'],
       ['reports', 'Звіти психологів'],
+      ['workload', 'Навантаження'],
+      ['supervisions', 'Супервізії'],
+      ['archive', 'Архів'],
       ['devices', 'Пристрої'],
       ['settings', 'Налаштування'],
       ['audit', 'Журнал дій']
     ];
   }
-  if (role === 'reception') return [['calendar', 'Календар'], ['patients', 'Пацієнти'], ['families', 'Сім’ї']];
-  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну']];
-  return [['dashboard', 'Огляд центру']];
+  if (role === 'reception') return [['calendar', 'Календар'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
+  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
+  return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
 }
 
 function defaultPage(role) {
@@ -307,7 +313,7 @@ function Login({ initialBase, onLogin }) {
             </>
           )}
 
-          <div className="login-foot">Версія 2.0 • by QureMed</div>
+          <div className="login-foot">Версія 2.1 • by QureMed</div>
         </form>
       </section>
     </div>
@@ -2539,7 +2545,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
-  const [health, setHealth] = useState({ online: true, version: '2.0.0' });
+  const [health, setHealth] = useState({ online: true, version: '2.1.0' });
   const navigation = navFor(user.role);
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
   const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
@@ -2570,7 +2576,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.0.0' });
+        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.1.0' });
       } catch {
         if (alive) setHealth({ online: false, version: '' });
       }
@@ -2618,7 +2624,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         <div className="sidebar-support">
           <div className="sidebar-support-head">
             <span className="support-dot" />
-            <div><strong>QureMed Support</strong><small>24/7 · SOLVIA 2.0</small></div>
+            <div><strong>QureMed Support</strong><small>24/7 · SOLVIA 2.1</small></div>
           </div>
           <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
         </div>
