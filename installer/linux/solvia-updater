@@ -68,7 +68,7 @@ fi
 
 if [[ ${1:-check} == check ]]; then
   echo "Update available: $installed -> $latest"
-  exit 10
+  exit 0
 fi
 
 [[ ${1:-} == apply ]] || {
