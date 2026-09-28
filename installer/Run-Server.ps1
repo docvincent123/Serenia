@@ -1,4 +1,4 @@
-﻿﻿param([Parameter(Mandatory=$true)][string]$InstallDir)
+﻿param([Parameter(Mandatory=$true)][string]$InstallDir)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Setup.Common.ps1')
 

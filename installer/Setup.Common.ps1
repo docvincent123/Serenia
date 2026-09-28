@@ -1,4 +1,4 @@
-﻿﻿# Shared helpers; compatible with Windows PowerShell 5.1.
+﻿# Shared helpers; compatible with Windows PowerShell 5.1.
 function ConvertTo-ProcessArgument([string]$Value) {
     '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }

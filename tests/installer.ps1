@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/../installer/Setup.Common.ps1"
 $testDir = Join-Path $env:TEMP ('solvia installer ' + [guid]::NewGuid())
 New-Item -ItemType Directory $testDir | Out-Null
@@ -6,6 +6,11 @@ try {
     Get-ChildItem "$PSScriptRoot/../installer/*.ps1" | ForEach-Object {
         $bytes = [IO.File]::ReadAllBytes($_.FullName)
         if ($bytes[0] -ne 239 -or $bytes[1] -ne 187 -or $bytes[2] -ne 191) { throw ('Missing UTF-8 BOM: ' + $_.Name) }
+        $bomCount = 0
+        for ($i = 0; $i -lt ($bytes.Length - 2); $i++) {
+            if ($bytes[$i] -eq 239 -and $bytes[$i+1] -eq 187 -and $bytes[$i+2] -eq 191) { $bomCount++ }
+        }
+        if ($bomCount -ne 1) { throw ('Expected exactly one UTF-8 BOM: ' + $_.Name) }
     }
     $config = Join-Path $testDir 'server.env'
     $settings = [ordered]@{ SOLVIA_DATABASE_URL='postgresql://user:password@localhost/solvia?sslmode=prefer'; SOLVIA_INSTALL_DIR='C:\Program Files\QureMed\SOLVIA'; SOLVIA_API_PORT='8765' }
@@ -42,3 +47,4 @@ try {
     } finally { $env:ProgramData = $oldData }
     Write-Host 'Installer regression tests passed on Windows PowerShell' $PSVersionTable.PSVersion
 } finally { Remove-Item $testDir -Recurse -Force }
+
