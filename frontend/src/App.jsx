@@ -1350,6 +1350,7 @@ function PatientCard({ api, role, patientId, back }) {
 
   const assessments = card.assessments || [];
   const completedAssessments = assessments.filter((a) => a.completed !== null && a.score !== null);
+  const activeCourse = (card.courses || []).find((x) => x.status === 'active');
 
   return (
     <>
@@ -1368,13 +1369,15 @@ function PatientCard({ api, role, patientId, back }) {
             </div>
           </div>
         </div>
-        {(isPsychologist || isAdmin) && (
+        {(isPsychologist || isAdmin || isReception) && (
           <div className="page-actions">
             {isPsychologist && <Button variant="secondary" onClick={assignAssessment}>Призначити анкету</Button>}
-            {isPsychologist && <Button onClick={openConsultation}>+ Консультація</Button>}
-            {isAdmin && <Button variant="secondary" onClick={openPatientEdit}>Редагувати профіль</Button>}
+            {isPsychologist && card.status === 'active' && <Button onClick={openConsultation}>+ Консультація</Button>}
+            {(isAdmin || isReception) && <Button variant="secondary" onClick={openPatientEdit}>Редагувати профіль</Button>}
             {isAdmin && <Button variant="secondary" onClick={() => setDialog('admin-note')}>+ Службова нотатка</Button>}
-            <Button variant="secondary" onClick={() => setDialog('discharge')}>Сформувати виписку</Button>
+            {(isAdmin || isPsychologist) && <Button variant="secondary" onClick={() => setDialog('discharge')}>Сформувати виписку</Button>}
+            {canManageCourse && activeCourse && <Button variant="secondary" onClick={() => setDialog('archive-course')}>Завершити курс</Button>}
+            {canManageCourse && !activeCourse && <Button onClick={() => setDialog('new-course')}>+ Новий курс</Button>}
           </div>
         )}
       </div>
@@ -1396,6 +1399,8 @@ function PatientCard({ api, role, patientId, back }) {
             <div><dt>Сім’я</dt><dd>{card.family || 'Не вказано'}</dd></div>
             <div><dt>Роль у сім’ї</dt><dd>{card.family_role || '—'}</dd></div>
             <div><dt>Адреса</dt><dd>{card.address || '—'}</dd></div>
+            <div><dt>Звідки звернувся</dt><dd>{card.referral_source || 'Не вказано'}</dd></div>
+            <div><dt>Деталі направлення</dt><dd>{card.referral_source_details || '—'}</dd></div>
             <div><dt>Стать</dt><dd>{card.sex || '—'}</dd></div>
             <div><dt>Статус</dt><dd>{card.status || 'active'}</dd></div>
           </dl>
@@ -1415,6 +1420,72 @@ function PatientCard({ api, role, patientId, back }) {
               <p>{isPsychologist ? 'Ви бачите записи лише цього пацієнта, який закріплений за вашим профілем.' : isAdmin ? 'Адміністратор має доступ до записів психологів у режимі перегляду. Зміни вносить тільки психолог.' : 'Реєстратура та керівник центру не отримують текст консультацій.'}</p>
             </div>
           </div>
+        </section>
+      </div>
+
+      <section className="surface">
+        <div className="section-head">
+          <div><div className="eyebrow">КУРСИ СУПРОВОДУ</div><h2>Історія курсів</h2></div>
+          <Badge tone={activeCourse ? 'forest' : 'stone'}>{activeCourse ? 'Активний курс' : 'Немає активного курсу'}</Badge>
+        </div>
+        {!card.courses?.length ? <Empty title="Курсів ще немає" text="Створіть перший курс супроводу." /> : (
+          <div className="course-list">
+            {card.courses.map((c) => (
+              <article className="course-card" key={c.id}>
+                <div>
+                  <div className="eyebrow">КУРС №{c.course_no}</div>
+                  <strong>{c.started_at} {c.ended_at ? '— ' + c.ended_at : '— дотепер'}</strong>
+                  <span>{c.psychologist}</span>
+                </div>
+                <div>
+                  <Badge tone={c.status === 'active' ? 'forest' : 'stone'}>{c.status}</Badge>
+                  {c.reason && <p><b>Причина:</b> {c.reason}</p>}
+                  {c.outcome && <p><b>Підсумок:</b> {c.outcome}</p>}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="patient-card-grid">
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">ДОКУМЕНТИ ТА ЗГОДИ</div><h2>Підписані документи</h2></div>
+            {canManageDocuments && <Button variant="secondary" onClick={() => openDocumentDialog()}>+ Документ</Button>}
+          </div>
+          {!card.documents?.length ? <Empty title="Документів ще немає" text="Додайте згоду, правила центру або відмову від послуги." /> : (
+            <div className="assessment-list">
+              {card.documents.map((d) => (
+                <div className="assessment-row" key={d.id}>
+                  <div><strong>{d.title}</strong><span>{d.signed_at?.replace('T',' ')} · {d.signed_by_name || 'без підписанта'}</span></div>
+                  <div className="row-actions"><Badge tone={d.status === 'signed' ? 'forest' : 'rose'}>{d.status}</Badge><Button variant="secondary" onClick={() => previewDocument(d.id)}>Перегляд / PDF</Button></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">НАПРАВЛЕННЯ</div><h2>Подальший маршрут</h2></div>
+            <Button variant="secondary" onClick={() => setDialog('referral')}>+ Направлення</Button>
+          </div>
+          {!card.referrals?.length ? <Empty title="Направлень немає" text="За потреби додайте направлення до іншого спеціаліста або служби." /> : (
+            <div className="assessment-list">
+              {card.referrals.map((x) => (
+                <div className="assessment-row referral-row" key={x.id}>
+                  <div><strong>{x.destination_type}{x.destination_name ? ' · ' + x.destination_name : ''}</strong><span>{x.reason || 'Без додаткового коментаря'} · {x.created?.replace('T',' ')}</span></div>
+                  <select value={x.status} onChange={(e) => setReferralStatus(x.id, e.target.value)}>
+                    <option value="recommended">Рекомендовано</option>
+                    <option value="sent">Направлено</option>
+                    <option value="completed">Виконано</option>
+                    <option value="cancelled">Скасовано</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
 
