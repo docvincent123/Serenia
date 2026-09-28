@@ -19,9 +19,9 @@ jobs:
     timeout-minutes: 40
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -58,7 +58,7 @@ jobs:
           npm run build
           if (!(Test-Path dist/index.html)) { throw 'React build did not produce index.html' }
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
           key: solvia-vcpkg-postgres-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
@@ -67,7 +67,7 @@ jobs:
         shell: pwsh
         run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-solvia -DVCPKG_OVERLAY_TRIPLETS="${{ github.workspace }}/cmake/triplets" -DBUILD_TESTING=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with:
           path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
           key: solvia-vcpkg-postgres-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
@@ -90,7 +90,7 @@ jobs:
         shell: pwsh
         run: ./tests/windows-ui.ps1 -BuildDir build/Release
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: SOLVIA-react-UI-check
@@ -125,13 +125,13 @@ jobs:
         timeout-minutes: 3
         run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-2.0.0-Windows-x64.exe
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SOLVIA-2.0.0-Windows-x64-portable
           path: out/SOLVIA/
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SOLVIA-2.0.0-Setup-EXE
           path: out/installer/*.exe
@@ -157,9 +157,9 @@ jobs:
           --health-retries 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -181,7 +181,7 @@ jobs:
 
 
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -216,7 +216,7 @@ jobs:
       - name: Archive Linux package
         run: tar -C out -czf out/SOLVIA-2.0.0-Linux-x64.tar.gz SOLVIA-Linux
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SOLVIA-2.0.0-Linux-x64-installer
           path: out/SOLVIA-2.0.0-Linux-x64.tar.gz
