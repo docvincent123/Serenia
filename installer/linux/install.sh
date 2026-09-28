@@ -87,8 +87,10 @@ runuser -u solvia --preserve-environment -- /opt/solvia/SolviaServer --init
 unset SOLVIA_ADMIN_PASSWORD SOLVIA_ADMIN_LOGIN SOLVIA_ADMIN_NAME confirmation
 printf '%s\n' "$ip" > /etc/solvia/address
 printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\n' "$SOLVIA_DATABASE_URL" "$ip" > /etc/solvia/server.env
-chmod 0640 /etc/solvia/server.env /etc/solvia/address
-chown root:solvia /etc/solvia/server.env /etc/solvia/address
+chmod 0640 /etc/solvia/server.env
+chmod 0644 /etc/solvia/address
+chown root:solvia /etc/solvia/server.env
+chown root:root /etc/solvia/address
 install -m 0755 solvia-admin /usr/local/sbin/solvia-admin
 install -m 0755 solvia-admin-app /usr/local/bin/solvia-admin-app
 install -m 0644 solvia-admin.desktop /usr/share/applications/solvia-admin.desktop
