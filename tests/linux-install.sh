@@ -9,6 +9,9 @@ sudo systemctl is-enabled solvia solvia-backup.timer solvia-certificate.timer
 sudo systemctl is-active solvia
 sudo solvia-admin health
 sudo test -x /usr/local/bin/solvia-admin-app
+sudo test -x /usr/local/sbin/solvia-updater
+sudo test -f /opt/solvia/VERSION
+test "$(sudo solvia-admin version)" = "2.0.0"
 sudo test -f /usr/share/applications/solvia-admin.desktop
 sudo desktop-file-validate /usr/share/applications/solvia-admin.desktop
 sudo test -f /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
