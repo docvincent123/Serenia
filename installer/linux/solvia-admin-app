@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 ADDRESS_FILE=/etc/solvia/address
-CA_FILE=/etc/solvia/ca/QureMed-Local-CA.crt
+CA_FILE=/usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
 
 if [[ ! -r "$ADDRESS_FILE" ]]; then
   echo "SOLVIA не налаштована: немає $ADDRESS_FILE" >&2
