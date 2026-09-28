@@ -86,6 +86,8 @@ chmod -R a+rX /opt/solvia/ui
 runuser -u solvia --preserve-environment -- /opt/solvia/SolviaServer --init
 unset SOLVIA_ADMIN_PASSWORD SOLVIA_ADMIN_LOGIN SOLVIA_ADMIN_NAME confirmation
 printf '%s\n' "$ip" > /etc/solvia/address
+install -d -m 0755 /usr/local/share/solvia
+install -m 0644 /etc/solvia/address /usr/local/share/solvia/address
 printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\n' "$SOLVIA_DATABASE_URL" "$ip" > /etc/solvia/server.env
 chmod 0640 /etc/solvia/server.env
 chmod 0644 /etc/solvia/address
