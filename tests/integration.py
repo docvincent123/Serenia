@@ -95,7 +95,7 @@ class Scenario(unittest.TestCase):
         self.assertIn('Android',other_row['platforms'])
         self.api(admin,'PATCH','/api/users/1',{'active':False},status=409)
         family=self.api(rec,'POST','/api/families',{'name':'Тестова сім’я'})['id']
-        p={'name':'Тестовий Пацієнт','phone':'+380000000000','dob':'1990-01-01','category':'Ветеран/ветеранка','psychologist_id':3,'family_id':family,'family_role':'Військовий'}
+        p={'name':'Тестовий Пацієнт','phone':'+380000000000','dob':'1990-01-01','category':'Ветеран/ветеранка','psychologist_id':3,'family_id':family,'family_role':'Військовий','referral_source':'Військова частина','referral_source_details':'Тестовий підрозділ','course_reason':'Первинне звернення'}
         created_patient=self.api(rec,'POST','/api/patients',p)
         pid=created_patient['id']
         self.assertEqual(len(created_patient['patient_no']),5)
@@ -171,9 +171,59 @@ class Scenario(unittest.TestCase):
         self.assertEqual(reports[0]['summary'],report['summary'])
         self.assertEqual(reports[0]['psychologist'],'Psychologist')
         self.api(rec,'GET',f'/api/shift-reports?from={day}&to={day}',status=403)
+
+        patient_detail=self.api(admin,'GET',f'/api/patients/{pid}')
+        self.assertEqual(patient_detail['referral_source'],'Військова частина')
+        self.assertEqual(len(patient_detail['courses']),1)
+        self.assertEqual(patient_detail['courses'][0]['status'],'active')
+
+        document=self.api(rec,'POST',f'/api/patients/{pid}/documents',{
+            'document_type':'informed_consent',
+            'title':'Тестова інформована згода',
+            'content':'Тестовий текст документа',
+            'status':'signed',
+            'signed_by_name':'Тестовий Пацієнт',
+            'signature_data':'data:image/png;base64,AAAA'
+        })
+        docs=self.api(rec,'GET',f'/api/patients/{pid}/documents')
+        self.assertEqual(docs[0]['id'],document['id'])
+        self.assertEqual(docs[0]['status'],'signed')
+
+        referral=self.api(rec,'POST',f'/api/patients/{pid}/referrals',{
+            'destination_type':'Психіатр',
+            'destination_name':'Тестовий спеціаліст',
+            'reason':'Додаткова консультація'
+        })
+        self.api(rec,'PATCH',f"/api/referrals/{referral['id']}",{'status':'sent'})
+        referrals=self.api(psy,'GET',f'/api/patients/{pid}/referrals')
+        self.assertEqual(referrals[0]['status'],'sent')
+
+        workload=self.api(admin,'GET','/api/workload')
+        self.assertTrue(any(x['name']=='Psychologist' and x['active_patients'] >= 1 for x in workload['items']))
+        self.api(rec,'GET','/api/workload',status=403)
+
+        supervision=self.api(director,'POST','/api/supervisions',{
+            'psychologist_id':3,
+            'scheduled_at':dt.date.today().isoformat()+'T18:00',
+            'duration_minutes':60,
+            'topic':'Тестова супервізія'
+        })
+        self.api(psy,'PATCH',f"/api/supervisions/{supervision['id']}",{'case_summary':'Деідентифікований опис випадку'})
+        self.api(director,'PATCH',f"/api/supervisions/{supervision['id']}",{
+            'case_summary':'Деідентифікований опис випадку',
+            'recommendations':'Рекомендації супервізора',
+            'status':'completed'
+        })
+        supervisions=self.api(director,'GET','/api/supervisions')
+        self.assertTrue(any(x['id']==supervision['id'] and x['status']=='completed' for x in supervisions))
+
         stats=self.api(director,'GET','/api/stats')
         self.assertEqual(stats['consultations'],1)
         self.assertEqual(stats['total_patients'],2)
+        self.assertGreaterEqual(stats['active_courses'],2)
+        self.assertGreaterEqual(stats['signed_documents'],1)
+        self.assertGreaterEqual(stats['outgoing_referrals'],1)
+        self.assertGreaterEqual(stats['supervisions_completed'],1)
         self.assertNotIn('ПРИВАТНА',json.dumps(stats,ensure_ascii=False))
         self.api(rec,'PATCH',f'/api/appointments/{aid}',{'status':'cancelled'},status=409)
         link=self.api(psy,'POST','/api/assessments',{'patient_id':pid})['link']
@@ -199,6 +249,24 @@ class Scenario(unittest.TestCase):
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             results=list(pool.map(lambda _: self.call('POST','/api/appointments',parallel_booking,self.tokens[rec]),range(2)))
         self.assertEqual(sorted(x[0] for x in results),[200,409])
+        current=self.api(admin,'GET',f'/api/patients/{pid}')
+        active_course=next(x for x in current['courses'] if x['status']=='active')
+        self.api(rec,'PATCH',f"/api/courses/{active_course['id']}",{
+            'status':'archived',
+            'ended_at':dt.date.today().isoformat(),
+            'outcome':'Курс завершено'
+        })
+        archived=self.api(rec,'GET','/api/patients?status=archived')
+        self.assertTrue(any(x['id']==pid for x in archived))
+        new_course=self.api(rec,'POST',f'/api/patients/{pid}/courses',{
+            'started_at':dt.date.today().isoformat(),
+            'reason':'Повторне звернення'
+        })
+        self.assertGreater(new_course['course_no'],1)
+        reopened=self.api(admin,'GET',f'/api/patients/{pid}')
+        self.assertEqual(reopened['status'],'active')
+        self.assertEqual(len(reopened['courses']),2)
+
         self.api(admin,'DELETE',f'/api/users/{other}/sessions',{})
         self.api('other','GET','/api/me',status=401)
         closed=self.api(admin,'POST','/api/shift-day',{'action':'close'})
