@@ -1249,7 +1249,7 @@ function PatientCard({ api, role, patientId, back }) {
       document_type: type,
       title: template.title,
       content: template.content,
-      status: type === 'service_refusal' ? 'refused' : 'signed',
+      status: 'signed',
       signed_by_name: card?.name || '',
       signature_data: ''
     });
@@ -1263,7 +1263,7 @@ function PatientCard({ api, role, patientId, back }) {
       document_type: type,
       title: template.title,
       content: template.content,
-      status: type === 'service_refusal' ? 'refused' : 'signed',
+      status: 'signed',
       signature_data: ''
     }));
   }
@@ -1829,12 +1829,8 @@ function PatientCard({ api, role, patientId, back }) {
                 <option value="">Не вказано</option><option value="female">Жіноча</option><option value="male">Чоловіча</option><option value="other">Інше</option>
               </select>
             </Field>
-            <Field label="Статус">
-              <select value={patientEdit.status} onChange={(e) => setPatientEdit({ ...patientEdit, status: e.target.value })}>
-                <option value="active">Активний</option>
-                <option value="completed">Супровід завершено</option>
-                <option value="archived">Архів</option>
-              </select>
+            <Field label="Статус" hint="Статус змінюється через «Завершити курс» або «Новий курс».">
+              <input value={patientEdit.status} disabled />
             </Field>
             <Field label="Адреса" full><input value={patientEdit.address} onChange={(e) => setPatientEdit({ ...patientEdit, address: e.target.value })} /></Field>
             <Field label="Звідки звернувся / направлений">
