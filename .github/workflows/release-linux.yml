@@ -1,0 +1,121 @@
+name: SOLVIA Linux Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, for example 2.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: solvia-linux-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid release version: $version"; exit 1; }
+          source_version=$(sed -n 's/^project(Solvia VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
+          [[ "$version" == "$source_version" ]] || {
+            echo "Release version $version does not match CMake version $source_version"
+            exit 1
+          }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Bootstrap vcpkg
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git /tmp/vcpkg
+          /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Build SOLVIA server
+        run: |
+          cmake -S . -B build-server \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=/tmp/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DBUILD_TESTING=OFF
+          cmake --build build-server --target SolviaServer --parallel 2
+
+      - name: Build Linux Admin interface
+        run: |
+          npm --prefix frontend install --no-audit --no-fund
+          npm --prefix frontend run build
+
+      - name: Stage Linux installer
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          mkdir -p out/SOLVIA-Linux/ui out/SOLVIA-Linux/licenses
+          cp build-server/SolviaServer out/SOLVIA-Linux/
+          cp -r frontend/dist/. out/SOLVIA-Linux/ui/
+          cp installer/linux/* out/SOLVIA-Linux/
+          cp docs/LINUX.md out/SOLVIA-Linux/
+          printf '%s\n' "$version" > out/SOLVIA-Linux/VERSION
+          find build-server/vcpkg_installed/x64-linux/share -name copyright -exec sh -c 'cp "$1" "out/SOLVIA-Linux/licenses/$(basename "$(dirname "$1")").txt"' _ {} \;
+          chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
+          bash -n out/SOLVIA-Linux/install.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
+          cd out/SOLVIA-Linux
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+
+      - name: Verify clean Linux install and upgrade path
+        timeout-minutes: 10
+        run: bash tests/linux-install.sh out/SOLVIA-Linux
+
+      - name: Archive release
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          archive="out/SOLVIA-$version-Linux-x64.tar.gz"
+          tar -C out -czf "$archive" SOLVIA-Linux
+          sha256sum "$archive" > "$archive.sha256"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          tag="${{ steps.version.outputs.tag }}"
+          archive="out/SOLVIA-$version-Linux-x64.tar.gz"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if ! git rev-parse "$tag" >/dev/null 2>&1; then
+              gh api "repos/${{ github.repository }}/git/refs" \
+                --method POST \
+                -f ref="refs/tags/$tag" \
+                -f sha="${GITHUB_SHA}"
+            fi
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$archive" "$archive.sha256" --clobber
+          else
+            gh release create "$tag" "$archive" "$archive.sha256" \
+              --title "SOLVIA $version" \
+              --generate-notes
+          fi
