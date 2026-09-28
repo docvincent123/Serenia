@@ -198,8 +198,12 @@ jobs:
           cp -r frontend/dist/. out/SOLVIA-Linux/ui/
           cp installer/linux/* out/SOLVIA-Linux/
           cp docs/LINUX.md out/SOLVIA-Linux/
+          version=$(sed -n 's/^project(Solvia VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
+          test -n "$version"
+          printf '%s\n' "$version" > out/SOLVIA-Linux/VERSION
           find build-server/vcpkg_installed/x64-linux/share -name copyright -exec sh -c 'cp "$1" "out/SOLVIA-Linux/licenses/$(basename "$(dirname "$1")").txt"' _ {} \;
-          chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app
+          chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
+          bash -n out/SOLVIA-Linux/install.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
           cd out/SOLVIA-Linux
           find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 
