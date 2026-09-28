@@ -9,8 +9,11 @@ record_event() {
   local action=${1:-unknown} path=${2:-} status=${3:-success} details=${4:-}
   runuser -u solvia -- psql -X "$SOLVIA_DATABASE_URL" -v ON_ERROR_STOP=1 \
     -v action="$action" -v path="$path" -v status="$status" -v details="$details" \
-    -c "INSERT INTO backup_events(user_id,action,path,status,details,created) VALUES(NULL, :'action', :'path', :'status', :'details', to_char(clock_timestamp(),'YYYY-MM-DD"T"HH24:MI:SSOF'))" \
-    >/dev/null 2>&1 || true
+    >/dev/null 2>&1 <<'SQL' || true
+INSERT INTO backup_events(user_id,action,path,status,details,created)
+VALUES(NULL, :'action', :'path', :'status', :'details',
+       to_char(clock_timestamp(),'YYYY-MM-DD"T"HH24:MI:SSOF'));
+SQL
 }
 
 case ${1:-help} in
