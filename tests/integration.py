@@ -281,6 +281,17 @@ class Scenario(unittest.TestCase):
         self.assertEqual(reopened['status'],'active')
         self.assertEqual(len(reopened['courses']),2)
 
+        # Password reset and deactivation must revoke sessions permanently.
+        code,old_login=self.call('POST','/api/login',{'login':'managed','password':'managed-test-password'})
+        self.assertEqual(code,200,old_login)
+        self.api(admin,'PATCH',f'/api/users/{managed}',{'password':'changed-test-password'})
+        self.assertEqual(self.call('GET','/api/me',token=old_login['token'])[0],401)
+        code,new_login=self.call('POST','/api/login',{'login':'managed','password':'changed-test-password'})
+        self.assertEqual(code,200,new_login)
+        self.api(admin,'PATCH',f'/api/users/{managed}',{'active':False})
+        self.api(admin,'PATCH',f'/api/users/{managed}',{'active':True})
+        self.assertEqual(self.call('GET','/api/me',token=new_login['token'])[0],401)
+
         self.api(admin,'DELETE',f'/api/users/{other}/sessions',{})
         self.api('other','GET','/api/me',status=401)
         closed=self.api(admin,'POST','/api/shift-day',{'action':'close'})

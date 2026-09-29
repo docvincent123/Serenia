@@ -3341,7 +3341,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
                 <div><strong>{connectionKind}</strong><small>{health.online ? `SOLVIA ${health.version}` : 'Немає зв’язку'}</small></div>
               </div>
             </div>
-            <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />
+            {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           </div>
         </>}
         <div className="workspace-inner">
@@ -3449,5 +3449,6 @@ export default function App() {
   if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} />;
   return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
 }
+
 
 
