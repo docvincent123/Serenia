@@ -44,6 +44,16 @@ with client.open(request) as r:
     assert int(system['counts']['users']) >= 1
 PY
 sudo solvia-admin backup
+# Two backups at the same timestamp must preserve both archives.
+clock_bin=$(mktemp -d)
+printf '#!/bin/sh\nprintf "20260101T000000\\n"\n' > "$clock_bin/date"
+chmod +x "$clock_bin/date"
+backup_one=$(sudo env PATH="$clock_bin:$PATH" /usr/local/sbin/solvia-admin backup)
+backup_two=$(sudo env PATH="$clock_bin:$PATH" /usr/local/sbin/solvia-admin backup)
+test "$backup_one" != "$backup_two"
+sudo test -s "$backup_one"
+sudo test -s "$backup_two"
+rm -rf "$clock_bin"
 sudo solvia-admin db-status
 sudo solvia-admin doctor
 backup_events=$(sudo -u solvia psql -X -p 55432 -d solvia -Atc "SELECT count(*) FROM backup_events WHERE action='backup' AND status='success'")
@@ -60,3 +70,4 @@ sudo solvia-admin restart
 # Failed TLS verification must never be bypassed; certificate contains the LAN SAN.
 sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_ip "$SOLVIA_SERVER_IP" /etc/solvia/tls/server.crt
 printf 'Linux install, HTTPS login, backup, restore and upgrade passed\n'
+

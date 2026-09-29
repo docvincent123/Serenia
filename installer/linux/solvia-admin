@@ -34,7 +34,7 @@ case ${1:-help} in
   update) /usr/local/sbin/solvia-updater apply ;;
   backup)
     exec 7>/run/solvia-admin/backup.lock; flock 7
-    target="/var/backups/solvia/solvia-$(date -u +%Y%m%dT%H%M%S)-$.dump"
+    target="/var/backups/solvia/solvia-$(date -u +%Y%m%dT%H%M%S)-$$.dump"
     trap 'rm -f "${target}.partial"' EXIT
     if ! runuser -u solvia -- /usr/lib/postgresql/16/bin/pg_dump -Fc "$SOLVIA_DATABASE_URL" > "$target.partial"; then
       record_event backup "$target" failed "pg_dump failed"
@@ -88,3 +88,4 @@ SQL
     ;;
   *) echo 'sudo solvia-admin {health|status|logs|restart|version|check-update|update|backup|backups|db-status|doctor|restore FILE}' ;;
 esac
+

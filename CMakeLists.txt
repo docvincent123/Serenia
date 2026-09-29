@@ -11,6 +11,8 @@ find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/server/schema.sql" SOLVIA_SCHEMA)
+# Keep each raw literal below MSVC C2026 limits as the schema grows.
+string(REPLACE "\n" "\n)SOLVIA\"\nR\"SOLVIA(" SOLVIA_SCHEMA "${SOLVIA_SCHEMA}")
 configure_file(src/server/schema.h.in generated/schema.h @ONLY)
 
 add_executable(SolviaServer src/server/main.cpp)
@@ -92,4 +94,5 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration.py $<TARGET_FILE:SolviaServer>
   )
 endif()
+
 

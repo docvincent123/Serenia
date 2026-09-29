@@ -108,6 +108,19 @@ class Scenario(unittest.TestCase):
         self.api(director,'GET','/api/patients',status=403)
         self.api(director,'GET',f'/api/patients/{pid}',status=403)
         self.api(director,'GET','/api/appointments',status=403)
+        # Search must enforce the same privacy boundary as the patient card.
+        query='/api/search?q='+urllib.parse.quote('Ветеран')
+        self.api(director,'GET',query,status=403)
+        self.assertEqual({x['id'] for x in self.api(psy,'GET',query)['patients']},{pid})
+        self.assertEqual({x['id'] for x in self.api('other','GET',query)['patients']},{second})
+        self.assertEqual({x['id'] for x in self.api(rec,'GET',query)['patients']},{pid,second})
+        self.assertEqual(self.api(psy,'GET','/api/search?q='+urllib.parse.quote('Тестова'))['families'],[])
+        # Editing cannot assign a patient to a non-psychologist or corrupt demographics.
+        for bad in ({'psychologist_id':1},{'dob':'2999-01-01'},{'phone':'abc'},{'category':'invalid'}):
+            self.api(rec,'PATCH',f'/api/patients/{pid}',bad,status=400)
+        self.api(rec,'PATCH',f'/api/patients/{second}',{'psychologist_id':3})
+        self.assertEqual(self.api(rec,'GET',f'/api/patients/{second}')['courses'][0]['psychologist_id'],3)
+        self.api(rec,'PATCH',f'/api/patients/{second}',{'psychologist_id':other})
         self.api(rec,'GET','/api/stats',status=403)
         self.api(rec,'POST','/api/users',{'name':'bad'},status=403)
         day=(dt.date.today()-dt.timedelta(days=1)).isoformat()
@@ -149,6 +162,7 @@ class Scenario(unittest.TestCase):
         self.assertTrue(any(x['id']==pid for x in search['patients']))
         rid=self.api(admin,'POST','/api/rooms',{'name':'Тестова кімната','code':'T1','type':'family','capacity':4,'description':'Тест'})['id']
         self.api(admin,'PATCH',f'/api/rooms/{rid}',{'active':False})
+        self.api(rec,'POST','/api/appointments',{**booking,'room_id':rid,'start':day+'T18:00','end':day+'T19:00'},status=400)
         self.api(admin,'DELETE',f'/api/rooms/{rid}',{})
         discharge=self.api(psy,'POST','/api/discharges',{'patient_id':pid,'date_from':day,'date_to':dt.date.today().isoformat(),'summary':'Підсумок','dynamics':'Динаміка','recommendations':'Рекомендації','followup':'Контроль'})
         self.assertEqual(discharge['patient']['id'],pid)
@@ -276,10 +290,20 @@ class Scenario(unittest.TestCase):
         self.api(rec,'GET','/api/me',status=401)
         self.api(director,'GET','/api/me',status=401)
 
+        # Simulate both a pre-course patient and a date written by the initial 2.1 migration.
+        subprocess.run(['psql',self.database,'-X','-v','ON_ERROR_STOP=1','-c',
+            f"DELETE FROM patient_courses WHERE patient_id={third}; "
+            f"UPDATE patient_courses SET started_at=started_at || 'T12:34:56' WHERE id={new_course['id']};"],
+            check=True,stdout=subprocess.DEVNULL)
         # Restart: data persist, while closed-shift staff sessions remain terminated.
         self.proc.terminate(); self.proc.wait(timeout=10); self.start()
         admin_detail=self.api(admin,'GET',f'/api/patients/{pid}')
         self.assertEqual(len(admin_detail['consultations']),2)
+        self.assertEqual(next(c for c in admin_detail['courses'] if c['id']==new_course['id'])['started_at'],dt.date.today().isoformat())
+        migrated=self.api(admin,'GET',f'/api/patients/{third}')['courses'][0]
+        self.assertEqual(migrated['started_at'],dt.date.today().isoformat())
+        self.api(admin,'PATCH',f"/api/courses/{migrated['id']}",{'status':'completed','ended_at':dt.date.today().isoformat()})
+
         self.assertEqual(self.api(admin,'GET','/api/stats')['repeat_visits'],1)
 
         _,psy_auth=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist'],'platform':'Android','device_id':'ci-psych','device_name':'CI Tablet'})
@@ -287,8 +311,14 @@ class Scenario(unittest.TestCase):
         self.api(psy,'GET','/api/patients',status=423)
         self.api(admin,'POST','/api/shift-day',{'action':'open'})
         self.assertEqual(len(self.api(psy,'GET',f'/api/patients/{pid}')['consultations']),2)
+        # Successful logins behind one reverse proxy must not exhaust the failure quota.
+        for _ in range(12):
+            code,login=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist']})
+            self.assertEqual(code,200,login)
+            self.call('POST','/api/logout',{},login['token'])
         self.api(psy,'POST','/api/logout',{})
         self.api(psy,'GET','/api/me',status=401)
 
 if __name__=='__main__': unittest.main()
+
 

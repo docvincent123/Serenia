@@ -361,7 +361,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_courses_one_active
 CREATE INDEX IF NOT EXISTS idx_patient_courses_patient ON patient_courses(patient_id,id DESC);
 
 INSERT INTO patient_courses(patient_id,course_no,psychologist_id,started_at,ended_at,status,reason,outcome,created_by,created)
-SELECT p.id,1,p.psychologist_id,p.created,NULL,
+SELECT p.id,1,p.psychologist_id,substr(p.created,1,10),NULL,
        CASE WHEN p.status='active' THEN 'active'
             WHEN p.status='archived' THEN 'archived'
             ELSE 'completed' END,
@@ -412,3 +412,8 @@ CREATE TABLE IF NOT EXISTS supervisions(
 );
 CREATE INDEX IF NOT EXISTS idx_supervisions_psychologist_date ON supervisions(psychologist_id,scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_supervisions_supervisor_date ON supervisions(supervisor_id,scheduled_at);
+
+
+-- Repair timestamp dates written by the original 2.1 migration.
+UPDATE patient_courses SET started_at=substr(started_at,1,10)
+WHERE started_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T';
