@@ -71,11 +71,6 @@ class MainActivity : Activity() {
         } else if (server.isBlank()) setupScreen() else loginScreen()
     }
 
-    override fun onDestroy() {
-        io.shutdownNow()
-        super.onDestroy()
-    }
-
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun rounded(color: Int, radius: Int = 16, stroke: Int? = null): GradientDrawable =

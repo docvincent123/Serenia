@@ -100,7 +100,7 @@ Updater читає останній GitHub Release SOLVIA, завантажує 
 
 У меню програм для **SOLVIA Admin** також є дія **«Оновити SOLVIA»**. Вона відкриває термінал і запускає той самий updater з `sudo`.
 
-Для публікації нової серверної версії використовується GitHub Actions workflow **SOLVIA Linux Release**. Версія має збігатися з `project(Solvia VERSION ...)` у CMake. Workflow збирає пакет на чистій Ubuntu, проходить install/backup/restore/upgrade test, створює GitHub Release і додає `.tar.gz` та `.sha256`.
+Для підготовки випуску використовується GitHub Actions workflow **SOLVIA Product Release**. Версія має збігатися з `project(Solvia VERSION ...)` у CMake. Після перевірок Windows, Linux і Android workflow створює чернетку GitHub Release з установниками та `.sha256`; публікація виконується окремо. Для Android потрібен постійний ключ підпису. Докладніше: [RELEASES.md](RELEASES.md).
 
 Ручне повторне `sudo bash install.sh` залишається запасним способом оновлення. Перед міграціями інсталятор створює `pre-update-*.dump`. Попередній виконуваний файл і UI залишаються під `/opt/solvia` з суфіксом `.previous`; автоматичного відкочування змін схеми немає.
 
