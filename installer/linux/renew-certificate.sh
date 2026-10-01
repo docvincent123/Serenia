@@ -13,7 +13,7 @@ if [[ ! -f $ca/ca.key ]]; then
     -subj '/CN=QureMed SOLVIA Local CA' -addext 'basicConstraints=critical,CA:TRUE,pathlen:0' \
     -addext 'keyUsage=critical,keyCertSign,cRLSign' -keyout "$ca/ca.key" -out "$ca/QureMed-Local-CA.crt"
 fi
-if [[ ${1:-} != --force && -f $tls/server.crt ]] && openssl x509 -checkend 2592000 -noout -in "$tls/server.crt" && openssl x509 -checkip "$ip" -noout -in "$tls/server.crt" && openssl x509 -checkhost localhost -noout -in "$tls/server.crt"; then exit 0; fi
+if [[ ${1:-} != --force && -f $tls/server.crt ]] && openssl x509 -checkend 2592000 -noout -in "$tls/server.crt" && openssl verify -CAfile "$ca/QureMed-Local-CA.crt" -verify_ip "$ip" "$tls/server.crt" && openssl verify -CAfile "$ca/QureMed-Local-CA.crt" -verify_hostname localhost "$tls/server.crt"; then exit 0; fi
 work=$(mktemp -d "$tls/.renew.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 openssl req -new -newkey rsa:2048 -nodes -subj '/CN=SOLVIA Server' -keyout "$work/server.key" -out "$work/server.csr"
