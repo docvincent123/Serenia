@@ -62,7 +62,7 @@ old_ip=''
 ip=$(python3 "$package/network-address.py" "${SOLVIA_SERVER_IP:-$old_ip}")
 echo "Визначено LAN-адресу SOLVIA: $ip"
 # Stop writers before the update snapshot and migrations.
-systemctl stop solvia.service 2>/dev/null || true
+systemctl stop solvia-network.timer solvia-network-refresh.service solvia-network.service solvia-certificate.timer solvia-certificate.service solvia.service 2>/dev/null || true
 # A failed update never deletes or silently replaces data.
 if [[ $count != 0 ]]; then
   snapshot="/var/backups/solvia/pre-update-$(date -u +%Y%m%dT%H%M%S).dump"

@@ -71,6 +71,9 @@ test "$(cat /usr/local/share/solvia/address)" = "$SOLVIA_SERVER_IP"
 sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_ip "$SOLVIA_SERVER_IP" /etc/solvia/tls/server.crt
 sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_hostname localhost /etc/solvia/tls/server.crt
 curl --fail --silent --noproxy '*' --cacert /tmp/solvia-ci-ca.crt https://localhost:8443/api/health
+sudo systemctl stop solvia
+sudo /opt/solvia/sync-network.sh
+sudo systemctl is-active solvia
 cert_before=$(sudo sha256sum /etc/solvia/tls/server.crt)
 sudo /opt/solvia/sync-network.sh
 cert_after=$(sudo sha256sum /etc/solvia/tls/server.crt)

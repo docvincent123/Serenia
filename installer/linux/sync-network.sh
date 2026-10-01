@@ -19,6 +19,10 @@ before=$(sha256sum /etc/solvia/tls/server.crt 2>/dev/null || true)
 /opt/solvia/renew-certificate.sh --no-restart
 after=$(sha256sum /etc/solvia/tls/server.crt)
 flock -u 6
-if [[ ${1:-} != --no-restart && $before != "$after" ]]; then
-  systemctl try-restart solvia.service
+if [[ ${1:-} != --no-restart ]] && systemctl is-enabled --quiet solvia.service; then
+  if [[ $before != "$after" ]]; then
+    systemctl restart solvia.service
+  elif ! systemctl is-active --quiet solvia.service; then
+    systemctl start solvia.service
+  fi
 fi
