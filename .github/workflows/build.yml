@@ -216,7 +216,7 @@ jobs:
       - name: Linux diagnostics
         if: failure()
         run: |
-          sudo journalctl -u solvia -u postgresql@16-solvia -n 100 --no-pager || true
+          sudo journalctl -u solvia -u solvia-network -u solvia-network-refresh -u postgresql@16-solvia -n 100 --no-pager || true
           sudo pg_lsclusters || true
 
       - name: Archive Linux package

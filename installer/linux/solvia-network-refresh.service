@@ -1,4 +1,5 @@
 [Unit]
+StartLimitIntervalSec=0
 Description=Refresh SOLVIA address after DHCP changes
 After=network-online.target
 
