@@ -530,8 +530,8 @@ function Calendar({ api, role, openPatient }) {
     setBooking({
       psychologist_id: meta.psychologists?.[0]?.id || '',
       room_id: meta.rooms?.[0]?.id || '',
-      start: '09:00',
-      end: '10:00',
+      start: meta.workflow?.opening_time || '08:00',
+      end: (() => { const [h,m]=(meta.workflow?.opening_time || '08:00').split(':').map(Number);const n=h*60+m+(meta.workflow?.default_duration_minutes || 60);return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); })(),
       kind: 'individual',
       status: 'scheduled',
       note: '',
@@ -810,7 +810,8 @@ function Calendar({ api, role, openPatient }) {
                   psychologist_id: Number(slotForm.psychologist_id),
                   room_id: Number(slotForm.room_id),
                   start: slot,
-                  end: `${String(Number(slot.slice(0, 2)) + 1).padStart(2, '0')}:00`,
+                  end: (() => { const [h,m]=slot.split(':').map(Number); const n=h*60+m+(meta.workflow?.default_duration_minutes || 60); return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); })(),
+                  status: 'scheduled', note: '',
                   kind: 'individual',
                   patient_ids: []
                 });
@@ -2444,7 +2445,7 @@ function ServerConsole({ api, user, onLogout, apiBase }) {
       </header>
       {error && <div className="alert error">{error}</div>}
       <div className="server-status-grid">
-        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.0</p></article>
+        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.2</p></article>
         <article className="stat-card"><strong>{shift?.open ? 'OPEN' : 'CLOSED'}</strong><h3>Робоча зміна</h3><p>{shift?.shift_date || localDate()}</p></article>
         <article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Онлайн пристроїв</h3><p>{sessions.length} активних сесій</p></article>
         <article className="stat-card"><strong>{reminders.length}</strong><h3>Найближчих записів</h3><p>Нагадування психологам і адміну</p></article>
@@ -2453,6 +2454,8 @@ function ServerConsole({ api, user, onLogout, apiBase }) {
         <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Сервер центру</h2></div><Badge tone="forest">Local</Badge></div>
         <ServerMaintenance api={api} apiBase={apiBase} />
       </section>
+      <WorkflowSettings api={api} />
+      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />
       <section className="surface">
         <div className="section-head"><div><div className="eyebrow">ПІДКЛЮЧЕННЯ</div><h2>Телефони, планшети та ПК</h2></div><Badge tone="stone">{sessions.length}</Badge></div>
         <div className="device-list">
@@ -2466,6 +2469,77 @@ function ServerConsole({ api, user, onLogout, apiBase }) {
       </section>
     </div>
   );
+}
+
+function WorkflowSettings({ api }) {
+  const [form, setForm] = useState(null);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api('GET', '/api/settings/workflow').then(setForm).catch(e => setMessage(e.message)); }, []);
+  async function save(e) {
+    e.preventDefault(); setBusy(true); setMessage('');
+    try { setForm(await api('PATCH', '/api/settings/workflow', form)); setMessage('Правила роботи збережено. Вони застосовуються до нового запису на всіх пристроях.'); }
+    catch (e) { setMessage(e.message); } finally { setBusy(false); }
+  }
+  return <section className="surface settings-panel">
+    <h2>Розклад і безпека</h2>
+    {message && <div className="alert info" role="status">{message}</div>}
+    {!form ? <Spinner /> : <form className="form-grid" onSubmit={save}>
+      <Field label="Початок роботи"><input type="time" value={form.opening_time} onChange={e => setForm({...form, opening_time:e.target.value})} required /></Field>
+      <Field label="Завершення роботи"><input type="time" value={form.closing_time} onChange={e => setForm({...form, closing_time:e.target.value})} required /></Field>
+      <div className="field full"><span>Робочі дні</span><div className="weekday-options">{['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].map((label,i) => <label key={label}><input type="checkbox" checked={form.working_days.includes(String(i+1))} onChange={e => setForm({...form,working_days:e.target.checked ? [...form.working_days,String(i+1)].sort().join('') : form.working_days.replace(String(i+1),'')})} /> {label}</label>)}</div></div>
+      <Field label="Крок вільних слотів"><select value={form.slot_step_minutes} onChange={e => setForm({...form,slot_step_minutes:Number(e.target.value)})}>{[15,30,60].map(n => <option key={n} value={n}>{n} хв</option>)}</select></Field>
+      <Field label="Стандартна тривалість, хв"><input type="number" min="15" max="240" value={form.default_duration_minutes} onChange={e => setForm({...form,default_duration_minutes:Number(e.target.value)})} required /></Field>
+      <Field label="Тривалість сесії входу, год" hint="Скорочення ліміту також скорочує чинні сесії."><input type="number" min="1" max="24" value={form.session_hours} onChange={e => setForm({...form,session_hours:Number(e.target.value)})} required /></Field>
+      <div className="form-actions full-span"><Button disabled={busy}>{busy ? 'Зберігаємо…' : 'Зберегти правила'}</Button></div>
+    </form>}
+  </section>;
+}
+
+function openProductUpdates() {
+  if (window.chrome?.webview) window.chrome.webview.postMessage('product-updates');
+  else window.open('https://github.com/docvincent123/Serenia/releases', '_blank', 'noopener,noreferrer');
+}
+
+function AccountSettings({ api, apiBase, onLogout }) {
+  const [prefs, setPrefs] = useState(() => { try { return JSON.parse(localStorage.getItem('solvia_preferences') || '{}'); } catch { return {}; } });
+  const [password, setPassword] = useState({current_password:'',new_password:'',confirm:''});
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [health, setHealth] = useState(null);
+  useEffect(() => { api('GET','/api/health').then(setHealth).catch(e=>setMessage(e.message)); }, []);
+  function change(key,value) {
+    const next={...prefs,[key]:value}; setPrefs(next);
+    localStorage.setItem('solvia_preferences',JSON.stringify(next));
+    document.documentElement.dataset.reducedMotion=next.reducedMotion ? 'true':'false';
+    document.documentElement.dataset.compact=next.compact ? 'true':'false';
+  }
+  async function changePassword(e) {
+    e.preventDefault(); setMessage('');
+    if(password.new_password!==password.confirm){setMessage('Нові паролі не збігаються.');return;}
+    setBusy(true);
+    try { await api('POST','/api/account/password',{current_password:password.current_password,new_password:password.new_password}); await onLogout(); }
+    catch(e){setMessage(e.message);}finally{setBusy(false);}
+  }
+  return <>
+    <PageHead eyebrow="ОСОБИСТИЙ ПРОСТІР" title="Мої налаштування" subtitle="Налаштування цього пристрою та захист облікового запису." />
+    {message && <div className="alert error" role="alert">{message}</div>}
+    <section className="surface settings-panel"><h2>Інтерфейс</h2><div className="weekday-options">
+      <label><input type="checkbox" checked={!!prefs.reducedMotion} onChange={e=>change('reducedMotion',e.target.checked)} /> Зменшити анімації</label>
+      <label><input type="checkbox" checked={!!prefs.compact} onChange={e=>change('compact',e.target.checked)} /> Компактні списки</label>
+    </div></section>
+    <section className="surface settings-panel"><h2>Змінити пароль</h2><p>Після зміни потрібно увійти з новим паролем на всіх пристроях.</p><form className="form-grid" onSubmit={changePassword}>
+      <Field label="Поточний пароль"><input type="password" autoComplete="current-password" value={password.current_password} onChange={e=>setPassword({...password,current_password:e.target.value})} required /></Field>
+      <Field label="Новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
+      <Field label="Повторіть новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field>
+      <div className="form-actions full-span"><Button disabled={busy}>Змінити пароль</Button></div>
+    </form></section>
+    <section className="surface settings-panel"><h2>Версія та оновлення</h2><p>Сервер: SOLVIA {health?.version || '…'} · {health?.platform || ''}</p><p>{apiBase}</p>
+      <Button variant="secondary" onClick={openProductUpdates}>Відкрити офіційні випуски</Button>
+      <p>Linux: sudo solvia-admin check-update / update. Windows: установник нового випуску поверх поточного клієнта. Android: APK нового випуску з тим самим підписом.</p>
+      <a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a>
+    </section>
+  </>;
 }
 
 function Settings({ api, apiBase, onSwitchApi }) {
@@ -2517,6 +2591,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
       const apiUrl = preferred === 'vps'
         ? cleanBase(form.vps_api_url)
         : cleanBase(form.local_api_url || apiBase);
+      if (!apiUrl.startsWith('https://')) throw new Error('Для телефону потрібне HTTPS-підключення.');
       if (/127\.0\.0\.1|localhost/i.test(apiUrl)) {
         throw new Error('Для телефона потрібна LAN-адреса серверного ПК, а не 127.0.0.1. Вкажіть Local API URL, наприклад https://192.168.1.100:8443.');
       }
@@ -2526,7 +2601,6 @@ function Settings({ api, apiBase, onSwitchApi }) {
         center: form.center_name || 'SOLVIA',
         preferred,
         api_url: apiUrl,
-        http_url: apiUrl.startsWith('http://') ? apiUrl : '',
         https_url: apiUrl.startsWith('https://') ? apiUrl : '',
         generated: new Date().toISOString()
       };
@@ -2587,6 +2661,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
             ['center','Центр','Реквізити та бренд'],
             ['documents','Документи','Виписки та підписи'],
             ['connection','Підключення','Local / VPS'],
+            ['workflow','Правила роботи','Розклад і безпека'],
             ['maintenance','Backup','Резервні копії']
           ].map(([key,title,text]) => (
             <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => setActiveSection(key)}>
@@ -2604,7 +2679,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
                   <div className="eyebrow">{activeSection === 'center' ? 'ПРОФІЛЬ ЦЕНТРУ' : 'ДОКУМЕНТИ'}</div>
                   <h2>{activeSection === 'center' ? 'Реквізити та оформлення' : 'Виписки та підписи'}</h2>
                 </div>
-                <Badge tone="forest">SOLVIA 2.0</Badge>
+                <Badge tone="forest">SOLVIA 2.2</Badge>
               </div>
 
               <form className="form-grid" onSubmit={save}>
@@ -2700,6 +2775,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
             </section>
           )}
 
+          {activeSection === 'workflow' && <WorkflowSettings api={api} />}
           {activeSection === 'maintenance' && (
             <section className="surface settings-panel">
               <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Backup / Restore</h2></div><Badge tone="sand">Admin only</Badge></div>
@@ -3231,8 +3307,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
-  const [health, setHealth] = useState({ online: true, version: '2.1.0' });
-  const navigation = navFor(user.role);
+  const [health, setHealth] = useState({ online: true, version: '2.2.0' });
+  const navigation = [...navFor(user.role), ['preferences', 'Мої налаштування']];
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
   const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
@@ -3262,7 +3338,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.1.0' });
+        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.2.0' });
       } catch {
         if (alive) setHealth({ online: false, version: '' });
       }
@@ -3286,6 +3362,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
     if (page === 'devices') return <Devices api={api} />;
     if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
+    if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
   })();
@@ -3303,7 +3380,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         <nav className={locked ? 'nav-locked' : ''}>
           <div className="nav-label">РОБОЧИЙ ПРОСТІР</div>
           {navigation.map(([key, label]) => (
-            <button key={key} disabled={locked} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
+            <button key={key} disabled={locked && key !== 'preferences' && !(user.role === 'admin' && key === 'settings')} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
               <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
             </button>
           ))}
@@ -3313,7 +3390,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         <div className="sidebar-support">
           <div className="sidebar-support-head">
             <span className="support-dot" />
-            <div><strong>QureMed Support</strong><small>24/7 · SOLVIA 2.1</small></div>
+            <div><strong>QureMed Support</strong><small>24/7 · SOLVIA 2.2</small></div>
           </div>
           <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
         </div>
@@ -3346,7 +3423,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         </>}
         <div className="workspace-inner">
           {shiftError && <div className="alert error">{shiftError}</div>}
-          {!shift ? <Spinner /> : locked ? (
+          {!shift ? <Spinner /> : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
               <div className="eyebrow">ЩОДЕННЕ ВІДКРИТТЯ ЦЕНТРУ</div>
@@ -3370,6 +3447,9 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    try { const p=JSON.parse(localStorage.getItem('solvia_preferences') || '{}');document.documentElement.dataset.reducedMotion=p.reducedMotion?'true':'false';document.documentElement.dataset.compact=p.compact?'true':'false'; } catch {}
+  }, []);
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');
   const appMode = params.get('mode') || 'center';

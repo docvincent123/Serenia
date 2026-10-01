@@ -1,13 +1,13 @@
-# SOLVIA 2.1 — Linux-сервер і Windows-клієнти
+# SOLVIA 2.2 — Linux-сервер і Windows-клієнти
 
 Пакет підтримує **Ubuntu 24.04 LTS x86_64 та elementary OS 8 на базі Ubuntu 24.04**. Для іншої версії Linux потрібна окрема перевірка сумісності. Docker, Node.js та компілятор на сервері не потрібні. Інтернет потрібен під час встановлення системних пакетів; щоденна робота відбувається в LAN.
 
 ## 1. Встановлення Linux-сервера
 
-У GitHub Actions відкрийте успішну збірку **SOLVIA • Desktop installer and PostgreSQL tests**, завантажте artifact **SOLVIA-2.1.0-Linux-x64-installer**, розпакуйте ZIP, потім:
+У GitHub Actions відкрийте успішну збірку **SOLVIA • Desktop installer and PostgreSQL tests**, завантажте artifact **SOLVIA-2.2.0-Linux-x64-installer**, розпакуйте ZIP, потім:
 
 ```bash
-tar -xzf SOLVIA-2.1.0-Linux-x64.tar.gz
+tar -xzf SOLVIA-2.2.0-Linux-x64.tar.gz
 cd SOLVIA-Linux
 sudo bash install.sh
 ```
@@ -28,7 +28,7 @@ sudo ufw allow from 192.168.1.0/24 to any port 8443 proto tcp
 
 ## 2. Windows-ПК
 
-Завантажте artifact **SOLVIA-2.1.0-Setup-EXE** тієї самої збірки. У майстрі виберіть **«Робоче місце — підключення до Linux-сервера»** (тип за замовчуванням) і введіть адресу HTTPS. На робочому ПК PostgreSQL і сервер не встановлюються.
+Завантажте artifact **SOLVIA-2.2.0-Setup-EXE** тієї самої збірки. У майстрі виберіть **«Робоче місце — підключення до Linux-сервера»** (тип за замовчуванням) і введіть адресу HTTPS. На робочому ПК PostgreSQL і сервер не встановлюються.
 
 1. На Linux скопіюйте **лише** `/etc/solvia/ca/QureMed-Local-CA.crt` на довірений носій. Приватний `ca.key` ніколи не переноситься на клієнт.
 2. На Windows у меню Пуск відкрийте **«Довірити сертифікат сервера SOLVIA»**.
@@ -47,7 +47,7 @@ sudo ufw allow from 192.168.1.0/24 to any port 8443 proto tcp
 
 Оплати/пакети, SMS/Telegram/push, повний кабінет пацієнта та інтеграція RehaFlow залишаються майбутніми модулями: наявність запису в `module_settings` не означає готової інтеграції.
 
-## 3.1. Модулі SOLVIA 2.1
+## 3.1. Модулі SOLVIA 2.2
 
 Для адміністратора та керівника доступний окремий контроль завантаження психологів. Показуються активні пацієнти, консультації за сьогодні й поточний тиждень, відміни, середня тривалість і розрахунок вільних годин на основі робочого вікна календаря 08:00–20:00.
 
@@ -130,3 +130,8 @@ Linux Admin використовує той самий захищений API т
 Небезпечні root-операції навмисно не виконуються через віддалений HTTP API. Повне відновлення БД, перезапуск сервісу та ручний backup виконуються локально через `sudo solvia-admin ...`. Це зменшує ризик знищення даних у разі викрадення адмінської web-сесії.
 
 Для видалення програми без видалення даних використовуйте `sudo bash uninstall.sh`. Повне видалення локальної БД доступне тільки через `sudo bash uninstall.sh --purge-data` із додатковим ручним підтвердженням.
+
+
+## Unified releases
+
+The former Linux-only release workflow now runs the verified Linux, Windows and Android pipelines and creates a draft product release. It no longer accepts a separate version input: CMake and the source versions define the release. Permanent Android signing is required. Read `docs/RELEASES.md` for the exact release and customer update procedure.

@@ -35,6 +35,8 @@ import java.net.URL
 import java.time.LocalDate
 import java.util.concurrent.Executors
 
+private class ApiError(val status: Int, message: String) : Exception(message)
+
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("solvia_settings", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
@@ -57,6 +59,7 @@ class MainActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        if (prefs.getBoolean("keep_screen_on", false)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         server = prefs.getString("server", "") ?: ""
         if (server.startsWith("http://", ignoreCase = true)) {
             server = ""
@@ -66,6 +69,11 @@ class MainActivity : Activity() {
         if (intent?.data != null) {
             importServerConfig(intent.data!!)
         } else if (server.isBlank()) setupScreen() else loginScreen()
+    }
+
+    override fun onDestroy() {
+        io.shutdownNow()
+        super.onDestroy()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -187,13 +195,15 @@ class MainActivity : Activity() {
             (nums[0] == 172 && nums[1] in 16..31)
     }
 
-    private fun requestAt(base: String, method: String, path: String, body: JSONObject? = null): Any {
+    private fun requestAt(base: String, method: String, path: String, body: JSONObject? = null, authToken: String = token): Any {
         val connection = URL(base + path).openConnection() as HttpURLConnection
+        try {
+        connection.instanceFollowRedirects = false
         connection.requestMethod = method
         connection.connectTimeout = 6000
         connection.readTimeout = 12000
         connection.setRequestProperty("Accept", "application/json")
-        if (token.isNotBlank()) connection.setRequestProperty("Authorization", "Bearer " + token)
+        if (authToken.isNotBlank() && path != "/api/health" && path != "/api/login") connection.setRequestProperty("Authorization", "Bearer " + authToken)
         if (body != null) {
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json")
@@ -206,23 +216,27 @@ class MainActivity : Activity() {
         if (code !in 200..299) {
             val message = (parsed as? JSONObject)?.optString("error")?.takeIf { it.isNotBlank() }
                 ?: "Помилка сервера $code"
-            throw IllegalStateException(message)
+            throw ApiError(code, message)
         }
         return parsed
+        } finally { connection.disconnect() }
     }
 
     private fun request(method: String, path: String, body: JSONObject? = null): Any =
         requestAt(server, method, path, body)
 
     private fun apiAsync(method: String, path: String, body: JSONObject? = null, ok: (Any) -> Unit) {
+        val requestToken = token
+        val requestServer = server
         io.execute {
             try {
-                val result = request(method, path, body)
-                runOnUiThread { ok(result) }
+                val result = requestAt(requestServer, method, path, body, requestToken)
+                runOnUiThread { if (!isFinishing && !isDestroyed && token == requestToken && server == requestServer) ok(result) }
             } catch (e: Exception) {
                 runOnUiThread {
+                    if (isFinishing || isDestroyed || token != requestToken || server != requestServer) return@runOnUiThread
                     val message = e.message ?: "Помилка підключення"
-                    if (message.contains("Увійдіть у систему", true)) {
+                    if (e is ApiError && e.status == 401 && requestToken.isNotBlank()) {
                         token = ""
                         Toast.makeText(this, "Сесію завершено. Увійдіть знову.", Toast.LENGTH_LONG).show()
                         loginScreen()
@@ -332,7 +346,7 @@ class MainActivity : Activity() {
         backAction = { setupScreen() }
         val body = root()
         body.addView(logo())
-        body.addView(title("SOLVIA 2.0", 20f))
+        body.addView(title("SOLVIA " + BuildConfig.VERSION_NAME, 20f))
         body.addView(title("Вхід до центру"))
         body.addView(caption(server))
         val login = edit("Логін")
@@ -365,7 +379,7 @@ class MainActivity : Activity() {
         backAction = null
         val checking = root()
         checking.addView(logo(64))
-        checking.addView(title("SOLVIA 2.0", 20f))
+        checking.addView(title("SOLVIA " + BuildConfig.VERSION_NAME, 20f))
         checking.addView(caption("Перевіряємо відкриття зміни…"))
         setContentView(scroll(checking))
         apiAsync("GET", "/api/shift-day") { result ->
@@ -411,11 +425,7 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         head.addView(user)
-        head.addView(secondary("Вийти") {
-            if (token.isNotBlank()) apiAsync("POST", "/api/logout", JSONObject()) { }
-            token = ""
-            loginScreen()
-        })
+        head.addView(secondary("Вийти") { logout() })
         outer.addView(head)
         outer.addView(spacer())
 
@@ -428,11 +438,15 @@ class MainActivity : Activity() {
             b.layoutParams = LinearLayout.LayoutParams(0, dp(46), 1f)
             tabs.addView(b)
         }
-        addTab("Календар") { calendarScreen() }
-        addTab("Пацієнти") { patientsScreen() }
+        if (role != "director") {
+            addTab("Календар") { calendarScreen() }
+            addTab("Пацієнти") { patientsScreen() }
+        } else addTab("Статистика") { statisticsScreen() }
         if (role == "psychologist") addTab("Звіт") { reportScreen() }
         if (role == "admin") addTab("Пристрої") { devicesScreen() }
         outer.addView(tabs)
+        outer.addView(secondary("Налаштування") { settingsScreen() })
+        if (role != "reception") outer.addView(secondary("Супервізії") { supervisionsScreen() })
         outer.addView(spacer())
         outer.addView(title("Робочий простір", 25f))
         outer.addView(caption("Нативний Android-клієнт SOLVIA. Дані завантажуються безпосередньо з API центру."))
@@ -440,9 +454,9 @@ class MainActivity : Activity() {
         val today = card()
         today.addView(title("Сьогодні", 18f))
         today.addView(caption(LocalDate.now().toString()))
-        today.addView(primary("Відкрити календар") { calendarScreen() })
+        today.addView(primary(if (role == "director") "Статистика центру" else "Відкрити календар") { if (role == "director") statisticsScreen() else calendarScreen() })
         today.addView(spacer(6))
-        today.addView(primary("Мої пацієнти") { patientsScreen() })
+        if (role != "director") today.addView(primary("Мої пацієнти") { patientsScreen() })
         outer.addView(today)
         setContentView(scroll(outer))
         if (role == "admin" || role == "psychologist") {
@@ -575,8 +589,13 @@ class MainActivity : Activity() {
                     val statusSpinner = Spinner(this)
                     statusSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, statusLabels)
 
-                    val startTime = edit("Початок HH:MM").apply { setText("09:00") }
-                    val endTime = edit("Кінець HH:MM").apply { setText("10:00") }
+                    val policy = meta.optJSONObject("workflow") ?: JSONObject()
+                    val opening = policy.optString("opening_time", "08:00")
+                    val closing = policy.optString("closing_time", "20:00")
+                    val endDefault = java.time.LocalTime.parse(opening).plusMinutes(policy.optLong("default_duration_minutes",60)).toString()
+                    wrap.addView(caption("Години роботи: $opening–$closing"))
+                    val startTime = edit("Початок HH:MM").apply { setText(opening) }
+                    val endTime = edit("Кінець HH:MM").apply { setText(endDefault) }
                     val note = edit("Примітка до запису").apply { minLines = 2 }
 
                     wrap.addView(caption("Пацієнт")); wrap.addView(patientSpinner); wrap.addView(spacer(7))
@@ -792,6 +811,22 @@ class MainActivity : Activity() {
             profile.addView(caption("Адреса: " + patient.optString("address", "—")))
             profile.addView(caption("Статус: " + patient.optString("status", "active")))
             content.addView(profile)
+            for ((field,label) in listOf("courses" to "Курси", "referrals" to "Направлення", "documents" to "Документи")) {
+                val rows=patient.optJSONArray(field)
+                if(rows!=null && rows.length()>0) {
+                    val box=card();box.addView(title(label,18f))
+                    for(i in 0 until rows.length()) {
+                        val item=rows.getJSONObject(i)
+                        val title=item.optString("title",item.optString("destination_type","Курс №"+item.optString("course_no")))
+                        box.addView(caption(title+" · "+item.optString("status")))
+                    }
+                    content.addView(spacer());content.addView(box)
+                }
+            }
+            content.addView(secondary("Документи та повна картка у браузері") {
+                startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(server)))
+            })
+
 
             if (role == "psychologist") {
                 content.addView(spacer())
@@ -823,7 +858,9 @@ class MainActivity : Activity() {
                     if (consultation.optString("work_done").isNotBlank()) box.addView(caption("Проведено: " + consultation.optString("work_done")))
                     if (consultation.optString("result_text").isNotBlank()) box.addView(caption("Динаміка: " + consultation.optString("result_text")))
                     if (consultation.optString("recommendations").isNotBlank()) box.addView(caption("Рекомендації: " + consultation.optString("recommendations")))
+                    box.addView(caption("Цілі: " + consultation.optString("goals", "—")))
                     box.addView(caption("План: " + consultation.optString("next_plan", "—")))
+                    box.addView(caption("Домашнє завдання: " + consultation.optString("homework", "—")))
                     content.addView(box)
                     content.addView(spacer(8))
                 }
@@ -996,6 +1033,101 @@ class MainActivity : Activity() {
                 }
             }
             dialog.show()
+        }
+    }
+
+    private fun logout() {
+        val oldToken = token
+        val oldServer = server
+        token = ""
+        role = ""
+        io.execute { try { requestAt(oldServer, "POST", "/api/logout", JSONObject(), oldToken) } catch (_: Exception) { } }
+        loginScreen()
+    }
+
+    private fun settingsScreen() {
+        backAction = { homeScreen() }
+        val body = root()
+        body.addView(topBar("Налаштування") { homeScreen() })
+        body.addView(caption("SOLVIA " + BuildConfig.VERSION_NAME + " · " + server))
+        val screenAwake = CheckBox(this).apply {
+            text = "Не вимикати екран під час роботи"
+            isChecked = prefs.getBoolean("keep_screen_on", false)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("keep_screen_on", checked).apply()
+                if (checked) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+        body.addView(screenAwake)
+        body.addView(secondary("Перевірити з’єднання") {
+            apiAsync("GET", "/api/health") { value ->
+                val health = value as JSONObject
+                showError("Сервер доступний: SOLVIA " + health.optString("version") + " · " + health.optString("platform"))
+            }
+        })
+        body.addView(secondary("Оновлення SOLVIA") {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/docvincent123/Serenia/releases")))
+        })
+        body.addView(caption("Установлюйте APK нового випуску з тим самим підписом. Налаштування з’єднання зберігаються."))
+        body.addView(title("Змінити пароль", 20f))
+        val old = edit("Поточний пароль", true)
+        val next = edit("Новий пароль — від 12 символів", true)
+        val repeat = edit("Повторіть новий пароль", true)
+        body.addView(old); body.addView(spacer()); body.addView(next); body.addView(spacer()); body.addView(repeat)
+        body.addView(primary("Зберегти новий пароль") {
+            if (next.text.toString() != repeat.text.toString()) { showError("Паролі не збігаються"); return@primary }
+            apiAsync("POST", "/api/account/password", JSONObject().put("current_password", old.text.toString()).put("new_password", next.text.toString())) {
+                token = ""; loginScreen()
+                Toast.makeText(this, "Пароль змінено. Увійдіть знову на всіх пристроях.", Toast.LENGTH_LONG).show()
+            }
+        })
+        body.addView(secondary("Вийти й змінити сервер") {
+            AlertDialog.Builder(this).setTitle("Змінити сервер?")
+                .setMessage("Поточну сесію буде завершено. Перевірте нову HTTPS-адресу та сертифікат.")
+                .setPositiveButton("Продовжити") { _, _ -> logout(); setupScreen() }
+                .setNegativeButton("Скасувати", null).show()
+        })
+        setContentView(scroll(body))
+    }
+
+    private fun statisticsScreen() {
+        backAction = { homeScreen() }
+        val body = root(); body.addView(topBar("Статистика центру") { homeScreen() })
+        setContentView(scroll(body))
+        apiAsync("GET", "/api/stats") { value ->
+            val data=value as JSONObject
+            for ((key,label) in listOf("total_patients" to "Усього пацієнтів", "active_patients" to "Активні пацієнти", "new_patients" to "Нові звернення", "consultations" to "Консультації", "repeat_visits" to "Повторні прийоми", "active_courses" to "Активні курси", "signed_documents" to "Підписані документи")) {
+                val box=card(); box.addView(title(data.optString(key,"0"),24f));box.addView(caption(label));body.addView(box);body.addView(spacer())
+            }
+            body.addView(caption("Показники поточного місяця. Керівник отримує статистику без приватних записів пацієнтів."))
+        }
+    }
+
+    private fun supervisionsScreen() {
+        backAction = { homeScreen() }
+        val body = root(); body.addView(topBar("Супервізії") { homeScreen() });setContentView(scroll(body))
+        apiAsync("GET", "/api/supervisions") { value ->
+            val rows=value as JSONArray
+            if(rows.length()==0)body.addView(caption("Супервізій ще немає. Керівник планує їх у SOLVIA Center."))
+            for(i in 0 until rows.length()) {
+                val item=rows.getJSONObject(i);val box=card()
+                box.addView(title(item.optString("topic","Супервізія"),18f))
+                box.addView(caption(item.optString("scheduled_at")+" · "+item.optString("psychologist")+" · "+item.optString("status")))
+                box.addView(caption("Випадок: "+item.optString("case_summary")))
+                box.addView(caption("Рекомендації: "+item.optString("recommendations")))
+                box.addView(secondary(if(role=="psychologist") "Описати випадок" else "Рекомендації") {
+                    val field=edit(if(role=="psychologist") "Без персональних даних" else "Рекомендації супервізора")
+                    field.setText(item.optString(if(role=="psychologist") "case_summary" else "recommendations"))
+                    field.minLines=4;field.gravity=Gravity.TOP
+                    AlertDialog.Builder(this).setTitle("Супервізія").setView(field).setNegativeButton("Скасувати",null)
+                        .setPositiveButton("Зберегти") { _, _ ->
+                            val payload=JSONObject().put(if(role=="psychologist") "case_summary" else "recommendations",field.text.toString())
+                            apiAsync("PATCH","/api/supervisions/"+item.getLong("id"),payload) { supervisionsScreen() }
+                        }.show()
+                })
+                body.addView(box);body.addView(spacer())
+            }
         }
     }
 

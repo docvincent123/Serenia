@@ -1,4 +1,4 @@
-# SOLVIA by QureMed — 2.1.0
+# SOLVIA by QureMed — 2.2.0
 
 SOLVIA — локальна система для приватного психологічного реабілітаційного центру. Репозиторій має назву Serenia; назва продукту в інтерфейсі — **SOLVIA by QureMed**.
 
@@ -6,8 +6,8 @@ SOLVIA — локальна система для приватного псих�
 
 Основний варіант встановлення: **Ubuntu 24.04 / elementary OS 8 x86_64 → Windows-клієнти та Android у LAN**. Покроково: [docs/LINUX.md](docs/LINUX.md).
 
-- Linux artifact: **SOLVIA-2.1.0-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **SOLVIA Admin** у меню Linux.
-- Windows artifact: **SOLVIA-2.1.0-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
+- Linux artifact: **SOLVIA-2.2.0-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **SOLVIA Admin** у меню Linux.
+- Windows artifact: **SOLVIA-2.2.0-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
 - Сервер: C++20, PostgreSQL, HTTPS/8443, systemd, щоденні резервні копії.
 - Linux Admin: окремий desktop launcher з ізольованим вікном браузера, автоматичною перевіркою локального API та імпортом локального CA у NSS-сховище користувача.
 - Linux updater: `sudo solvia-admin check-update` / `sudo solvia-admin update` або дія «Оновити SOLVIA» у меню програми; оновлення береться з перевіреного GitHub Release зі SHA-256 і pre-update backup.
@@ -17,7 +17,7 @@ SOLVIA — локальна система для приватного псих�
 
 На Linux немає залежності від Windows Task Scheduler або Caddy. Збірка перевіряє встановлення, HTTPS-вхід, Linux Admin launcher, системний CA, admin-only діагностику БД, backup/restore, повторне встановлення та основний сценарій із розмежуванням доступів.
 
-## Нове в SOLVIA 2.1
+## Нове в SOLVIA 2.2
 
 - **Контроль завантаження психологів:** активні пацієнти, консультації сьогодні/за тиждень, відміни, середня тривалість і вільні години поточного дня.
 - **Супервізії:** керівник/адміністратор планує супервізію; психолог додає деідентифікований опис випадку; керівник фіксує рекомендації та завершення.
@@ -106,3 +106,10 @@ gradle :app:assembleDebug
 ## Межі готовності
 
 Наявний робочий сценарій та перелік реалізованих модулів описано в [LINUX.md](docs/LINUX.md). Оплати, зовнішні нагадування, повний кабінет пацієнта й RehaFlow потребують окремої реалізації. Існуючі дані Windows не переносяться автоматично на Linux.
+
+
+## SOLVIA 2.2 operational settings and releases
+
+Administrators configure working hours/weekdays, slot step, default consultation duration and session lifetime. All accounts can change their own password; this revokes existing sessions. Windows/Linux also offer reduced animations and compact lists. Android now handles expired sessions by HTTP status, snapshots logout credentials, exposes settings, supervision and a director statistics view.
+
+Production releases are tested across all three platforms and created as drafts, with permanent Android signing required. See [Release and delivery guide](docs/RELEASES.md). No published GitHub release exists until its draft is reviewed and published.

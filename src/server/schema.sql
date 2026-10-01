@@ -417,3 +417,15 @@ CREATE INDEX IF NOT EXISTS idx_supervisions_supervisor_date ON supervisions(supe
 -- Repair timestamp dates written by the original 2.1 migration.
 UPDATE patient_courses SET started_at=substr(started_at,1,10)
 WHERE started_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T';
+
+-- Operational policy shared by Linux, Windows and mobile clients.
+CREATE TABLE IF NOT EXISTS workflow_settings(
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ opening_time TEXT NOT NULL DEFAULT '08:00',
+ closing_time TEXT NOT NULL DEFAULT '20:00',
+ working_days TEXT NOT NULL DEFAULT '1234567',
+ slot_step_minutes INTEGER NOT NULL DEFAULT 60,
+ default_duration_minutes INTEGER NOT NULL DEFAULT 60,
+ session_hours INTEGER NOT NULL DEFAULT 8
+);
+INSERT INTO workflow_settings(id) VALUES(1) ON CONFLICT(id) DO NOTHING;

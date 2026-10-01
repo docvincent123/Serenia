@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -61,3 +62,4 @@ jobs:
         shell: powershell
         timeout-minutes: 2
         run: ./tests/startup-task.ps1
+

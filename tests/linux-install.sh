@@ -8,6 +8,7 @@ printf 'admin\nАдміністратор CI\nCI-password-long-2026\nCI-password
 sudo systemctl is-enabled solvia solvia-backup.timer solvia-certificate.timer
 sudo systemctl is-active solvia
 sudo solvia-admin health
+sudo bash tests/linux-updater.sh
 sudo test -x /usr/local/bin/solvia-admin-app
 sudo test -x /usr/local/sbin/solvia-updater
 sudo test -f /opt/solvia/VERSION

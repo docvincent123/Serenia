@@ -131,6 +131,25 @@ class Scenario(unittest.TestCase):
         self.api(psy,'POST','/api/appointments',booking,status=403)
         self.assertNotIn('09:00',self.api(rec,'GET',f'/api/slots?date={day}&psychologist_id=3&room_id=1'))
         self.assertEqual(self.api('other','GET','/api/appointments?date='+day),[])
+        # Operational policy is authoritative across every client.
+        defaults=self.api(admin,'GET','/api/settings/workflow')
+        self.api(rec,'PATCH','/api/settings/workflow',{'session_hours':1},status=403)
+        self.api(admin,'PATCH','/api/settings/workflow',{'opening_time':'19:00','closing_time':'09:00'},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'session_hours':0},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'working_days':'0'},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'default_duration_minutes':241},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'opening_time':'09:30','closing_time':'18:30','slot_step_minutes':15,'default_duration_minutes':45,'session_hours':2})
+        slots=self.api(rec,'GET',f'/api/slots?date={day}&psychologist_id=3&room_id=1')
+        self.assertEqual(slots[0],'10:00')
+        self.assertIn('10:15',slots)
+        self.assertEqual(slots[-1],'17:45')
+        self.api(rec,'POST','/api/appointments',{**booking,'start':day+'T08:00','end':day+'T09:00'},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'working_days':str(dt.date.today().isoweekday())})
+        self.assertEqual(self.api(rec,'GET',f'/api/slots?date={day}&psychologist_id=3&room_id=1'),[])
+        self.api(rec,'POST','/api/appointments',{**booking,'start':day+'T16:00','end':day+'T17:00'},status=400)
+        self.assertTrue(all(x['expires'] <= time.time()+7201 for x in self.api(admin,'GET','/api/admin/sessions')))
+        self.api(admin,'PATCH','/api/settings/workflow',defaults)
+
         note={'patient_id':pid,'appointment_id':aid,'note':'ПРИВАТНА НОТАТКА','goals':'Цілі','next_plan':'План','homework':'Завдання','consultation_type':'primary','duration_minutes':60,'request_text':'Запит','state_text':'Стан','work_done':'Робота','recommendations':'Рекомендації','result_text':'Результат','risk_level':'moderate','risk_flags':['sleep','anxiety']}
         self.api(rec,'POST','/api/consultations',note,status=403)
         self.api('other','POST','/api/consultations',note,status=403)
@@ -291,6 +310,16 @@ class Scenario(unittest.TestCase):
         self.api(admin,'PATCH',f'/api/users/{managed}',{'active':False})
         self.api(admin,'PATCH',f'/api/users/{managed}',{'active':True})
         self.assertEqual(self.call('GET','/api/me',token=new_login['token'])[0],401)
+        # Staff can change their own password; old sessions are all revoked.
+        code,account=self.call('POST','/api/login',{'login':'managed','password':'changed-test-password'})
+        self.assertEqual(code,200,account)
+        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'wrong-password','new_password':'another-test-password'},account['token'])[0],403)
+        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':'short'},account['token'])[0],400)
+        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':'another-test-password'},account['token'])[0],200)
+        self.assertEqual(self.call('GET','/api/me',token=account['token'])[0],401)
+        code,account=self.call('POST','/api/login',{'login':'managed','password':'another-test-password'})
+        self.assertEqual(code,200,account)
+
 
         self.api(admin,'DELETE',f'/api/users/{other}/sessions',{})
         self.api('other','GET','/api/me',status=401)

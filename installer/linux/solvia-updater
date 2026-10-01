@@ -18,11 +18,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-curl --fail --silent --show-error --location \
+http_status=$(curl --silent --show-error --location \
   --connect-timeout 10 --max-time 30 \
   -H 'Accept: application/vnd.github+json' \
   -H 'User-Agent: SOLVIA-Updater' \
-  "$api" -o "$release_json"
+  --write-out '%{http_code}' "$api" -o "$release_json")
+if [[ $http_status == 404 ]]; then
+  echo 'Опублікованих випусків SOLVIA ще немає. Поточна програма продовжує працювати.'
+  exit 0
+fi
+[[ $http_status == 200 ]] || { echo "Не вдалося перевірити випуски (HTTP $http_status)." >&2; exit 1; }
 
 readarray -t meta < <(python3 - "$release_json" <<'PY'
 import json, re, sys
@@ -117,3 +122,4 @@ new_version=$(tr -d '[:space:]' < /opt/solvia/VERSION)
 
 /usr/local/sbin/solvia-admin health
 echo "SOLVIA updated successfully to $new_version."
+
