@@ -1,0 +1,9 @@
+[Unit]
+Description=Update SOLVIA LAN address and TLS certificate
+Wants=network-online.target
+After=network-online.target
+Before=solvia.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/solvia/sync-network.sh --no-restart

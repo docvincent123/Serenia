@@ -1,0 +1,7 @@
+[Unit]
+Description=Refresh SOLVIA address after DHCP changes
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/solvia/sync-network.sh

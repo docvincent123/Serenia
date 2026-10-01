@@ -5,9 +5,10 @@ set -Eeuo pipefail
 purge=false
 [[ ${1:-} != --purge-data ]] || purge=true
 
-systemctl disable --now solvia.service solvia-backup.timer solvia-certificate.timer 2>/dev/null || true
+systemctl disable --now solvia.service solvia-backup.timer solvia-certificate.timer solvia-network.timer solvia-network.service solvia-network-refresh.service 2>/dev/null || true
 rm -f /etc/systemd/system/solvia.service /etc/systemd/system/solvia-backup.service /etc/systemd/system/solvia-backup.timer \
       /etc/systemd/system/solvia-certificate.service /etc/systemd/system/solvia-certificate.timer
+rm -f /etc/systemd/system/solvia-network.service /etc/systemd/system/solvia-network-refresh.service /etc/systemd/system/solvia-network.timer
 systemctl daemon-reload
 
 rm -f /usr/local/sbin/solvia-admin /usr/local/sbin/solvia-updater /usr/local/bin/solvia-admin-app
@@ -31,3 +32,4 @@ pg_dropcluster --stop 16 solvia 2>/dev/null || true
 userdel solvia 2>/dev/null || true
 rm -rf /opt/solvia /etc/solvia /var/lib/solvia /var/backups/solvia /run/solvia-admin
 echo 'SOLVIA and its local data were removed.'
+

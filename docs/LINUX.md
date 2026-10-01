@@ -100,7 +100,7 @@ Updater читає останній GitHub Release SOLVIA, завантажує 
 
 У меню програм для **SOLVIA Admin** також є дія **«Оновити SOLVIA»**. Вона відкриває термінал і запускає той самий updater з `sudo`.
 
-Для підготовки випуску використовується GitHub Actions workflow **SOLVIA Product Release**. Версія має збігатися з `project(Solvia VERSION ...)` у CMake. Після перевірок Windows, Linux і Android workflow створює чернетку GitHub Release з установниками та `.sha256`; публікація виконується окремо. Для Android потрібен постійний ключ підпису. Докладніше: [RELEASES.md](RELEASES.md).
+Для підготовки випуску використовується GitHub Actions workflow **SOLVIA verified product release**. Версія має збігатися з `project(Solvia VERSION ...)` у CMake. Після перевірок Windows, Linux і Android workflow створює чернетку GitHub Release з установниками та `.sha256`; публікація виконується окремо. Для Android потрібен постійний ключ підпису. Докладніше: [RELEASES.md](RELEASES.md).
 
 Ручне повторне `sudo bash install.sh` залишається запасним способом оновлення. Перед міграціями інсталятор створює `pre-update-*.dump`. Попередній виконуваний файл і UI залишаються під `/opt/solvia` з суфіксом `.previous`; автоматичного відкочування змін схеми немає.
 
@@ -135,3 +135,13 @@ Linux Admin використовує той самий захищений API т
 ## Unified releases
 
 The former Linux-only release workflow now runs the verified Linux, Windows and Android pipelines and creates a draft product release. It no longer accepts a separate version input: CMake and the source versions define the release. Permanent Android signing is required. Read `docs/RELEASES.md` for the exact release and customer update procedure.
+
+## Зміна IP і запуск після DHCP
+
+Інсталятор визначає призначену приватну IPv4-адресу. Збережена адреса або `SOLVIA_SERVER_IP` використовується лише тоді, коли вона реально присутня на активному інтерфейсі. Інакше пріоритет має LAN-інтерфейс із маршрутом за замовчуванням. Без приватної адреси встановлення зупиняється з поясненням.
+
+Перед стартом `solvia-network.service` оновлює адресу й SAN сертифіката; `solvia-network.timer` перевіряє DHCP-зміни кожні 30 секунд. HTTPS слухає IPv4-інтерфейси, тому не прив'язаний до старої адреси. CA, база й користувачі зберігаються. Приватні ключі не стають доступними клієнтам. Якщо адреса не змінилася й сертифікат чинний, перевипуску та перезапуску немає.
+
+Linux Admin відкриває `https://localhost:8443` з перевіркою сертифіката. Налаштування центру й діагностика показують актуальну LAN-адресу. Після зміни IP експортуйте новий `SOLVIA-Mobile.solvia` і повторно імпортуйте на телефонах; Windows-клієнтам укажіть нову адресу. Старий IP на іншому пристрої не є автоматичним перенаправленням. DHCP-резервація на роутері залишається зручним способом уникнути змін адреси клієнтів.
+
+Ручне оновлення адреси: `sudo solvia-admin network`. Діагностика: `journalctl -u solvia-network -u solvia-network-refresh -u solvia -n 60`. Firewall має дозволяти 8443 лише в мережі центру; база залишається доступною тільки через Unix socket.

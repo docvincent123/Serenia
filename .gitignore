@@ -12,3 +12,9 @@ __pycache__/
 vcpkg_installed/
 frontend/node_modules/
 frontend/dist/
+
+
+# Generated from the versioned minimal brand source
+assets/solvia-icon.png
+assets/solvia.ico
+android/app/src/main/res/drawable/solvia_icon.png

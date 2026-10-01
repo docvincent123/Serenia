@@ -84,19 +84,6 @@ const categoryTone = {
   'Інше': 'stone'
 };
 
-const icons = {
-  dashboard: '◈',
-  calendar: '▣',
-  patients: '◉',
-  families: '⌘',
-  team: '♢',
-  rooms: '▦',
-  reports: '▤',
-  audit: '☷',
-  settings: '⚙',
-  devices: '◫'
-};
-
 function AppIcon({ name, size = 18 }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
   const paths = {
@@ -112,6 +99,14 @@ function AppIcon({ name, size = 18 }) {
     supervisions: <><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 21a6 6 0 0 1 12 0M13 21a5 5 0 0 1 9 0"/><path d="M14 4l2 2 4-4"/></>,
     archive: <><path d="M4 7h16v14H4z"/><path d="M3 3h18v4H3zM9 12h6"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H10v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V10h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3H14v.1a1.7 1.7 0 0 0 1.1 1.6 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.37.34.71.6 1 .28.3.67.46 1.1.46h.1V14h-.1a1.7 1.7 0 0 0-1.7 1z"/></>,
+    preferences: <><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--surface,white)"/><circle cx="15" cy="17" r="3" fill="var(--surface,white)"/></>,
+    close: <path d="M6 6l12 12M18 6L6 18"/>,
+    edit: <><path d="M16 3l5 5-12 12H4v-5zM14 5l5 5"/></>,
+    delete: <><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></>,
+    logout: <><path d="M9 3H4v18h5M9 12h12M17 8l4 4-4 4"/></>,
+    search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="M16 16l5 5"/></>,
+    check: <path d="M5 12l4 4L19 6"/>,
+    lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/></>,
     audit: <><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></>
   };
   return <svg {...common}>{paths[name] || paths.dashboard}</svg>;
@@ -232,7 +227,7 @@ function Dialog({ title, subtitle, onClose, children, wide = false }) {
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <IconButton onClick={onClose} aria-label="Закрити">×</IconButton>
+          <IconButton onClick={onClose} aria-label="Закрити"><AppIcon name="close" /></IconButton>
         </div>
         <div className="dialog-body">{children}</div>
       </div>
@@ -931,7 +926,7 @@ function Patients({ api, role, openPatient }) {
       <section className="surface">
         <div className="toolbar">
           <div className="search-box">
-            <span>⌕</span>
+            <span><AppIcon name="search" /></span>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук за №, ПІБ, телефоном, категорією…" />
           </div>
           <Badge tone="stone">{filtered.length} записів</Badge>
@@ -1420,7 +1415,7 @@ function PatientCard({ api, role, patientId, back }) {
             </div>
           </div>
           <div className={`privacy-card ${canReadConsultations ? 'allowed' : 'locked'}`}>
-            <div className="privacy-icon">{canReadConsultations ? '✓' : '⌁'}</div>
+            <div className="privacy-icon"><AppIcon name={canReadConsultations ? "check" : "lock"} size={22} /></div>
             <div>
               <strong>{isPsychologist ? 'Приватні записи доступні' : isAdmin ? 'Записи доступні для контролю' : 'Нотатки психолога приховані'}</strong>
               <p>{isPsychologist ? 'Ви бачите записи лише цього пацієнта, який закріплений за вашим профілем.' : isAdmin ? 'Адміністратор має доступ до записів психологів у режимі перегляду. Зміни вносить тільки психолог.' : 'Реєстратура та керівник центру не отримують текст консультацій.'}</p>
@@ -2198,8 +2193,8 @@ function Rooms({ api }) {
             </div>
             <div className="room-actions">
               <Badge tone={r.active ? 'forest' : 'stone'}>{r.active ? 'Активний' : 'Неактивний'}</Badge>
-              <IconButton onClick={() => openEdit(r)} title="Редагувати">✎</IconButton>
-              <IconButton onClick={() => removeRoom(r)} title="Видалити">×</IconButton>
+              <IconButton onClick={() => openEdit(r)} title="Редагувати"><AppIcon name="edit" /></IconButton>
+              <IconButton onClick={() => removeRoom(r)} title="Видалити"><AppIcon name="delete" /></IconButton>
             </div>
           </article>
         ))}
@@ -2355,7 +2350,7 @@ function ServerMaintenance({ api, apiBase }) {
   if (!localWindows) return <div className="maintenance-grid">
     <article>
       <strong>Сервер {platform === 'linux' ? 'Linux' : 'центру'}</strong>
-      <p>{apiBase}</p>
+      <p>{system?.lan_url || apiBase}</p>
       <p>{platform === 'linux' ? 'systemd + PostgreSQL + HTTPS. Критичні root-операції виконуються локально на сервері.' : 'Обслуговування виконує адміністратор на сервері.'}</p>
       <Button variant="secondary" onClick={loadSystem}>Оновити діагностику</Button>
       {systemError && <p className="danger-text">{systemError}</p>}
@@ -2665,7 +2660,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
             ['maintenance','Backup','Резервні копії']
           ].map(([key,title,text]) => (
             <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => setActiveSection(key)}>
-              <span>{key === 'center' ? '01' : key === 'documents' ? '02' : key === 'connection' ? '03' : '04'}</span>
+              <span><AppIcon name={key === "center" ? "rooms" : key === "documents" ? "reports" : key === "connection" ? "devices" : "preferences"} /></span>
               <div><strong>{title}</strong><small>{text}</small></div>
             </button>
           ))}
@@ -2730,10 +2725,10 @@ function Settings({ api, apiBase, onSwitchApi }) {
 
               <div className="connection-mode-grid">
                 <button className={form.connection_mode === 'local' ? 'active' : ''} onClick={() => setForm({ ...form, connection_mode: 'local' })}>
-                  <span className="mode-icon">L</span><div><strong>Локальний сервер</strong><small>Сервер у мережі центру або на цьому ПК</small></div>
+                  <span className="mode-icon"><AppIcon name="devices" /></span><div><strong>Локальний сервер</strong><small>Сервер у мережі центру або на цьому ПК</small></div>
                 </button>
                 <button className={form.connection_mode === 'vps' ? 'active' : ''} onClick={() => setForm({ ...form, connection_mode: 'vps' })}>
-                  <span className="mode-icon">V</span><div><strong>VPS сервер</strong><small>Захищене HTTPS-підключення через інтернет</small></div>
+                  <span className="mode-icon"><AppIcon name="devices" /></span><div><strong>VPS сервер</strong><small>Захищене HTTPS-підключення через інтернет</small></div>
                 </button>
               </div>
 
@@ -2808,7 +2803,7 @@ function GlobalSearch({ api, onPatient, onNavigate }) {
   return (
     <div className="global-search-wrap">
       <div className="global-search">
-        <span>⌕</span>
+        <span><AppIcon name="search" /></span>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Пошук пацієнта, сім’ї, працівника, кабінету…" />
         {busy && <small>Пошук…</small>}
       </div>
@@ -3397,7 +3392,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         <div className="user-card">
           <div className="avatar inverse">{user.name.slice(0, 1).toUpperCase()}</div>
           <div className="user-copy"><strong>{user.name}</strong><span>{roleLabels[user.role]}</span></div>
-          <IconButton onClick={onLogout} title="Вийти">↪</IconButton>
+          <IconButton onClick={onLogout} title="Вийти"><AppIcon name="logout" /></IconButton>
         </div>
       </aside>
 

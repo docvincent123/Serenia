@@ -22,7 +22,7 @@ if [[ ! -r "$ADDRESS_FILE" ]]; then
 fi
 
 ip=$(tr -d '[:space:]' < "$ADDRESS_FILE")
-url="https://$ip:8443"
+url="https://localhost:8443"
 
 if [[ -r "$CA_FILE" ]] && command -v certutil >/dev/null 2>&1; then
   nssdb="$HOME/.pki/nssdb"
@@ -62,3 +62,4 @@ if command -v firefox >/dev/null 2>&1; then
 fi
 
 exec xdg-open "$url"
+

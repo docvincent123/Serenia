@@ -119,6 +119,28 @@ class MainActivity : Activity() {
         background = rounded(Color.WHITE, 13, line)
     }
 
+    private fun Button.minimalIcon(label: String, color: Int) {
+        val icon = when {
+            label.startsWith("+") -> R.drawable.ic_plus
+            label.contains("Назад", true) -> R.drawable.ic_back
+            label.contains("Вийти", true) -> R.drawable.ic_logout
+            label.contains("Налаштування", true) -> R.drawable.ic_settings
+            label.contains("Супервіз", true) -> R.drawable.ic_supervisions
+            label.contains("Календар", true) -> R.drawable.ic_calendar
+            label.contains("Пацієнт", true) -> R.drawable.ic_patients
+            label.contains("Статист", true) || label.contains("Звіт", true) -> R.drawable.ic_reports
+            else -> null
+        }
+        if (icon != null) {
+            val drawable = getDrawable(icon)?.mutate()
+            drawable?.setTint(color)
+            drawable?.setBounds(0, 0, dp(20), dp(20))
+            setCompoundDrawablesRelative(drawable, null, null, null)
+            compoundDrawablePadding = dp(8)
+            text = label.removePrefix("+").trim()
+        }
+    }
+
     private fun primary(label: String, action: () -> Unit): Button = Button(this).apply {
         text = label
         isAllCaps = false
@@ -127,6 +149,7 @@ class MainActivity : Activity() {
         setTypeface(typeface, Typeface.BOLD)
         setPadding(dp(14), dp(10), dp(14), dp(10))
         background = rounded(forest, 13)
+        minimalIcon(label, Color.WHITE)
         setOnClickListener { action() }
     }
 
@@ -138,6 +161,7 @@ class MainActivity : Activity() {
         setTypeface(typeface, Typeface.BOLD)
         setPadding(dp(12), dp(10), dp(12), dp(10))
         background = rounded(forestSoft, 13, line)
+        minimalIcon(label, forestDark)
         setOnClickListener { action() }
     }
 

@@ -216,7 +216,7 @@ class Scenario(unittest.TestCase):
             'content':'Тестовий текст документа',
             'status':'signed',
             'signed_by_name':'Тестовий Пацієнт',
-            'signature_data':'data:image/png;base64,AAAA'
+            'signature_data':'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF0cAAAAASUVORK5CYII='
         })
         docs=self.api(rec,'GET',f'/api/patients/{pid}/documents')
         self.assertEqual(docs[0]['id'],document['id'])
@@ -254,6 +254,21 @@ class Scenario(unittest.TestCase):
         self.assertEqual(stats['consultations'],1)
         self.assertEqual(stats['total_patients'],2)
         self.assertGreaterEqual(stats['active_courses'],2)
+        # Object authorization must hold for ancillary endpoints too.
+        for suffix in ('courses','documents','referrals'):
+            self.api('other','GET',f'/api/patients/{pid}/{suffix}',status=403)
+            self.api(director,'GET',f'/api/patients/{pid}/{suffix}',status=403)
+        self.api('other','PATCH',f"/api/referrals/{referral['id']}",{'status':'completed'},status=403)
+        self.api('other','PATCH',f"/api/supervisions/{supervision['id']}",{'case_summary':'attempt'},status=403)
+        for endpoint in ('/api/admin/system','/api/admin/sessions','/api/audit','/api/users','/api/rooms'):
+            for role in (rec,psy,director):self.api(role,'GET',endpoint,status=403)
+        self.assertEqual(self.call('GET','/api/patients',token='0'*64)[0],401)
+        self.api(rec,'POST',f'/api/patients/{pid}/documents',{
+            'document_type':'informed_consent','title':'bad','content':'','status':'signed',
+            'signed_by_name':'Test','signature_data':'data:image/png;base64,AAAA'},status=400)
+        self.api(rec,'POST','/api/patients',{'name':'bad\x00hidden','phone':'+380501234567','dob':'1990-01-01','category':'Ветеран/ветеранка','psychologist_id':3},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'session_hours':2**64-1},status=400)
+
         self.assertGreaterEqual(stats['signed_documents'],1)
         self.assertGreaterEqual(stats['outgoing_referrals'],1)
         self.assertGreaterEqual(stats['supervisions_completed'],1)
@@ -358,6 +373,23 @@ class Scenario(unittest.TestCase):
             self.call('POST','/api/logout',{},login['token'])
         self.api(psy,'POST','/api/logout',{})
         self.api(psy,'GET','/api/me',status=401)
+
+    def test_z_security_inputs_and_rate_limit(self):
+        # Authentication checks work even if a browser or forged caller bypasses UI.
+        for login in ("' OR '1'='1",'admin\x00extra'):
+            status,_=self.call('POST','/api/login',{'login':login,'password':'invalid-password'})
+            self.assertIn(status,(400,401))
+        req=urllib.request.Request(self.base+'/api/health')
+        with urllib.request.urlopen(req) as r:
+            self.assertEqual(r.headers['X-Frame-Options'],'DENY')
+            self.assertEqual(r.headers['X-Content-Type-Options'],'nosniff')
+            self.assertIn("object-src 'none'",r.headers['Content-Security-Policy'])
+        for _ in range(12):
+            code,_=self.call('POST','/api/login',{'login':'missing-account','password':'invalid-password'})
+            if code==429:break
+            self.assertEqual(code,401)
+        self.assertEqual(code,429)
+        self.assertEqual(self.call('GET','/api/me',token='forged-token')[0],401)
 
 if __name__=='__main__': unittest.main()
 

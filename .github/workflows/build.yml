@@ -191,6 +191,7 @@ jobs:
           npm --prefix frontend ci --no-audit --no-fund
           npm --prefix frontend run build
           node tests/connection.mjs
+          python3 tests/network-address.py
 
       - name: Stage Linux server installer
         run: |

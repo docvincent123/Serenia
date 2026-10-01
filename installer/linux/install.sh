@@ -18,7 +18,7 @@ cd "$package"
 sha256sum --check SHA256SUMS
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 xdg-utils libnss3-tools desktop-file-utils
+apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 iproute2 xdg-utils libnss3-tools desktop-file-utils
 libraries=$(ldd ./SolviaServer)
 printf '%s\n' "$libraries"
 if grep -q 'not found' <<< "$libraries"; then echo 'Відсутні бібліотеки сервера'; exit 1; fi
@@ -59,14 +59,8 @@ if [[ $count == 0 ]]; then
 fi
 old_ip=''
 [[ ! -f /etc/solvia/address ]] || old_ip=$(cat /etc/solvia/address)
-ip=${SOLVIA_SERVER_IP:-$old_ip}
-if [[ -z $ip ]]; then read -r -p 'Стала IPv4-адреса Linux-сервера в LAN (наприклад 192.168.1.105): ' ip; fi
-python3 - "$ip" <<'PY'
-import ipaddress, sys
-ip = ipaddress.IPv4Address(sys.argv[1])
-if ip.is_unspecified or ip.is_multicast or ip.is_loopback or not any(ip in ipaddress.ip_network(n) for n in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16')):
-    raise SystemExit('Потрібна приватна IPv4-адреса LAN')
-PY
+ip=$(python3 "$package/network-address.py" "${SOLVIA_SERVER_IP:-$old_ip}")
+echo "Визначено LAN-адресу SOLVIA: $ip"
 # Stop writers before the update snapshot and migrations.
 systemctl stop solvia.service 2>/dev/null || true
 # A failed update never deletes or silently replaces data.
@@ -89,7 +83,7 @@ unset SOLVIA_ADMIN_PASSWORD SOLVIA_ADMIN_LOGIN SOLVIA_ADMIN_NAME confirmation
 printf '%s\n' "$ip" > /etc/solvia/address
 install -d -m 0755 /usr/local/share/solvia
 install -m 0644 /etc/solvia/address /usr/local/share/solvia/address
-printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\n' "$SOLVIA_DATABASE_URL" "$ip" > /etc/solvia/server.env
+printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\n' "$SOLVIA_DATABASE_URL" "0.0.0.0" > /etc/solvia/server.env
 chmod 0640 /etc/solvia/server.env
 chmod 0644 /etc/solvia/address
 chown root:solvia /etc/solvia/server.env
@@ -101,6 +95,7 @@ install -m 0644 solvia-admin.desktop /usr/share/applications/solvia-admin.deskto
 if [[ -f /opt/solvia/ui/solvia-icon.png ]]; then
   install -D -m 0644 /opt/solvia/ui/solvia-icon.png /usr/share/icons/hicolor/256x256/apps/solvia-admin.png
 fi
+install -m 0755 network-address.py sync-network.sh /opt/solvia/
 install -m 0755 renew-certificate.sh /opt/solvia/renew-certificate.sh
 /opt/solvia/renew-certificate.sh --force
 install -D -m 0644 /etc/solvia/ca/QureMed-Local-CA.crt /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
@@ -108,7 +103,7 @@ update-ca-certificates >/dev/null
 update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 install -m 0644 ./*.service ./*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now solvia.service solvia-certificate.timer solvia-backup.timer
+systemctl enable --now solvia.service solvia-certificate.timer solvia-backup.timer solvia-network.timer
 systemctl restart solvia.service
 /usr/local/sbin/solvia-admin health
 printf '\nSOLVIA готова: https://%s:8443\n' "$ip"
@@ -118,3 +113,4 @@ echo 'Сертифікат для ПК/Android: /etc/solvia/ca/QureMed-Local-CA.
 openssl x509 -in /etc/solvia/ca/QureMed-Local-CA.crt -noout -fingerprint -sha256
 echo 'Установіть довіру тільки до цього CA. Збережіть його відбиток для звірки.'
 echo 'Якщо firewall активний: дозвольте TCP 8443 лише з підмережі центру (див. LINUX.md).'
+

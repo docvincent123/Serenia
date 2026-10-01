@@ -26,6 +26,7 @@ case ${1:-help} in
       sleep 1
     done
     journalctl -u solvia -n 40 --no-pager; exit 1 ;;
+  network) /opt/solvia/sync-network.sh; cat /etc/solvia/address ;;
   status) systemctl status solvia --no-pager ;;
   logs) journalctl -u solvia -n 100 --no-pager ;;
   restart) systemctl restart solvia; "$0" health ;;
@@ -86,6 +87,6 @@ SQL
     echo '== DATABASE =='; "$0" db-status
     echo '== BACKUPS =='; "$0" backups | head -5
     ;;
-  *) echo 'sudo solvia-admin {health|status|logs|restart|version|check-update|update|backup|backups|db-status|doctor|restore FILE}' ;;
+  *) echo 'sudo solvia-admin {health|network|status|logs|restart|version|check-update|update|backup|backups|db-status|doctor|restore FILE}' ;;
 esac
 
