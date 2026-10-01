@@ -57,7 +57,7 @@ case ${1:-help} in
     read -r -p 'Відновлення замінить дані центру. Введіть ВІДНОВИТИ: ' confirm
     [[ $confirm == ВІДНОВИТИ ]] || exit 1
     exec 9>/run/solvia-admin/install.lock; flock -n 9
-    systemctl stop solvia
+    systemctl stop solvia-network.timer solvia-network-refresh.service solvia-certificate.timer solvia-certificate.service solvia
     "$0" backup
     # Root opens the archive; postgres can read stdin even from a private directory.
     runuser -u postgres -- /usr/lib/postgresql/16/bin/pg_restore -p 55432 -d solvia --role=solvia --no-owner --no-privileges \
@@ -67,6 +67,7 @@ case ${1:-help} in
     runuser -u solvia --preserve-environment -- /opt/solvia/SolviaServer --init
     systemctl start solvia
     "$0" health
+    systemctl start solvia-network.timer solvia-certificate.timer
     record_event restore "$2" success "database restored and HTTPS health check passed" ;;
   backups)
     find /var/backups/solvia -maxdepth 1 -type f -name '*.dump' -printf '%TY-%Tm-%Td %TH:%TM  %10s bytes  %p\n' | sort -r ;;
