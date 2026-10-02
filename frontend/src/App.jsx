@@ -1107,7 +1107,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
     try { remote = await api('GET', `/api/patients/${patientId}/draft`); }
     catch (e) { if (!local) setError(e.message); }
     if (discardLocal && !remote) { setDraftStatus('offline'); return; }
-    let restored = !discardLocal && local?.dirty ? local.payload : remote?.payload || local?.payload;
+    let restored = !discardLocal && local?.dirty ? local.payload : remote ? remote.payload : local?.payload;
     const alreadySaved = restored?.client_key && card?.consultations?.some(c => c.client_key === restored.client_key);
     if (alreadySaved) {
       await removeDraft(draftSession, patientId).catch(() => {});
@@ -1122,7 +1122,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
       appointment_id: '', consultation_type: 'repeat', duration_minutes: 60,
       request_text: '', state_text: '', work_done: '', note: '', goals: '',
       next_plan: '', homework: '', recommendations: '', result_text: '',
-      risk_level: 'low', risk_flags: [], client_key: crypto.randomUUID(),
+      risk_level: 'low', risk_flags: [], client_key: crypto.randomUUID?.() || Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''),
       ...restored
     };
     const date = restored?.consult_date || localDate();
@@ -1771,6 +1771,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
           {!draftSession?.key && <div className="alert info">Після перезавантаження увійдіть повторно для розблокування зашифрованих локальних чернеток. Серверне збереження працює.</div>}
           {draftStatus === 'conflict' && <Button type="button" variant="secondary" onClick={() => { if (window.confirm('Замінити текст у цьому вікні актуальною серверною чернеткою? Локальні незбережені зміни буде втрачено.')) void openConsultation({ discardLocal: true }); }}>Завантажити серверну версію</Button>}
           <form className="form-grid" onSubmit={saveConsultation}>
+            <fieldset className="form-contents" disabled={consultBusy}>
             <Field label="Дата запису">
               <input type="date" value={consultDate} onChange={(e) => { setConsultDate(e.target.value); setConsultation({ ...consultation, appointment_id: '' }); loadConsultationsForDay(e.target.value); }} />
             </Field>
@@ -1845,6 +1846,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
               <Button type="button" variant="ghost" disabled={consultBusy} onClick={closeConsultation}>Закрити · залишити чернетку</Button>
               <Button type="submit" disabled={consultBusy || draftStatus === 'conflict'}>{consultBusy ? 'Зберігаємо…' : 'Зберегти консультацію'}</Button>
             </div>
+            </fieldset>
           </form>
         </Dialog>
       )}

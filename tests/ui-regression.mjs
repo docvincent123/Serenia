@@ -92,7 +92,7 @@ try {
   await page.setViewportSize({width:1280,height:800}); currentUser = {id:3,name:'Тестовий психолог',role:'psychologist'};
   await page.locator('input[autocomplete="username"]').fill('synthetic-psychologist');
   await page.locator('input[autocomplete="current-password"]').fill('synthetic-password-long');
-  await page.getByRole('button',{name:'Увійти',exact:true}).click();
+  await page.locator('.login-submit').click();
   await page.getByRole('button',{name:'Мої пацієнти',exact:true}).click();
   await page.locator('.patient-list-card').first().click();
   await page.getByRole('button',{name:'+ Консультація',exact:true}).click();

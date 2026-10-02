@@ -55,6 +55,7 @@ class MainActivity : Activity() {
     private var role = ""
     private var userName = ""
     private var userId = 0L
+    private var consultationWindow: AlertDialog? = null
     private var backAction: (() -> Unit)? = null
 
     override fun onCreate(state: Bundle?) {
@@ -257,6 +258,7 @@ class MainActivity : Activity() {
                     if (isFinishing || isDestroyed || token != requestToken || server != requestServer) return@runOnUiThread
                     val message = e.message ?: "Помилка підключення"
                     if (e is ApiError && e.status == 401 && requestToken.isNotBlank()) {
+                        consultationWindow?.dismiss(); consultationWindow = null
                         token = ""
                         Toast.makeText(this, "Сесію завершено. Увійдіть знову.", Toast.LENGTH_LONG).show()
                         loginScreen()
@@ -1058,6 +1060,11 @@ class MainActivity : Activity() {
             }
             textFields.values.forEach { it.addTextChangedListener(watcher) }; duration.addTextChangedListener(watcher)
             flagChecks.forEach { it.setOnCheckedChangeListener { _, _ -> persistDraft() } }
+            val selectionWatcher = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { persistDraft() }
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            }
+            listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.onItemSelectedListener = selectionWatcher }
 
             val dialog = AlertDialog.Builder(this)
                 .setTitle("Підсумок консультації")
@@ -1065,7 +1072,8 @@ class MainActivity : Activity() {
                 .setNegativeButton("Залишити чернетку", null)
                 .setPositiveButton("Зберегти", null)
                 .create()
-            dialog.setOnDismissListener { persistDraft() }
+            consultationWindow = dialog
+            dialog.setOnDismissListener { persistDraft(); if (consultationWindow === dialog) consultationWindow = null }
             wrap.addView(secondary("Зберегти чернетку на сервері") {
                 apiAsync("GET", "/api/patients/$patientId/draft") { value ->
                     val remote = value as JSONObject
@@ -1135,12 +1143,16 @@ class MainActivity : Activity() {
                     if (serverRevision > 0) payload.put("draft_version", serverRevision)
 
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                    textFields.values.forEach { it.isEnabled = false }
+                    duration.isEnabled = false
+                    listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.isEnabled = false }
+                    flagChecks.forEach { it.isEnabled = false }
                     persistDraft()
                     val requestToken = token; val requestServer = server
                     io.execute {
                         try {
                             requestAt(requestServer, "POST", "/api/consultations", payload, requestToken)
-                            draftStore.remove(patientId)
+                            try { draftStore.remove(patientId) } catch (_: Exception) { /* Consultation is already committed; do not misreport it as failed. */ }
                             runOnUiThread {
                                 if (token == requestToken && server == requestServer && !isDestroyed) {
                                     submitted = true; dialog.dismiss()
@@ -1150,7 +1162,12 @@ class MainActivity : Activity() {
                         } catch (e: Exception) {
                             runOnUiThread {
                                 if (token == requestToken && server == requestServer && !isDestroyed) {
+                                    if (e is ApiError && e.status == 401) { dialog.dismiss(); logout(); return@runOnUiThread }
                                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                                    textFields.values.forEach { it.isEnabled = true }
+                                    duration.isEnabled = true
+                                    listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.isEnabled = true }
+                                    flagChecks.forEach { it.isEnabled = true }
                                     draftStatus.text = "Не відправлено. Чернетка залишилась на пристрої; повторіть збереження."
                                     showError(e.message ?: "Немає зв’язку із сервером")
                                 }
@@ -1164,6 +1181,7 @@ class MainActivity : Activity() {
     }
 
     private fun logout() {
+        consultationWindow?.dismiss(); consultationWindow = null
         val oldToken = token
         val oldServer = server
         token = ""
