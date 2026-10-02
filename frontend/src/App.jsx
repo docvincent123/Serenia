@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
+import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
+import WaitingList from './WaitingList.jsx';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -25,6 +27,57 @@ const riskFlagOptions = [
   ['group_work', 'Потреба у груповій терапії']
 ];
 
+const referralSourceOptions = [
+  'Самозвернення',
+  'Військова частина',
+  'Сімейний лікар',
+  'Психіатр',
+  'Невролог',
+  'Ветеранський простір',
+  'Соціальна служба',
+  'Інший заклад',
+  'Інше'
+];
+
+const referralDestinationOptions = [
+  'Психіатр',
+  'Невролог',
+  'Сімейний лікар',
+  'Реабілітація',
+  'Соціальний працівник',
+  'Юрист',
+  'Ветеранський простір',
+  'Інший спеціаліст'
+];
+
+const documentTemplates = {
+  informed_consent: {
+    title: 'Інформована згода на психологічну допомогу',
+    content: 'Я підтверджую, що отримав(ла) зрозумілу інформацію про формат психологічної допомоги, її добровільність, межі конфіденційності та право припинити участь.'
+  },
+  data_processing: {
+    title: 'Згода на обробку персональних даних',
+    content: 'Я надаю згоду центру на обробку персональних даних у межах надання послуг, ведення документації та виконання законних організаційних обов’язків центру.'
+  },
+  center_rules: {
+    title: 'Ознайомлення з правилами центру',
+    content: 'Підтверджую, що ознайомився(лась) із правилами центру, порядком запису, перенесення та скасування консультацій і правилами безпечної поведінки.'
+  },
+  family_consent: {
+    title: 'Згода на сімейну консультацію',
+    content: 'Надаю добровільну згоду на участь у сімейній консультації та розумію формат спільної роботи й межі конфіденційності.'
+  },
+  service_refusal: {
+    title: 'Відмова від запропонованої послуги',
+    content: 'Підтверджую, що мені було запропоновано відповідну послугу/направлення, однак я добровільно відмовляюся від неї після отримання пояснень.'
+  },
+  other: {
+    title: 'Інший документ',
+    content: ''
+  }
+};
+
+
 const categoryTone = {
   'Військовий/військова': 'olive',
   'Ветеран/ветеранка': 'forest',
@@ -33,22 +86,12 @@ const categoryTone = {
   'Інше': 'stone'
 };
 
-const icons = {
-  dashboard: '◈',
-  calendar: '▣',
-  patients: '◉',
-  families: '⌘',
-  team: '♢',
-  rooms: '▦',
-  reports: '▤',
-  audit: '☷',
-  settings: '⚙',
-  devices: '◫'
-};
-
 function AppIcon({ name, size = 18 }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
   const paths = {
+    'waiting-list': <><rect x="3" y="4" width="12" height="17" rx="2"/><path d="M6 8h6M6 12h5M6 16h3"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/></>,
+    documents: <><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></>,
+    preferences: <><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M18 3l1 1 2-2"/></>,
     dashboard: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></>,
     patients: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
@@ -57,7 +100,18 @@ function AppIcon({ name, size = 18 }) {
     rooms: <><path d="M4 21V4a1 1 0 0 1 1-1h11v18"/><path d="M16 8h4v13M8 7h4M8 11h4M8 15h4"/><path d="M3 21h18"/></>,
     reports: <><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
     devices: <><rect x="3" y="4" width="13" height="10" rx="2"/><path d="M8 20h3M9.5 14v6"/><rect x="17" y="8" width="4" height="9" rx="1"/></>,
+    workload: <><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/><path d="M2 21h22"/></>,
+    supervisions: <><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 21a6 6 0 0 1 12 0M13 21a5 5 0 0 1 9 0"/><path d="M14 4l2 2 4-4"/></>,
+    archive: <><path d="M4 7h16v14H4z"/><path d="M3 3h18v4H3zM9 12h6"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H10v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V10h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3H14v.1a1.7 1.7 0 0 0 1.1 1.6 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.37.34.71.6 1 .28.3.67.46 1.1.46h.1V14h-.1a1.7 1.7 0 0 0-1.7 1z"/></>,
+    preferences: <><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--surface,white)"/><circle cx="15" cy="17" r="3" fill="var(--surface,white)"/></>,
+    close: <path d="M6 6l12 12M18 6L6 18"/>,
+    edit: <><path d="M16 3l5 5-12 12H4v-5zM14 5l5 5"/></>,
+    delete: <><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></>,
+    logout: <><path d="M9 3H4v18h5M9 12h12M17 8l4 4-4 4"/></>,
+    search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="M16 16l5 5"/></>,
+    check: <path d="M5 12l4 4L19 6"/>,
+    lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/></>,
     audit: <><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></>
   };
   return <svg {...common}>{paths[name] || paths.dashboard}</svg>;
@@ -121,19 +175,23 @@ function navFor(role) {
     return [
       ['dashboard', 'Огляд центру'],
       ['calendar', 'Календар'],
+      ['waiting-list', 'Лист очікування'],
       ['patients', 'Пацієнти'],
       ['families', 'Сім’ї'],
       ['team', 'Команда'],
       ['rooms', 'Кабінети'],
       ['reports', 'Звіти психологів'],
+      ['workload', 'Навантаження'],
+      ['supervisions', 'Супервізії'],
+      ['archive', 'Архів'],
       ['devices', 'Пристрої'],
       ['settings', 'Налаштування'],
       ['audit', 'Журнал дій']
     ];
   }
-  if (role === 'reception') return [['calendar', 'Календар'], ['patients', 'Пацієнти'], ['families', 'Сім’ї']];
-  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну']];
-  return [['dashboard', 'Огляд центру']];
+  if (role === 'reception') return [['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
+  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
+  return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
 }
 
 function defaultPage(role) {
@@ -169,13 +227,13 @@ function Spinner() {
 function Dialog({ title, subtitle, onClose, children, wide = false }) {
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
         <div className="dialog-head">
           <div>
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <IconButton onClick={onClose} aria-label="Закрити">×</IconButton>
+          <IconButton onClick={onClose} aria-label="Закрити"><AppIcon name="close" /></IconButton>
         </div>
         <div className="dialog-body">{children}</div>
       </div>
@@ -184,10 +242,12 @@ function Dialog({ title, subtitle, onClose, children, wide = false }) {
 }
 
 function Field({ label, hint, children, full = false }) {
+  const controls = React.Children.map(children, child => React.isValidElement(child) && ['input', 'select', 'textarea'].includes(child.type)
+    ? React.cloneElement(child, { 'aria-label': child.props['aria-label'] || label }) : child);
   return (
     <label className={`field ${full ? 'full' : ''}`}>
       <span>{label}</span>
-      {children}
+      {controls}
       {hint && <small>{hint}</small>}
     </label>
   );
@@ -235,7 +295,7 @@ function Login({ initialBase, onLogin }) {
     try {
       const base = cleanBase(server);
       const result = await request(base, '', 'POST', '/api/login', { login, password, ...deviceIdentity() });
-      onLogin(base, result);
+      await onLogin(base, result, password);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -307,7 +367,7 @@ function Login({ initialBase, onLogin }) {
             </>
           )}
 
-          <div className="login-foot">Версія 2.0 • by QureMed</div>
+          <div className="login-foot">Версія 2.2 • by QureMed</div>
         </form>
       </section>
     </div>
@@ -333,10 +393,17 @@ function Dashboard({ api }) {
 
   const cards = stats ? [
     ['Усього пацієнтів', stats.total_patients, 'У базі центру'],
+    ['Активні пацієнти', stats.active_patients, 'Зараз проходять супровід'],
+    ['Архів', stats.archived_patients, 'Завершені та архівовані картки'],
     ['Нові звернення', stats.new_patients, 'За обраний період'],
     ['Консультації', stats.consultations, 'Збережені психологами'],
-    ['Повторні прийоми', stats.repeat_visits, 'Пацієнти з попередньою історією'],
-    ['Скасовані записи', stats.appointments?.cancelled || 0, 'У календарі']
+    ['Середня тривалість', stats.avg_duration_minutes + ' хв', 'Консультації за період'],
+    ['Активні курси', stats.active_courses, 'Поточні курси супроводу'],
+    ['Завершені курси', stats.completed_courses, 'За обраний період'],
+    ['Підписані документи', stats.signed_documents, 'Згоди та документи'],
+    ['Направлення', stats.outgoing_referrals, 'Створено за період'],
+    ['Супервізії', stats.supervisions_completed, 'Завершено за період'],
+    ['Неявки', stats.appointments?.no_show || 0, 'За обраний період']
   ] : [];
 
   return (
@@ -399,6 +466,23 @@ function Dashboard({ api }) {
               </div>
             )}
           </section>
+
+          <div className="analytics-grid">
+            <section className="surface">
+              <div className="section-head"><div><div className="eyebrow">СТРУКТУРА ЗВЕРНЕНЬ</div><h2>Категорії пацієнтів</h2></div></div>
+              <div className="analytics-list">
+                {(stats.categories || []).map((x) => <div key={x.category}><span>{x.category}</span><strong>{x.n}</strong></div>)}
+                {!stats.categories?.length && <span className="muted">Даних ще немає.</span>}
+              </div>
+            </section>
+            <section className="surface">
+              <div className="section-head"><div><div className="eyebrow">НАПРАВЛЕННЯ В ЦЕНТР</div><h2>Звідки приходять пацієнти</h2></div></div>
+              <div className="analytics-list">
+                {(stats.referral_sources || []).map((x) => <div key={x.source}><span>{x.source}</span><strong>{x.n}</strong></div>)}
+                {!stats.referral_sources?.length && <span className="muted">Даних ще немає.</span>}
+              </div>
+            </section>
+          </div>
         </>
       )}
     </>
@@ -449,8 +533,8 @@ function Calendar({ api, role, openPatient }) {
     setBooking({
       psychologist_id: meta.psychologists?.[0]?.id || '',
       room_id: meta.rooms?.[0]?.id || '',
-      start: '09:00',
-      end: '10:00',
+      start: meta.workflow?.opening_time || '08:00',
+      end: (() => { const [h,m]=(meta.workflow?.opening_time || '08:00').split(':').map(Number);const n=h*60+m+(meta.workflow?.default_duration_minutes || 60);return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); })(),
       kind: 'individual',
       status: 'scheduled',
       note: '',
@@ -729,7 +813,8 @@ function Calendar({ api, role, openPatient }) {
                   psychologist_id: Number(slotForm.psychologist_id),
                   room_id: Number(slotForm.room_id),
                   start: slot,
-                  end: `${String(Number(slot.slice(0, 2)) + 1).padStart(2, '0')}:00`,
+                  end: (() => { const [h,m]=slot.split(':').map(Number); const n=h*60+m+(meta.workflow?.default_duration_minutes || 60); return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); })(),
+                  status: 'scheduled', note: '',
                   kind: 'individual',
                   patient_ids: []
                 });
@@ -761,6 +846,9 @@ function Patients({ api, role, openPatient }) {
     family_role: '',
     sex: '',
     address: '',
+    referral_source: '',
+    referral_source_details: '',
+    course_reason: '',
     admin_note: ''
   });
 
@@ -799,6 +887,9 @@ function Patients({ api, role, openPatient }) {
       family_role: '',
       sex: '',
       address: '',
+      referral_source: '',
+      referral_source_details: '',
+      course_reason: '',
       admin_note: ''
     });
     setDialog(true);
@@ -817,6 +908,9 @@ function Patients({ api, role, openPatient }) {
         family_role: form.family_role,
         sex: form.sex,
         address: form.address,
+        referral_source: form.referral_source,
+        referral_source_details: form.referral_source_details,
+        course_reason: form.course_reason,
         admin_note: form.admin_note
       });
       setDialog(false);
@@ -840,7 +934,7 @@ function Patients({ api, role, openPatient }) {
       <section className="surface">
         <div className="toolbar">
           <div className="search-box">
-            <span>⌕</span>
+            <span><AppIcon name="search" /></span>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук за №, ПІБ, телефоном, категорією…" />
           </div>
           <Badge tone="stone">{filtered.length} записів</Badge>
@@ -915,6 +1009,18 @@ function Patients({ api, role, openPatient }) {
             <Field label="Адреса">
               <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Населений пункт / адреса" />
             </Field>
+            <Field label="Звідки направлений / звернувся">
+              <select value={form.referral_source} onChange={(e) => setForm({ ...form, referral_source: e.target.value })}>
+                <option value="">Не вказано</option>
+                {referralSourceOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Field>
+            <Field label="Деталі направлення">
+              <input value={form.referral_source_details} onChange={(e) => setForm({ ...form, referral_source_details: e.target.value })} placeholder="Заклад, підрозділ, лікар…" />
+            </Field>
+            <Field label="Причина початку курсу" full>
+              <textarea rows="3" value={form.course_reason} onChange={(e) => setForm({ ...form, course_reason: e.target.value })} placeholder="Коротко: запит / причина звернення" />
+            </Field>
             {role === 'admin' && (
               <Field label="Службова примітка адміністратора" full>
                 <textarea rows="3" value={form.admin_note} onChange={(e) => setForm({ ...form, admin_note: e.target.value })} />
@@ -931,7 +1037,10 @@ function Patients({ api, role, openPatient }) {
   );
 }
 
-function PatientCard({ api, role, patientId, back }) {
+function PatientCard({ api, role, patientId, back, draftSession }) {
+  const draftWriter = useRef(null);
+  const [draftStatus, setDraftStatus] = useState('');
+  const [consultBusy, setConsultBusy] = useState(false);
   const [card, setCard] = useState(null);
   const [error, setError] = useState('');
   const [dialog, setDialog] = useState('');
@@ -947,12 +1056,27 @@ function PatientCard({ api, role, patientId, back }) {
   const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
   const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate() });
   const [printDoc, setPrintDoc] = useState(null);
-  const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', admin_note: '' });
+  const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', referral_source: '', referral_source_details: '', admin_note: '' });
   const [editMeta, setEditMeta] = useState({ psychologists: [], categories: [] });
   const [editFamilies, setEditFamilies] = useState([]);
+  const [documentForm, setDocumentForm] = useState({
+    document_type: 'informed_consent',
+    title: documentTemplates.informed_consent.title,
+    content: documentTemplates.informed_consent.content,
+    status: 'signed',
+    signed_by_name: '',
+    signature_data: ''
+  });
+  const [documentPreview, setDocumentPreview] = useState(null);
+  const [referralForm, setReferralForm] = useState({ destination_type: 'Психіатр', destination_name: '', reason: '', status: 'recommended' });
+  const [courseForm, setCourseForm] = useState({ started_at: localDate(), reason: '' });
+  const [courseClose, setCourseClose] = useState({ ended_at: localDate(), outcome: '' });
 
   const isPsychologist = role === 'psychologist';
   const isAdmin = role === 'admin';
+  const isReception = role === 'reception';
+  const canManageCourse = isAdmin || isReception;
+  const canManageDocuments = isAdmin || isReception || isPsychologist;
   const canReadConsultations = isPsychologist || isAdmin;
 
   async function load() {
@@ -975,24 +1099,77 @@ function PatientCard({ api, role, patientId, back }) {
     }
   }
 
-  function openConsultation() {
-    setConsultDate(localDate());
-    setConsultation({
+  async function openConsultation(options = {}) {
+    const discardLocal = options.discardLocal === true;
+    setDraftStatus('loading'); setError('');
+    await draftWriter.current?.stop();
+    let local = null, remote = null;
+    try { local = await readDraft(draftSession, patientId); }
+    catch { setError('Локальна чернетка не розшифрувалася. Можливо, пароль змінено. Серверна копія залишається доступною.'); }
+    try { remote = await api('GET', `/api/patients/${patientId}/draft`); }
+    catch (e) { if (!local) setError(e.message); }
+    if (discardLocal && !remote) { setDraftStatus('offline'); return; }
+    let restored = !discardLocal && local?.dirty ? local.payload : remote ? remote.payload : local?.payload;
+    const alreadySaved = restored?.client_key && card?.consultations?.some(c => c.client_key === restored.client_key);
+    if (alreadySaved) {
+      await removeDraft(draftSession, patientId).catch(() => {});
+      let clearedVersion = remote?.version || 0;
+      if (remote?.version) {
+        const result = await api('DELETE', `/api/patients/${patientId}/draft`, { version: remote.version }).catch(() => null);
+        if (result) clearedVersion = result.version;
+      }
+      restored = null; remote = { version: clearedVersion, payload: null }; local = null;
+    }
+    const initial = {
       appointment_id: '', consultation_type: 'repeat', duration_minutes: 60,
       request_text: '', state_text: '', work_done: '', note: '', goals: '',
       next_plan: '', homework: '', recommendations: '', result_text: '',
-      risk_level: 'low', risk_flags: []
-    });
+      risk_level: 'low', risk_flags: [], client_key: crypto.randomUUID?.() || Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''),
+      ...restored
+    };
+    const date = restored?.consult_date || localDate();
+    setConsultDate(date); setConsultation(initial);
+    const writer = new DraftWriter({ identity: draftSession, patientId, api, version: remote?.version ?? local?.version ?? 0, status: setDraftStatus });
+    draftWriter.current = writer;
+    if (!discardLocal && local?.dirty && remote && local.version !== remote.version) {
+      writer.version = local.version;
+      writer.conflict = true; setDraftStatus('conflict');
+    } else {
+      setDraftStatus(restored ? 'saved' : 'ready');
+      if (discardLocal) await writeDraft(draftSession, patientId, { payload: initial, version: writer.version, dirty: false }).catch(() => {});
+    }
     setDayAppointments([]);
     setDialog('consultation');
-    loadConsultationsForDay(localDate());
+    loadConsultationsForDay(date);
+  }
+
+  useEffect(() => {
+    if (dialog === 'consultation' && draftWriter.current) draftWriter.current.edit({ ...consultation, consult_date: consultDate });
+  }, [consultation, consultDate, dialog]);
+  useEffect(() => {
+    const flush = () => { void draftWriter.current?.flush(); };
+    const visibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    const beforeUnload = (e) => {
+      const writer = draftWriter.current;
+      if (writer && writer.generation > writer.synced) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('online', flush); document.addEventListener('visibilitychange', visibility); window.addEventListener('beforeunload', beforeUnload);
+    return () => {
+      window.removeEventListener('online', flush); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('beforeunload', beforeUnload);
+      void draftWriter.current?.stop();
+    };
+  }, [patientId]);
+
+  async function closeConsultation() {
+    await draftWriter.current?.flush();
+    setDialog('');
   }
 
   const eligibleAppointments = useMemo(() => {
     if (!card) return [];
     const completed = new Set((card.consultations || []).map((c) => Number(c.appointment_id)));
     return dayAppointments.filter((a) =>
-      a.status === 'scheduled' &&
+      (a.status === 'scheduled' || a.status === 'confirmed') &&
       !completed.has(Number(a.id)) &&
       a.patients?.some((p) => Number(p.id) === Number(patientId))
     );
@@ -1000,8 +1177,14 @@ function PatientCard({ api, role, patientId, back }) {
 
   async function saveConsultation(e) {
     e.preventDefault();
+    if (consultBusy) return;
+    setConsultBusy(true);
     try {
+      await draftWriter.current?.flush();
+      if (draftWriter.current?.conflict) throw new Error('Спочатку вирішіть конфлікт чернеток.');
       await api('POST', '/api/consultations', {
+        client_key: consultation.client_key,
+        draft_version: draftWriter.current?.version || 0,
         patient_id: Number(patientId),
         appointment_id: Number(consultation.appointment_id),
         note: consultation.note,
@@ -1018,11 +1201,14 @@ function PatientCard({ api, role, patientId, back }) {
         risk_level: consultation.risk_level,
         risk_flags: consultation.risk_flags
       });
+      await draftWriter.current?.stop();
+      draftWriter.current = null;
+      await removeDraft(draftSession, patientId).catch(() => {});
       setDialog('');
       await load();
     } catch (e) {
       setError(e.message);
-    }
+    } finally { setConsultBusy(false); }
   }
 
   function toggleRiskFlag(value) {
@@ -1090,6 +1276,8 @@ function PatientCard({ api, role, patientId, back }) {
         sex: card.sex || '',
         address: card.address || '',
         status: card.status || 'active',
+        referral_source: card.referral_source || '',
+        referral_source_details: card.referral_source_details || '',
         admin_note: card.admin_note || ''
       });
       setDialog('edit-patient');
@@ -1123,6 +1311,109 @@ function PatientCard({ api, role, patientId, back }) {
     }
   }
 
+
+  function openDocumentDialog(type = 'informed_consent') {
+    const template = documentTemplates[type] || documentTemplates.other;
+    setDocumentForm({
+      document_type: type,
+      title: template.title,
+      content: template.content,
+      status: 'signed',
+      signed_by_name: card?.name || '',
+      signature_data: ''
+    });
+    setDialog('document');
+  }
+
+  function changeDocumentType(type) {
+    const template = documentTemplates[type] || documentTemplates.other;
+    setDocumentForm((current) => ({
+      ...current,
+      document_type: type,
+      title: template.title,
+      content: template.content,
+      status: 'signed',
+      signature_data: ''
+    }));
+  }
+
+  async function saveDocument(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/patients/' + patientId + '/documents', documentForm);
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function previewDocument(id) {
+    try {
+      const [docs, center] = await Promise.all([
+        api('GET', '/api/patients/' + patientId + '/documents'),
+        api('GET', '/api/settings/center')
+      ]);
+      const item = docs.find((x) => Number(x.id) === Number(id));
+      if (!item) throw new Error('Документ не знайдено');
+      setDocumentPreview({ ...item, center });
+      setDialog('print-document');
+    } catch (e) { setError(e.message); }
+  }
+
+  function printDocument() {
+    const previous = document.title;
+    document.title = (documentPreview?.title || 'Документ SOLVIA') + ' — ' + card.name;
+    const restore = () => {
+      document.title = previous;
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    window.print();
+    setTimeout(restore, 1500);
+  }
+
+  async function saveReferral(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/patients/' + patientId + '/referrals', referralForm);
+      setReferralForm({ destination_type: 'Психіатр', destination_name: '', reason: '', status: 'recommended' });
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function setReferralStatus(id, status) {
+    try {
+      await api('PATCH', '/api/referrals/' + id, { status });
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function startNewCourse(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/patients/' + patientId + '/courses', courseForm);
+      setCourseForm({ started_at: localDate(), reason: '' });
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function archiveActiveCourse(e) {
+    e.preventDefault();
+    const activeCourse = (card.courses || []).find((x) => x.status === 'active');
+    if (!activeCourse) { setError('Активного курсу немає.'); return; }
+    try {
+      await api('PATCH', '/api/courses/' + activeCourse.id, {
+        status: 'archived',
+        ended_at: courseClose.ended_at,
+        outcome: courseClose.outcome
+      });
+      setCourseClose({ ended_at: localDate(), outcome: '' });
+      setDialog('');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
   if (error && !card) {
     return <>
       <Button variant="ghost" onClick={back}>← Назад</Button>
@@ -1133,6 +1424,7 @@ function PatientCard({ api, role, patientId, back }) {
 
   const assessments = card.assessments || [];
   const completedAssessments = assessments.filter((a) => a.completed !== null && a.score !== null);
+  const activeCourse = (card.courses || []).find((x) => x.status === 'active');
 
   return (
     <>
@@ -1151,13 +1443,15 @@ function PatientCard({ api, role, patientId, back }) {
             </div>
           </div>
         </div>
-        {(isPsychologist || isAdmin) && (
+        {(isPsychologist || isAdmin || isReception) && (
           <div className="page-actions">
             {isPsychologist && <Button variant="secondary" onClick={assignAssessment}>Призначити анкету</Button>}
-            {isPsychologist && <Button onClick={openConsultation}>+ Консультація</Button>}
-            {isAdmin && <Button variant="secondary" onClick={openPatientEdit}>Редагувати профіль</Button>}
+            {isPsychologist && card.status === 'active' && <Button onClick={openConsultation}>+ Консультація</Button>}
+            {(isAdmin || isReception) && <Button variant="secondary" onClick={openPatientEdit}>Редагувати профіль</Button>}
             {isAdmin && <Button variant="secondary" onClick={() => setDialog('admin-note')}>+ Службова нотатка</Button>}
-            <Button variant="secondary" onClick={() => setDialog('discharge')}>Сформувати виписку</Button>
+            {(isAdmin || isPsychologist) && <Button variant="secondary" onClick={() => setDialog('discharge')}>Сформувати виписку</Button>}
+            {canManageCourse && activeCourse && <Button variant="secondary" onClick={() => setDialog('archive-course')}>Завершити курс</Button>}
+            {canManageCourse && !activeCourse && <Button onClick={() => setDialog('new-course')}>+ Новий курс</Button>}
           </div>
         )}
       </div>
@@ -1179,6 +1473,8 @@ function PatientCard({ api, role, patientId, back }) {
             <div><dt>Сім’я</dt><dd>{card.family || 'Не вказано'}</dd></div>
             <div><dt>Роль у сім’ї</dt><dd>{card.family_role || '—'}</dd></div>
             <div><dt>Адреса</dt><dd>{card.address || '—'}</dd></div>
+            <div><dt>Звідки звернувся</dt><dd>{card.referral_source || 'Не вказано'}</dd></div>
+            <div><dt>Деталі направлення</dt><dd>{card.referral_source_details || '—'}</dd></div>
             <div><dt>Стать</dt><dd>{card.sex || '—'}</dd></div>
             <div><dt>Статус</dt><dd>{card.status || 'active'}</dd></div>
           </dl>
@@ -1192,12 +1488,78 @@ function PatientCard({ api, role, patientId, back }) {
             </div>
           </div>
           <div className={`privacy-card ${canReadConsultations ? 'allowed' : 'locked'}`}>
-            <div className="privacy-icon">{canReadConsultations ? '✓' : '⌁'}</div>
+            <div className="privacy-icon"><AppIcon name={canReadConsultations ? "check" : "lock"} size={22} /></div>
             <div>
               <strong>{isPsychologist ? 'Приватні записи доступні' : isAdmin ? 'Записи доступні для контролю' : 'Нотатки психолога приховані'}</strong>
               <p>{isPsychologist ? 'Ви бачите записи лише цього пацієнта, який закріплений за вашим профілем.' : isAdmin ? 'Адміністратор має доступ до записів психологів у режимі перегляду. Зміни вносить тільки психолог.' : 'Реєстратура та керівник центру не отримують текст консультацій.'}</p>
             </div>
           </div>
+        </section>
+      </div>
+
+      <section className="surface">
+        <div className="section-head">
+          <div><div className="eyebrow">КУРСИ СУПРОВОДУ</div><h2>Історія курсів</h2></div>
+          <Badge tone={activeCourse ? 'forest' : 'stone'}>{activeCourse ? 'Активний курс' : 'Немає активного курсу'}</Badge>
+        </div>
+        {!card.courses?.length ? <Empty title="Курсів ще немає" text="Створіть перший курс супроводу." /> : (
+          <div className="course-list">
+            {card.courses.map((c) => (
+              <article className="course-card" key={c.id}>
+                <div>
+                  <div className="eyebrow">КУРС №{c.course_no}</div>
+                  <strong>{c.started_at} {c.ended_at ? '— ' + c.ended_at : '— дотепер'}</strong>
+                  <span>{c.psychologist}</span>
+                </div>
+                <div>
+                  <Badge tone={c.status === 'active' ? 'forest' : 'stone'}>{c.status}</Badge>
+                  {c.reason && <p><b>Причина:</b> {c.reason}</p>}
+                  {c.outcome && <p><b>Підсумок:</b> {c.outcome}</p>}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="patient-card-grid">
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">ДОКУМЕНТИ ТА ЗГОДИ</div><h2>Підписані документи</h2></div>
+            {canManageDocuments && <Button variant="secondary" onClick={() => openDocumentDialog()}>+ Документ</Button>}
+          </div>
+          {!card.documents?.length ? <Empty title="Документів ще немає" text="Додайте згоду, правила центру або відмову від послуги." /> : (
+            <div className="assessment-list">
+              {card.documents.map((d) => (
+                <div className="assessment-row" key={d.id}>
+                  <div><strong>{d.title}</strong><span>{d.signed_at?.replace('T',' ')} · {d.signed_by_name || 'без підписанта'}</span></div>
+                  <div className="row-actions"><Badge tone={d.status === 'signed' ? 'forest' : 'rose'}>{d.status}</Badge><Button variant="secondary" onClick={() => previewDocument(d.id)}>Перегляд / PDF</Button></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">НАПРАВЛЕННЯ</div><h2>Подальший маршрут</h2></div>
+            <Button variant="secondary" onClick={() => setDialog('referral')}>+ Направлення</Button>
+          </div>
+          {!card.referrals?.length ? <Empty title="Направлень немає" text="За потреби додайте направлення до іншого спеціаліста або служби." /> : (
+            <div className="assessment-list">
+              {card.referrals.map((x) => (
+                <div className="assessment-row referral-row" key={x.id}>
+                  <div><strong>{x.destination_type}{x.destination_name ? ' · ' + x.destination_name : ''}</strong><span>{x.reason || 'Без додаткового коментаря'} · {x.created?.replace('T',' ')}</span></div>
+                  <select value={x.status} onChange={(e) => setReferralStatus(x.id, e.target.value)}>
+                    <option value="recommended">Рекомендовано</option>
+                    <option value="sent">Направлено</option>
+                    <option value="completed">Виконано</option>
+                    <option value="cancelled">Скасовано</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
 
@@ -1306,9 +1668,112 @@ function PatientCard({ api, role, patientId, back }) {
         </section>
       )}
 
+
+      {dialog === 'document' && canManageDocuments && (
+        <Dialog title="Документ / згода" subtitle={card.name} onClose={() => setDialog('')} wide>
+          <form className="form-grid" onSubmit={saveDocument}>
+            <Field label="Тип документа">
+              <select value={documentForm.document_type} onChange={(e) => changeDocumentType(e.target.value)}>
+                <option value="informed_consent">Інформована згода</option>
+                <option value="data_processing">Обробка персональних даних</option>
+                <option value="center_rules">Правила центру</option>
+                <option value="family_consent">Сімейна консультація</option>
+                <option value="service_refusal">Відмова від послуги</option>
+                <option value="other">Інший документ</option>
+              </select>
+            </Field>
+            <Field label="Статус">
+              <select value={documentForm.status} onChange={(e) => setDocumentForm({ ...documentForm, status: e.target.value })}>
+                <option value="signed">Підписано</option>
+                <option value="refused">Відмова</option>
+              </select>
+            </Field>
+            <Field label="Назва" full><input value={documentForm.title} onChange={(e) => setDocumentForm({ ...documentForm, title: e.target.value })} required /></Field>
+            <Field label="Текст документа" full><textarea rows="8" value={documentForm.content} onChange={(e) => setDocumentForm({ ...documentForm, content: e.target.value })} /></Field>
+            <Field label="ПІБ підписанта" full><input value={documentForm.signed_by_name} onChange={(e) => setDocumentForm({ ...documentForm, signed_by_name: e.target.value })} /></Field>
+            {documentForm.status === 'signed' && (
+              <div className="field full">
+                <span>Підпис пацієнта / представника</span>
+                <SignaturePad value={documentForm.signature_data} onChange={(signature_data) => setDocumentForm({ ...documentForm, signature_data })} />
+              </div>
+            )}
+            <div className="alert info full-span">Після збереження підпис і текст документа залишаються в картці. Кнопка «Перегляд / PDF» формує друковану версію для збереження у PDF.</div>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти документ</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'print-document' && documentPreview && (
+        <Dialog title={documentPreview.title} subtitle="Підписаний документ" onClose={() => { setDialog(''); setDocumentPreview(null); }} wide>
+          <article className="consent-print">
+            <header>
+              <img src={documentPreview.center?.logo_data || '/solvia-icon.png'} alt="SOLVIA" />
+              <div><strong>{documentPreview.center?.center_name || 'SOLVIA Center'}</strong><span>{documentPreview.center?.address || ''}</span></div>
+            </header>
+            <div className="consent-title"><div className="eyebrow">ДОКУМЕНТ ПАЦІЄНТА · №{card.patient_no}</div><h1>{documentPreview.title}</h1></div>
+            <p className="consent-body">{documentPreview.content || '—'}</p>
+            <dl className="profile-list">
+              <div><dt>Пацієнт</dt><dd>{card.name}</dd></div>
+              <div><dt>Статус</dt><dd>{documentPreview.status}</dd></div>
+              <div><dt>Підписант</dt><dd>{documentPreview.signed_by_name || '—'}</dd></div>
+              <div><dt>Дата</dt><dd>{documentPreview.signed_at?.replace('T',' ')}</dd></div>
+            </dl>
+            {documentPreview.signature_data && <div className="saved-signature"><img src={documentPreview.signature_data} alt="Підпис" /><span>підпис</span></div>}
+            <footer>{documentPreview.center?.document_footer || 'SOLVIA by QureMed'}</footer>
+          </article>
+          <div className="form-actions no-print"><Button variant="ghost" onClick={() => { setDialog(''); setDocumentPreview(null); }}>Закрити</Button><Button onClick={printDocument}>Друк / Зберегти PDF</Button></div>
+        </Dialog>
+      )}
+
+      {dialog === 'referral' && (
+        <Dialog title="Нове направлення" subtitle={card.name} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={saveReferral}>
+            <Field label="Куди направити">
+              <select value={referralForm.destination_type} onChange={(e) => setReferralForm({ ...referralForm, destination_type: e.target.value })}>
+                {referralDestinationOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Field>
+            <Field label="Заклад / спеціаліст"><input value={referralForm.destination_name} onChange={(e) => setReferralForm({ ...referralForm, destination_name: e.target.value })} placeholder="Необов’язково" /></Field>
+            <Field label="Причина / мета направлення" full><textarea rows="5" value={referralForm.reason} onChange={(e) => setReferralForm({ ...referralForm, reason: e.target.value })} /></Field>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Створити направлення</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'archive-course' && canManageCourse && activeCourse && (
+        <Dialog title="Завершити курс" subtitle={'Курс №' + activeCourse.course_no + ' · ' + card.name} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={archiveActiveCourse}>
+            <Field label="Дата завершення"><input type="date" value={courseClose.ended_at} onChange={(e) => setCourseClose({ ...courseClose, ended_at: e.target.value })} required /></Field>
+            <Field label="Підсумок курсу" full><textarea rows="6" value={courseClose.outcome} onChange={(e) => setCourseClose({ ...courseClose, outcome: e.target.value })} placeholder="Організаційний підсумок курсу без дублювання приватних нотаток." /></Field>
+            <div className="alert info full-span">Після завершення картка перейде в архів. Консультації, документи, направлення й попередня історія залишаться в базі.</div>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Завершити й архівувати</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'new-course' && canManageCourse && !activeCourse && (
+        <Dialog title="Новий курс" subtitle={'Повторне звернення · ' + card.name} onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={startNewCourse}>
+            <Field label="Дата початку"><input type="date" value={courseForm.started_at} onChange={(e) => setCourseForm({ ...courseForm, started_at: e.target.value })} required /></Field>
+            <Field label="Причина повторного звернення" full><textarea rows="5" value={courseForm.reason} onChange={(e) => setCourseForm({ ...courseForm, reason: e.target.value })} /></Field>
+            <div className="alert info full-span">Створиться наступний курс у цій самій картці. Попередні курси та документи не змінюються.</div>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Відкрити новий курс</Button></div>
+          </form>
+        </Dialog>
+      )}
+
       {dialog === 'consultation' && (
-        <Dialog title="Підсумок консультації" subtitle={card.name} onClose={() => setDialog('')} wide>
+        <Dialog title="Підсумок консультації" subtitle={card.name} onClose={() => { if (!consultBusy) void closeConsultation(); }} wide>
+          {error && <div className="alert error">{error}</div>}
+          <div className={`draft-status ${draftStatus}`} role="status">
+            <AppIcon name="documents" />
+            <span>{{ ready: 'Автозбереження увімкнено', loading: 'Відновлюємо чернетку…', local: 'Зашифровано на цьому пристрої', saving: 'Зберігаємо на сервері…', saved: 'Чернетку збережено', offline: 'Немає зв’язку. Локальна копія зашифрована; повторимо при підключенні.', memory: 'Локальне сховище недоступне. Не закривайте вікно до збереження на сервері.', conflict: 'Чернетку змінено на іншому пристрої. Ваш текст не перезаписано.' }[draftStatus]}</span>
+            <Button type="button" variant="ghost" onClick={() => draftWriter.current?.flush()}>Повторити</Button>
+          </div>
+          {!draftSession?.key && <div className="alert info">Після перезавантаження увійдіть повторно для розблокування зашифрованих локальних чернеток. Серверне збереження працює.</div>}
+          {draftStatus === 'conflict' && <Button type="button" variant="secondary" onClick={() => { if (window.confirm('Замінити текст у цьому вікні актуальною серверною чернеткою? Локальні незбережені зміни буде втрачено.')) void openConsultation({ discardLocal: true }); }}>Завантажити серверну версію</Button>}
           <form className="form-grid" onSubmit={saveConsultation}>
+            <fieldset className="form-contents" disabled={consultBusy}>
             <Field label="Дата запису">
               <input type="date" value={consultDate} onChange={(e) => { setConsultDate(e.target.value); setConsultation({ ...consultation, appointment_id: '' }); loadConsultationsForDay(e.target.value); }} />
             </Field>
@@ -1380,9 +1845,10 @@ function PatientCard({ api, role, patientId, back }) {
               <textarea rows="3" value={consultation.result_text} onChange={(e) => setConsultation({ ...consultation, result_text: e.target.value })} />
             </Field>
             <div className="form-actions full-span">
-              <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
-              <Button type="submit">Зберегти консультацію</Button>
+              <Button type="button" variant="ghost" disabled={consultBusy} onClick={closeConsultation}>Закрити · залишити чернетку</Button>
+              <Button type="submit" disabled={consultBusy || draftStatus === 'conflict'}>{consultBusy ? 'Зберігаємо…' : 'Зберегти консультацію'}</Button>
             </div>
+            </fieldset>
           </form>
         </Dialog>
       )}
@@ -1414,7 +1880,7 @@ function PatientCard({ api, role, patientId, back }) {
         </Dialog>
       )}
 
-      {dialog === 'edit-patient' && isAdmin && (
+      {dialog === 'edit-patient' && (isAdmin || isReception) && (
         <Dialog title="Редагувати профіль пацієнта" subtitle={card.name} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={savePatientEdit}>
             <Field label="ПІБ" full><input value={patientEdit.name} onChange={(e) => setPatientEdit({ ...patientEdit, name: e.target.value })} required /></Field>
@@ -1442,15 +1908,20 @@ function PatientCard({ api, role, patientId, back }) {
                 <option value="">Не вказано</option><option value="female">Жіноча</option><option value="male">Чоловіча</option><option value="other">Інше</option>
               </select>
             </Field>
-            <Field label="Статус">
-              <select value={patientEdit.status} onChange={(e) => setPatientEdit({ ...patientEdit, status: e.target.value })}>
-                <option value="active">Активний</option>
-                <option value="completed">Супровід завершено</option>
-                <option value="archived">Архів</option>
-              </select>
+            <Field label="Статус" hint="Статус змінюється через «Завершити курс» або «Новий курс».">
+              <input value={patientEdit.status} disabled />
             </Field>
             <Field label="Адреса" full><input value={patientEdit.address} onChange={(e) => setPatientEdit({ ...patientEdit, address: e.target.value })} /></Field>
-            <Field label="Службова примітка" full><textarea rows="4" value={patientEdit.admin_note} onChange={(e) => setPatientEdit({ ...patientEdit, admin_note: e.target.value })} /></Field>
+            <Field label="Звідки звернувся / направлений">
+              <select value={patientEdit.referral_source} onChange={(e) => setPatientEdit({ ...patientEdit, referral_source: e.target.value })}>
+                <option value="">Не вказано</option>
+                {referralSourceOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Field>
+            <Field label="Деталі направлення">
+              <input value={patientEdit.referral_source_details} onChange={(e) => setPatientEdit({ ...patientEdit, referral_source_details: e.target.value })} />
+            </Field>
+            {isAdmin && <Field label="Службова примітка" full><textarea rows="4" value={patientEdit.admin_note} onChange={(e) => setPatientEdit({ ...patientEdit, admin_note: e.target.value })} /></Field>}
             <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти зміни</Button></div>
           </form>
         </Dialog>
@@ -1805,8 +2276,8 @@ function Rooms({ api }) {
             </div>
             <div className="room-actions">
               <Badge tone={r.active ? 'forest' : 'stone'}>{r.active ? 'Активний' : 'Неактивний'}</Badge>
-              <IconButton onClick={() => openEdit(r)} title="Редагувати">✎</IconButton>
-              <IconButton onClick={() => removeRoom(r)} title="Видалити">×</IconButton>
+              <IconButton onClick={() => openEdit(r)} title="Редагувати"><AppIcon name="edit" /></IconButton>
+              <IconButton onClick={() => removeRoom(r)} title="Видалити"><AppIcon name="delete" /></IconButton>
             </div>
           </article>
         ))}
@@ -1935,16 +2406,74 @@ function ReminderBar({ api, role }) {
 
 function ServerMaintenance({ api, apiBase }) {
   const [platform, setPlatform] = useState('');
-  useEffect(() => { api('GET', '/api/health').then(h => setPlatform(h.platform || 'unknown')).catch(() => setPlatform('offline')); }, [apiBase]);
+  const [serverVersion, setServerVersion] = useState('');
+  const [system, setSystem] = useState(null);
+  const [systemError, setSystemError] = useState('');
+
+  async function loadSystem() {
+    try {
+      const health = await api('GET', '/api/health');
+      setPlatform(health.platform || 'unknown');
+      setServerVersion(health.version || '');
+      if (health.platform === 'linux') {
+        setSystem(await api('GET', '/api/admin/system'));
+      }
+      setSystemError('');
+    } catch (e) {
+      setPlatform('offline');
+      setSystemError(e.message);
+    }
+  }
+
+  useEffect(() => { loadSystem(); }, [apiBase]);
+
   let localWindows = false;
   try { localWindows = platform === 'windows' && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(apiBase).hostname) && !!window.chrome?.webview; } catch {}
+
   if (!localWindows) return <div className="maintenance-grid">
-    <article><strong>Сервер {platform === 'linux' ? 'Linux' : 'центру'}</strong><p>{apiBase}</p><p>Обслуговування виконує адміністратор на самому сервері.</p></article>
+    <article>
+      <strong>Сервер {platform === 'linux' ? 'Linux' : 'центру'}</strong>
+      <p>{system?.lan_url || apiBase}</p>
+      <p>{platform === 'linux' ? 'systemd + PostgreSQL + HTTPS. Критичні root-операції виконуються локально на сервері.' : 'Обслуговування виконує адміністратор на сервері.'}</p>
+      <Button variant="secondary" onClick={loadSystem}>Оновити діагностику</Button>
+      {systemError && <p className="danger-text">{systemError}</p>}
+    </article>
+
     {platform === 'linux' && <>
-      <article><strong>Резервні копії</strong><p>Щодня о 02:00 за часом сервера. Зберігайте окрему копію на іншому носії.</p><code>sudo solvia-admin backup</code><p>/var/backups/solvia</p></article>
-      <article><strong>Стан та відновлення</strong><p><code>sudo solvia-admin health</code></p><p><code>sudo solvia-admin restore /path/backup.dump</code></p><p>Відновлення потребує підтвердження на сервері.</p></article>
+      <article>
+        <strong>PostgreSQL</strong>
+        <p>{system?.database?.name || 'solvia'} · {system?.database?.size || '—'}</p>
+        <p>PostgreSQL {system?.database?.version || '—'}</p>
+        <small>
+          {system ? `${system.counts?.patients ?? 0} пацієнтів · ${system.counts?.consultations ?? 0} консультацій · ${system.counts?.discharges ?? 0} виписок` : 'Завантаження статистики…'}
+        </small>
+      </article>
+      <article>
+        <strong>Оновлення SOLVIA</strong>
+        <p>Встановлена версія: <b>{serverVersion || '—'}</b></p>
+        <p><code>sudo solvia-admin check-update</code></p>
+        <p><code>sudo solvia-admin update</code></p>
+        <small>Або скористайтесь дією «Оновити SOLVIA» у меню програми Linux.</small>
+      </article>
+      <article>
+        <strong>Резервні копії</strong>
+        <p>Автоматично щодня о 02:00. Для ручної перевіреної копії:</p>
+        <code>sudo solvia-admin backup</code>
+        <p><code>sudo solvia-admin backups</code></p>
+        <p><code>sudo solvia-admin verify-backup /path/backup.dump</code></p>
+        <small>Кожна нова копія проходить справжнє відновлення в окрему тимчасову БД. Робочі дані не замінюються.</small>
+        <small>{system?.backups?.[0] ? `Остання подія: ${system.backups[0].status} · ${String(system.backups[0].created || '').replace('T',' ')}` : 'Історії backup ще немає.'}</small>
+        <div className="backup-history">{system?.backups?.slice(0, 6).map(event => <div key={event.id}><span className={`badge ${event.status === 'success' ? 'forest' : 'rose'}`}>{event.status === 'success' ? 'Успішно' : 'Помилка'}</span><strong>{event.action === 'verify' ? 'Перевірка відновлення' : event.action === 'backup' ? 'Резервна копія' : 'Відновлення'}</strong><small>{event.created?.replace('T',' ')} · {event.details}</small></div>)}</div>
+      </article>
+      <article>
+        <strong>Діагностика / відновлення</strong>
+        <p><code>sudo solvia-admin doctor</code></p>
+        <p><code>sudo solvia-admin restore /path/backup.dump</code></p>
+        <small>Restore навмисно вимагає sudo та ручне підтвердження на Linux-сервері.</small>
+      </article>
     </>}
   </div>;
+
   return <div className="backup-actions">
     <Button onClick={() => window.chrome.webview.postMessage('backup')}>Створити backup</Button>
     <Button variant="secondary" onClick={() => window.chrome.webview.postMessage('restore')}>Відновити БД</Button>
@@ -1952,7 +2481,8 @@ function ServerMaintenance({ api, apiBase }) {
   </div>;
 }
 
-function ServerConsole({ api, user, onLogout, apiBase }) {
+function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
+  const [showSettings, setShowSettings] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [shift, setShift] = useState(null);
   const [reminders, setReminders] = useState([]);
@@ -1991,13 +2521,15 @@ function ServerConsole({ api, user, onLogout, apiBase }) {
       <header className="server-console-head">
         <div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console</strong><span>{center?.center_name || 'QureMed'}</span></div></div>
         <div className="page-actions">
+          <Button variant="secondary" onClick={() => setShowSettings(!showSettings)}>{showSettings ? 'Закрити налаштування' : 'Налаштування системи'}</Button>
           <Button variant="secondary" onClick={load}>Оновити</Button>
           <Button variant="ghost" onClick={onLogout}>Вийти</Button>
         </div>
       </header>
       {error && <div className="alert error">{error}</div>}
+      {showSettings && <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />}
       <div className="server-status-grid">
-        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.0</p></article>
+        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.2</p></article>
         <article className="stat-card"><strong>{shift?.open ? 'OPEN' : 'CLOSED'}</strong><h3>Робоча зміна</h3><p>{shift?.shift_date || localDate()}</p></article>
         <article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Онлайн пристроїв</h3><p>{sessions.length} активних сесій</p></article>
         <article className="stat-card"><strong>{reminders.length}</strong><h3>Найближчих записів</h3><p>Нагадування психологам і адміну</p></article>
@@ -2006,6 +2538,8 @@ function ServerConsole({ api, user, onLogout, apiBase }) {
         <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Сервер центру</h2></div><Badge tone="forest">Local</Badge></div>
         <ServerMaintenance api={api} apiBase={apiBase} />
       </section>
+      <WorkflowSettings api={api} />
+      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />
       <section className="surface">
         <div className="section-head"><div><div className="eyebrow">ПІДКЛЮЧЕННЯ</div><h2>Телефони, планшети та ПК</h2></div><Badge tone="stone">{sessions.length}</Badge></div>
         <div className="device-list">
@@ -2019,6 +2553,77 @@ function ServerConsole({ api, user, onLogout, apiBase }) {
       </section>
     </div>
   );
+}
+
+function WorkflowSettings({ api }) {
+  const [form, setForm] = useState(null);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api('GET', '/api/settings/workflow').then(setForm).catch(e => setMessage(e.message)); }, []);
+  async function save(e) {
+    e.preventDefault(); setBusy(true); setMessage('');
+    try { setForm(await api('PATCH', '/api/settings/workflow', form)); setMessage('Правила роботи збережено. Вони застосовуються до нового запису на всіх пристроях.'); }
+    catch (e) { setMessage(e.message); } finally { setBusy(false); }
+  }
+  return <section className="surface settings-panel">
+    <h2>Розклад і безпека</h2>
+    {message && <div className="alert info" role="status">{message}</div>}
+    {!form ? <Spinner /> : <form className="form-grid" onSubmit={save}>
+      <Field label="Початок роботи"><input type="time" value={form.opening_time} onChange={e => setForm({...form, opening_time:e.target.value})} required /></Field>
+      <Field label="Завершення роботи"><input type="time" value={form.closing_time} onChange={e => setForm({...form, closing_time:e.target.value})} required /></Field>
+      <div className="field full"><span>Робочі дні</span><div className="weekday-options">{['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].map((label,i) => <label key={label}><input type="checkbox" checked={form.working_days.includes(String(i+1))} onChange={e => setForm({...form,working_days:e.target.checked ? [...form.working_days,String(i+1)].sort().join('') : form.working_days.replace(String(i+1),'')})} /> {label}</label>)}</div></div>
+      <Field label="Крок вільних слотів"><select value={form.slot_step_minutes} onChange={e => setForm({...form,slot_step_minutes:Number(e.target.value)})}>{[15,30,60].map(n => <option key={n} value={n}>{n} хв</option>)}</select></Field>
+      <Field label="Стандартна тривалість, хв"><input type="number" min="15" max="240" value={form.default_duration_minutes} onChange={e => setForm({...form,default_duration_minutes:Number(e.target.value)})} required /></Field>
+      <Field label="Тривалість сесії входу, год" hint="Скорочення ліміту також скорочує чинні сесії."><input type="number" min="1" max="24" value={form.session_hours} onChange={e => setForm({...form,session_hours:Number(e.target.value)})} required /></Field>
+      <div className="form-actions full-span"><Button disabled={busy}>{busy ? 'Зберігаємо…' : 'Зберегти правила'}</Button></div>
+    </form>}
+  </section>;
+}
+
+function openProductUpdates() {
+  if (window.chrome?.webview) window.chrome.webview.postMessage('product-updates');
+  else window.open('https://github.com/docvincent123/Serenia/releases', '_blank', 'noopener,noreferrer');
+}
+
+function AccountSettings({ api, apiBase, onLogout }) {
+  const [prefs, setPrefs] = useState(() => { try { return JSON.parse(localStorage.getItem('solvia_preferences') || '{}'); } catch { return {}; } });
+  const [password, setPassword] = useState({current_password:'',new_password:'',confirm:''});
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [health, setHealth] = useState(null);
+  useEffect(() => { api('GET','/api/health').then(setHealth).catch(e=>setMessage(e.message)); }, []);
+  function change(key,value) {
+    const next={...prefs,[key]:value}; setPrefs(next);
+    localStorage.setItem('solvia_preferences',JSON.stringify(next));
+    document.documentElement.dataset.reducedMotion=next.reducedMotion ? 'true':'false';
+    document.documentElement.dataset.compact=next.compact ? 'true':'false';
+  }
+  async function changePassword(e) {
+    e.preventDefault(); setMessage('');
+    if(password.new_password!==password.confirm){setMessage('Нові паролі не збігаються.');return;}
+    setBusy(true);
+    try { await api('POST','/api/account/password',{current_password:password.current_password,new_password:password.new_password}); await onLogout(); }
+    catch(e){setMessage(e.message);}finally{setBusy(false);}
+  }
+  return <>
+    <PageHead eyebrow="ОСОБИСТИЙ ПРОСТІР" title="Мої налаштування" subtitle="Налаштування цього пристрою та захист облікового запису." />
+    {message && <div className="alert error" role="alert">{message}</div>}
+    <section className="surface settings-panel"><h2>Інтерфейс</h2><div className="weekday-options">
+      <label><input type="checkbox" checked={!!prefs.reducedMotion} onChange={e=>change('reducedMotion',e.target.checked)} /> Зменшити анімації</label>
+      <label><input type="checkbox" checked={!!prefs.compact} onChange={e=>change('compact',e.target.checked)} /> Компактні списки</label>
+    </div></section>
+    <section className="surface settings-panel"><h2>Змінити пароль</h2><p>Після зміни потрібно увійти з новим паролем на всіх пристроях.</p><form className="form-grid" onSubmit={changePassword}>
+      <Field label="Поточний пароль"><input type="password" autoComplete="current-password" value={password.current_password} onChange={e=>setPassword({...password,current_password:e.target.value})} required /></Field>
+      <Field label="Новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
+      <Field label="Повторіть новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field>
+      <div className="form-actions full-span"><Button disabled={busy}>Змінити пароль</Button></div>
+    </form></section>
+    <section className="surface settings-panel"><h2>Версія та оновлення</h2><p>Сервер: SOLVIA {health?.version || '…'} · {health?.platform || ''}</p><p>{apiBase}</p>
+      <Button variant="secondary" onClick={openProductUpdates}>Відкрити офіційні випуски</Button>
+      <p>Linux: sudo solvia-admin check-update / update. Windows: установник нового випуску поверх поточного клієнта. Android: APK нового випуску з тим самим підписом.</p>
+      <a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a>
+    </section>
+  </>;
 }
 
 function Settings({ api, apiBase, onSwitchApi }) {
@@ -2070,6 +2675,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
       const apiUrl = preferred === 'vps'
         ? cleanBase(form.vps_api_url)
         : cleanBase(form.local_api_url || apiBase);
+      if (!apiUrl.startsWith('https://')) throw new Error('Для телефону потрібне HTTPS-підключення.');
       if (/127\.0\.0\.1|localhost/i.test(apiUrl)) {
         throw new Error('Для телефона потрібна LAN-адреса серверного ПК, а не 127.0.0.1. Вкажіть Local API URL, наприклад https://192.168.1.100:8443.');
       }
@@ -2079,7 +2685,6 @@ function Settings({ api, apiBase, onSwitchApi }) {
         center: form.center_name || 'SOLVIA',
         preferred,
         api_url: apiUrl,
-        http_url: apiUrl.startsWith('http://') ? apiUrl : '',
         https_url: apiUrl.startsWith('https://') ? apiUrl : '',
         generated: new Date().toISOString()
       };
@@ -2140,10 +2745,11 @@ function Settings({ api, apiBase, onSwitchApi }) {
             ['center','Центр','Реквізити та бренд'],
             ['documents','Документи','Виписки та підписи'],
             ['connection','Підключення','Local / VPS'],
+            ['workflow','Правила роботи','Розклад і безпека'],
             ['maintenance','Backup','Резервні копії']
           ].map(([key,title,text]) => (
             <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => setActiveSection(key)}>
-              <span>{key === 'center' ? '01' : key === 'documents' ? '02' : key === 'connection' ? '03' : '04'}</span>
+              <span><AppIcon name={key === "center" ? "rooms" : key === "documents" ? "reports" : key === "connection" ? "devices" : "preferences"} /></span>
               <div><strong>{title}</strong><small>{text}</small></div>
             </button>
           ))}
@@ -2157,7 +2763,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
                   <div className="eyebrow">{activeSection === 'center' ? 'ПРОФІЛЬ ЦЕНТРУ' : 'ДОКУМЕНТИ'}</div>
                   <h2>{activeSection === 'center' ? 'Реквізити та оформлення' : 'Виписки та підписи'}</h2>
                 </div>
-                <Badge tone="forest">SOLVIA 2.0</Badge>
+                <Badge tone="forest">SOLVIA 2.2</Badge>
               </div>
 
               <form className="form-grid" onSubmit={save}>
@@ -2208,10 +2814,10 @@ function Settings({ api, apiBase, onSwitchApi }) {
 
               <div className="connection-mode-grid">
                 <button className={form.connection_mode === 'local' ? 'active' : ''} onClick={() => setForm({ ...form, connection_mode: 'local' })}>
-                  <span className="mode-icon">L</span><div><strong>Локальний сервер</strong><small>Сервер у мережі центру або на цьому ПК</small></div>
+                  <span className="mode-icon"><AppIcon name="devices" /></span><div><strong>Локальний сервер</strong><small>Сервер у мережі центру або на цьому ПК</small></div>
                 </button>
                 <button className={form.connection_mode === 'vps' ? 'active' : ''} onClick={() => setForm({ ...form, connection_mode: 'vps' })}>
-                  <span className="mode-icon">V</span><div><strong>VPS сервер</strong><small>Захищене HTTPS-підключення через інтернет</small></div>
+                  <span className="mode-icon"><AppIcon name="devices" /></span><div><strong>VPS сервер</strong><small>Захищене HTTPS-підключення через інтернет</small></div>
                 </button>
               </div>
 
@@ -2253,6 +2859,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
             </section>
           )}
 
+          {activeSection === 'workflow' && <WorkflowSettings api={api} />}
           {activeSection === 'maintenance' && (
             <section className="surface settings-panel">
               <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Backup / Restore</h2></div><Badge tone="sand">Admin only</Badge></div>
@@ -2285,7 +2892,7 @@ function GlobalSearch({ api, onPatient, onNavigate }) {
   return (
     <div className="global-search-wrap">
       <div className="global-search">
-        <span>⌕</span>
+        <span><AppIcon name="search" /></span>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Пошук пацієнта, сім’ї, працівника, кабінету…" />
         {busy && <small>Пошук…</small>}
       </div>
@@ -2455,6 +3062,306 @@ function Reports({ api, role }) {
   );
 }
 
+
+function SignaturePad({ value, onChange }) {
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+
+  useEffect(() => {
+    if (!value || !canvasRef.current) return;
+    const image = new Image();
+    image.onload = () => {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    };
+    image.src = value;
+  }, []);
+
+  function position(e) {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  function start(e) {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    canvas.setPointerCapture?.(e.pointerId);
+    const ctx = canvas.getContext('2d');
+    const p = position(e);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    drawing.current = true;
+  }
+
+  function move(e) {
+    if (!drawing.current) return;
+    e.preventDefault();
+    const ctx = canvasRef.current.getContext('2d');
+    const p = position(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+
+  function end(e) {
+    if (!drawing.current) return;
+    drawing.current = false;
+    e.preventDefault();
+    onChange(canvasRef.current.toDataURL('image/png'));
+  }
+
+  function clear() {
+    const canvas = canvasRef.current;
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    onChange('');
+  }
+
+  return (
+    <div className="signature-pad-wrap">
+      <canvas
+        ref={canvasRef}
+        width="900"
+        height="240"
+        className="signature-pad"
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+      />
+      <div className="signature-pad-foot">
+        <small>Підпис пальцем або стилусом</small>
+        <Button type="button" variant="ghost" onClick={clear}>Очистити</Button>
+      </div>
+    </div>
+  );
+}
+
+function Workload({ api }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+
+  async function load() {
+    setError('');
+    try { setData(await api('GET', '/api/workload')); }
+    catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  return (
+    <>
+      <PageHead
+        eyebrow="КОМАНДА"
+        title="Контроль завантаження психологів"
+        subtitle="Активні пацієнти, консультації, відміни, середня тривалість і вільний час на сьогодні."
+        actions={<Button variant="secondary" onClick={load}>Оновити</Button>}
+      />
+      {error && <div className="alert error">{error}</div>}
+      {!data ? <Spinner /> : (
+        <section className="surface">
+          <div className="section-head">
+            <div><div className="eyebrow">ПОТОЧНИЙ ТИЖДЕНЬ</div><h2>Навантаження команди</h2></div>
+            <Badge tone="forest">{data.items?.length || 0} психологів</Badge>
+          </div>
+          {!data.items?.length ? <Empty title="Немає психологів" text="Додайте активних психологів у команду центру." /> : (
+            <div className="workload-grid">
+              {data.items.map((x) => (
+                <article className="workload-card" key={x.id}>
+                  <div className="workload-card-head">
+                    <div className="avatar">{String(x.name || '?').slice(0,1).toUpperCase()}</div>
+                    <div><strong>{x.name}</strong><small>Тиждень від {data.week_start}</small></div>
+                  </div>
+                  <div className="metric-grid">
+                    <div><strong>{x.active_patients}</strong><span>активних пацієнтів</span></div>
+                    <div><strong>{x.consultations_today}</strong><span>консультацій сьогодні</span></div>
+                    <div><strong>{x.consultations_week}</strong><span>консультацій за тиждень</span></div>
+                    <div><strong>{x.free_hours_today}</strong><span>вільних годин сьогодні</span></div>
+                    <div><strong>{x.cancellations_week}</strong><span>відмін за тиждень</span></div>
+                    <div><strong>{x.avg_duration_minutes}</strong><span>середня тривалість, хв</span></div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
+function Supervisions({ api, role, user }) {
+  const [items, setItems] = useState([]);
+  const [meta, setMeta] = useState({ psychologists: [] });
+  const [dialog, setDialog] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ psychologist_id: '', scheduled_at: localDate() + 'T10:00', duration_minutes: 60, topic: '' });
+  const [edit, setEdit] = useState({ case_summary: '', recommendations: '', status: 'scheduled' });
+  const leader = role === 'admin' || role === 'director';
+
+  async function load() {
+    setError('');
+    try {
+      const tasks = [api('GET', '/api/supervisions')];
+      if (leader) tasks.push(api('GET', '/api/meta'));
+      const [rows, m = { psychologists: [] }] = await Promise.all(tasks);
+      setItems(rows); setMeta(m);
+    } catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  function openCreate() {
+    setForm({ psychologist_id: meta.psychologists?.[0]?.id || '', scheduled_at: localDate() + 'T10:00', duration_minutes: 60, topic: '' });
+    setDialog('create');
+  }
+
+  async function create(e) {
+    e.preventDefault();
+    try {
+      await api('POST', '/api/supervisions', {
+        psychologist_id: Number(form.psychologist_id),
+        supervisor_id: Number(user.id),
+        scheduled_at: form.scheduled_at,
+        duration_minutes: Number(form.duration_minutes),
+        topic: form.topic
+      });
+      setDialog(''); await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  function openEdit(item) {
+    setSelected(item);
+    setEdit({ case_summary: item.case_summary || '', recommendations: item.recommendations || '', status: item.status || 'scheduled' });
+    setDialog('edit');
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault();
+    try {
+      const body = role === 'psychologist'
+        ? { case_summary: edit.case_summary }
+        : { case_summary: edit.case_summary, recommendations: edit.recommendations, status: edit.status };
+      await api('PATCH', '/api/supervisions/' + selected.id, body);
+      setDialog(''); setSelected(null); await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  return (
+    <>
+      <PageHead
+        eyebrow="ПРОФЕСІЙНА ПІДТРИМКА"
+        title={leader ? 'Супервізії психологів' : 'Мої супервізії'}
+        subtitle={leader ? 'Планування супервізій і фіксація рекомендацій без персональних даних пацієнта.' : 'Додавайте лише деідентифікований опис випадку — без ПІБ, телефону, адреси чи номера картки.'}
+        actions={leader && <Button onClick={openCreate}>+ Запланувати</Button>}
+      />
+      {error && <div className="alert error">{error}</div>}
+      <section className="surface">
+        {!items.length ? <Empty title="Супервізій ще немає" text="Заплановані зустрічі з’являться тут." /> : (
+          <div className="consultation-list">
+            {items.map((x) => (
+              <article className="consultation-card" key={x.id}>
+                <div className="section-head compact">
+                  <div>
+                    <div className="eyebrow">{x.scheduled_at?.replace('T',' ')} · {x.duration_minutes} хв</div>
+                    <h3>{x.psychologist}</h3>
+                  </div>
+                  <Badge tone={x.status === 'completed' ? 'forest' : x.status === 'cancelled' ? 'rose' : 'sand'}>{x.status}</Badge>
+                </div>
+                <p><strong>Тема:</strong> {x.topic || '—'}</p>
+                <p><strong>Супервізор:</strong> {x.supervisor}</p>
+                {x.case_summary && <p><strong>Деідентифікований випадок:</strong> {x.case_summary}</p>}
+                {x.recommendations && <p><strong>Рекомендації:</strong> {x.recommendations}</p>}
+                <div className="form-actions"><Button variant="secondary" onClick={() => openEdit(x)}>{role === 'psychologist' ? 'Додати випадок' : 'Відкрити / завершити'}</Button></div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {dialog === 'create' && leader && (
+        <Dialog title="Нова супервізія" subtitle="Планування зустрічі" onClose={() => setDialog('')}>
+          <form className="form-grid" onSubmit={create}>
+            <Field label="Психолог" full>
+              <select value={form.psychologist_id} onChange={(e) => setForm({ ...form, psychologist_id: e.target.value })} required>
+                {(meta.psychologists || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Дата і час"><input type="datetime-local" value={form.scheduled_at} onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })} required /></Field>
+            <Field label="Тривалість, хв"><input type="number" min="30" max="240" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: e.target.value })} /></Field>
+            <Field label="Тема" full><input value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} placeholder="Напрям супервізії" /></Field>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Запланувати</Button></div>
+          </form>
+        </Dialog>
+      )}
+
+      {dialog === 'edit' && selected && (
+        <Dialog title="Супервізія" subtitle={selected.psychologist + ' · ' + (selected.scheduled_at || '').replace('T',' ')} onClose={() => setDialog('')} wide>
+          <form className="form-grid" onSubmit={saveEdit}>
+            <Field label="Деідентифікований опис випадку" hint="Не вказуйте ПІБ, телефон, адресу, номер картки або інші прямі ідентифікатори." full>
+              <textarea rows="7" value={edit.case_summary} onChange={(e) => setEdit({ ...edit, case_summary: e.target.value })} />
+            </Field>
+            {leader && <>
+              <Field label="Рекомендації супервізора" full><textarea rows="6" value={edit.recommendations} onChange={(e) => setEdit({ ...edit, recommendations: e.target.value })} /></Field>
+              <Field label="Статус">
+                <select value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value })}>
+                  <option value="scheduled">Заплановано</option>
+                  <option value="completed">Завершено</option>
+                  <option value="cancelled">Скасовано</option>
+                </select>
+              </Field>
+            </>}
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти</Button></div>
+          </form>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function Archive({ api, openPatient }) {
+  const [rows, setRows] = useState([]);
+  const [error, setError] = useState('');
+  async function load() {
+    try { setRows(await api('GET', '/api/patients?status=archived')); setError(''); }
+    catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  return (
+    <>
+      <PageHead eyebrow="ІСТОРІЯ ЦЕНТРУ" title="Архів пацієнтів" subtitle="Завершені курси не видаляються. При повторному зверненні відкривається новий курс у тій самій картці." actions={<Button variant="secondary" onClick={load}>Оновити</Button>} />
+      {error && <div className="alert error">{error}</div>}
+      <section className="surface">
+        {!rows.length ? <Empty title="Архів порожній" text="Після завершення курсу картка пацієнта з’явиться тут." /> : (
+          <div className="patient-card-list">
+            {rows.map((p) => (
+              <button className="patient-list-card" key={p.id} onClick={() => openPatient(p.id)}>
+                <span className="patient-card-accent" />
+                <span className="patient-card-head">
+                  <span className="avatar patient-avatar">{p.name.slice(0,1).toUpperCase()}</span>
+                  <span className="patient-card-name"><small>АРХІВ · №{p.patient_no}</small><strong>{p.name}</strong><span>{p.phone}</span></span>
+                  <span className="patient-card-arrow">↗</span>
+                </span>
+                <span className="patient-card-meta">
+                  <span><small>КАТЕГОРІЯ</small><strong>{p.category}</strong></span>
+                  <span><small>ПСИХОЛОГ</small><strong>{p.psychologist}</strong></span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
 function Audit({ api }) {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
@@ -2478,14 +3385,14 @@ function Audit({ api }) {
   );
 }
 
-function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
+function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
   const [patientId, setPatientId] = useState(null);
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
-  const [health, setHealth] = useState({ online: true, version: '2.0.0' });
-  const navigation = navFor(user.role);
+  const [health, setHealth] = useState({ online: true, version: '2.2.0' });
+  const navigation = [...navFor(user.role), ['preferences', 'Мої налаштування']];
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
   const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
@@ -2515,7 +3422,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.0.0' });
+        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.2.0' });
       } catch {
         if (alive) setHealth({ online: false, version: '' });
       }
@@ -2526,7 +3433,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
   }, [apiBase]);
 
   const content = (() => {
-    if (page === 'patient-card' && patientId) return <PatientCard api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} />;
+    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} draftSession={draftSession} />;
+    if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
     if (page === 'dashboard') return <Dashboard api={api} />;
     if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} />;
@@ -2534,8 +3442,12 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports api={api} role={user.role} />;
+    if (page === 'workload') return <Workload api={api} />;
+    if (page === 'supervisions') return <Supervisions api={api} role={user.role} user={user} />;
+    if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
     if (page === 'devices') return <Devices api={api} />;
     if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
+    if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
   })();
@@ -2552,25 +3464,29 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
 
         <nav className={locked ? 'nav-locked' : ''}>
           <div className="nav-label">РОБОЧИЙ ПРОСТІР</div>
-          {navigation.map(([key, label]) => (
-            <button key={key} disabled={locked} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
+          {navigation.filter(([key]) => key !== 'settings' && key !== 'preferences').map(([key, label]) => (
+            <button key={key} disabled={locked && key !== 'preferences' && !(user.role === 'admin' && key === 'settings')} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
               <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
             </button>
           ))}
         </nav>
 
         <div className="sidebar-spacer" />
+        <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
+          {user.role === 'admin' && <button aria-label="Налаштування системи" className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span className="desktop-label">Налаштування системи</span><span className="mobile-label" aria-hidden="true">Система</span></button>}
+          <button aria-label="Мої налаштування" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Мої налаштування</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
+          <button className="nav-item" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
+        </div>
         <div className="sidebar-support">
           <div className="sidebar-support-head">
             <span className="support-dot" />
-            <div><strong>QureMed Support</strong><small>24/7 · SOLVIA 2.0</small></div>
+            <div><strong>QureMed Support</strong><small>24/7 · SOLVIA 2.2</small></div>
           </div>
           <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
         </div>
         <div className="user-card">
           <div className="avatar inverse">{user.name.slice(0, 1).toUpperCase()}</div>
           <div className="user-copy"><strong>{user.name}</strong><span>{roleLabels[user.role]}</span></div>
-          <IconButton onClick={onLogout} title="Вийти">↪</IconButton>
         </div>
       </aside>
 
@@ -2591,12 +3507,12 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
                 <div><strong>{connectionKind}</strong><small>{health.online ? `SOLVIA ${health.version}` : 'Немає зв’язку'}</small></div>
               </div>
             </div>
-            <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />
+            {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           </div>
         </>}
         <div className="workspace-inner">
           {shiftError && <div className="alert error">{shiftError}</div>}
-          {!shift ? <Spinner /> : locked ? (
+          {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? <Spinner /> : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
               <div className="eyebrow">ЩОДЕННЕ ВІДКРИТТЯ ЦЕНТРУ</div>
@@ -2620,12 +3536,17 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    try { const p=JSON.parse(localStorage.getItem('solvia_preferences') || '{}');document.documentElement.dataset.reducedMotion=p.reducedMotion?'true':'false';document.documentElement.dataset.compact=p.compact?'true':'false'; } catch {}
+  }, []);
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');
   const appMode = params.get('mode') || 'center';
   const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? (appMode === 'server' ? 'http://127.0.0.1:8765' : '') : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || params.get('default_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
+  const activeToken = useRef(token);
+  const [draftSession, setDraftSession] = useState(null);
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(Boolean(token));
 
@@ -2654,29 +3575,40 @@ export default function App() {
       .finally(() => setBooting(false));
   }, []);
 
-  function login(base, result) {
+  async function login(base, result, password) {
+    const identity = await draftIdentity(base, result.user, password).catch(() => null);
+    setDraftSession(identity);
     localStorage.setItem('solvia_api', base);
     sessionStorage.setItem('solvia_token', result.token);
+    activeToken.current = result.token;
     setApiBase(base);
     setToken(result.token);
     setUser(result.user);
   }
 
-  async function logout() {
-    try { await request(apiBase, token, 'POST', '/api/logout'); } catch {}
+  function logout() {
+    const previousBase = apiBase;
+    const previousToken = token;
     sessionStorage.removeItem('solvia_token');
+    activeToken.current = '';
     setToken('');
     setUser(null);
+    setBooting(false);
+    setDraftSession(null);
+    // Return to login immediately; revoke the original session in the background.
+    if (previousToken) void request(previousBase, previousToken, 'POST', '/api/logout').catch(() => {});
   }
 
   async function api(method, path, body) {
     try {
       return await request(apiBase, token, method, path, body);
     } catch (e) {
-      if (e.status === 401) {
+      if (e.status === 401 && activeToken.current === token) {
         sessionStorage.removeItem('solvia_token');
+        activeToken.current = '';
         setToken('');
         setUser(null);
+        setDraftSession(null);
       }
       throw e;
     }
@@ -2686,9 +3618,11 @@ export default function App() {
     const clean = cleanBase(nextBase);
     localStorage.setItem('solvia_api', clean);
     sessionStorage.removeItem('solvia_token');
+    activeToken.current = '';
     setApiBase(clean);
     setToken('');
     setUser(null);
+    setDraftSession(null);
   }
 
   if (booting) {
@@ -2696,8 +3630,6 @@ export default function App() {
   }
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} />;
-  if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} />;
-  return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
+  if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
+  return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} />;
 }
-
-

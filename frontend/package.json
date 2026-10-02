@@ -1,7 +1,7 @@
 {
   "name": "solvia-desktop-ui",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -17,4 +17,5 @@
     "vite": "8.3.0"
   }
 }
+
 

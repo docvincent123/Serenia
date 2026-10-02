@@ -1,0 +1,82 @@
+name: SOLVIA verified product release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solvia-product-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate version and production signing
+        id: version
+        env:
+          KEYSTORE: ${{ secrets.SOLVIA_ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SOLVIA_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SOLVIA_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SOLVIA_ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          version=$(sed -n 's/^project(Solvia VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then test "$GITHUB_REF_NAME" = "v$version"; fi
+          if [[ -z $KEYSTORE || -z $STORE_PASSWORD || -z $KEY_ALIAS || -z $KEY_PASSWORD ]]; then
+            echo 'Configure all four SOLVIA_ANDROID signing secrets before a product release.' >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+  installer:
+    needs: validate
+    uses: ./.github/workflows/installer-lint.yml
+  desktop-server:
+    needs: validate
+    uses: ./.github/workflows/build.yml
+  mobile:
+    needs: validate
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
+  release:
+    needs: [validate, installer, desktop-server, mobile]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: downloads
+      - name: Assemble versioned packages and checksums
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        shell: bash
+        run: |
+          mkdir release-files
+          cp "downloads/SOLVIA-$VERSION-Linux-x64-installer/SOLVIA-$VERSION-Linux-x64.tar.gz" release-files/
+          cp "downloads/SOLVIA-$VERSION-Setup-EXE/SOLVIA-Setup-$VERSION-Windows-x64.exe" release-files/
+          cp "downloads/SOLVIA-$VERSION-Android-release-APK/app-release.apk" "release-files/SOLVIA-$VERSION-Android.apk"
+          cd release-files
+          for file in *; do sha256sum "$file" > "$file.sha256"; done
+      - name: Create reviewable draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        shell: bash
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" --json isDraft --jq '.isDraft' > draft.txt; then
+            test "$(cat draft.txt)" = true || { echo 'Published releases are immutable; use a new version.'; exit 1; }
+            gh release upload "$tag" release-files/* --clobber
+          else
+            gh release create "$tag" release-files/* --draft --target "$GITHUB_SHA" --title "SOLVIA $VERSION" --generate-notes
+          fi

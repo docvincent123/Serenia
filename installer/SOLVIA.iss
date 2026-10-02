@@ -1,5 +1,5 @@
 #define MyAppName "SOLVIA by QureMed"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "2.2.0"
 #define MyAppPublisher "QureMed Industries"
 #define MyAppExeName "Solvia.exe"
 
@@ -102,7 +102,7 @@ begin
     'Адреса сервера центру',
     'Укажіть HTTPS-адресу, яку показав Linux-інсталятор, наприклад https://192.168.1.105:8443. Поле можна залишити порожнім і налаштувати при вході. Після встановлення імпортуйте сертифікат сервера через ярлик «Довірити сертифікат сервера SOLVIA».');
   ConnectionPage.Add('Адреса HTTPS:', False);
-  AccountPage := CreateInputQueryPage(ConnectionPage.ID, 'SOLVIA 2.0 — налаштування центру',
+  AccountPage := CreateInputQueryPage(ConnectionPage.ID, 'SOLVIA 2.2 — налаштування центру',
     'Обліковий запис адміністратора',
     'Для першого встановлення створіть адміністратора. При оновленні наявні облікові записи зберігаються. Пароль postgres потрібен лише для підключення до вже встановленого PostgreSQL без конфігурації SOLVIA.');
   AccountPage.Add('Логін адміністратора (латиниця, цифри, . _ -):', False);
@@ -181,7 +181,7 @@ begin
   InputDir := ExpandConstant('{tmp}\solvia-private');
   InputPath := InputDir + '\setup-input.txt';
   LogPath := ExpandConstant('{commonappdata}\QureMed\SOLVIA\install.log');
-  Progress := CreateOutputMarqueeProgressPage('Налаштування SOLVIA 2.0', 'Встановлення PostgreSQL та запуск сервера можуть тривати кілька хвилин.');
+  Progress := CreateOutputMarqueeProgressPage('Налаштування SOLVIA 2.2', 'Встановлення PostgreSQL та запуск сервера можуть тривати кілька хвилин.');
   repeat
     Retry := False;
     Progress.Show;
@@ -226,5 +226,6 @@ function GetCustomSetupExitCode: Integer;
 begin
   if Configured then Result := 0 else Result := 1;
 end;
+
 
 
