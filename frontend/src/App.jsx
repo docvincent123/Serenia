@@ -227,7 +227,7 @@ function Spinner() {
 function Dialog({ title, subtitle, onClose, children, wide = false }) {
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
         <div className="dialog-head">
           <div>
             <h2>{title}</h2>
@@ -3469,8 +3469,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
-          {user.role === 'admin' && <button className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span>Налаштування системи</span></button>}
-          <button className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="settings" /><span>Мої налаштування</span></button>
+          {user.role === 'admin' && <button aria-label="Налаштування системи" className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span className="desktop-label">Налаштування системи</span><span className="mobile-label" aria-hidden="true">Система</span></button>}
+          <button aria-label="Мої налаштування" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Мої налаштування</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
           <button className="nav-item" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
         </div>
         <div className="sidebar-support">

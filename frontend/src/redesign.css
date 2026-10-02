@@ -31,6 +31,7 @@ input:focus, select:focus, textarea:focus { border-color: #49a39e; box-shadow: 0
 .nav-item.active .nav-icon { color: #0e716d; }
 .nav-item:disabled { opacity: .42; }
 .sidebar-actions { border-color: var(--line); padding-top: 10px; }
+.mobile-label { display: none; }
 .sidebar-actions .nav-item:last-child { color: #76828a; }
 .sidebar-actions .nav-item:last-child:hover { color: #ad4352; background: #fff1f3; }
 .sidebar-support { background: #f6f8f9; border-color: var(--line); box-shadow: none; padding: 10px; }
@@ -148,6 +149,9 @@ textarea { line-height: 1.7; resize: vertical; }
   .nav-icon { width: 20px; }
   .sidebar-actions { flex-shrink: 0; display: flex; border: 0; border-left: 1px solid var(--line); padding: 0 0 0 4px; gap: 1px; }
   .sidebar-actions .nav-item { flex-basis: 50px; width: 50px; min-width: 50px; padding: 5px 3px; }
+  .sidebar-actions .desktop-label { display: none; }
+  .sidebar-actions .mobile-label { display: inline; }
+  .sidebar .nav-item > span { font-size: 9px; line-height: 1.2; max-width: 100%; overflow-wrap: anywhere; }
   .workspace { overflow: visible; padding-bottom: 90px; }
   .workspace-inner { padding: 20px 14px 30px; }
   .workspace-topbar { padding: 16px 14px 0; }

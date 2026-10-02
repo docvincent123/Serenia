@@ -18,8 +18,8 @@ SQL
 
 verify_backup() (
   # Restore under a fresh unprivileged role: never run archive SQL as postgres.
-  local archive=$1 scratch="solvia_verify_${$}_$(date -u +%s)" made_db=0 made_role=0
-  exec 6>/run/solvia-admin/verify-backup.lock; flock 6
+  local archive=$1 scratch="solvia_verify_${BASHPID}_${RANDOM}" made_db=0 made_role=0
+  exec 6>/run/solvia-admin/verify-backup.lock; flock 6 || exit 1
   cleanup() {
     local rc=$?
     if [[ $made_db == 1 ]]; then runuser -u postgres -- /usr/lib/postgresql/16/bin/dropdb -p 55432 "$scratch" >/dev/null 2>&1 || rc=1; fi
