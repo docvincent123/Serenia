@@ -359,7 +359,7 @@ function Login({ initialBase, onLogin }) {
             </>
           )}
 
-          <div className="login-foot">Версія 2.1 • by QureMed</div>
+          <div className="login-foot">Версія 2.2 • by QureMed</div>
         </form>
       </section>
     </div>
@@ -2395,7 +2395,8 @@ function ServerMaintenance({ api, apiBase }) {
   </div>;
 }
 
-function ServerConsole({ api, user, onLogout, apiBase }) {
+function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
+  const [showSettings, setShowSettings] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [shift, setShift] = useState(null);
   const [reminders, setReminders] = useState([]);
@@ -2434,11 +2435,13 @@ function ServerConsole({ api, user, onLogout, apiBase }) {
       <header className="server-console-head">
         <div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console</strong><span>{center?.center_name || 'QureMed'}</span></div></div>
         <div className="page-actions">
+          <Button variant="secondary" onClick={() => setShowSettings(!showSettings)}>{showSettings ? 'Закрити налаштування' : 'Налаштування системи'}</Button>
           <Button variant="secondary" onClick={load}>Оновити</Button>
           <Button variant="ghost" onClick={onLogout}>Вийти</Button>
         </div>
       </header>
       {error && <div className="alert error">{error}</div>}
+      {showSettings && <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />}
       <div className="server-status-grid">
         <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.2</p></article>
         <article className="stat-card"><strong>{shift?.open ? 'OPEN' : 'CLOSED'}</strong><h3>Робоча зміна</h3><p>{shift?.shift_date || localDate()}</p></article>
@@ -3374,7 +3377,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
 
         <nav className={locked ? 'nav-locked' : ''}>
           <div className="nav-label">РОБОЧИЙ ПРОСТІР</div>
-          {navigation.map(([key, label]) => (
+          {navigation.filter(([key]) => key !== 'settings' && key !== 'preferences').map(([key, label]) => (
             <button key={key} disabled={locked && key !== 'preferences' && !(user.role === 'admin' && key === 'settings')} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
               <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
             </button>
@@ -3382,6 +3385,11 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         </nav>
 
         <div className="sidebar-spacer" />
+        <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
+          {user.role === 'admin' && <button className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span>Налаштування системи</span></button>}
+          <button className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="settings" /><span>Мої налаштування</span></button>
+          <button className="nav-item" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
+        </div>
         <div className="sidebar-support">
           <div className="sidebar-support-head">
             <span className="support-dot" />
@@ -3392,7 +3400,6 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         <div className="user-card">
           <div className="avatar inverse">{user.name.slice(0, 1).toUpperCase()}</div>
           <div className="user-copy"><strong>{user.name}</strong><span>{roleLabels[user.role]}</span></div>
-          <IconButton onClick={onLogout} title="Вийти"><AppIcon name="logout" /></IconButton>
         </div>
       </aside>
 
@@ -3418,7 +3425,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
         </>}
         <div className="workspace-inner">
           {shiftError && <div className="alert error">{shiftError}</div>}
-          {!shift ? <Spinner /> : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
+          {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? <Spinner /> : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
               <div className="eyebrow">ЩОДЕННЕ ВІДКРИТТЯ ЦЕНТРУ</div>
@@ -3451,6 +3458,7 @@ export default function App() {
   const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? (appMode === 'server' ? 'http://127.0.0.1:8765' : '') : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || params.get('default_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
+  const activeToken = useRef(token);
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(Boolean(token));
 
@@ -3482,24 +3490,31 @@ export default function App() {
   function login(base, result) {
     localStorage.setItem('solvia_api', base);
     sessionStorage.setItem('solvia_token', result.token);
+    activeToken.current = result.token;
     setApiBase(base);
     setToken(result.token);
     setUser(result.user);
   }
 
-  async function logout() {
-    try { await request(apiBase, token, 'POST', '/api/logout'); } catch {}
+  function logout() {
+    const previousBase = apiBase;
+    const previousToken = token;
     sessionStorage.removeItem('solvia_token');
+    activeToken.current = '';
     setToken('');
     setUser(null);
+    setBooting(false);
+    // Return to login immediately; revoke the original session in the background.
+    if (previousToken) void request(previousBase, previousToken, 'POST', '/api/logout').catch(() => {});
   }
 
   async function api(method, path, body) {
     try {
       return await request(apiBase, token, method, path, body);
     } catch (e) {
-      if (e.status === 401) {
+      if (e.status === 401 && activeToken.current === token) {
         sessionStorage.removeItem('solvia_token');
+        activeToken.current = '';
         setToken('');
         setUser(null);
       }
@@ -3511,6 +3526,7 @@ export default function App() {
     const clean = cleanBase(nextBase);
     localStorage.setItem('solvia_api', clean);
     sessionStorage.removeItem('solvia_token');
+    activeToken.current = '';
     setApiBase(clean);
     setToken('');
     setUser(null);
@@ -3521,9 +3537,6 @@ export default function App() {
   }
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} />;
-  if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} />;
+  if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
   return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
 }
-
-
-

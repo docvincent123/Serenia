@@ -50,7 +50,9 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Check connection address validation
-        run: node tests/connection.mjs
+        run: |
+          node tests/connection.mjs
+          node tests/auth-session.mjs
 
       - name: Build React interface
         shell: pwsh

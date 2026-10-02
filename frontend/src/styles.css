@@ -2553,3 +2553,23 @@ input:focus, select:focus, textarea:focus {
 .weekday-options label { display:flex; align-items:center; gap:8px; }
 html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, html[data-reduced-motion="true"] *::after { animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; scroll-behavior:auto !important; }
 html[data-compact="true"] .appointment, html[data-compact="true"] .patient-row, html[data-compact="true"] .assessment-row { padding-top:8px; padding-bottom:8px; }
+
+/* Keep account actions visible on short desktop windows. */
+.sidebar nav {
+  min-height: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  align-content: start;
+  scrollbar-width: thin;
+}
+.sidebar-brand, .sidebar-actions, .user-card { flex-shrink: 0; }
+.sidebar-spacer { flex: 0 0 8px; min-height: 8px; }
+.sidebar-actions { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.12); }
+.sidebar-actions svg { width: 20px; height: 20px; flex-shrink: 0; }
+@media (max-height: 800px) { .sidebar-support { display: none; } }
+@media (max-width: 760px) {
+  .sidebar-support, .sidebar .user-card { display: none; }
+  .sidebar nav { overflow-y: hidden; overflow-x: auto; }
+  .sidebar-actions { display: flex; padding: 0; border: 0; }
+  .sidebar-actions .nav-item { width: 68px; padding: 5px; }
+}
