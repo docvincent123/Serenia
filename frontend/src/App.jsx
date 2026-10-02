@@ -242,10 +242,12 @@ function Dialog({ title, subtitle, onClose, children, wide = false }) {
 }
 
 function Field({ label, hint, children, full = false }) {
+  const controls = React.Children.map(children, child => React.isValidElement(child) && ['input', 'select', 'textarea'].includes(child.type)
+    ? React.cloneElement(child, { 'aria-label': child.props['aria-label'] || label }) : child);
   return (
     <label className={`field ${full ? 'full' : ''}`}>
       <span>{label}</span>
-      {children}
+      {controls}
       {hint && <small>{hint}</small>}
     </label>
   );

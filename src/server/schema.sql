@@ -440,6 +440,7 @@ CREATE TABLE IF NOT EXISTS consultation_drafts (
  PRIMARY KEY(patient_id,user_id)
 );
 ALTER TABLE consultations ADD COLUMN IF NOT EXISTS client_key TEXT;
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS request_fingerprint TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_consultation_client_key
  ON consultations(psychologist_id,client_key) WHERE client_key IS NOT NULL;
 CREATE TABLE IF NOT EXISTS waiting_list (

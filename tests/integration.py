@@ -420,6 +420,7 @@ class Scenario(unittest.TestCase):
         first=self.api('draft_psy','POST','/api/consultations',consultation)
         again=self.api('draft_psy','POST','/api/consultations',consultation)
         self.assertEqual(first['id'],again['id']);self.assertTrue(again['already_saved'])
+        self.api('draft_psy','POST','/api/consultations',{**consultation,'note':'Changed after a lost response'},status=409)
         self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
         self.assertEqual(len(self.api('draft_psy','GET',f'/api/patients/{patient}')['consultations']),1)
 

@@ -97,6 +97,8 @@ try {
   await page.locator('.patient-list-card').first().click();
   await page.getByRole('button',{name:'+ Консультація',exact:true}).click();
   let consultationDialog = page.getByRole('dialog',{name:'Підсумок консультації',exact:true});
+  await consultationDialog.waitFor({timeout:5000});
+  await page.screenshot({path:'out/design/desktop-consultation-form.png',fullPage:true});
   await consultationDialog.getByLabel('Запис у календарі', {exact:true}).selectOption('7');
   draftOffline = true;
   await consultationDialog.getByLabel('Приватна нотатка',{exact:true}).fill('Синтетична чернетка: тест відновлення після обриву Wi-Fi');

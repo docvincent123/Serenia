@@ -1,4 +1,14 @@
 // Included after DB/validation/booking helpers. All routes run in the caller's transaction.
+std::string consultationFingerprint(const J&input){
+    J canonical=J::object();
+    for(auto key:{"note","goals","next_plan","homework","request_text","state_text","work_done","recommendations","result_text"})canonical[key]=str(input,key,10000,false);
+    auto type=str(input,"consultation_type",40,false),risk=str(input,"risk_level",20,false);
+    canonical["consultation_type"]=type.empty()?"repeat":type;
+    canonical["risk_level"]=risk.empty()?"low":risk;
+    canonical["duration_minutes"]=input.value("duration_minutes",60);
+    canonical["risk_flags"]=input.value("risk_flags",J::array());
+    return digest(canonical.dump());
+}
 J privateDraft(DB&db,const J&u,int pid,const std::string&method,const J&body){
     allow(u,{"psychologist"});getPatient(db,u,pid);
     auto rows=db.query("SELECT version,payload,updated FROM consultation_drafts WHERE patient_id=? AND user_id=?",{pid,u["id"]});
