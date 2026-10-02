@@ -42,18 +42,19 @@ class MainActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private val openConfigRequest = 4101
 
-    private val bg = Color.rgb(239, 246, 242)
-    private val ink = Color.rgb(17, 52, 41)
-    private val muted = Color.rgb(99, 122, 112)
-    private val forest = Color.rgb(24, 103, 76)
-    private val forestDark = Color.rgb(14, 73, 53)
-    private val forestSoft = Color.rgb(228, 241, 234)
-    private val line = Color.rgb(211, 226, 217)
+    private val bg = Color.rgb(243, 245, 246)
+    private val ink = Color.rgb(24, 59, 61)
+    private val muted = Color.rgb(108, 124, 131)
+    private val forest = Color.rgb(20, 123, 120)
+    private val forestDark = Color.rgb(16, 93, 92)
+    private val forestSoft = Color.rgb(231, 244, 242)
+    private val line = Color.rgb(227, 233, 235)
 
     private var server = ""
     private var token = ""
     private var role = ""
     private var userName = ""
+    private var userId = 0L
     private var backAction: (() -> Unit)? = null
 
     override fun onCreate(state: Bundle?) {
@@ -169,7 +170,7 @@ class MainActivity : Activity() {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(16), dp(15), dp(16), dp(15))
         background = rounded(Color.WHITE, 17, line)
-        elevation = dp(2).toFloat()
+        elevation = dp(1).toFloat()
     }
 
     private fun scroll(content: View): ScrollView = ScrollView(this).apply {
@@ -387,6 +388,7 @@ class MainActivity : Activity() {
                 val user = obj.getJSONObject("user")
                 role = user.getString("role")
                 userName = user.getString("name")
+                userId = user.getLong("id")
                 homeScreen()
             }
         })
@@ -888,7 +890,13 @@ class MainActivity : Activity() {
     }
 
     private fun consultationDialog(patientId: Long, patientName: String) {
-        apiAsync("GET", "/api/appointments?date=" + LocalDate.now().toString()) { result ->
+        val draftStore = DraftStore(this, server, userId)
+        val savedDraft = try { draftStore.read(patientId) } catch (_: Exception) {
+            Toast.makeText(this, "Локальну чернетку не вдалося розшифрувати. Її не видалено.", Toast.LENGTH_LONG).show(); null
+        }
+        val draftDate = savedDraft?.optString("consult_date", LocalDate.now().toString()) ?: LocalDate.now().toString()
+        val clientKey = savedDraft?.optString("client_key")?.takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString()
+        apiAsync("GET", "/api/appointments?date=" + draftDate) { result ->
             val apps = result as JSONArray
             val eligible = mutableListOf<JSONObject>()
             for (i in 0 until apps.length()) {
@@ -904,6 +912,16 @@ class MainActivity : Activity() {
                 }
             }
 
+            if (savedDraft != null && eligible.none { it.optLong("id") == savedDraft.optLong("appointment_id") }) {
+                AlertDialog.Builder(this).setTitle("Збережена чернетка")
+                    .setMessage("Чернетка стосується запису, який уже завершено або скасовано. Перевірте історію консультацій. Текст не буде автоматично перенесено на інший прийом.")
+                    .setNegativeButton("Залишити", null)
+                    .setPositiveButton("Видалити локальну чернетку") { _, _ ->
+                        try { draftStore.remove(patientId); consultationDialog(patientId, patientName) }
+                        catch (_: Exception) { showError("Не вдалося видалити чернетку") }
+                    }.show()
+                return@apiAsync
+            }
             if (eligible.isEmpty()) {
                 showError("На сьогодні немає активного запису цього пацієнта.")
                 return@apiAsync
@@ -1002,12 +1020,83 @@ class MainActivity : Activity() {
             wrap.addView(title("Важливі позначки", 16f))
             flagChecks.forEach { wrap.addView(it) }
 
+            val draftStatus = caption("Чернетка зашифрована на цьому пристрої · $draftDate")
+            wrap.addView(draftStatus)
+            val textFields = linkedMapOf("note" to note, "goals" to goals, "next_plan" to next,
+                "homework" to homework, "recommendations" to recommendations, "request_text" to requestText,
+                "state_text" to stateText, "work_done" to workDone, "result_text" to resultText)
+            if (savedDraft != null) {
+                textFields.forEach { (key, field) -> field.setText(savedDraft.optString(key)) }
+                duration.setText(savedDraft.optInt("duration_minutes", 60).toString())
+                typeSpinner.setSelection(typeValues.indexOf(savedDraft.optString("consultation_type", "repeat")).coerceAtLeast(0))
+                riskSpinner.setSelection(riskValues.indexOf(savedDraft.optString("risk_level", "low")).coerceAtLeast(0))
+                val selected = eligible.indexOfFirst { it.optLong("id") == savedDraft.optLong("appointment_id") }
+                if (selected >= 0) appointmentSpinner.setSelection(selected)
+                val flags = savedDraft.optJSONArray("risk_flags") ?: JSONArray()
+                flagChecks.forEachIndexed { index, check -> check.isChecked = (0 until flags.length()).any { flags.optString(it) == flagValues[index].first } }
+            }
+            fun snapshot(): JSONObject {
+                val flags = JSONArray(); flagChecks.forEachIndexed { index, check -> if (check.isChecked) flags.put(flagValues[index].first) }
+                val value = JSONObject().put("client_key", clientKey).put("consult_date", draftDate)
+                    .put("appointment_id", eligible[appointmentSpinner.selectedItemPosition].getLong("id"))
+                    .put("duration_minutes", duration.text.toString().toIntOrNull() ?: 60)
+                    .put("consultation_type", typeValues[typeSpinner.selectedItemPosition])
+                    .put("risk_level", riskValues[riskSpinner.selectedItemPosition]).put("risk_flags", flags)
+                textFields.forEach { (key, field) -> value.put(key, field.text.toString()) }; return value
+            }
+            var submitted = false
+            var serverRevision = savedDraft?.optInt("server_version", 0) ?: 0
+            fun persistDraft() {
+                if (submitted) return
+                try { draftStore.save(patientId, snapshot().put("server_version", serverRevision)); draftStatus.text = "Чернетку зашифровано на пристрої · $draftDate" }
+                catch (_: Exception) { draftStatus.text = "Не вдалося зберегти чернетку. Не закривайте до збереження на сервері." }
+            }
+            val watcher = object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { persistDraft() }
+                override fun afterTextChanged(s: Editable?) {}
+            }
+            textFields.values.forEach { it.addTextChangedListener(watcher) }; duration.addTextChangedListener(watcher)
+            flagChecks.forEach { it.setOnCheckedChangeListener { _, _ -> persistDraft() } }
+
             val dialog = AlertDialog.Builder(this)
                 .setTitle("Підсумок консультації")
                 .setView(scroll)
-                .setNegativeButton("Скасувати", null)
+                .setNegativeButton("Залишити чернетку", null)
                 .setPositiveButton("Зберегти", null)
                 .create()
+            dialog.setOnDismissListener { persistDraft() }
+            wrap.addView(secondary("Зберегти чернетку на сервері") {
+                apiAsync("GET", "/api/patients/$patientId/draft") { value ->
+                    val remote = value as JSONObject
+                    val version = remote.optInt("version")
+                    if (remote.optJSONObject("payload") != null && version != serverRevision) {
+                        showError("Серверну чернетку змінено на іншому пристрої. Локальний текст залишився зашифрованим. Спочатку відновіть серверну версію.")
+                    } else {
+                        val current = snapshot()
+                        apiAsync("PATCH", "/api/patients/$patientId/draft", JSONObject().put("version", version).put("payload", current)) { response ->
+                            serverRevision = (response as JSONObject).getInt("version")
+                            persistDraft(); draftStatus.text = "Чернетку збережено на сервері та зашифровано на пристрої"
+                        }
+                    }
+                }
+            })
+            wrap.addView(secondary("Відновити серверну чернетку") {
+                apiAsync("GET", "/api/patients/$patientId/draft") { value ->
+                    val remote = value as JSONObject
+                    val payload = remote.optJSONObject("payload")
+                    if (payload == null) showError("Серверної чернетки поки немає")
+                    else AlertDialog.Builder(this).setTitle("Відновити чернетку?")
+                        .setMessage("Текст у цьому вікні буде замінено серверною версією. Незбережені локальні зміни буде втрачено.")
+                        .setNegativeButton("Залишити локальну", null)
+                        .setPositiveButton("Відновити") { _, _ ->
+                            try {
+                                draftStore.save(patientId, payload.put("server_version", remote.optInt("version")))
+                                submitted = true; dialog.dismiss(); consultationDialog(patientId, patientName)
+                            } catch (_: Exception) { showError("Не вдалося зберегти зашифровану чернетку") }
+                        }.show()
+                }
+            })
 
             dialog.setOnShowListener {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -1027,6 +1116,7 @@ class MainActivity : Activity() {
                         if (check.isChecked) flags.put(flagValues[index].first)
                     }
                     val payload = JSONObject()
+                        .put("client_key", clientKey)
                         .put("patient_id", patientId)
                         .put("appointment_id", appointment.getLong("id"))
                         .put("note", note.text.toString())
@@ -1042,12 +1132,30 @@ class MainActivity : Activity() {
                         .put("result_text", resultText.text.toString())
                         .put("risk_level", riskValues[riskSpinner.selectedItemPosition])
                         .put("risk_flags", flags)
+                    if (serverRevision > 0) payload.put("draft_version", serverRevision)
 
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-                    apiAsync("POST", "/api/consultations", payload) {
-                        dialog.dismiss()
-                        Toast.makeText(this, "Консультацію збережено в SOLVIA.", Toast.LENGTH_LONG).show()
-                        patientScreen(patientId)
+                    persistDraft()
+                    val requestToken = token; val requestServer = server
+                    io.execute {
+                        try {
+                            requestAt(requestServer, "POST", "/api/consultations", payload, requestToken)
+                            draftStore.remove(patientId)
+                            runOnUiThread {
+                                if (token == requestToken && server == requestServer && !isDestroyed) {
+                                    submitted = true; dialog.dismiss()
+                                    Toast.makeText(this, "Консультацію збережено в SOLVIA.", Toast.LENGTH_LONG).show(); patientScreen(patientId)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                if (token == requestToken && server == requestServer && !isDestroyed) {
+                                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                                    draftStatus.text = "Не відправлено. Чернетка залишилась на пристрої; повторіть збереження."
+                                    showError(e.message ?: "Немає зв’язку із сервером")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1307,4 +1415,3 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 }
-

@@ -429,3 +429,36 @@ CREATE TABLE IF NOT EXISTS workflow_settings(
  session_hours INTEGER NOT NULL DEFAULT 8
 );
 INSERT INTO workflow_settings(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
+
+-- Private drafts use optimistic revisions: a second device cannot silently overwrite.
+CREATE TABLE IF NOT EXISTS consultation_drafts (
+ patient_id BIGINT NOT NULL REFERENCES patients(id),
+ user_id BIGINT NOT NULL REFERENCES users(id),
+ version INTEGER NOT NULL DEFAULT 1,
+ payload TEXT NOT NULL,
+ updated TEXT NOT NULL,
+ PRIMARY KEY(patient_id,user_id)
+);
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS client_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consultation_client_key
+ ON consultations(psychologist_id,client_key) WHERE client_key IS NOT NULL;
+CREATE TABLE IF NOT EXISTS waiting_list (
+ id BIGSERIAL PRIMARY KEY,
+ patient_id BIGINT NOT NULL REFERENCES patients(id),
+ psychologist_id BIGINT NOT NULL REFERENCES users(id),
+ date_from TEXT NOT NULL,
+ date_to TEXT NOT NULL,
+ time_from TEXT NOT NULL DEFAULT '09:00',
+ time_to TEXT NOT NULL DEFAULT '18:00',
+ priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('normal','high')),
+ contact_note TEXT NOT NULL DEFAULT '',
+ status TEXT NOT NULL DEFAULT 'waiting' CHECK(status IN ('waiting','offered','booked','cancelled')),
+ appointment_id BIGINT REFERENCES appointments(id),
+ version INTEGER NOT NULL DEFAULT 1,
+ created_by BIGINT NOT NULL REFERENCES users(id),
+ created TEXT NOT NULL,
+ updated TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_waiting_active_patient
+ ON waiting_list(patient_id) WHERE status IN ('waiting','offered');
+CREATE INDEX IF NOT EXISTS idx_waiting_status_dates ON waiting_list(status,date_from,date_to);

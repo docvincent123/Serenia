@@ -60,6 +60,15 @@ sudo solvia-admin doctor
 backup_events=$(sudo -u solvia psql -X -p 55432 -d solvia -Atc "SELECT count(*) FROM backup_events WHERE action='backup' AND status='success'")
 test "$backup_events" -ge 1
 backup=$(sudo find /var/backups/solvia -name 'solvia-*.dump' | sort | tail -1)
+sudo solvia-admin verify-backup "$backup"
+test "$(sudo -u postgres psql -X -p 55432 -Atc "SELECT count(*) FROM pg_database WHERE datname LIKE 'solvia_verify_%'")" = 0
+test "$(sudo -u postgres psql -X -p 55432 -Atc "SELECT count(*) FROM pg_roles WHERE rolname LIKE 'solvia_verify_%'")" = 0
+test "$(sudo -u solvia psql -X -p 55432 -d solvia -Atc "SELECT count(*) FROM backup_events WHERE action='verify' AND status='success'")" -ge 1
+invalid_backup=$(mktemp)
+printf 'not a PostgreSQL archive\n' > "$invalid_backup"
+if sudo solvia-admin verify-backup "$invalid_backup"; then echo 'Corrupt backup accepted'; exit 1; fi
+rm -f "$invalid_backup"
+sudo solvia-admin health
 printf 'ВІДНОВИТИ\n' | sudo solvia-admin restore "$backup"
 # Simulate a stale DHCP address and certificate without changing the runner network.
 ca_original=$(sudo sha256sum /etc/solvia/ca/QureMed-Local-CA.crt | cut -d' ' -f1)
@@ -92,4 +101,3 @@ sudo solvia-admin restart
 SOLVIA_SERVER_IP=$(cat /usr/local/share/solvia/address)
 sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_ip "$SOLVIA_SERVER_IP" /etc/solvia/tls/server.crt
 printf 'Linux install, HTTPS login, backup, restore and upgrade passed\n'
-

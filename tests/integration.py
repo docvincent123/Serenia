@@ -374,6 +374,55 @@ class Scenario(unittest.TestCase):
         self.api(psy,'POST','/api/logout',{})
         self.api(psy,'GET','/api/me',status=401)
 
+    def test_features_drafts_waiting_list_and_retry(self):
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        for name, role in [('draft_psy','psychologist'),('draft_other','psychologist'),('wait_rec','reception'),('wait_director','director')]:
+            user=self.api('admin','POST','/api/users',{'name':name,'login':name,'password':'feature-password-2026','role':role})
+            code, auth=self.call('POST','/api/login',{'login':name,'password':'feature-password-2026'})
+            self.assertEqual(code,200,auth); self.tokens[name]=auth['token']
+            if name=='draft_psy': psychologist=user['id']
+        patient=self.api('wait_rec','POST','/api/patients',{'name':'Synthetic waiting patient','phone':'+380009991111','dob':'1995-02-01','category':'Інше','psychologist_id':psychologist})['id']
+        path=f'/api/patients/{patient}/draft'
+        self.assertEqual(self.api('draft_psy','GET',path)['version'],0)
+        for role in ['admin','wait_rec','wait_director','draft_other']:
+            self.api(role,'GET',path,status=403)
+        payload={'note':'Private synthetic draft','goals':'Goal','appointment_id':'','client_key':'draft-test-client-key-2026'}
+        saved=self.api('draft_psy','PATCH',path,{'version':0,'payload':payload})
+        self.assertEqual(saved['version'],1)
+        self.api('draft_psy','PATCH',path,{'version':0,'payload':{'note':'Stale overwrite'}},status=409)
+        self.assertEqual(self.api('draft_psy','GET',path)['payload']['note'],payload['note'])
+        self.api('draft_psy','PATCH',path,{'version':1,'payload':{'note':'x'*10001}},status=400)
+        self.api('draft_psy','DELETE',path,{'version':0},status=409)
+        self.api('draft_psy','DELETE',path,{'version':1})
+        self.assertEqual(self.api('draft_psy','GET',path)['version'],2)
+        self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
+        room=self.api('admin','POST','/api/rooms',{'name':'Waiting room','capacity':1})['id']
+        self.api('admin','PATCH','/api/settings/workflow',{'opening_time':'09:00','closing_time':'18:00','working_days':'1234567'})
+        date=(dt.date.today()-dt.timedelta(days=1)).isoformat()
+        body={'patient_id':patient,'psychologist_id':psychologist,'date_from':date,'date_to':date,'time_from':'09:00','time_to':'18:00','priority':'normal','contact_note':'Call after 15:00'}
+        wait=self.api('wait_rec','POST','/api/waiting-list',body)['id']
+        self.api('wait_rec','POST','/api/waiting-list',body,status=409)
+        for role in ['draft_psy','wait_director']:
+            self.api(role,'GET','/api/waiting-list',status=403)
+        self.api('wait_rec','PATCH',f'/api/waiting-list/{wait}',{'status':'offered','version':1})
+        self.api('wait_rec','PATCH',f'/api/waiting-list/{wait}',{'status':'cancelled','version':1},status=409)
+        booking={'version':2,'room_id':room,'start':date+'T09:00','end':date+'T10:00'}
+        self.api('wait_rec','POST',f'/api/waiting-list/{wait}/book',{**booking,'start':date+'T08:00'},status=400)
+        appointment=self.api('wait_rec','POST',f'/api/waiting-list/{wait}/book',booking)['id']
+        repeat=self.api('wait_rec','POST',f'/api/waiting-list/{wait}/book',booking)
+        self.assertEqual(repeat['id'],appointment);self.assertTrue(repeat['already_booked'])
+        self.api('wait_rec','PATCH',f'/api/waiting-list/{wait}',{'status':'waiting','version':3},status=409)
+        second=self.api('wait_rec','POST','/api/patients',{'name':'Second waiting patient','phone':'+380009991112','dob':'1995-02-01','category':'Інше','psychologist_id':psychologist})['id']
+        otherwait=self.api('wait_rec','POST','/api/waiting-list',{**body,'patient_id':second})['id']
+        self.api('wait_rec','POST',f'/api/waiting-list/{otherwait}/book',{**booking,'version':1},status=409)
+        current=self.api('draft_psy','PATCH',path,{'version':2,'payload':payload})
+        consultation={'patient_id':patient,'appointment_id':appointment,'note':'Completed synthetic consultation','client_key':payload['client_key'],'draft_version':current['version']}
+        first=self.api('draft_psy','POST','/api/consultations',consultation)
+        again=self.api('draft_psy','POST','/api/consultations',consultation)
+        self.assertEqual(first['id'],again['id']);self.assertTrue(again['already_saved'])
+        self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
+        self.assertEqual(len(self.api('draft_psy','GET',f'/api/patients/{patient}')['consultations']),1)
+
     def test_z_security_inputs_and_rate_limit(self):
         # Authentication checks work even if a browser or forged caller bypasses UI.
         for login in ("' OR '1'='1",'admin\x00extra'):
@@ -392,5 +441,3 @@ class Scenario(unittest.TestCase):
         self.assertEqual(self.call('GET','/api/me',token='forged-token')[0],401)
 
 if __name__=='__main__': unittest.main()
-
-

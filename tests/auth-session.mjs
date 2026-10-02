@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../frontend/src/App.jsx', import.meta.url), 'utf8');
-const functions = source.slice(source.indexOf('  function login(base, result) {'), source.indexOf('\n  if (booting) {'));
+const start = source.indexOf('  async function login(base, result, password) {');
+assert(start >= 0, 'Login implementation must be found');
+const functions = source.slice(start, source.indexOf('\n  if (booting) {'));
 const calls = [];
 const pending = [];
 const context = vm.createContext({
@@ -14,6 +16,8 @@ const context = vm.createContext({
   setToken(value) { calls.push(['token', value]); },
   setUser(value) { calls.push(['user', value]); },
   setBooting(value) { calls.push(['booting', value]); },
+  draftIdentity: async () => null,
+  setDraftSession() {},
   request(...args) { calls.push(['request', ...args]); return new Promise((resolve, reject) => pending.push({ resolve, reject })); },
   cleanBase: value => value,
 });
@@ -29,7 +33,7 @@ await new Promise(resolve => setImmediate(resolve));
 
 // A late 401 from the previous account cannot sign out the newly logged-in account.
 const staleRequest = context.api('GET', '/api/shift-day').catch(error => error);
-context.login('https://server.example', { token: 'new-session', user: { name: 'New user' } });
+await context.login('https://server.example', { token: 'new-session', user: { name: 'New user' } }, 'test-password');
 calls.length = 0;
 pending.shift().reject({ status: 401 });
 await staleRequest;

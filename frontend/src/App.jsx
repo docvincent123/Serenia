@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
+import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
+import WaitingList from './WaitingList.jsx';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -87,6 +89,9 @@ const categoryTone = {
 function AppIcon({ name, size = 18 }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
   const paths = {
+    'waiting-list': <><rect x="3" y="4" width="12" height="17" rx="2"/><path d="M6 8h6M6 12h5M6 16h3"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/></>,
+    documents: <><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></>,
+    preferences: <><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M18 3l1 1 2-2"/></>,
     dashboard: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></>,
     patients: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
@@ -170,6 +175,7 @@ function navFor(role) {
     return [
       ['dashboard', 'Огляд центру'],
       ['calendar', 'Календар'],
+      ['waiting-list', 'Лист очікування'],
       ['patients', 'Пацієнти'],
       ['families', 'Сім’ї'],
       ['team', 'Команда'],
@@ -183,7 +189,7 @@ function navFor(role) {
       ['audit', 'Журнал дій']
     ];
   }
-  if (role === 'reception') return [['calendar', 'Календар'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
+  if (role === 'reception') return [['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
   if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
   return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
 }
@@ -287,7 +293,7 @@ function Login({ initialBase, onLogin }) {
     try {
       const base = cleanBase(server);
       const result = await request(base, '', 'POST', '/api/login', { login, password, ...deviceIdentity() });
-      onLogin(base, result);
+      await onLogin(base, result, password);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -1029,7 +1035,10 @@ function Patients({ api, role, openPatient }) {
   );
 }
 
-function PatientCard({ api, role, patientId, back }) {
+function PatientCard({ api, role, patientId, back, draftSession }) {
+  const draftWriter = useRef(null);
+  const [draftStatus, setDraftStatus] = useState('');
+  const [consultBusy, setConsultBusy] = useState(false);
   const [card, setCard] = useState(null);
   const [error, setError] = useState('');
   const [dialog, setDialog] = useState('');
@@ -1088,24 +1097,77 @@ function PatientCard({ api, role, patientId, back }) {
     }
   }
 
-  function openConsultation() {
-    setConsultDate(localDate());
-    setConsultation({
+  async function openConsultation(options = {}) {
+    const discardLocal = options.discardLocal === true;
+    setDraftStatus('loading'); setError('');
+    await draftWriter.current?.stop();
+    let local = null, remote = null;
+    try { local = await readDraft(draftSession, patientId); }
+    catch { setError('Локальна чернетка не розшифрувалася. Можливо, пароль змінено. Серверна копія залишається доступною.'); }
+    try { remote = await api('GET', `/api/patients/${patientId}/draft`); }
+    catch (e) { if (!local) setError(e.message); }
+    if (discardLocal && !remote) { setDraftStatus('offline'); return; }
+    let restored = !discardLocal && local?.dirty ? local.payload : remote?.payload || local?.payload;
+    const alreadySaved = restored?.client_key && card?.consultations?.some(c => c.client_key === restored.client_key);
+    if (alreadySaved) {
+      await removeDraft(draftSession, patientId).catch(() => {});
+      let clearedVersion = remote?.version || 0;
+      if (remote?.version) {
+        const result = await api('DELETE', `/api/patients/${patientId}/draft`, { version: remote.version }).catch(() => null);
+        if (result) clearedVersion = result.version;
+      }
+      restored = null; remote = { version: clearedVersion, payload: null }; local = null;
+    }
+    const initial = {
       appointment_id: '', consultation_type: 'repeat', duration_minutes: 60,
       request_text: '', state_text: '', work_done: '', note: '', goals: '',
       next_plan: '', homework: '', recommendations: '', result_text: '',
-      risk_level: 'low', risk_flags: []
-    });
+      risk_level: 'low', risk_flags: [], client_key: crypto.randomUUID(),
+      ...restored
+    };
+    const date = restored?.consult_date || localDate();
+    setConsultDate(date); setConsultation(initial);
+    const writer = new DraftWriter({ identity: draftSession, patientId, api, version: remote?.version ?? local?.version ?? 0, status: setDraftStatus });
+    draftWriter.current = writer;
+    if (!discardLocal && local?.dirty && remote && local.version !== remote.version) {
+      writer.version = local.version;
+      writer.conflict = true; setDraftStatus('conflict');
+    } else {
+      setDraftStatus(restored ? 'saved' : 'ready');
+      if (discardLocal) await writeDraft(draftSession, patientId, { payload: initial, version: writer.version, dirty: false }).catch(() => {});
+    }
     setDayAppointments([]);
     setDialog('consultation');
-    loadConsultationsForDay(localDate());
+    loadConsultationsForDay(date);
+  }
+
+  useEffect(() => {
+    if (dialog === 'consultation' && draftWriter.current) draftWriter.current.edit({ ...consultation, consult_date: consultDate });
+  }, [consultation, consultDate, dialog]);
+  useEffect(() => {
+    const flush = () => { void draftWriter.current?.flush(); };
+    const visibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    const beforeUnload = (e) => {
+      const writer = draftWriter.current;
+      if (writer && writer.generation > writer.synced) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('online', flush); document.addEventListener('visibilitychange', visibility); window.addEventListener('beforeunload', beforeUnload);
+    return () => {
+      window.removeEventListener('online', flush); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('beforeunload', beforeUnload);
+      void draftWriter.current?.stop();
+    };
+  }, [patientId]);
+
+  async function closeConsultation() {
+    await draftWriter.current?.flush();
+    setDialog('');
   }
 
   const eligibleAppointments = useMemo(() => {
     if (!card) return [];
     const completed = new Set((card.consultations || []).map((c) => Number(c.appointment_id)));
     return dayAppointments.filter((a) =>
-      a.status === 'scheduled' &&
+      (a.status === 'scheduled' || a.status === 'confirmed') &&
       !completed.has(Number(a.id)) &&
       a.patients?.some((p) => Number(p.id) === Number(patientId))
     );
@@ -1113,8 +1175,14 @@ function PatientCard({ api, role, patientId, back }) {
 
   async function saveConsultation(e) {
     e.preventDefault();
+    if (consultBusy) return;
+    setConsultBusy(true);
     try {
+      await draftWriter.current?.flush();
+      if (draftWriter.current?.conflict) throw new Error('Спочатку вирішіть конфлікт чернеток.');
       await api('POST', '/api/consultations', {
+        client_key: consultation.client_key,
+        draft_version: draftWriter.current?.version || 0,
         patient_id: Number(patientId),
         appointment_id: Number(consultation.appointment_id),
         note: consultation.note,
@@ -1131,11 +1199,14 @@ function PatientCard({ api, role, patientId, back }) {
         risk_level: consultation.risk_level,
         risk_flags: consultation.risk_flags
       });
+      await draftWriter.current?.stop();
+      draftWriter.current = null;
+      await removeDraft(draftSession, patientId).catch(() => {});
       setDialog('');
       await load();
     } catch (e) {
       setError(e.message);
-    }
+    } finally { setConsultBusy(false); }
   }
 
   function toggleRiskFlag(value) {
@@ -1690,7 +1761,15 @@ function PatientCard({ api, role, patientId, back }) {
       )}
 
       {dialog === 'consultation' && (
-        <Dialog title="Підсумок консультації" subtitle={card.name} onClose={() => setDialog('')} wide>
+        <Dialog title="Підсумок консультації" subtitle={card.name} onClose={() => { if (!consultBusy) void closeConsultation(); }} wide>
+          {error && <div className="alert error">{error}</div>}
+          <div className={`draft-status ${draftStatus}`} role="status">
+            <AppIcon name="documents" />
+            <span>{{ ready: 'Автозбереження увімкнено', loading: 'Відновлюємо чернетку…', local: 'Зашифровано на цьому пристрої', saving: 'Зберігаємо на сервері…', saved: 'Чернетку збережено', offline: 'Немає зв’язку. Локальна копія зашифрована; повторимо при підключенні.', memory: 'Локальне сховище недоступне. Не закривайте вікно до збереження на сервері.', conflict: 'Чернетку змінено на іншому пристрої. Ваш текст не перезаписано.' }[draftStatus]}</span>
+            <Button type="button" variant="ghost" onClick={() => draftWriter.current?.flush()}>Повторити</Button>
+          </div>
+          {!draftSession?.key && <div className="alert info">Після перезавантаження увійдіть повторно для розблокування зашифрованих локальних чернеток. Серверне збереження працює.</div>}
+          {draftStatus === 'conflict' && <Button type="button" variant="secondary" onClick={() => { if (window.confirm('Замінити текст у цьому вікні актуальною серверною чернеткою? Локальні незбережені зміни буде втрачено.')) void openConsultation({ discardLocal: true }); }}>Завантажити серверну версію</Button>}
           <form className="form-grid" onSubmit={saveConsultation}>
             <Field label="Дата запису">
               <input type="date" value={consultDate} onChange={(e) => { setConsultDate(e.target.value); setConsultation({ ...consultation, appointment_id: '' }); loadConsultationsForDay(e.target.value); }} />
@@ -1763,8 +1842,8 @@ function PatientCard({ api, role, patientId, back }) {
               <textarea rows="3" value={consultation.result_text} onChange={(e) => setConsultation({ ...consultation, result_text: e.target.value })} />
             </Field>
             <div className="form-actions full-span">
-              <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
-              <Button type="submit">Зберегти консультацію</Button>
+              <Button type="button" variant="ghost" disabled={consultBusy} onClick={closeConsultation}>Закрити · залишити чернетку</Button>
+              <Button type="submit" disabled={consultBusy || draftStatus === 'conflict'}>{consultBusy ? 'Зберігаємо…' : 'Зберегти консультацію'}</Button>
             </div>
           </form>
         </Dialog>
@@ -2377,7 +2456,10 @@ function ServerMaintenance({ api, apiBase }) {
         <p>Автоматично щодня о 02:00. Для ручної перевіреної копії:</p>
         <code>sudo solvia-admin backup</code>
         <p><code>sudo solvia-admin backups</code></p>
+        <p><code>sudo solvia-admin verify-backup /path/backup.dump</code></p>
+        <small>Кожна нова копія проходить справжнє відновлення в окрему тимчасову БД. Робочі дані не замінюються.</small>
         <small>{system?.backups?.[0] ? `Остання подія: ${system.backups[0].status} · ${String(system.backups[0].created || '').replace('T',' ')}` : 'Історії backup ще немає.'}</small>
+        <div className="backup-history">{system?.backups?.slice(0, 6).map(event => <div key={event.id}><span className={`badge ${event.status === 'success' ? 'forest' : 'rose'}`}>{event.status === 'success' ? 'Успішно' : 'Помилка'}</span><strong>{event.action === 'verify' ? 'Перевірка відновлення' : event.action === 'backup' ? 'Резервна копія' : 'Відновлення'}</strong><small>{event.created?.replace('T',' ')} · {event.details}</small></div>)}</div>
       </article>
       <article>
         <strong>Діагностика / відновлення</strong>
@@ -3299,7 +3381,7 @@ function Audit({ api }) {
   );
 }
 
-function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
+function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
   const [patientId, setPatientId] = useState(null);
   const [shift, setShift] = useState(null);
@@ -3347,7 +3429,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi }) {
   }, [apiBase]);
 
   const content = (() => {
-    if (page === 'patient-card' && patientId) return <PatientCard api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} />;
+    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} draftSession={draftSession} />;
+    if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
     if (page === 'dashboard') return <Dashboard api={api} />;
     if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} />;
@@ -3459,6 +3542,7 @@ export default function App() {
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || params.get('default_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
   const activeToken = useRef(token);
+  const [draftSession, setDraftSession] = useState(null);
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(Boolean(token));
 
@@ -3487,7 +3571,9 @@ export default function App() {
       .finally(() => setBooting(false));
   }, []);
 
-  function login(base, result) {
+  async function login(base, result, password) {
+    const identity = await draftIdentity(base, result.user, password).catch(() => null);
+    setDraftSession(identity);
     localStorage.setItem('solvia_api', base);
     sessionStorage.setItem('solvia_token', result.token);
     activeToken.current = result.token;
@@ -3504,6 +3590,7 @@ export default function App() {
     setToken('');
     setUser(null);
     setBooting(false);
+    setDraftSession(null);
     // Return to login immediately; revoke the original session in the background.
     if (previousToken) void request(previousBase, previousToken, 'POST', '/api/logout').catch(() => {});
   }
@@ -3517,6 +3604,7 @@ export default function App() {
         activeToken.current = '';
         setToken('');
         setUser(null);
+        setDraftSession(null);
       }
       throw e;
     }
@@ -3530,6 +3618,7 @@ export default function App() {
     setApiBase(clean);
     setToken('');
     setUser(null);
+    setDraftSession(null);
   }
 
   if (booting) {
@@ -3538,5 +3627,5 @@ export default function App() {
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} />;
   if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
-  return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
+  return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} />;
 }

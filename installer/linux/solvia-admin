@@ -16,6 +16,39 @@ VALUES(NULL, :'action', :'path', :'status', :'details',
 SQL
 }
 
+verify_backup() (
+  # Restore under a fresh unprivileged role: never run archive SQL as postgres.
+  local archive=$1 scratch="solvia_verify_${$}_$(date -u +%s)" made_db=0 made_role=0
+  exec 6>/run/solvia-admin/verify-backup.lock; flock 6
+  cleanup() {
+    local rc=$?
+    if [[ $made_db == 1 ]]; then runuser -u postgres -- /usr/lib/postgresql/16/bin/dropdb -p 55432 "$scratch" >/dev/null 2>&1 || rc=1; fi
+    if [[ $made_role == 1 ]]; then runuser -u postgres -- psql -X -p 55432 -v ON_ERROR_STOP=1 -c "DROP ROLE $scratch" >/dev/null 2>&1 || rc=1; fi
+    if [[ $rc == 0 ]]; then record_event verify "$archive" success 'isolated restore, required tables and validated constraints checked';
+    else record_event verify "$archive" failed 'isolated restore verification failed; production database unchanged'; fi
+    exit "$rc"
+  }
+  trap cleanup EXIT
+  /usr/lib/postgresql/16/bin/pg_restore --list "$archive" >/dev/null || exit 1
+  runuser -u postgres -- psql -X -p 55432 -v ON_ERROR_STOP=1 -c "CREATE ROLE $scratch NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE" >/dev/null || exit 1
+  made_role=1
+  runuser -u postgres -- /usr/lib/postgresql/16/bin/createdb -p 55432 -O "$scratch" "$scratch" || exit 1
+  made_db=1
+  runuser -u postgres -- psql -X -p 55432 -d "$scratch" -v ON_ERROR_STOP=1 -c "REVOKE CONNECT ON DATABASE $scratch FROM PUBLIC" >/dev/null || exit 1
+  runuser -u postgres -- /usr/lib/postgresql/16/bin/pg_restore -p 55432 -d "$scratch" --role="$scratch" --no-owner --no-privileges --single-transaction --exit-on-error < "$archive" >/dev/null || exit 1
+  # SQL deliberately fails for missing core tables; PostgreSQL restore validates FKs.
+  runuser -u postgres -- psql -X -p 55432 -d "$scratch" -v ON_ERROR_STOP=1 >/dev/null <<'SQL' || exit 1
+SELECT count(*) FROM users;
+SELECT count(*) FROM patients;
+SELECT count(*) FROM appointments;
+SELECT count(*) FROM consultations;
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_constraint WHERE connamespace='public'::regnamespace AND NOT convalidated)
+ THEN RAISE EXCEPTION 'Unvalidated constraints in backup'; END IF;
+END $$;
+SQL
+)
+
 case ${1:-help} in
   health)
     ip=$(cat /etc/solvia/address)
@@ -41,19 +74,23 @@ case ${1:-help} in
       record_event backup "$target" failed "pg_dump failed"
       exit 1
     fi
-    if ! /usr/lib/postgresql/16/bin/pg_restore --list "$target.partial" >/dev/null; then
-      record_event backup "$target" failed "archive verification failed"
+    if ! verify_backup "$target.partial"; then
+      record_event backup "$target" failed "isolated restore verification failed"
       exit 1
     fi
     mv "$target.partial" "$target"
     chmod 0600 "$target"
-    record_event backup "$target" success "verified PostgreSQL custom-format archive"
+    record_event backup "$target" success "verified by real isolated PostgreSQL restore"
     echo "$target"
     # No silent retention deletion: operators archive copies and manage available space.
     ;;
+  verify-backup)
+    [[ $# == 2 && -f $2 ]] || { echo 'sudo solvia-admin verify-backup /path/backup.dump'; exit 1; }
+    verify_backup "$2"
+    echo 'SOLVIA: ізольоване відновлення перевірено; робоча база не змінена.' ;;
   restore)
     [[ $# == 2 && -f $2 ]] || { echo 'sudo solvia-admin restore /path/backup.dump'; exit 1; }
-    /usr/lib/postgresql/16/bin/pg_restore --list "$2" >/dev/null
+    verify_backup "$2"
     read -r -p 'Відновлення замінить дані центру. Введіть ВІДНОВИТИ: ' confirm
     [[ $confirm == ВІДНОВИТИ ]] || exit 1
     exec 9>/run/solvia-admin/install.lock; flock -n 9
@@ -88,6 +125,5 @@ SQL
     echo '== DATABASE =='; "$0" db-status
     echo '== BACKUPS =='; "$0" backups | head -5
     ;;
-  *) echo 'sudo solvia-admin {health|network|status|logs|restart|version|check-update|update|backup|backups|db-status|doctor|restore FILE}' ;;
+  *) echo 'sudo solvia-admin {health|network|status|logs|restart|version|check-update|update|backup|backups|verify-backup FILE|db-status|doctor|restore FILE}' ;;
 esac
-
