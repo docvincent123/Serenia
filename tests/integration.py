@@ -221,6 +221,12 @@ class Scenario(unittest.TestCase):
         docs=self.api(rec,'GET',f'/api/patients/{pid}/documents')
         self.assertEqual(docs[0]['id'],document['id'])
         self.assertEqual(docs[0]['status'],'signed')
+        self.assertEqual(docs[0]['patient_name'],'Тестовий Пацієнт')
+        self.assertEqual(docs[0]['patient_no_snapshot'],created_patient['patient_no'])
+        self.assertEqual(docs[0]['patient_dob'],p['dob'])
+        self.assertEqual(docs[0]['patient_category'],p['category'])
+        self.assertEqual(docs[0]['center_name_snapshot'],'Тестовий центр')
+        self.assertEqual(docs[0]['center_email_snapshot'],'test@example.com')
 
         referral=self.api(rec,'POST',f'/api/patients/{pid}/referrals',{
             'destination_type':'Психіатр',
