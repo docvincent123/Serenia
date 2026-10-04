@@ -128,6 +128,178 @@ function monthStart() {
   const d = new Date();
   return localDate(new Date(d.getFullYear(), d.getMonth(), 1));
 }
+function printStandaloneNode(node, title = 'SOLVIA Document') {
+  if (!node) throw new Error('Не знайдено документ для друку.');
+
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  Object.assign(frame.style, {
+    position: 'fixed',
+    right: '0',
+    bottom: '0',
+    width: '1px',
+    height: '1px',
+    opacity: '0',
+    border: '0',
+    pointerEvents: 'none'
+  });
+  document.body.appendChild(frame);
+
+  const doc = frame.contentDocument;
+  if (!doc) {
+    frame.remove();
+    throw new Error('Не вдалося підготувати друк.');
+  }
+
+  const safeTitle = String(title).replace(/[<>]/g, '');
+  doc.open();
+  doc.write(`<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>${safeTitle}</title>
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #172f27; font-family: "Segoe UI", Arial, sans-serif; }
+  body { width: 210mm; min-height: 297mm; }
+  .consent-print, .discharge-print {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 14mm 16mm !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #172f27 !important;
+    font-size: 10.5pt;
+  }
+  header, .discharge-header {
+    display: flex;
+    align-items: center;
+    gap: 5mm;
+    padding-bottom: 5mm;
+    margin-bottom: 6mm;
+    border-bottom: 1.4pt solid #24684f;
+  }
+  header img, .discharge-logo {
+    width: 18mm !important;
+    height: 18mm !important;
+    object-fit: contain;
+    border-radius: 3mm;
+  }
+  header > div, .discharge-center-copy { display: grid; gap: 1mm; flex: 1; }
+  header strong, .discharge-center-copy strong { font-size: 14pt; color: #173f30; }
+  header span, header p, .discharge-center-copy p { margin: 0; color: #64766d; font-size: 8.5pt; }
+  .eyebrow {
+    color: #49705f !important;
+    font-size: 7.5pt !important;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .consent-title, .discharge-title { margin: 6mm 0 5mm; }
+  .consent-title h1, .discharge-title h1 {
+    margin: 1.5mm 0 0 !important;
+    color: #111 !important;
+    font-size: 19pt !important;
+    line-height: 1.15;
+    letter-spacing: 0 !important;
+  }
+  .discharge-title { text-align: center; }
+  .discharge-title p { margin: 1.5mm 0 0; color: #65776e; font-size: 8.5pt; }
+  .consent-body {
+    min-height: 0 !important;
+    margin: 0 0 7mm;
+    white-space: pre-wrap;
+    line-height: 1.55;
+    font-size: 11pt;
+  }
+  .profile-list {
+    display: grid;
+    margin: 0;
+    padding: 0;
+  }
+  .profile-list > div {
+    display: grid;
+    grid-template-columns: 42mm 1fr;
+    gap: 5mm;
+    align-items: baseline;
+    padding: 2.7mm 0;
+    border-bottom: .5pt solid #e0e7e2;
+  }
+  .profile-list dt { color: #61736a; font-size: 8.5pt; }
+  .profile-list dd { margin: 0; text-align: right; font-size: 9pt; font-weight: 650; overflow-wrap: anywhere; }
+  .saved-signature {
+    width: 72mm !important;
+    margin: 9mm 0 5mm auto !important;
+    display: grid;
+    gap: 1mm;
+    text-align: center;
+    border-bottom: .7pt solid #39473f !important;
+    break-inside: avoid;
+  }
+  .saved-signature img {
+    width: 100% !important;
+    height: 24mm !important;
+    object-fit: contain;
+  }
+  .saved-signature span { color: #66766e; font-size: 7.5pt; }
+  .consent-print footer,
+  .discharge-footer {
+    margin-top: 7mm !important;
+    padding-top: 3mm !important;
+    border-top: .5pt solid #dce4df !important;
+    color: #6d7d75 !important;
+    font-size: 7.5pt !important;
+    break-inside: avoid;
+  }
+  .discharge-doc-number { margin-left: auto; color: #1d5e47; font-size: 9pt; font-weight: 700; white-space: nowrap; }
+  .discharge-profile {
+    margin: 0 0 6mm !important;
+    padding: 4mm !important;
+    border: .5pt solid #dfe8e2;
+    border-radius: 3mm;
+    background: #f8faf9 !important;
+  }
+  .discharge-print section { margin-top: 5mm; break-inside: avoid; }
+  .discharge-print section h3 { margin: 0 0 1.5mm; color: #436a59; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; }
+  .discharge-print section p { margin: 0; white-space: pre-wrap; line-height: 1.5; font-size: 9.5pt; }
+  .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16mm; margin-top: 10mm; break-inside: avoid; }
+  .signature-block { display: grid; gap: 2mm; }
+  .signature-block strong { color: #526b60; font-size: 8pt; }
+  .signature-block span { min-height: 6mm; font-size: 9pt; font-weight: 650; }
+  .signature-line { border-top: .6pt solid #647a70; padding-top: 1.5mm; text-align: center; color: #7b8a83; font-size: 7pt; }
+  .no-print, button { display: none !important; }
+</style>
+</head>
+<body>${node.outerHTML}</body>
+</html>`);
+  doc.close();
+
+  const cleanup = () => {
+    try { frame.remove(); } catch {}
+  };
+
+  const runPrint = async () => {
+    const images = [...doc.images];
+    await Promise.all(images.map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => {
+      img.addEventListener('load', resolve, { once: true });
+      img.addEventListener('error', resolve, { once: true });
+    })));
+    setTimeout(() => {
+      try {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+      } finally {
+        setTimeout(cleanup, 1500);
+      }
+    }, 80);
+  };
+  void runPrint();
+}
+
 function deviceIdentity() {
   let id = localStorage.getItem('solvia_device_id');
   if (!id) {
@@ -1249,15 +1421,11 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
   }
 
   function printDischargeDocument() {
-    const previous = document.title;
-    document.title = `Виписка №${printDoc?.item?.document_no || printDoc?.item?.patient_no_snapshot || card.patient_no || '00000'} — ${printDoc?.item?.patient_name || card.name}`;
-    const restore = () => {
-      document.title = previous;
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    window.print();
-    setTimeout(restore, 1500);
+    const node = document.querySelector('.discharge-print');
+    printStandaloneNode(
+      node,
+      `Виписка №${printDoc?.item?.document_no || printDoc?.item?.patient_no_snapshot || card.patient_no || '00000'} — ${printDoc?.item?.patient_name || card.name}`
+    );
   }
 
   async function openPatientEdit() {
@@ -1360,15 +1528,11 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
   }
 
   function printDocument() {
-    const previous = document.title;
-    document.title = (documentPreview?.title || 'Документ SOLVIA') + ' — ' + card.name;
-    const restore = () => {
-      document.title = previous;
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    window.print();
-    setTimeout(restore, 1500);
+    const node = document.querySelector('.consent-print');
+    printStandaloneNode(
+      node,
+      (documentPreview?.title || 'Документ SOLVIA') + ' — ' + (documentPreview?.patient_name || card.name)
+    );
   }
 
   async function saveReferral(e) {
