@@ -19,7 +19,7 @@ assert 'scheme == "https" && isPrivateIpv4(host) -> 8443' in kotlin
 assert 'json.optString("http_url")' in kotlin
 assert 'json.optString("https_url")' in kotlin
 assert 'Підключити локально' in kotlin
-assert 'для VPS/інтернету використовуйте HTTPS' in kotlin
+assert 'Для VPS та інтернету використовуйте HTTPS' in kotlin
 
 for file in ('installer/Setup-Server.ps1', 'installer/Repair-Network.ps1'):
     source = (root / file).read_text(encoding='utf-8-sig')
