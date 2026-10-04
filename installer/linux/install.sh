@@ -62,7 +62,7 @@ old_ip=''
 ip=$(python3 "$package/network-address.py" "${SOLVIA_SERVER_IP:-$old_ip}")
 echo "Визначено LAN-адресу SOLVIA: $ip"
 # Stop writers before the update snapshot and migrations.
-systemctl stop solvia-network.timer solvia-network-refresh.service solvia-network.service solvia-certificate.timer solvia-certificate.service solvia.service 2>/dev/null || true
+systemctl stop solvia-network.timer solvia-network-refresh.service solvia-network.service solvia-certificate.timer solvia-certificate.service solvia-http.service solvia.service 2>/dev/null || true
 # A failed update never deletes or silently replaces data.
 if [[ $count != 0 ]]; then
   snapshot="/var/backups/solvia/pre-update-$(date -u +%Y%m%dT%H%M%S).dump"
@@ -83,7 +83,7 @@ unset SOLVIA_ADMIN_PASSWORD SOLVIA_ADMIN_LOGIN SOLVIA_ADMIN_NAME confirmation
 printf '%s\n' "$ip" > /etc/solvia/address
 install -d -m 0755 /usr/local/share/solvia
 install -m 0644 /etc/solvia/address /usr/local/share/solvia/address
-printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\n' "$SOLVIA_DATABASE_URL" "0.0.0.0" > /etc/solvia/server.env
+printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\nSOLVIA_LAN_IP=%s\n' "$SOLVIA_DATABASE_URL" "0.0.0.0" "$ip" > /etc/solvia/server.env
 chmod 0640 /etc/solvia/server.env
 chmod 0644 /etc/solvia/address
 chown root:solvia /etc/solvia/server.env
@@ -103,14 +103,35 @@ update-ca-certificates >/dev/null
 update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 install -m 0644 ./*.service ./*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now solvia.service solvia-certificate.timer solvia-backup.timer solvia-network.timer
-systemctl restart solvia.service
+systemctl enable --now solvia.service solvia-http.service solvia-certificate.timer solvia-backup.timer solvia-network.timer
+systemctl restart solvia.service solvia-http.service
 /usr/local/sbin/solvia-admin health
+
+mobile_config=/usr/local/share/solvia/SOLVIA-Mobile.solvia
+python3 - "$ip" "$mobile_config" <<'PY'
+import json,sys
+ip,path=sys.argv[1:3]
+data={
+  "format":"quremed.solvia.mobile",
+  "version":1,
+  "center":"SOLVIA",
+  "preferred":"https",
+  "api_url":f"https://{ip}:8443",
+  "https_url":f"https://{ip}:8443",
+  "http_url":f"http://{ip}:8765",
+}
+with open(path,"w",encoding="utf-8") as f:
+    json.dump(data,f,ensure_ascii=False,indent=2)
+PY
+chmod 0644 "$mobile_config"
+
 printf '\nSOLVIA готова: https://%s:8443\n' "$ip"
+printf 'Локальний HTTP для мобільного: http://%s:8765\n' "$ip"
+printf 'Файл підключення телефона: %s\n' "$mobile_config"
 echo 'Linux Admin: відкрийте «SOLVIA Admin» у меню програм або виконайте solvia-admin-app.'
 echo 'Оновлення: sudo solvia-admin check-update / sudo solvia-admin update'
 echo 'Сертифікат для ПК/Android: /etc/solvia/ca/QureMed-Local-CA.crt'
 openssl x509 -in /etc/solvia/ca/QureMed-Local-CA.crt -noout -fingerprint -sha256
 echo 'Установіть довіру тільки до цього CA. Збережіть його відбиток для звірки.'
-echo 'Якщо firewall активний: дозвольте TCP 8443 лише з підмережі центру (див. LINUX.md).'
+echo 'Якщо firewall активний: дозвольте TCP 8443 і 8765 лише з підмережі центру (див. LINUX.md). HTTP 8765 не відкривайте в інтернет.'
 
