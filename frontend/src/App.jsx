@@ -1872,18 +1872,25 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
           <article className="consent-print">
             <header>
               <img src={documentPreview.center?.logo_data || '/solvia-icon.png'} alt="SOLVIA" />
-              <div><strong>{documentPreview.center?.center_name || 'SOLVIA Center'}</strong><span>{documentPreview.center?.address || ''}</span></div>
+              <div><strong>{documentPreview.center_name_snapshot || documentPreview.center?.center_name || 'SOLVIA Center'}</strong><span>{documentPreview.center_address_snapshot || documentPreview.center?.address || ''}</span></div>
             </header>
-            <div className="consent-title"><div className="eyebrow">ДОКУМЕНТ ПАЦІЄНТА · №{card.patient_no}</div><h1>{documentPreview.title}</h1></div>
+            <div className="consent-title"><div className="eyebrow">ДОКУМЕНТ ПАЦІЄНТА · №{documentPreview.patient_no_snapshot || card.patient_no}</div><h1>{documentPreview.title}</h1></div>
             <p className="consent-body">{documentPreview.content || '—'}</p>
             <dl className="profile-list">
-              <div><dt>Пацієнт</dt><dd>{card.name}</dd></div>
-              <div><dt>Статус</dt><dd>{documentPreview.status}</dd></div>
+              <div><dt>Пацієнт</dt><dd>{documentPreview.patient_name || card.name}</dd></div>
+              <div><dt>№ картки</dt><dd>№{documentPreview.patient_no_snapshot || card.patient_no || '—'}</dd></div>
+              <div><dt>Дата народження</dt><dd>{documentPreview.patient_dob || card.dob || '—'}</dd></div>
+              <div><dt>Категорія</dt><dd>{documentPreview.patient_category || card.category || '—'}</dd></div>
+              <div><dt>Статус</dt><dd>{documentPreview.status === 'signed' ? 'Підписано' : documentPreview.status === 'refused' ? 'Відмова' : documentPreview.status}</dd></div>
               <div><dt>Підписант</dt><dd>{documentPreview.signed_by_name || '—'}</dd></div>
               <div><dt>Дата</dt><dd>{documentPreview.signed_at?.replace('T',' ')}</dd></div>
             </dl>
             {documentPreview.signature_data && <div className="saved-signature"><img src={documentPreview.signature_data} alt="Підпис" /><span>підпис</span></div>}
-            <footer>{documentPreview.center?.document_footer || 'SOLVIA by QureMed'}</footer>
+            <footer>
+              <span>{documentPreview.center_name_snapshot || documentPreview.center?.center_name || 'SOLVIA Center'}</span>
+              <span>{[documentPreview.center_phone_snapshot || documentPreview.center?.phone, documentPreview.center_email_snapshot || documentPreview.center?.email].filter(Boolean).join(' · ')}</span>
+              <span>{documentPreview.center?.document_footer || 'SOLVIA by QureMed'}</span>
+            </footer>
           </article>
           <div className="form-actions no-print"><Button variant="ghost" onClick={() => { setDialog(''); setDocumentPreview(null); }}>Закрити</Button><Button onClick={printDocument}>Друк / Зберегти PDF</Button></div>
         </Dialog>
