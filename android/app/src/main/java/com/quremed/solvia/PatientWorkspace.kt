@@ -29,7 +29,7 @@ interface MobileApi {
 
 /** Native patient workspace. All authorization and final validation remain on the server. */
 class PatientWorkspace(
-    private val activity: Activity, private val api: MobileApi, private val role: String,
+    private val activity: Activity, private val api: MobileApi, private val role: String, private val server: String,
     private val show: (View, () -> Unit) -> Unit, private val back: () -> Unit,
     private val consult: (Long, String) -> Unit,
     private val preview: (NativeDocument, () -> Unit) -> Unit
@@ -126,7 +126,12 @@ class PatientWorkspace(
                 api.call("POST", "/api/assessments", JSONObject().put("patient_id", id), { value ->
                     val response = value as JSONObject
                     AlertDialog.Builder(activity).setTitle("Анкету призначено")
-                        .setMessage("Посилання для пацієнта доступне в центрі. Ідентифікатор анкети: ${response.optString("id")}")
+                        .setMessage("Посилання для пацієнта:\n" + server + response.optString("link"))
+                        .setNeutralButton("Скопіювати посилання") { _, _ ->
+                            val clipboard = activity.getSystemService(Activity.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Анкета SOLVIA", server + response.optString("link")))
+                            open(id)
+                        }
                         .setPositiveButton("Готово") { _, _ -> open(id) }.show()
                 }, { error(it) })
             })
@@ -200,9 +205,18 @@ class PatientWorkspace(
             fields.addView(signature, LinearLayout.LayoutParams(-1, dp(180)))
             fields.addView(button("Очистити підпис") { signature.clear() })
             fields.addView(text("Рукописний підпис не є кваліфікованим електронним підписом.", 12f))
+            val templates = listOf(
+                "Я підтверджую, що отримав(ла) зрозумілу інформацію про формат психологічної допомоги, її добровільність, межі конфіденційності та право припинити участь.",
+                "Я надаю згоду центру на обробку персональних даних у межах надання послуг, ведення документації та виконання законних організаційних обов’язків центру.",
+                "Підтверджую, що ознайомився(лась) із правилами центру, порядком запису, перенесення та скасування консультацій і правилами безпечної поведінки.",
+                "Надаю добровільну згоду на участь у сімейній консультації та розумію формат спільної роботи й межі конфіденційності.",
+                "Підтверджую, що мені було запропоновано відповідну послугу/направлення, однак я добровільно відмовляюся від неї після отримання пояснень.", "")
             type.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
                 override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
-                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, itemId: Long) { name.setText(documentLabels[position]) }
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, itemId: Long) {
+                    name.setText(documentLabels[position])
+                    if (body.text.isBlank() || templates.contains(body.text.toString())) body.setText(templates[position])
+                }
             }
             submit { done ->
                 if (name.text.isBlank() || body.text.isBlank() || (!refused.isChecked && (signer.text.isBlank() || !signature.hasSignature))) {
@@ -313,7 +327,7 @@ class PatientWorkspace(
     }
     /** Forms stay open on server/network errors and block duplicate taps. */
     private fun form(title: String, build: (LinearLayout, (( ((Boolean) -> Unit) -> Unit) -> Unit)) -> Unit) {
-        val body = box(); body.addView(text(title, 24f, true)); val fields = box(); body.addView(fields)
+        val body = box(); body.tag = "unsaved_form"; body.addView(text(title, 24f, true)); val fields = box(); body.addView(fields)
         val save = button("Зберегти") {}; body.addView(save)
         body.addView(button("Скасувати") {
             AlertDialog.Builder(activity).setTitle("Закрити форму?").setMessage("Незбережені зміни цієї форми буде втрачено.")

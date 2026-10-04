@@ -43,18 +43,18 @@ class NativeWorkflowTest {
                 }
             }
         }
-        PatientWorkspace(activity, api, "psychologist", { view, _ ->
+        PatientWorkspace(activity, api, "psychologist", "https://synthetic.example", { view, _ ->
             current = view; activity.setContentView(ScrollView(activity).apply { addView(view) })
         }, {}, { _, _ -> }, { model, _ -> preview(model) }).open(7, tab)
         return { current }
     }
     private fun screenshot(activity: MainActivity, name: String) {
-        activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
         val folder = File(activity.getExternalFilesDir(null), "previews").apply { mkdirs() }
         val image = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
         File(folder, "$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
         image.recycle()
-        activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) }
     }
     @Test fun documentsUseSnapshotIdentityAndCompleteText() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { activity ->
@@ -135,7 +135,9 @@ class NativeWorkflowTest {
                 assertNotNull(button(root, "Розклад")); assertNotNull(button(root, "Пацієнти"))
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-            scenario.onActivity { screenshot(it, "native-menu") }
+            var reference: MainActivity? = null
+            scenario.onActivity { reference = it }
+            screenshot(reference!!, "native-menu")
         }
     }
 }
