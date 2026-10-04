@@ -5,8 +5,8 @@ package=$(realpath "$1")
 export SOLVIA_SERVER_IP
 SOLVIA_SERVER_IP=$(hostname -I | awk '{print $1}')
 printf 'admin\nАдміністратор CI\nCI-password-long-2026\nCI-password-long-2026\n' | sudo --preserve-env=SOLVIA_SERVER_IP bash "$package/install.sh"
-sudo systemctl is-enabled solvia solvia-backup.timer solvia-certificate.timer solvia-network.timer
-sudo systemctl is-active solvia
+sudo systemctl is-enabled solvia solvia-http solvia-backup.timer solvia-certificate.timer solvia-network.timer
+sudo systemctl is-active solvia solvia-http
 sudo solvia-admin health
 sudo bash tests/linux-updater.sh
 sudo test -x /usr/local/bin/solvia-admin-app
@@ -17,6 +17,7 @@ sudo test -f /usr/share/applications/solvia-admin.desktop
 sudo desktop-file-validate /usr/share/applications/solvia-admin.desktop
 sudo test -f /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
 sudo -u nobody test -r /usr/local/share/solvia/address
+sudo -u nobody test -r /usr/local/share/solvia/SOLVIA-Mobile.solvia
 sudo -u nobody test -r /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
 # Peer auth and socket-only DB, no database TCP exposure.
 test "$(sudo -u postgres psql -X -p 55432 -Atc 'SHOW listen_addresses')" = ''
@@ -43,6 +44,18 @@ with client.open(request) as r:
     system=json.load(r)
     assert system['database']['name']=='solvia'
     assert int(system['counts']['users']) >= 1
+PY
+python3 - <<'PY'
+import json, os, urllib.request
+ip=os.environ['SOLVIA_SERVER_IP']
+with urllib.request.urlopen('http://'+ip+':8765/api/health', timeout=5) as r:
+    health=json.load(r)
+    assert health['ok'] is True
+with open('/usr/local/share/solvia/SOLVIA-Mobile.solvia', encoding='utf-8') as f:
+    profile=json.load(f)
+assert profile['preferred']=='https'
+assert profile['https_url']==f'https://{ip}:8443'
+assert profile['http_url']==f'http://{ip}:8765'
 PY
 sudo solvia-admin backup
 # Two backups at the same timestamp must preserve both archives.
@@ -80,9 +93,9 @@ test "$(cat /usr/local/share/solvia/address)" = "$SOLVIA_SERVER_IP"
 sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_ip "$SOLVIA_SERVER_IP" /etc/solvia/tls/server.crt
 sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_hostname localhost /etc/solvia/tls/server.crt
 curl --fail --silent --noproxy '*' --cacert /tmp/solvia-ci-ca.crt https://localhost:8443/api/health
-sudo systemctl stop solvia
+sudo systemctl stop solvia solvia-http
 sudo /opt/solvia/sync-network.sh
-sudo systemctl is-active solvia
+sudo systemctl is-active solvia solvia-http
 cert_before=$(sudo sha256sum /etc/solvia/tls/server.crt)
 sudo /opt/solvia/sync-network.sh
 cert_after=$(sudo sha256sum /etc/solvia/tls/server.crt)
@@ -100,4 +113,4 @@ sudo solvia-admin restart
 # Failed TLS verification must never be bypassed; certificate contains the LAN SAN.
 SOLVIA_SERVER_IP=$(cat /usr/local/share/solvia/address)
 sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_ip "$SOLVIA_SERVER_IP" /etc/solvia/tls/server.crt
-printf 'Linux install, HTTPS login, backup, restore and upgrade passed\n'
+printf 'Linux install, HTTPS + private-LAN HTTP, backup, restore and upgrade passed\n'
