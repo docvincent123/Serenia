@@ -193,17 +193,28 @@ class MainActivity : Activity() {
 
     private fun normalize(value: String): String {
         var raw = value.trim()
-        require(raw.isNotBlank()) { "Вкажіть HTTPS-адресу сервера" }
-        if (!raw.contains("://")) raw = "https://$raw"
+        require(raw.isNotBlank()) { "Вкажіть адресу сервера" }
+        if (!raw.contains("://")) {
+            val hostGuess = raw.substringBefore(':').trim()
+            raw = if (isPrivateIpv4(hostGuess)) "http://$raw" else "https://$raw"
+        }
         val uri = URI(raw)
         val scheme = uri.scheme?.lowercase()
         val host = uri.host ?: throw IllegalArgumentException("Не знайдено IP/host")
-        require(scheme == "https") { "SOLVIA передає дані тільки через HTTPS. Установіть сертифікат сервера й введіть https:// адресу." }
+        require(scheme == "http" || scheme == "https") { "Підтримуються тільки HTTP/HTTPS адреси" }
         require(uri.userInfo == null && uri.query == null && uri.fragment == null)
         require(uri.path.isNullOrEmpty() || uri.path == "/")
         require(uri.port == -1 || uri.port in 1..65535)
-        val port = if (uri.port != -1) uri.port else if (isPrivateIpv4(host)) 8443 else -1
-        return URI("https", null, host.lowercase(), port, null, null, null).toString().trimEnd('/')
+        if (scheme == "http") {
+            require(isPrivateIpv4(host)) { "HTTP дозволений тільки для приватної локальної IP-адреси центру" }
+        }
+        val port = when {
+            uri.port != -1 -> uri.port
+            scheme == "http" && isPrivateIpv4(host) -> 8765
+            scheme == "https" && isPrivateIpv4(host) -> 8443
+            else -> -1
+        }
+        return URI(scheme, null, host.lowercase(), port, null, null, null).toString().trimEnd('/')
     }
 
     private fun isPrivateIpv4(host: String): Boolean {
@@ -285,9 +296,14 @@ class MainActivity : Activity() {
                     ?: throw IllegalStateException("Не вдалося прочитати файл")
                 val json = JSONObject(text)
                 require(json.optString("format") == "quremed.solvia.mobile") { "Це не файл підключення SOLVIA" }
-                val candidate = normalize(
-                    json.optString("https_url").ifBlank { json.optString("api_url") }
-                )
+                val preferred = json.optString("preferred", "https")
+                val source = when (preferred) {
+                    "http" -> json.optString("http_url").ifBlank { json.optString("api_url") }
+                    else -> json.optString("api_url").ifBlank {
+                        json.optString("https_url").ifBlank { json.optString("http_url") }
+                    }
+                }
+                val candidate = normalize(source)
                 val health = requestAt(candidate, "GET", "/api/health") as JSONObject
                 require(health.optBoolean("ok")) { "Сервер не підтвердив готовність" }
                 server = candidate
@@ -329,7 +345,7 @@ class MainActivity : Activity() {
         body.addView(spacer(14))
 
         body.addView(title("Або введіть адресу вручну", 18f))
-        body.addView(caption("Введіть адресу https:// сервера центру, наприклад https://192.168.1.100:8443. Спершу встановіть сертифікат CA сервера на планшет."))
+        body.addView(caption("Локально можна ввести 192.168.1.100 або http://192.168.1.100:8765. Для захищеного LAN/VPS використовуйте https://192.168.1.100:8443 або HTTPS-домен."))
         val address = edit("192.168.1.100").apply {
             setText(server)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
@@ -360,7 +376,7 @@ class MainActivity : Activity() {
             }
         })
         body.addView(spacer(10))
-        body.addView(caption("SOLVIA завжди передає дані через HTTPS. Якщо з’єднання не захищене чинним сертифікатом центру, застосунок відмовить у підключенні."))
+        body.addView(caption("HTTPS рекомендований. HTTP дозволяється тільки для приватної локальної IP-мережі центру; для VPS/інтернету застосунок приймає лише HTTPS."))
         setContentView(scroll(body))
     }
 
