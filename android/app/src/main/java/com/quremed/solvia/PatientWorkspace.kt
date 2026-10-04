@@ -39,7 +39,7 @@ class PatientWorkspace(
     private var patient = JSONObject()
     private var selected = "summary"
     private val clinical get() = role == "admin" || role == "psychologist"
-    private val registration get() = role == "admin" || role == "reception"
+    init { require(role == "psychologist") { "Мобільний кабінет доступний лише психологу" } }
     private fun dp(n: Int) = (activity.resources.displayMetrics.density * n).toInt()
     private fun box(): LinearLayout = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(16))
@@ -116,7 +116,6 @@ class PatientWorkspace(
         listOf("phone" to "Телефон", "dob" to "Дата народження", "category" to "Категорія", "psychologist" to "Психолог",
             "family" to "Сім’я", "family_role" to "Роль у сім’ї", "address" to "Адреса", "referral_source" to "Джерело направлення",
             "referral_source_details" to "Деталі направлення").forEach { (key, label) -> section(content, label, patient.optString(key)) }
-        if (registration) content.addView(button("Редагувати контактні дані") { editPatient(id) })
         if (clinical) {
             content.addView(text("Анкети та оцінювання", 19f, true))
             val assessments = patient.optJSONArray("assessments")
@@ -135,19 +134,6 @@ class PatientWorkspace(
                         .setPositiveButton("Готово") { _, _ -> open(id) }.show()
                 }, { error(it) })
             })
-        }
-    }
-    private fun editPatient(id: Long) {
-        form("Контактні дані") { fields, submit ->
-            val name = input("ПІБ", patient.optString("name")); val phone = input("Телефон", patient.optString("phone"))
-            phone.inputType = InputType.TYPE_CLASS_PHONE
-            val address = input("Адреса", patient.optString("address")); val source = input("Джерело направлення", patient.optString("referral_source"))
-            listOf(name, phone, address, source).forEach { fields.addView(it) }
-            submit { done ->
-                if (name.text.isBlank() || phone.text.isBlank()) { error("Заповніть ПІБ і телефон"); done(false) }
-                else api.call("PATCH", "/api/patients/$id", JSONObject().put("name", name.text.toString()).put("phone", phone.text.toString())
-                    .put("address", address.text.toString()).put("referral_source", source.text.toString()), { done(true); open(id) }, { error(it); done(false) })
-            }
         }
     }
     private fun history(content: LinearLayout, id: Long) {
@@ -261,31 +247,13 @@ class PatientWorkspace(
     private fun courses(content: LinearLayout, id: Long) {
         val entries = patient.optJSONArray("courses")
         if (entries == null || entries.length() == 0) empty(content, "Курсів поки немає")
-        var active = false
         rows(entries) { entry ->
             val row = box(); row.addView(text("Курс № ${entry.optInt("course_no")}", 19f, true))
-            section(row, "Статус", displayStatus(entry.optString("status"))); section(row, "Період", entry.optString("started_at") + " — " + entry.optString("ended_at").replace("null", "триває"))
-            section(row, "Психолог", entry.optString("psychologist")); section(row, "Мета курсу", entry.optString("reason")); section(row, "Підсумок", entry.optString("outcome"))
-            if (entry.optString("status") == "active") {
-                active = true
-                if (registration) row.addView(button("Завершити курс") {
-                    form("Завершення курсу") { fields, submit ->
-                        val status = select(listOf("Завершено", "Перевести в архів")); val ended = date("Дата завершення", LocalDate.now().toString())
-                        val outcome = input("Підсумок курсу", lines = 4); fields.addView(status); fields.addView(ended); fields.addView(outcome)
-                        submit { done -> api.call("PATCH", "/api/courses/${entry.getLong("id")}", JSONObject().put("status", if(status.selectedItemPosition == 0) "completed" else "archived")
-                            .put("ended_at", ended.text.toString()).put("outcome", outcome.text.toString()), { done(true); open(id, "courses") }, { error(it); done(false) }) }
-                    }
-                })
-            }; content.addView(row)
+            section(row, "Статус", displayStatus(entry.optString("status")))
+            section(row, "Період", entry.optString("started_at") + " — " + entry.optString("ended_at").replace("null", "триває"))
+            section(row, "Мета курсу", entry.optString("reason")); section(row, "Підсумок", entry.optString("outcome"))
+            content.addView(row)
         }
-        if (registration && !active) content.addView(button("Відкрити новий курс") {
-            form("Новий курс") { fields, submit ->
-                val start = date("Дата початку", LocalDate.now().toString()); val reason = input("Мета та причина курсу", lines = 4)
-                fields.addView(start); fields.addView(reason)
-                submit { done -> api.call("POST", "/api/patients/$id/courses", JSONObject().put("started_at", start.text.toString()).put("reason", reason.text.toString()),
-                    { done(true); open(id, "courses") }, { error(it); done(false) }) }
-            }
-        })
     }
     private fun referrals(content: LinearLayout, id: Long) {
         content.addView(button("Додати направлення") {

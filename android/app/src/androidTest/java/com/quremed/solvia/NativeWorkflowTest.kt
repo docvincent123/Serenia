@@ -123,6 +123,14 @@ class NativeWorkflowTest {
         assertFalse(context.getSharedPreferences("solvia_encrypted_drafts", 0).all.values.any { it.toString().contains("Секретна тестова нотатка") })
         first.remove(7)
     }
+    @Test fun otherRolesCannotOpenMobileWorkspace() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { activity ->
+            val response = JSONObject().put("token", "synthetic-admin-token").put("user", JSONObject().put("role", "admin").put("name", "Admin").put("id", 1))
+            MainActivity::class.java.getDeclaredMethod("acceptLogin", JSONObject::class.java).apply { isAccessible = true }.invoke(activity, response)
+            assertEquals("", MainActivity::class.java.getDeclaredField("token").apply { isAccessible = true }.get(activity))
+            assertEquals("", MainActivity::class.java.getDeclaredField("role").apply { isAccessible = true }.get(activity))
+        } }
+    }
     @Test fun nativeMenuContainsDocumentsDraftsAndSettings() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -133,6 +141,8 @@ class NativeWorkflowTest {
                 val root = activity.window.decorView
                 assertNotNull(button(root, "Документи пацієнтів")); assertNotNull(button(root, "Мої чернетки")); assertNotNull(button(root, "Мої налаштування"))
                 assertNotNull(button(root, "Розклад")); assertNotNull(button(root, "Пацієнти"))
+                val labels = views(root).filterIsInstance<Button>().map { it.text.toString() }
+                assertFalse(labels.any { it.contains("центру") || it.contains("Пристрої") || it.contains("очікування") })
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             var reference: MainActivity? = null
