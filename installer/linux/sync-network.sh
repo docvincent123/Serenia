@@ -13,6 +13,26 @@ if [[ $old != "$ip" ]]; then
   chmod 0644 /etc/solvia/address.new
   mv /etc/solvia/address.new /etc/solvia/address
   install -m 0644 /etc/solvia/address /usr/local/share/solvia/address
+  if [[ -f /etc/solvia/server.env ]]; then
+    sed -i -E "s/^SOLVIA_LAN_IP=.*/SOLVIA_LAN_IP=$ip/" /etc/solvia/server.env
+    grep -q '^SOLVIA_LAN_IP=' /etc/solvia/server.env || printf 'SOLVIA_LAN_IP=%s\n' "$ip" >> /etc/solvia/server.env
+  fi
+  python3 - "$ip" /usr/local/share/solvia/SOLVIA-Mobile.solvia <<'PY'
+import json,sys
+ip,path=sys.argv[1:3]
+data={
+  "format":"quremed.solvia.mobile",
+  "version":1,
+  "center":"SOLVIA",
+  "preferred":"https",
+  "api_url":f"https://{ip}:8443",
+  "https_url":f"https://{ip}:8443",
+  "http_url":f"http://{ip}:8765",
+}
+with open(path,"w",encoding="utf-8") as f:
+    json.dump(data,f,ensure_ascii=False,indent=2)
+PY
+  chmod 0644 /usr/local/share/solvia/SOLVIA-Mobile.solvia
   echo "SOLVIA LAN address: $old -> $ip"
 fi
 before=$(sha256sum /etc/solvia/tls/server.crt 2>/dev/null || true)
@@ -24,5 +44,8 @@ if [[ ${1:-} != --no-restart ]] && systemctl is-enabled --quiet solvia.service; 
     systemctl restart solvia.service
   elif ! systemctl is-active --quiet solvia.service; then
     systemctl start solvia.service
+  fi
+  if systemctl is-enabled --quiet solvia-http.service; then
+    systemctl restart solvia-http.service
   fi
 fi
