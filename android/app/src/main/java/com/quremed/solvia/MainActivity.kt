@@ -42,13 +42,13 @@ class MainActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private val openConfigRequest = 4101
 
-    private val bg = Color.rgb(243, 245, 246)
-    private val ink = Color.rgb(24, 59, 61)
-    private val muted = Color.rgb(108, 124, 131)
-    private val forest = Color.rgb(20, 123, 120)
-    private val forestDark = Color.rgb(16, 93, 92)
-    private val forestSoft = Color.rgb(231, 244, 242)
-    private val line = Color.rgb(227, 233, 235)
+    private val bg = Color.rgb(239, 246, 242)
+    private val ink = Color.rgb(18, 54, 42)
+    private val muted = Color.rgb(99, 122, 111)
+    private val forest = Color.rgb(28, 112, 78)
+    private val forestDark = Color.rgb(17, 77, 54)
+    private val forestSoft = Color.rgb(228, 242, 234)
+    private val line = Color.rgb(211, 226, 217)
 
     private var server = ""
     private var token = ""
@@ -63,11 +63,6 @@ class MainActivity : Activity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         if (prefs.getBoolean("keep_screen_on", false)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         server = prefs.getString("server", "") ?: ""
-        if (server.startsWith("http://", ignoreCase = true)) {
-            server = ""
-            prefs.edit().remove("server").apply()
-            Toast.makeText(this, "SOLVIA оновлено для HTTPS. Імпортуйте новий файл підключення або введіть адресу https:// сервера.", Toast.LENGTH_LONG).show()
-        }
         if (intent?.data != null) {
             importServerConfig(intent.data!!)
         } else if (server.isBlank()) setupScreen() else loginScreen()
@@ -296,21 +291,46 @@ class MainActivity : Activity() {
                     ?: throw IllegalStateException("Не вдалося прочитати файл")
                 val json = JSONObject(text)
                 require(json.optString("format") == "quremed.solvia.mobile") { "Це не файл підключення SOLVIA" }
+
                 val preferred = json.optString("preferred", "https")
-                val source = when (preferred) {
-                    "http" -> json.optString("http_url").ifBlank { json.optString("api_url") }
-                    else -> json.optString("api_url").ifBlank {
-                        json.optString("https_url").ifBlank { json.optString("http_url") }
-                    }
+                val httpsSource = json.optString("https_url").ifBlank {
+                    json.optString("api_url").takeIf { it.startsWith("https://", true) }.orEmpty()
                 }
-                val candidate = normalize(source)
-                val health = requestAt(candidate, "GET", "/api/health") as JSONObject
-                require(health.optBoolean("ok")) { "Сервер не підтвердив готовність" }
-                server = candidate
-                prefs.edit().putString("server", server).apply()
-                runOnUiThread {
-                    Toast.makeText(this, "Сервер SOLVIA підключено: $server", Toast.LENGTH_LONG).show()
-                    loginScreen()
+                val httpSource = json.optString("http_url").ifBlank {
+                    json.optString("api_url").takeIf { it.startsWith("http://", true) }.orEmpty()
+                }
+                val firstSource = if (preferred == "http" && httpSource.isNotBlank()) httpSource
+                    else httpsSource.ifBlank { json.optString("api_url").ifBlank { httpSource } }
+                val candidate = normalize(firstSource)
+
+                try {
+                    val health = requestAt(candidate, "GET", "/api/health", authToken = "") as JSONObject
+                    require(health.optBoolean("ok")) { "Сервер не підтвердив готовність" }
+                    server = candidate
+                    prefs.edit().putString("server", server).apply()
+                    runOnUiThread {
+                        Toast.makeText(this, "Сервер SOLVIA підключено: $server", Toast.LENGTH_LONG).show()
+                        loginScreen()
+                    }
+                } catch (primary: Exception) {
+                    if (candidate.startsWith("https://", true) && httpSource.isNotBlank()) {
+                        val localHttp = normalize(httpSource)
+                        val health = requestAt(localHttp, "GET", "/api/health", authToken = "") as JSONObject
+                        require(health.optBoolean("ok")) { "Локальний HTTP сервер не готовий" }
+                        runOnUiThread {
+                            AlertDialog.Builder(this)
+                                .setTitle("Доступний локальний HTTP")
+                                .setMessage("HTTPS не вдалося відкрити, але сервер доступний через $localHttp. Використовувати HTTP лише у приватній Wi-Fi/LAN мережі центру? Для VPS та інтернету використовуйте HTTPS.")
+                                .setNegativeButton("Ні") { _, _ -> setupScreen() }
+                                .setPositiveButton("Підключити локально") { _, _ ->
+                                    server = localHttp
+                                    prefs.edit().putString("server", server).apply()
+                                    Toast.makeText(this, "Підключено локально: $server", Toast.LENGTH_LONG).show()
+                                    loginScreen()
+                                }
+                                .show()
+                        }
+                    } else throw primary
                 }
             } catch (e: Exception) {
                 runOnUiThread {
