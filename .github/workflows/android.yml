@@ -38,7 +38,7 @@ jobs:
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" 'platforms;android-35' 'build-tools;34.0.0'
-      - name: Verify HTTPS only Android enrollment and network config
+      - name: Verify HTTPS default and private LAN HTTP restrictions
         run: python3 tests/mobile-security-config.py
       - name: Build SOLVIA test APK and lint
         working-directory: android
