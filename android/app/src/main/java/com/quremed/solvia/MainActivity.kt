@@ -1025,38 +1025,67 @@ class MainActivity : Activity() {
                 }
             }
 
-            fun addGap() = wrap.addView(spacer(8))
-            wrap.addView(caption("Запис у календарі"))
-            wrap.addView(appointmentSpinner)
-            addGap()
-            wrap.addView(caption("Тип консультації"))
-            wrap.addView(typeSpinner)
-            addGap()
-            wrap.addView(duration)
-            addGap()
-            wrap.addView(requestText)
-            addGap()
-            wrap.addView(stateText)
-            addGap()
-            wrap.addView(workDone)
-            addGap()
-            wrap.addView(note)
-            addGap()
-            wrap.addView(goals)
-            addGap()
-            wrap.addView(next)
-            addGap()
-            wrap.addView(homework)
-            addGap()
-            wrap.addView(recommendations)
-            addGap()
-            wrap.addView(resultText)
-            addGap()
-            wrap.addView(caption("Рівень ризику"))
-            wrap.addView(riskSpinner)
-            addGap()
-            wrap.addView(title("Важливі позначки", 16f))
-            flagChecks.forEach { wrap.addView(it) }
+            fun addGap(parent: LinearLayout, value: Int = 8) = parent.addView(spacer(value))
+            fun section(name: String, hint: String, build: (LinearLayout) -> Unit) {
+                val box = card()
+                box.background = rounded(Color.WHITE, 18, line)
+                box.addView(title(name, 17f))
+                box.addView(caption(hint))
+                build(box)
+                wrap.addView(box)
+                wrap.addView(spacer(10))
+            }
+
+            section("1 · Прийом", "Оберіть конкретний запис із календаря. Після збереження консультація буде прив’язана саме до нього.") { box ->
+                box.addView(caption("Запис у календарі"))
+                box.addView(appointmentSpinner)
+                addGap(box)
+                box.addView(caption("Тип консультації"))
+                box.addView(typeSpinner)
+                addGap(box)
+                box.addView(duration)
+            }
+
+            section("2 · Запит і стан", "Фіксуйте факти та слова пацієнта окремо від власної інтерпретації.") { box ->
+                box.addView(caption("Основний запит — коротко, бажано словами пацієнта"))
+                box.addView(requestText)
+                addGap(box)
+                box.addView(caption("Стан на початку — спостереження, скарги, важливі зміни"))
+                box.addView(stateText)
+            }
+
+            section("3 · Робота психолога", "Опишіть що реально проводилось на консультації. Приватна нотатка доступна лише ролям із клінічним доступом.") { box ->
+                box.addView(caption("Проведена робота / техніки / інтервенції"))
+                box.addView(workDone)
+                addGap(box)
+                box.addView(caption("Приватна нотатка психолога"))
+                box.addView(note)
+                addGap(box)
+                box.addView(caption("Цілі поточного етапу"))
+                box.addView(goals)
+                addGap(box)
+                box.addView(caption("Результат / динаміка наприкінці зустрічі"))
+                box.addView(resultText)
+            }
+
+            section("4 · План після консультації", "Ці поля SOLVIA використовує для наступної зустрічі та автоматичного формування виписки.") { box ->
+                box.addView(caption("План наступної консультації"))
+                box.addView(next)
+                addGap(box)
+                box.addView(caption("Домашнє завдання"))
+                box.addView(homework)
+                addGap(box)
+                box.addView(caption("Рекомендації"))
+                box.addView(recommendations)
+            }
+
+            section("5 · Ризики та контроль", "Оберіть рівень ризику і тільки ті позначки, які були реально оцінені під час консультації.") { box ->
+                box.addView(caption("Рівень ризику"))
+                box.addView(riskSpinner)
+                addGap(box)
+                box.addView(title("Важливі позначки", 15f))
+                flagChecks.forEach { box.addView(it) }
+            }
 
             val draftStatus = caption("Чернетка зашифрована на цьому пристрої · $draftDate")
             wrap.addView(draftStatus)
