@@ -63,6 +63,15 @@ class MainActivity : Activity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         if (prefs.getBoolean("keep_screen_on", false)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         server = prefs.getString("server", "") ?: ""
+        if (server.isNotBlank()) {
+            try {
+                server = normalize(server)
+            } catch (_: Exception) {
+                server = ""
+                prefs.edit().remove("server").apply()
+                Toast.makeText(this, "Збережена адреса сервера більше не відповідає політиці SOLVIA. Підключіть сервер повторно.", Toast.LENGTH_LONG).show()
+            }
+        }
         if (intent?.data != null) {
             importServerConfig(intent.data!!)
         } else if (server.isBlank()) setupScreen() else loginScreen()
