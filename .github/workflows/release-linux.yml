@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      mobile_version: ${{ steps.version.outputs.mobile_version }}
     steps:
       - uses: actions/checkout@v7
       - name: Validate version and production signing
@@ -35,7 +36,10 @@ jobs:
             echo 'Configure all four SOLVIA_ANDROID signing secrets before a product release.' >&2
             exit 1
           fi
+          mobile_version=$(awk -F"'" '/versionName / { print $2; exit }' android/app/build.gradle)
+          [[ "$mobile_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "mobile_version=$mobile_version" >> "$GITHUB_OUTPUT"
   installer:
     needs: validate
     uses: ./.github/workflows/installer-lint.yml
@@ -59,12 +63,13 @@ jobs:
       - name: Assemble versioned packages and checksums
         env:
           VERSION: ${{ needs.validate.outputs.version }}
+          MOBILE_VERSION: ${{ needs.validate.outputs.mobile_version }}
         shell: bash
         run: |
           mkdir release-files
           cp "downloads/SOLVIA-$VERSION-Linux-x64-installer/SOLVIA-$VERSION-Linux-x64.tar.gz" release-files/
           cp "downloads/SOLVIA-$VERSION-Setup-EXE/SOLVIA-Setup-$VERSION-Windows-x64.exe" release-files/
-          cp "downloads/SOLVIA-$VERSION-Android-release-APK/app-release.apk" "release-files/SOLVIA-$VERSION-Android.apk"
+          cp "downloads/SOLVIA-$MOBILE_VERSION-Android-release-APK/app-release.apk" "release-files/SOLVIA-$MOBILE_VERSION-Android.apk"
           cd release-files
           for file in *; do sha256sum "$file" > "$file.sha256"; done
       - name: Create reviewable draft release

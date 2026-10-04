@@ -115,6 +115,7 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Exercise native documents, forms, PDF and encrypted drafts
         run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
           mkdir -p out/mobile-previews
           "$ANDROID_HOME/emulator/emulator" -avd solvia-ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot >out/emulator.log 2>&1 &
           timeout 120 "$ANDROID_HOME/platform-tools/adb" wait-for-device
