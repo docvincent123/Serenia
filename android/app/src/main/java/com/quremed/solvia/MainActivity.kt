@@ -42,13 +42,13 @@ class MainActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private val openConfigRequest = 4101
 
-    private val bg = Color.rgb(239, 246, 242)
-    private val ink = Color.rgb(18, 54, 42)
-    private val muted = Color.rgb(99, 122, 111)
-    private val forest = Color.rgb(28, 112, 78)
-    private val forestDark = Color.rgb(17, 77, 54)
-    private val forestSoft = Color.rgb(228, 242, 234)
-    private val line = Color.rgb(211, 226, 217)
+    private val bg = Color.rgb(240, 246, 249)
+    private val ink = Color.rgb(25, 48, 62)
+    private val muted = Color.rgb(104, 124, 137)
+    private val forest = Color.rgb(16, 111, 117)
+    private val forestDark = Color.rgb(13, 83, 91)
+    private val forestSoft = Color.rgb(224, 240, 243)
+    private val line = Color.rgb(213, 226, 232)
 
     private var server = ""
     private var token = ""
@@ -57,9 +57,16 @@ class MainActivity : Activity() {
     private var userId = 0L
     private var consultationWindow: AlertDialog? = null
     private var backAction: (() -> Unit)? = null
+    private var workspaceReady = false
+    private var selectedNavigation = "home"
+    private var sceneEpoch = 0L
+    private var pdfPreview: NativePdfPreview? = null
+    private var pendingPdf: java.io.File? = null
+    private val exportPdfRequest = 4102
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        java.io.File(cacheDir, "documents").deleteRecursively()
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         if (prefs.getBoolean("keep_screen_on", false)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         server = prefs.getString("server", "") ?: ""
@@ -77,6 +84,196 @@ class MainActivity : Activity() {
         } else if (server.isBlank()) setupScreen() else loginScreen()
     }
 
+    private fun mount(content: View) {
+        sceneEpoch++
+        pdfPreview?.close(); pdfPreview = null
+        val shell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(bg)
+            fitsSystemWindows = true
+        }
+        shell.setOnApplyWindowInsetsListener { view, insets ->
+            view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+            insets
+        }
+        shell.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        if (token.isNotBlank() && workspaceReady) {
+            val bar = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+                setBackgroundColor(Color.WHITE); elevation = dp(6).toFloat()
+            }
+            val links = mutableListOf(Triple("home", "Головна", R.drawable.ic_home))
+            if (role != "director") {
+                links.add(Triple("calendar", "Розклад", R.drawable.ic_calendar))
+                links.add(Triple("patients", "Пацієнти", R.drawable.ic_patients))
+            } else links.add(Triple("statistics", "Статистика", R.drawable.ic_reports))
+            links.add(Triple("more", "Меню", R.drawable.ic_menu))
+            links.forEach { (key, label, icon) ->
+                bar.addView(Button(this).apply {
+                    text = label; isAllCaps = false; textSize = 11f; contentDescription = label
+                    setTextColor(if (selectedNavigation == key) forest else muted)
+                    background = rounded(if (selectedNavigation == key) forestSoft else Color.WHITE, 12)
+                    val drawable = getDrawable(icon)?.mutate()
+                    drawable?.setTint(if(selectedNavigation == key) forest else muted)
+                    drawable?.setBounds(0, 0, dp(22), dp(22)); setCompoundDrawables(null, drawable, null, null)
+                    setPadding(dp(3), dp(8), dp(3), dp(5))
+                    setOnClickListener {
+                        when(key) {
+                            "home" -> homeScreen(); "calendar" -> calendarScreen(); "patients" -> patientsScreen()
+                            "statistics" -> { selectedNavigation = key; statisticsScreen() }; else -> moreScreen()
+                        }
+                    }
+                }, LinearLayout.LayoutParams(0, dp(68), 1f))
+            }
+            shell.addView(bar)
+        }
+        setContentView(shell)
+    }
+
+    private fun mobileApi(): MobileApi = object : MobileApi {
+        override fun call(method: String, path: String, body: JSONObject?, success: (Any) -> Unit, failure: (String) -> Unit) {
+            apiAsync(method, path, body, onError = failure, ok = success)
+        }
+    }
+
+    private fun moreScreen() {
+        selectedNavigation = "more"; backAction = { homeScreen() }
+        val body = root(); body.addView(title("Меню", 30f)); body.addView(caption("$userName · ${roleLabel(role)}"))
+        if (role != "director") {
+            body.addView(primary("Документи пацієнтів") { patientsScreen(documentLibrary = true) })
+            body.addView(spacer())
+        }
+        if (role == "psychologist") {
+            body.addView(secondary("Мої чернетки") { draftsScreen() })
+            body.addView(secondary("Звіт за зміну") { reportScreen() })
+        }
+        if (role == "admin" || role == "reception") body.addView(secondary("Лист очікування") { waitingListScreen() })
+        if (role != "reception") body.addView(secondary("Супервізії") { supervisionsScreen() })
+        if (role == "admin" || role == "director") body.addView(secondary("Статистика центру") { statisticsScreen() })
+        if (role == "admin") body.addView(secondary("Пристрої та сесії") { devicesScreen() })
+        body.addView(secondary("Мої налаштування") { settingsScreen() })
+        body.addView(spacer()); body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}"))
+        body.addView(secondary("Вийти") {
+            AlertDialog.Builder(this).setTitle("Вийти з облікового запису?")
+                .setMessage("Зашифровані чернетки залишаться для наступного входу цього користувача.")
+                .setNegativeButton("Залишитися", null).setPositiveButton("Вийти") { _, _ -> logout() }.show()
+        })
+        mount(scroll(body))
+    }
+
+    private fun draftsScreen() {
+        backAction = { moreScreen() }; val body = root(); body.addView(topBar("Чернетки", ::moreScreen))
+        body.addView(caption("Локальні зашифровані чернетки цього облікового запису та сервера.")); mount(scroll(body))
+        apiAsync("GET", "/api/patients") { result ->
+            val patients = result as JSONArray; val store = DraftStore(this, server, userId); var count = 0
+            for (i in 0 until patients.length()) {
+                val p = patients.getJSONObject(i); val id = p.getLong("id")
+                try {
+                    val draft = store.read(id) ?: continue; count++
+                    val row = card(); row.addView(title(p.optString("name"), 18f))
+                    row.addView(caption("Чернетка від ${draft.optString("consult_date")}"))
+                    row.addView(secondary("Продовжити консультацію") { consultationDialog(id, p.optString("name")) })
+                    body.addView(row); body.addView(spacer())
+                } catch (_: Exception) { body.addView(caption("Не вдалося прочитати чернетку №$id. Вона не видалена.")) }
+            }
+            if (count == 0) body.addView(caption("Збережених локальних чернеток поки немає."))
+        }
+    }
+
+    private fun previewDocument(document: NativeDocument, back: () -> Unit) {
+        val session = token; val epoch = sceneEpoch
+        Toast.makeText(this, "Готуємо PDF…", Toast.LENGTH_SHORT).show()
+        io.execute {
+            try {
+                val file = NativePdf.create(this, document)
+                runOnUiThread {
+                    if (isDestroyed || token != session || sceneEpoch != epoch) { file.delete(); return@runOnUiThread }
+                    val viewer = NativePdfPreview(this, file) { exportPdf(it) }
+                    val body = root(); body.addView(topBar(document.title, back)); body.addView(viewer.view(document.title))
+                    backAction = back; mount(scroll(body)); pdfPreview = viewer
+                }
+            } catch (error: Exception) { runOnUiThread { if(token == session && sceneEpoch == epoch) showError(error.message ?: "Не вдалося сформувати PDF") } }
+        }
+    }
+
+    private fun exportPdf(file: java.io.File) {
+        pendingPdf = file
+        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "application/pdf"; putExtra(Intent.EXTRA_TITLE, "SOLVIA-document.pdf")
+        }, exportPdfRequest)
+    }
+
+    private fun waitingListScreen() {
+        backAction = { moreScreen() }; val body = root(); body.addView(topBar("Лист очікування", ::moreScreen))
+        body.addView(primary("Додати до листа очікування") { waitingListForm() }); mount(scroll(body))
+        apiAsync("GET", "/api/waiting-list") { value ->
+            val entries = value as JSONArray
+            if (entries.length() == 0) body.addView(caption("Лист очікування порожній"))
+            for (i in 0 until entries.length()) {
+                val item = entries.getJSONObject(i); val row = card()
+                row.addView(title(item.optString("patient"), 18f)); row.addView(caption(item.optString("psychologist") + " · " + item.optString("phone")))
+                row.addView(caption("${item.optString("date_from")} — ${item.optString("date_to")} · ${item.optString("time_from")} — ${item.optString("time_to")}"))
+                row.addView(caption(item.optString("contact_note")))
+                val status = item.optString("status")
+                row.addView(caption(when(status) { "waiting" -> "Очікує"; "offered" -> "Час запропоновано"; "booked" -> "Записано"; else -> "Скасовано" }))
+                if (status == "waiting" || status == "offered") {
+                    row.addView(secondary("Записати у слот") { waitingBooking(item) })
+                    row.addView(secondary(if(status == "waiting") "Позначити: час запропоновано" else "Повернути в очікування") {
+                        apiAsync("PATCH", "/api/waiting-list/${item.getLong("id")}", JSONObject().put("version", item.getInt("version"))
+                            .put("status", if(status == "waiting") "offered" else "waiting")) { waitingListScreen() }
+                    })
+                    row.addView(secondary("Скасувати очікування") {
+                        AlertDialog.Builder(this).setTitle("Скасувати очікування?").setNegativeButton("Ні", null)
+                            .setPositiveButton("Так") { _, _ -> apiAsync("PATCH", "/api/waiting-list/${item.getLong("id")}",
+                                JSONObject().put("version", item.getInt("version")).put("status", "cancelled")) { waitingListScreen() } }.show()
+                    })
+                }; body.addView(row); body.addView(spacer())
+            }
+        }
+    }
+
+    private fun waitingListForm() {
+        apiAsync("GET", "/api/patients?status=active") { value ->
+            val rows = value as JSONArray
+            if(rows.length() == 0) { showError("Спочатку додайте активного пацієнта"); return@apiAsync }
+            val wrap = root(); val patients = Spinner(this)
+            patients.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, (0 until rows.length()).map { rows.getJSONObject(it).optString("name") })
+            val from = edit("Від YYYY-MM-DD").apply { setText(LocalDate.now().toString()) }
+            val to = edit("До YYYY-MM-DD").apply { setText(LocalDate.now().plusDays(14).toString()) }
+            val first = edit("Початок HH:mm").apply { setText("09:00") }; val last = edit("Кінець HH:mm").apply { setText("18:00") }
+            val note = edit("Контактна примітка"); val high = CheckBox(this).apply { text = "Високий пріоритет" }
+            listOf(patients, from, to, first, last, note, high).forEach { wrap.addView(it) }
+            val dialog = AlertDialog.Builder(this).setTitle("Лист очікування").setView(scroll(wrap)).setNegativeButton("Скасувати", null).setPositiveButton("Зберегти", null).create()
+            dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val p = rows.getJSONObject(patients.selectedItemPosition); val save = dialog.getButton(AlertDialog.BUTTON_POSITIVE); save.isEnabled = false
+                apiAsync("POST", "/api/waiting-list", JSONObject().put("patient_id", p.getLong("id")).put("psychologist_id", p.getLong("psychologist_id"))
+                    .put("date_from", from.text.toString()).put("date_to", to.text.toString()).put("time_from", first.text.toString()).put("time_to", last.text.toString())
+                    .put("contact_note", note.text.toString()).put("priority", if(high.isChecked) "high" else "normal"),
+                    onError = { save.isEnabled = true; showError(it) }) { dialog.dismiss(); waitingListScreen() }
+            } }; dialog.show()
+        }
+    }
+
+    private fun waitingBooking(item: JSONObject) {
+        apiAsync("GET", "/api/meta") { value ->
+            val rooms = (value as JSONObject).optJSONArray("rooms") ?: JSONArray()
+            if(rooms.length() == 0) { showError("Немає доступних кабінетів"); return@apiAsync }
+            val wrap = root(); val room = Spinner(this)
+            room.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, (0 until rooms.length()).map { rooms.getJSONObject(it).optString("name") })
+            val date = edit("Дата YYYY-MM-DD").apply { setText(item.optString("date_from")) }
+            val start = edit("Початок HH:mm").apply { setText(item.optString("time_from")) }
+            val end = edit("Кінець HH:mm").apply { setText(item.optString("time_from").take(2) + ":50") }
+            listOf(date, start, end, room).forEach { wrap.addView(it) }
+            val dialog = AlertDialog.Builder(this).setTitle("Запис із листа очікування").setView(scroll(wrap)).setNegativeButton("Скасувати", null).setPositiveButton("Записати", null).create()
+            dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val save = dialog.getButton(AlertDialog.BUTTON_POSITIVE); save.isEnabled = false
+                apiAsync("POST", "/api/waiting-list/${item.getLong("id")}/book", JSONObject().put("version", item.getInt("version"))
+                    .put("room_id", rooms.getJSONObject(room.selectedItemPosition).getLong("id")).put("start", date.text.toString()+"T"+start.text.toString())
+                    .put("end", date.text.toString()+"T"+end.text.toString()), onError = { save.isEnabled = true; showError(it) }) { dialog.dismiss(); waitingListScreen() }
+            } }; dialog.show()
+        }
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun rounded(color: Int, radius: Int = 16, stroke: Int? = null): GradientDrawable =
@@ -90,7 +287,7 @@ class MainActivity : Activity() {
     private fun root(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(bg)
-        setPadding(dp(18), dp(20), dp(18), dp(30))
+        setPadding(dp(18), dp(12), dp(18), dp(16))
     }
 
     private fun logo(size: Int = 82): ImageView = ImageView(this).apply {
@@ -149,6 +346,7 @@ class MainActivity : Activity() {
 
     private fun primary(label: String, action: () -> Unit): Button = Button(this).apply {
         text = label
+        minHeight = dp(48)
         isAllCaps = false
         textSize = 14f
         setTextColor(Color.WHITE)
@@ -161,6 +359,7 @@ class MainActivity : Activity() {
 
     private fun secondary(label: String, action: () -> Unit): Button = Button(this).apply {
         text = label
+        minHeight = dp(48)
         isAllCaps = false
         textSize = 13f
         setTextColor(forestDark)
@@ -261,24 +460,24 @@ class MainActivity : Activity() {
     private fun request(method: String, path: String, body: JSONObject? = null): Any =
         requestAt(server, method, path, body)
 
-    private fun apiAsync(method: String, path: String, body: JSONObject? = null, ok: (Any) -> Unit) {
+    private fun apiAsync(method: String, path: String, body: JSONObject? = null, onError: ((String) -> Unit)? = null, ok: (Any) -> Unit) {
         val requestToken = token
         val requestServer = server
+        val requestEpoch = sceneEpoch
         io.execute {
             try {
                 val result = requestAt(requestServer, method, path, body, requestToken)
-                runOnUiThread { if (!isFinishing && !isDestroyed && token == requestToken && server == requestServer) ok(result) }
+                runOnUiThread { if (!isFinishing && !isDestroyed && token == requestToken && server == requestServer && sceneEpoch == requestEpoch) ok(result) }
             } catch (e: Exception) {
                 runOnUiThread {
-                    if (isFinishing || isDestroyed || token != requestToken || server != requestServer) return@runOnUiThread
+                    if (isFinishing || isDestroyed || token != requestToken || server != requestServer || sceneEpoch != requestEpoch) return@runOnUiThread
                     val message = e.message ?: "Помилка підключення"
                     if (e is ApiError && e.status == 401 && requestToken.isNotBlank()) {
                         consultationWindow?.dismiss(); consultationWindow = null
-                        token = ""
                         Toast.makeText(this, "Сесію завершено. Увійдіть знову.", Toast.LENGTH_LONG).show()
-                        loginScreen()
+                        logout()
                     } else {
-                        showError(message)
+                        if (onError != null) onError(message) else showError(message)
                     }
                 }
             }
@@ -352,6 +551,20 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == exportPdfRequest) {
+            val file = pendingPdf; pendingPdf = null
+            if (resultCode == RESULT_OK && data?.data != null && file != null && token.isNotBlank()) {
+                val uri = data.data!!
+                io.execute {
+                    try {
+                        contentResolver.openOutputStream(uri)?.use { output -> file.inputStream().use { it.copyTo(output) } }
+                            ?: throw IllegalStateException("Не вдалося відкрити файл")
+                        runOnUiThread { Toast.makeText(this, "PDF збережено", Toast.LENGTH_LONG).show() }
+                    } catch (error: Exception) { runOnUiThread { showError(error.message ?: "Помилка збереження PDF") } }
+                }
+            }
+            return
+        }
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == openConfigRequest && resultCode == RESULT_OK && data?.data != null) {
             importServerConfig(data.data!!)
@@ -406,7 +619,7 @@ class MainActivity : Activity() {
         })
         body.addView(spacer(10))
         body.addView(caption("HTTPS рекомендований. HTTP дозволяється тільки для приватної локальної IP-мережі центру; для VPS/інтернету застосунок приймає лише HTTPS."))
-        setContentView(scroll(body))
+        mount(scroll(body))
     }
 
     private fun loginScreen() {
@@ -440,16 +653,18 @@ class MainActivity : Activity() {
             }
         })
         body.addView(secondary("Змінити сервер") { setupScreen() })
-        setContentView(scroll(body))
+        mount(scroll(body))
     }
 
     private fun homeScreen() {
+        selectedNavigation = "home"
+        workspaceReady = false
         backAction = null
         val checking = root()
         checking.addView(logo(64))
         checking.addView(title("SOLVIA " + BuildConfig.VERSION_NAME, 20f))
         checking.addView(caption("Перевіряємо відкриття зміни…"))
-        setContentView(scroll(checking))
+        mount(scroll(checking))
         apiAsync("GET", "/api/shift-day") { result ->
             val shift = result as JSONObject
             if (shift.optBoolean("open", false)) renderHomeScreen()
@@ -472,13 +687,13 @@ class MainActivity : Activity() {
         }
         body.addView(secondary("Перевірити ще раз") { homeScreen() })
         body.addView(secondary("Вийти") {
-            token = ""
-            loginScreen()
+            logout()
         })
-        setContentView(scroll(body))
+        mount(scroll(body))
     }
 
     private fun renderHomeScreen() {
+        workspaceReady = true
         backAction = null
         val outer = root()
         outer.addView(logo(64))
@@ -517,7 +732,7 @@ class MainActivity : Activity() {
         if (role != "reception") outer.addView(secondary("Супервізії") { supervisionsScreen() })
         outer.addView(spacer())
         outer.addView(title("Робочий простір", 25f))
-        outer.addView(caption("Нативний Android-клієнт SOLVIA. Дані завантажуються безпосередньо з API центру."))
+        outer.addView(caption("Ваш розклад, пацієнти та документи — поруч."))
 
         val today = card()
         today.addView(title("Сьогодні", 18f))
@@ -526,7 +741,7 @@ class MainActivity : Activity() {
         today.addView(spacer(6))
         if (role != "director") today.addView(primary("Мої пацієнти") { patientsScreen() })
         outer.addView(today)
-        setContentView(scroll(outer))
+        mount(scroll(outer))
         if (role == "admin" || role == "psychologist") {
             apiAsync("GET", "/api/reminders") { result ->
                 val reminders = result as JSONArray
@@ -561,6 +776,7 @@ class MainActivity : Activity() {
     }
 
     private fun calendarScreen(date: String = LocalDate.now().toString()) {
+        selectedNavigation = "calendar"
         backAction = { homeScreen() }
         val body = root()
         body.addView(topBar(if (role == "psychologist") "Мій календар" else "Календар центру", ::homeScreen))
@@ -581,7 +797,7 @@ class MainActivity : Activity() {
         body.addView(spacer(12))
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(list)
-        setContentView(scroll(body))
+        mount(scroll(body))
 
         apiAsync("GET", "/api/appointments?date=" + date) { result ->
             list.removeAllViews()
@@ -612,11 +828,15 @@ class MainActivity : Activity() {
     }
 
     private fun newBookingDialog(date: String) {
+        val sessionToken = token
+        val sessionServer = server
+        val sessionEpoch = sceneEpoch
         io.execute {
             try {
                 val meta = request("GET", "/api/meta") as JSONObject
                 val patients = request("GET", "/api/patients") as JSONArray
                 runOnUiThread {
+                    if (isDestroyed || token != sessionToken || server != sessionServer || sceneEpoch != sessionEpoch) return@runOnUiThread
                     val psychologists = meta.optJSONArray("psychologists") ?: JSONArray()
                     val rooms = meta.optJSONArray("rooms") ?: JSONArray()
                     if (psychologists.length() == 0 || rooms.length() == 0 || patients.length() == 0) {
@@ -694,7 +914,7 @@ class MainActivity : Activity() {
                                 .put("note", note.text.toString())
                                 .put("patient_ids", JSONArray().put(patient.getLong("id")))
                             dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-                            apiAsync("POST", "/api/appointments", payload) {
+                            apiAsync("POST", "/api/appointments", payload, onError = { dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true; showError(it) }) {
                                 dialog.dismiss()
                                 Toast.makeText(this, "Запис збережено в календарі.", Toast.LENGTH_LONG).show()
                                 calendarScreen(date)
@@ -709,7 +929,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun patientsScreen() {
+    private fun patientsScreen(status: String = "active", documentLibrary: Boolean = false) {
+        selectedNavigation = "patients"
         backAction = { homeScreen() }
         val body = root()
         body.addView(topBar(if (role == "psychologist") "Мої пацієнти" else "Пацієнти", ::homeScreen))
@@ -719,12 +940,18 @@ class MainActivity : Activity() {
         }
         val search = edit("Пошук за №, ПІБ, телефоном, категорією")
         body.addView(search)
+        val filters = LinearLayout(this)
+        for ((key, label) in listOf("active" to "Активні", "completed" to "Завершені", "archived" to "Архів")) {
+            filters.addView(secondary(label) { patientsScreen(key, documentLibrary) }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }
+        body.addView(filters)
+        if (documentLibrary) body.addView(caption("Оберіть пацієнта, щоб відкрити його документи."))
         body.addView(spacer())
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(list)
-        setContentView(scroll(body))
+        mount(scroll(body))
 
-        apiAsync("GET", "/api/patients") { result ->
+        apiAsync("GET", "/api/patients?status=" + status) { result ->
             val all = result as JSONArray
 
             fun render(query: String) {
@@ -741,7 +968,7 @@ class MainActivity : Activity() {
                     val patientId = patient.getLong("id")
                     val box = card()
                     box.background = rounded(Color.WHITE, 17, line)
-                    box.setOnClickListener { patientScreen(patientId) }
+                    box.setOnClickListener { patientWorkspace(patientId, if(documentLibrary) "documents" else "summary") }
                     box.addView(caption("ПАЦІЄНТ · №" + patient.optString("patient_no", "—")))
                     box.addView(title(patient.optString("name"), 18f))
                     box.addView(caption(patient.optString("category") + " · " + patient.optString("phone")))
@@ -753,6 +980,7 @@ class MainActivity : Activity() {
             }
 
             render("")
+            if (all.length() == 0) list.addView(caption("У цій категорії пацієнтів поки немає."))
             search.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -764,11 +992,15 @@ class MainActivity : Activity() {
     }
 
     private fun newPatientDialog() {
+        val sessionToken = token
+        val sessionServer = server
+        val sessionEpoch = sceneEpoch
         io.execute {
             try {
                 val meta = request("GET", "/api/meta") as JSONObject
                 val families = request("GET", "/api/families") as JSONArray
                 runOnUiThread {
+                    if (isDestroyed || token != sessionToken || server != sessionServer || sceneEpoch != sessionEpoch) return@runOnUiThread
                     val psychologists = meta.optJSONArray("psychologists") ?: JSONArray()
                     val categories = meta.optJSONArray("categories") ?: JSONArray()
                     if (psychologists.length() == 0) {
@@ -839,7 +1071,7 @@ class MainActivity : Activity() {
                             else payload.put("family_id", families.getJSONObject(familySpinner.selectedItemPosition - 1).getLong("id"))
 
                             dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-                            apiAsync("POST", "/api/patients", payload) {
+                            apiAsync("POST", "/api/patients", payload, onError = { dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true; showError(it) }) {
                                 dialog.dismiss()
                                 Toast.makeText(this, "Пацієнта створено.", Toast.LENGTH_LONG).show()
                                 patientsScreen()
@@ -854,86 +1086,15 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun patientScreen(id: Long) {
-        backAction = { patientsScreen() }
-        val body = root()
-        body.addView(topBar("Картка пацієнта", ::patientsScreen))
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        body.addView(content)
-        setContentView(scroll(body))
+    private fun patientScreen(id: Long) = patientWorkspace(id)
 
-        apiAsync("GET", "/api/patients/" + id) { result ->
-            val patient = result as JSONObject
-            content.removeAllViews()
-            content.addView(title(patient.optString("name")))
-            content.addView(caption(
-                "№" + patient.optString("patient_no", "—") + " · " +
-                patient.optString("category") + " · " +
-                patient.optString("phone") + " · " +
-                patient.optString("dob")
-            ))
-            val profile = card()
-            profile.addView(title("Профіль", 18f))
-            profile.addView(caption("Сім’я: " + patient.optString("family", "—")))
-            profile.addView(caption("Роль у сім’ї: " + patient.optString("family_role", "—")))
-            profile.addView(caption("Адреса: " + patient.optString("address", "—")))
-            profile.addView(caption("Статус: " + patient.optString("status", "active")))
-            content.addView(profile)
-            for ((field,label) in listOf("courses" to "Курси", "referrals" to "Направлення", "documents" to "Документи")) {
-                val rows=patient.optJSONArray(field)
-                if(rows!=null && rows.length()>0) {
-                    val box=card();box.addView(title(label,18f))
-                    for(i in 0 until rows.length()) {
-                        val item=rows.getJSONObject(i)
-                        val title=item.optString("title",item.optString("destination_type","Курс №"+item.optString("course_no")))
-                        box.addView(caption(title+" · "+item.optString("status")))
-                    }
-                    content.addView(spacer());content.addView(box)
-                }
-            }
-            content.addView(secondary("Документи та повна картка у браузері") {
-                startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(server)))
-            })
-
-
-            if (role == "psychologist") {
-                content.addView(spacer())
-                content.addView(primary("+ Додати консультацію") {
-                    consultationDialog(id, patient.optString("name"))
-                })
-            }
-
-            val consultations = patient.optJSONArray("consultations")
-            if (consultations != null) {
-                content.addView(spacer())
-                content.addView(title("Історія консультацій", 20f))
-                for (i in 0 until consultations.length()) {
-                    val consultation = consultations.getJSONObject(i)
-                    val box = card()
-                    box.addView(caption(
-                        consultation.optString("created").replace('T', ' ') + " · " +
-                        consultation.optString("consultation_type", "repeat") + " · ризик " +
-                        consultation.optString("risk_level", "low")
-                    ))
-                    box.addView(TextView(this).apply {
-                        text = consultation.optString("note")
-                        textSize = 15f
-                        setTextColor(ink)
-                        setTypeface(typeface, Typeface.BOLD)
-                    })
-                    if (consultation.optString("request_text").isNotBlank()) box.addView(caption("Запит: " + consultation.optString("request_text")))
-                    if (consultation.optString("state_text").isNotBlank()) box.addView(caption("Стан: " + consultation.optString("state_text")))
-                    if (consultation.optString("work_done").isNotBlank()) box.addView(caption("Проведено: " + consultation.optString("work_done")))
-                    if (consultation.optString("result_text").isNotBlank()) box.addView(caption("Динаміка: " + consultation.optString("result_text")))
-                    if (consultation.optString("recommendations").isNotBlank()) box.addView(caption("Рекомендації: " + consultation.optString("recommendations")))
-                    box.addView(caption("Цілі: " + consultation.optString("goals", "—")))
-                    box.addView(caption("План: " + consultation.optString("next_plan", "—")))
-                    box.addView(caption("Домашнє завдання: " + consultation.optString("homework", "—")))
-                    content.addView(box)
-                    content.addView(spacer(8))
-                }
-            }
-        }
+    private fun patientWorkspace(id: Long, tab: String = "summary") {
+        selectedNavigation = "patients"
+        val workspace = PatientWorkspace(this, mobileApi(), role,
+            { view, back -> backAction = back; mount(scroll(view)) },
+            { patientsScreen() }, { patientId, name -> consultationDialog(patientId, name) },
+            { document, back -> previewDocument(document, back) })
+        workspace.open(id, tab)
     }
 
     private fun consultationDialog(patientId: Long, patientName: String) {
@@ -982,7 +1143,7 @@ class MainActivity : Activity() {
             val scroll = ScrollView(this).apply { addView(wrap) }
 
             wrap.addView(title(patientName, 20f))
-            wrap.addView(caption("Усі поля нижче передаються в API SOLVIA та зберігаються у PostgreSQL на серверному ПК."))
+            wrap.addView(caption("Заповніть підсумок прийому. Текст автоматично зберігається як зашифрована чернетка."))
 
             val appointmentSpinner = Spinner(this)
             val appointmentLabels = eligible.map {
@@ -1255,6 +1416,8 @@ class MainActivity : Activity() {
                 }
             }
             dialog.show()
+            dialog.window?.setLayout(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
+            dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
     }
 
@@ -1264,11 +1427,17 @@ class MainActivity : Activity() {
         val oldServer = server
         token = ""
         role = ""
+        workspaceReady = false
+        userId = 0
+        pendingPdf = null
+        pdfPreview?.close(); pdfPreview = null
+        java.io.File(cacheDir, "documents").deleteRecursively()
         io.execute { try { requestAt(oldServer, "POST", "/api/logout", JSONObject(), oldToken) } catch (_: Exception) { } }
         loginScreen()
     }
 
     private fun settingsScreen() {
+        selectedNavigation = "more"
         backAction = { homeScreen() }
         val body = root()
         body.addView(topBar("Налаштування") { homeScreen() })
@@ -1311,13 +1480,13 @@ class MainActivity : Activity() {
                 .setPositiveButton("Продовжити") { _, _ -> logout(); setupScreen() }
                 .setNegativeButton("Скасувати", null).show()
         })
-        setContentView(scroll(body))
+        mount(scroll(body))
     }
 
     private fun statisticsScreen() {
         backAction = { homeScreen() }
         val body = root(); body.addView(topBar("Статистика центру") { homeScreen() })
-        setContentView(scroll(body))
+        mount(scroll(body))
         apiAsync("GET", "/api/stats") { value ->
             val data=value as JSONObject
             for ((key,label) in listOf("total_patients" to "Усього пацієнтів", "active_patients" to "Активні пацієнти", "new_patients" to "Нові звернення", "consultations" to "Консультації", "repeat_visits" to "Повторні прийоми", "active_courses" to "Активні курси", "signed_documents" to "Підписані документи")) {
@@ -1329,7 +1498,7 @@ class MainActivity : Activity() {
 
     private fun supervisionsScreen() {
         backAction = { homeScreen() }
-        val body = root(); body.addView(topBar("Супервізії") { homeScreen() });setContentView(scroll(body))
+        val body = root(); body.addView(topBar("Супервізії") { homeScreen() });mount(scroll(body))
         apiAsync("GET", "/api/supervisions") { value ->
             val rows=value as JSONArray
             if(rows.length()==0)body.addView(caption("Супервізій ще немає. Керівник планує їх у SOLVIA Center."))
@@ -1361,7 +1530,7 @@ class MainActivity : Activity() {
         body.addView(caption("Телефони, планшети та ПК з активним входом у SOLVIA."))
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(list)
-        setContentView(scroll(body))
+        mount(scroll(body))
 
         fun load() {
             apiAsync("GET", "/api/admin/sessions") { result ->
@@ -1464,7 +1633,7 @@ class MainActivity : Activity() {
                 reportScreen()
             }
         })
-        setContentView(scroll(body))
+        mount(scroll(body))
 
         apiAsync("GET", "/api/shift-reports?from=$day&to=$day") { result ->
             val rows = result as JSONArray
@@ -1508,6 +1677,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         io.shutdownNow()
+        pdfPreview?.close(); pdfPreview = null
         super.onDestroy()
     }
 }
