@@ -20,6 +20,8 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.util.Base64
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.Button
 import android.widget.ImageView
@@ -95,10 +97,12 @@ object NativePdf {
         manager.print(title, object : PrintDocumentAdapter() {
             override fun onLayout(old: PrintAttributes?, new: PrintAttributes?, cancel: CancellationSignal?, callback: LayoutResultCallback, extras: android.os.Bundle?) {
                 if (cancel?.isCanceled == true) { callback.onLayoutCancelled(); return }
-                val count = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
-                    PdfRenderer(descriptor).use { it.pageCount }
-                }
-                callback.onLayoutFinished(PrintDocumentInfo.Builder("SOLVIA.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(count).build(), old != new)
+                try {
+                    val count = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                        PdfRenderer(descriptor).use { it.pageCount }
+                    }
+                    callback.onLayoutFinished(PrintDocumentInfo.Builder("SOLVIA.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(count).build(), old != new)
+                } catch (error: Exception) { callback.onLayoutFailed(error.message ?: "Не вдалося відкрити PDF") }
             }
             override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor?, cancel: CancellationSignal?, callback: WriteResultCallback) {
                 if (destination == null) { callback.onWriteFailed("Немає файлу призначення"); return }
@@ -122,7 +126,7 @@ class NativePdfPreview(private val activity: Activity, val file: File, private v
     fun view(title: String): View {
         val root = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12) }
         val counter = TextView(activity).apply { gravity = Gravity.CENTER; textSize = 15f }
-        val image = ImageView(activity).apply { adjustViewBounds = true; contentDescription = title; setBackgroundColor(Color.WHITE) }
+        val image = ZoomPdfView(activity).apply { adjustViewBounds = true; contentDescription = title; setBackgroundColor(Color.WHITE) }
         val controls = LinearLayout(activity).apply { gravity = Gravity.CENTER }
         fun render() {
             if (closed) return
@@ -130,7 +134,7 @@ class NativePdfPreview(private val activity: Activity, val file: File, private v
                 val width = minOf(1440, activity.resources.displayMetrics.widthPixels * 2).coerceAtLeast(595)
                 val next = Bitmap.createBitmap(width, (width * page.height.toFloat() / page.width).toInt(), Bitmap.Config.ARGB_8888)
                 next.eraseColor(Color.WHITE); page.render(next, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                image.setImageBitmap(next); bitmap?.recycle(); bitmap = next
+                image.resetZoom(); image.setImageBitmap(next); bitmap?.recycle(); bitmap = next
             }
             counter.text = "Сторінка ${current + 1} з ${renderer.pageCount}"
         }
@@ -140,7 +144,53 @@ class NativePdfPreview(private val activity: Activity, val file: File, private v
         root.addView(counter); root.addView(controls)
         root.addView(button("Зберегти PDF") { export(file) })
         root.addView(button("Друк") { NativePdf.print(activity, file, title) })
+        root.addView(TextView(activity).apply { text = "Розведіть два пальці, щоб збільшити текст. Подвійний дотик скидає масштаб."; textSize = 13f })
         root.addView(image); render(); return root
     }
     override fun close() { if (!closed) { closed = true; renderer.close(); bitmap?.recycle(); bitmap = null } }
+}
+
+/** Pinch zoom and drag keep an A4 document readable on a small phone. */
+private class ZoomPdfView(activity: Activity) : ImageView(activity) {
+    private var zoom = 1f
+    private var offsetX = 0f
+    private var offsetY = 0f
+    private var lastX = 0f
+    private var lastY = 0f
+    private val scale = ScaleGestureDetector(activity, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScale(detector: ScaleGestureDetector): Boolean {
+            val next = (zoom * detector.scaleFactor).coerceIn(1f, 5f)
+            val ratio = next / zoom
+            offsetX = detector.focusX - (detector.focusX - offsetX) * ratio
+            offsetY = detector.focusY - (detector.focusY - offsetY) * ratio
+            zoom = next; clamp(); invalidate(); return true
+        }
+    })
+    private val gestures = android.view.GestureDetector(activity, object : android.view.GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(event: MotionEvent) = true
+        override fun onDoubleTap(event: MotionEvent): Boolean { resetZoom(); return true }
+    })
+    fun resetZoom() { zoom = 1f; offsetX = 0f; offsetY = 0f; invalidate() }
+    private fun clamp() {
+        offsetX = offsetX.coerceIn(-width * (zoom - 1f), 0f)
+        offsetY = offsetY.coerceIn(-height * (zoom - 1f), 0f)
+    }
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        canvas.save(); canvas.translate(offsetX, offsetY); canvas.scale(zoom, zoom)
+        super.onDraw(canvas); canvas.restore()
+    }
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        parent?.requestDisallowInterceptTouchEvent(event.pointerCount > 1 || zoom > 1f)
+        gestures.onTouchEvent(event); scale.onTouchEvent(event)
+        when(event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> if(event.pointerCount == 1 && !scale.isInProgress && zoom > 1f) {
+                offsetX += event.x - lastX; offsetY += event.y - lastY; clamp(); invalidate()
+            }
+            MotionEvent.ACTION_UP -> { performClick(); parent?.requestDisallowInterceptTouchEvent(false) }
+            MotionEvent.ACTION_CANCEL -> parent?.requestDisallowInterceptTouchEvent(false)
+        }
+        lastX = event.x; lastY = event.y
+        return true
+    }
+    override fun performClick(): Boolean { super.performClick(); return true }
 }
