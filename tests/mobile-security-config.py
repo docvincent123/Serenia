@@ -1,4 +1,4 @@
-"""Verify HTTPS-default enrollment with explicit private-LAN HTTP fallback."""
+"""Verify HTTPS enrollment and platform-specific HTTP restrictions."""
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
@@ -35,12 +35,17 @@ for file in ('installer/Setup-Server.ps1', 'installer/Repair-Network.ps1'):
     assert all('-Profile Private' in line for line in http_rules)
 
 linux_service = (root / 'installer/linux/solvia-http.service').read_text()
-assert '--host ${SOLVIA_LAN_IP}' in linux_service
+assert '--host 127.0.0.1' in linux_service
+assert '${SOLVIA_LAN_IP}' not in linux_service
 assert '--port 8765' in linux_service
 
 linux_install = (root / 'installer/linux/install.sh').read_text()
 assert '"preferred":"https"' in linux_install or '"preferred": "https"' in linux_install
-assert 'http://{ip}:8765' in linux_install
-assert 'HTTP 8765 не відкривайте в інтернет' in linux_install
+assert 'http://{ip}:8765' not in linux_install
+assert '"http_url"' not in linux_install
+assert 'HTTP 8765 не відкривайте для LAN або інтернету' in linux_install
+linux_sync = (root / 'installer/linux/sync-network.sh').read_text()
+assert '"https_url":f"https://{ip}:8443"' in linux_sync
+assert '"http_url"' not in linux_sync
 
-print('HTTPS remains preferred; HTTP fallback is restricted to private LAN by application and installer policy')
+print('HTTPS remains preferred; Linux HTTP is loopback-only; Windows HTTP fallback is private-LAN restricted')
