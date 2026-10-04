@@ -118,7 +118,6 @@ data={
   "preferred":"https",
   "api_url":f"https://{ip}:8443",
   "https_url":f"https://{ip}:8443",
-  "http_url":f"http://{ip}:8765",
 }
 with open(path,"w",encoding="utf-8") as f:
     json.dump(data,f,ensure_ascii=False,indent=2)
@@ -126,12 +125,12 @@ PY
 chmod 0644 "$mobile_config"
 
 printf '\nSOLVIA готова: https://%s:8443\n' "$ip"
-printf 'Локальний HTTP для мобільного: http://%s:8765\n' "$ip"
+echo 'HTTP 8765 доступний лише локально; телефони підключаються через HTTPS 8443.'
 printf 'Файл підключення телефона: %s\n' "$mobile_config"
 echo 'Linux Admin: відкрийте «SOLVIA Admin» у меню програм або виконайте solvia-admin-app.'
 echo 'Оновлення: sudo solvia-admin check-update / sudo solvia-admin update'
 echo 'Сертифікат для ПК/Android: /etc/solvia/ca/QureMed-Local-CA.crt'
 openssl x509 -in /etc/solvia/ca/QureMed-Local-CA.crt -noout -fingerprint -sha256
 echo 'Установіть довіру тільки до цього CA. Збережіть його відбиток для звірки.'
-echo 'Якщо firewall активний: дозвольте TCP 8443 і 8765 лише з підмережі центру (див. LINUX.md). HTTP 8765 не відкривайте в інтернет.'
+echo 'Якщо firewall активний: дозвольте TCP 8443 лише з підмережі центру (див. LINUX.md). HTTP 8765 не відкривайте для LAN або інтернету.'
 

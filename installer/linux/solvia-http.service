@@ -1,5 +1,5 @@
 [Unit]
-Description=SOLVIA private-LAN HTTP API for mobile clients
+Description=SOLVIA loopback HTTP API
 Requires=postgresql@16-solvia.service solvia-network.service
 After=network-online.target postgresql@16-solvia.service solvia-network.service solvia.service
 Wants=network-online.target
@@ -11,7 +11,7 @@ Group=solvia
 EnvironmentFile=/etc/solvia/server.env
 WorkingDirectory=/opt/solvia
 ExecStartPre=/bin/sleep 2
-ExecStart=/opt/solvia/SolviaServer --host ${SOLVIA_LAN_IP} --port 8765 --ui /opt/solvia/ui
+ExecStart=/opt/solvia/SolviaServer --host 127.0.0.1 --port 8765 --ui /opt/solvia/ui
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30

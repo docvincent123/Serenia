@@ -27,7 +27,6 @@ data={
   "preferred":"https",
   "api_url":f"https://{ip}:8443",
   "https_url":f"https://{ip}:8443",
-  "http_url":f"http://{ip}:8765",
 }
 with open(path,"w",encoding="utf-8") as f:
     json.dump(data,f,ensure_ascii=False,indent=2)

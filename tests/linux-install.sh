@@ -46,16 +46,28 @@ with client.open(request) as r:
     assert int(system['counts']['users']) >= 1
 PY
 python3 - <<'PY'
-import json, os, urllib.request
+import json, os, urllib.request, urllib.error, http.client
 ip=os.environ['SOLVIA_SERVER_IP']
-with urllib.request.urlopen('http://'+ip+':8765/api/health', timeout=5) as r:
+client=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+with client.open('http://127.0.0.1:8765/api/health', timeout=5) as r:
     health=json.load(r)
     assert health['ok'] is True
 with open('/usr/local/share/solvia/SOLVIA-Mobile.solvia', encoding='utf-8') as f:
     profile=json.load(f)
 assert profile['preferred']=='https'
 assert profile['https_url']==f'https://{ip}:8443'
-assert profile['http_url']==f'http://{ip}:8765'
+assert profile['api_url']==f'https://{ip}:8443'
+assert not profile.get('http_url')
+# The API must remain unreachable over unencrypted LAN HTTP.
+try:
+    response=client.open('http://'+ip+':8765/api/health', timeout=5)
+except urllib.error.HTTPError as error:
+    raise AssertionError('LAN HTTP listener is exposed') from error
+except (urllib.error.URLError, http.client.HTTPException):
+    pass
+else:
+    response.close()
+    raise AssertionError('LAN HTTP listener is exposed')
 PY
 sudo solvia-admin backup
 # Two backups at the same timestamp must preserve both archives.
@@ -113,4 +125,4 @@ sudo solvia-admin restart
 # Failed TLS verification must never be bypassed; certificate contains the LAN SAN.
 SOLVIA_SERVER_IP=$(cat /usr/local/share/solvia/address)
 sudo openssl verify -CAfile /tmp/solvia-ci-ca.crt -verify_ip "$SOLVIA_SERVER_IP" /etc/solvia/tls/server.crt
-printf 'Linux install, HTTPS + private-LAN HTTP, backup, restore and upgrade passed\n'
+printf 'Linux install, HTTPS + loopback-only HTTP, backup, restore and upgrade passed\n'
