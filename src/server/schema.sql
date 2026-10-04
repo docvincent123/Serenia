@@ -391,6 +391,14 @@ CREATE TABLE IF NOT EXISTS patient_documents(
   signed_by_name TEXT NOT NULL DEFAULT '',
   signature_data TEXT NOT NULL DEFAULT '',
   signed_at TEXT NOT NULL,
+  patient_name TEXT NOT NULL DEFAULT '',
+  patient_no_snapshot TEXT NOT NULL DEFAULT '',
+  patient_dob TEXT NOT NULL DEFAULT '',
+  patient_category TEXT NOT NULL DEFAULT '',
+  center_name_snapshot TEXT NOT NULL DEFAULT '',
+  center_address_snapshot TEXT NOT NULL DEFAULT '',
+  center_phone_snapshot TEXT NOT NULL DEFAULT '',
+  center_email_snapshot TEXT NOT NULL DEFAULT '',
   created_by BIGINT NOT NULL REFERENCES users(id),
   created TEXT NOT NULL
 );
@@ -463,3 +471,30 @@ CREATE TABLE IF NOT EXISTS waiting_list (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_waiting_active_patient
  ON waiting_list(patient_id) WHERE status IN ('waiting','offered');
 CREATE INDEX IF NOT EXISTS idx_waiting_status_dates ON waiting_list(status,date_from,date_to);
+
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_no_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_dob TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_category TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS center_name_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS center_address_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS center_phone_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS center_email_snapshot TEXT NOT NULL DEFAULT '';
+
+UPDATE patient_documents d
+SET patient_name = p.name,
+    patient_no_snapshot = p.patient_no,
+    patient_dob = p.dob,
+    patient_category = p.category
+FROM patients p
+WHERE d.patient_id = p.id
+  AND (d.patient_name = '' OR d.patient_no_snapshot = '');
+
+UPDATE patient_documents d
+SET center_name_snapshot = cs.center_name,
+    center_address_snapshot = cs.address,
+    center_phone_snapshot = cs.phone,
+    center_email_snapshot = cs.email
+FROM center_settings cs
+WHERE cs.id = 1
+  AND d.center_name_snapshot = '';
