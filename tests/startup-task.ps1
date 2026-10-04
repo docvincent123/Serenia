@@ -5,10 +5,17 @@ $apiArgs = Get-SolviaApiProcessArguments -Port '8765' -UiDirectory 'C:\Program F
 $repair = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../installer/Repair-Network.ps1'))
 $serverSetup = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../installer/Setup-Server.ps1'))
 if ($repair -notmatch "preferred = 'https'" -or $serverSetup -notmatch "preferred = 'https'") { throw 'Mobile config must prefer HTTPS.' }
-if ($repair -match '(?m)^New-NetFirewallRule.*8765' -or $serverSetup -match '(?m)^New-NetFirewallRule.*8765') { throw 'The raw HTTP API must not be opened in Windows Firewall.' }
-if ($apiArgs[0] -ne '--host' -or $apiArgs[1] -ne '127.0.0.1' -or $apiArgs -contains '0.0.0.0') { throw 'SOLVIA HTTP API must only listen on loopback; Caddy exposes HTTPS to LAN.' }
+if ($apiArgs[0] -ne '--host' -or $apiArgs[1] -ne '0.0.0.0') { throw 'SOLVIA API must bind the host so native mobile clients can reach private-LAN HTTP.' }
 if ($apiArgs[2] -ne '--port' -or $apiArgs[3] -ne '8765' -or $apiArgs[4] -ne '--ui' -or $apiArgs[5] -ne '"C:\Program Files\QureMed\SOLVIA\ui"') { throw 'API launch arguments are malformed.' }
-if ($repair -match '(?m)^New-NetFirewallRule.*SOLVIA Local HTTP API' -or $repair -match '(?m)^.*http://.*:8765') { throw 'Network repair must only publish HTTPS.' }
+
+foreach ($source in @($repair,$serverSetup)) {
+    if ($source -notmatch '(?m)^New-NetFirewallRule.*SOLVIA Local HTTP API.*-LocalPort 8765.*-RemoteAddress LocalSubnet.*-Profile Private') {
+        throw 'LAN HTTP 8765 must be restricted to LocalSubnet on the Private profile.'
+    }
+    if ($source -notmatch "http_url = \('http://' \+ .*':8765'\)") {
+        throw 'Mobile config must publish the private-LAN HTTP fallback.'
+    }
+}
 if ($settings.DisallowStartIfOnBatteries -or $settings.StopIfGoingOnBatteries) { throw 'Server task is blocked on battery power' }
 if (-not $settings.StartWhenAvailable -or [int]$settings.MultipleInstances -ne 2) { throw 'Incorrect startup/concurrency policy' }
 $root = Join-Path $env:TEMP ('solvia-restart-' + [guid]::NewGuid())
