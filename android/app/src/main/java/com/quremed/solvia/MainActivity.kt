@@ -1021,10 +1021,14 @@ class MainActivity : Activity() {
                 "sleep" to "Порушення сну",
                 "panic" to "Панічні прояви",
                 "aggression" to "Агресія / дратівливість",
+                "family_conflict" to "Сімейний конфлікт",
+                "burnout" to "Емоційне виснаження",
                 "suicide" to "Суїцидальний ризик",
                 "harm_others" to "Ризик для оточення",
                 "urgent_followup" to "Терміновий повторний контакт",
-                "doctor_referral" to "Скерування до лікаря / психіатра"
+                "doctor_referral" to "Скерування до лікаря / психіатра",
+                "family_work" to "Потреба у сімейній роботі",
+                "group_work" to "Потреба у груповій роботі"
             )
             val flagChecks = flagValues.map { pair ->
                 CheckBox(this).apply {
