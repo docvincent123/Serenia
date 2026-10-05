@@ -12,6 +12,7 @@
   background: #12243c; color: #eef5ff; overflow: hidden;
 }
 .desktop-mvp .sidebar-brand { display: flex; padding: 0 12px 22px; gap: 12px; }
+.desktop-mvp .sidebar-brand > div:nth-child(2) { display: grid; align-content: center; gap: 4px; min-width: 0; }
 .desktop-mvp .sidebar-brand strong { font-size: 18px; color: #fff; letter-spacing: .12em; }
 .desktop-mvp .sidebar-brand span { color: #9bafc8; font-size: 11px; }
 .desktop-mvp .sidebar-brand .product-mark { background: #24405e; border-radius: 12px; }
@@ -76,6 +77,9 @@
 .desktop-mvp .page-head p { color: #61738a; font-size: 13px; max-width: 740px; }
 .desktop-mvp .eyebrow { color: #537d93; font-size: 10px; letter-spacing: .08em; }
 .desktop-mvp .surface, .desktop-mvp .stat-card, .desktop-mvp .consultation-card, .desktop-mvp .device-card { border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 8px #152b4504; }
+.desktop-mvp .stat-card { min-height: 110px; padding: 16px; }
+.desktop-mvp .stat-card > strong { font-size: 29px; }
+.desktop-mvp .stat-card h3 { margin: 7px 0 4px; }
 .desktop-mvp .surface h2, .desktop-mvp .section-head h2 { color: #243c5b; font-size: 17px; font-weight: 650; }
 .desktop-mvp .button { min-height: 40px; font-size: 12px; border-radius: 8px; }
 .desktop-mvp input:not([type=checkbox]):not([type=radio]), .desktop-mvp select, .desktop-mvp textarea { border-radius: 8px; }

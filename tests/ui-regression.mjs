@@ -105,6 +105,9 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('button',{name:'Відкрити меню'}).evaluate(el => el === document.activeElement),true);
   await page.setViewportSize({width:1280,height:600});
+  const brandTitle = await page.locator('.sidebar-brand strong').boundingBox();
+  const brandSubtitle = await page.locator('.sidebar-brand span').boundingBox();
+  assert(brandTitle && brandSubtitle && brandSubtitle.y >= brandTitle.y+brandTitle.height, 'Brand subtitle stays on its own line');
   const systemSettings = page.getByRole('button',{name:'Налаштування системи',exact:true});
   const exit = page.getByRole('button',{name:'Вийти',exact:true});
   for (const target of [systemSettings, exit]) {
@@ -142,6 +145,9 @@ try {
   await page.getByRole('button',{name:'+ Консультація',exact:true}).click();
   let consultationDialog = page.getByRole('dialog',{name:'Підсумок консультації',exact:true});
   await consultationDialog.waitFor({timeout:5000});
+  const dialogLast = consultationDialog.getByRole('button',{name:'Зберегти консультацію',exact:true});
+  await dialogLast.focus(); await page.keyboard.press('Tab');
+  assert.equal(await consultationDialog.getByRole('button',{name:'Закрити',exact:true}).evaluate(el => el === document.activeElement),true);
   await page.screenshot({path:'out/design/desktop-consultation-form.png',fullPage:true});
   await consultationDialog.getByLabel('Запис у календарі', {exact:true}).selectOption('7');
   draftOffline = true;
@@ -171,6 +177,7 @@ try {
     assert.equal(await page.getByRole('button',{name:'Команда',exact:true}).count(),role === 'admin' ? 1 : 0);
     assert.equal(await page.getByRole('button',{name:'Лист очікування',exact:true}).count(),['admin','reception'].includes(role) ? 1 : 0);
     assert.equal(await page.getByRole('textbox',{name:'Пошук у центрі'}).count(),role === 'director' ? 0 : 1);
+    await page.locator('.sidebar nav').evaluate(el => { el.scrollTop = 0; });
     await page.screenshot({path:`out/design/desktop-${role}.png`,fullPage:true});
     await page.setViewportSize({width:1024,height:600});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
