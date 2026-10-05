@@ -63,6 +63,113 @@ class MainActivity : Activity() {
     private var pdfPreview: NativePdfPreview? = null
     private var pendingPdf: java.io.File? = null
     private val exportPdfRequest = 4102
+    private val offlineUnlockRequest = 4103
+    private var pendingOfflineSession: JSONObject? = null
+    private var offlineMode = false
+    private var syncRunning = false
+    private var statusView: TextView? = null
+    private var lastCacheTime = 0L
+    private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val syncTick = object : Runnable {
+        override fun run() { syncNow(); syncHandler.postDelayed(this, 60000) }
+    }
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    private fun offlineStore() = OfflineStore(this, server, userId)
+    override fun onResume() { super.onResume(); syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick) }
+    override fun onPause() { syncHandler.removeCallbacks(syncTick); super.onPause() }
+    override fun onDestroy() {
+        syncHandler.removeCallbacks(syncTick)
+        networkCallback?.let { runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(it) } }
+        io.shutdown(); super.onDestroy()
+    }
+    private fun unavailable(error: Exception) = error is java.io.IOException && error !is javax.net.ssl.SSLException
+    private fun updateConnectionStatus() {
+        if(token.isBlank()) return
+        val count = runCatching { val q = offlineStore().queue(); (0 until q.length()).count { q.getJSONObject(it).optString("state") in listOf("pending", "blocked") } }.getOrDefault(0)
+        statusView?.text = (if(offlineMode) "Без мережі · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "З’єднання із сервером") +
+            (if(count > 0) " · у черзі: $count" else "")
+    }
+    private fun syncNow(refresh: Boolean = false) {
+        if(token.isBlank() || role != "psychologist" || syncRunning || isDestroyed) return
+        syncRunning = true
+        val base = server; val sessionToken = token; val uid = userId
+        val store = OfflineStore(this, base, uid)
+        io.execute {
+            var authExpired = false
+            var connected = false
+            try {
+                val shift = requestAt(base, "GET", "/api/shift-day", authToken = sessionToken)
+                connected = true; store.saveCache("/api/shift-day", shift)
+                val authorized = ConsultationSync(store) { payload ->
+                    try { requestAt(base, "POST", "/api/consultations", payload, sessionToken) as JSONObject }
+                    catch(e: ApiError) { throw SyncFailure(e.status, e.message ?: "Помилка сервера") }
+                }.run()
+                authExpired = !authorized
+                if(authorized && refresh) warmCache(base, sessionToken, store)
+            } catch(e: ApiError) { authExpired = e.status == 401 }
+            catch(_: Exception) { }
+            runOnUiThread {
+                syncRunning = false
+                if(token != sessionToken || server != base || isDestroyed) return@runOnUiThread
+                offlineMode = !connected; updateConnectionStatus()
+                if(authExpired) { store.revokeSession(); logout() }
+                else if(refresh) syncScreen()
+            }
+        }
+    }
+    private fun warmCache(base: String, auth: String, store: OfflineStore) {
+        val paths = mutableListOf("/api/patients", "/api/patients?status=active", "/api/patients?status=completed", "/api/patients?status=archived", "/api/settings/center")
+        for(day in 0..7) paths.add("/api/appointments?date=" + LocalDate.now().plusDays(day.toLong()))
+        for(path in paths) {
+            try {
+                val result = requestAt(base, "GET", path, authToken = auth); store.saveCache(path, result)
+                if(path == "/api/patients") {
+                    val patients = result as JSONArray
+                    for(i in 0 until patients.length()) {
+                        val id = patients.getJSONObject(i).getLong("id")
+                        for(suffix in listOf("", "/documents", "/courses", "/referrals")) {
+                            val detailPath = "/api/patients/$id$suffix"
+                            try { store.saveCache(detailPath, requestAt(base, "GET", detailPath, authToken = auth)) }
+                            catch(e: ApiError) { if(e.status == 401) throw e; store.forgetCache(detailPath) }
+                        }
+                    }
+                }
+            } catch(e: ApiError) { if(e.status == 401) throw e; store.forgetCache(path) }
+        }
+    }
+    private fun syncScreen() {
+        backAction = { moreScreen() }; val body = root(); body.addView(topBar("Синхронізація", ::moreScreen))
+        body.addView(caption("Завершені записи зберігаються зашифрованими. Передавання запускається при поверненні мережі, відкритті застосунку та щохвилини, поки він відкритий."))
+        body.addView(primary("Синхронізувати й оновити офлайн-копії") { syncNow(refresh = true) })
+        val rows = runCatching { offlineStore().queue() }.getOrElse { showError("Не вдалося прочитати чергу. Дані не видалені."); JSONArray() }
+        if(rows.length() == 0) body.addView(caption("Черга порожня"))
+        for(i in rows.length()-1 downTo 0) {
+            val row = rows.getJSONObject(i); val payload = row.getJSONObject("payload"); val state = row.optString("state")
+            val item = card(); item.addView(title(row.optString("patient_name"), 18f))
+            item.addView(caption(when(state) { "sent" -> "Передано на сервер · №${row.optLong("server_id")}"; "blocked" -> "Потрібна перевірка · ${row.optString("error")}"; "reviewed" -> "Відновлено як чернетку для виправлення"; else -> "Збережено на телефоні · очікує передавання" }))
+            item.addView(secondary("Переглянути збережений запис") {
+                AlertDialog.Builder(this).setTitle(row.optString("patient_name")).setMessage(
+                    listOf("note" to "Нотатка", "request_text" to "Запит", "state_text" to "Стан", "work_done" to "Проведена робота", "goals" to "Цілі", "result_text" to "Результат", "next_plan" to "Подальший план", "homework" to "Домашнє завдання", "recommendations" to "Рекомендації").joinToString("\n\n") { (key, label) -> label + ": " + payload.optString(key) }
+                ).setPositiveButton("Закрити", null).show()
+            })
+            if(state == "blocked") item.addView(secondary("Повторити після перевірки на сервері") {
+                offlineStore().mark(payload.getString("client_key"), "pending"); syncNow(refresh = true)
+            })
+            if(state == "blocked") item.addView(secondary("Відновити текст як чернетку") {
+                AlertDialog.Builder(this).setTitle("Відновити для виправлення?")
+                    .setMessage("Перевірте історію пацієнта, щоб не створити повторну консультацію. Поточна чернетка цього пацієнта, якщо є, буде замінена збереженим текстом.")
+                    .setNegativeButton("Скасувати", null).setPositiveButton("Відновити") { _, _ ->
+                        val restored = JSONObject(payload.toString()).put("client_key", java.util.UUID.randomUUID().toString())
+                        restored.remove("draft_version"); restored.put("server_version", 0)
+                        DraftStore(this, server, userId).save(payload.getLong("patient_id"), restored)
+                        offlineStore().mark(payload.getString("client_key"), "reviewed")
+                        consultationDialog(payload.getLong("patient_id"), row.optString("patient_name"))
+                    }.show()
+            })
+            body.addView(item); body.addView(spacer())
+        }
+        mount(scroll(body))
+    }
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -82,6 +189,11 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) {
             if(backAction != null) backAction?.invoke() else if(token.isNotBlank()) moreScreen() else finish()
         }
+        val connectivity = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) { runOnUiThread { syncNow() } }
+        }
+        connectivity.registerNetworkCallback(android.net.NetworkRequest.Builder().build(), networkCallback!!)
         if (intent?.data != null) {
             importServerConfig(intent.data!!)
         } else if (server.isBlank()) setupScreen() else loginScreen()
@@ -98,6 +210,11 @@ class MainActivity : Activity() {
         shell.setOnApplyWindowInsetsListener { view, insets ->
             view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
             insets
+        }
+        statusView = null
+        if(token.isNotBlank() && workspaceReady) {
+            statusView = caption("").apply { setPadding(dp(16), dp(6), dp(16), dp(6)); setOnClickListener { syncScreen() } }
+            shell.addView(statusView); updateConnectionStatus()
         }
         shell.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         if (token.isNotBlank() && workspaceReady) {
@@ -145,6 +262,7 @@ class MainActivity : Activity() {
         val body = root(); body.addView(title("Меню психолога", 30f)); body.addView(caption(userName))
         body.addView(primary("Документи пацієнтів") { patientsScreen(documentLibrary = true) })
         body.addView(secondary("Мої чернетки") { draftsScreen() })
+        body.addView(secondary("Синхронізація та офлайн-доступ") { syncScreen() })
         body.addView(secondary("Звіт за зміну") { reportScreen() })
         body.addView(secondary("Мої супервізії") { supervisionsScreen() })
         body.addView(secondary("Мої налаштування") { settingsScreen() })
@@ -388,11 +506,31 @@ class MainActivity : Activity() {
         val requestToken = token
         val requestServer = server
         val requestEpoch = sceneEpoch
+        val requestUser = userId
+        val store = if(requestToken.isNotBlank() && requestUser > 0) OfflineStore(this, requestServer, requestUser) else null
         io.execute {
             try {
-                val result = requestAt(requestServer, method, path, body, requestToken)
-                runOnUiThread { if (!isFinishing && !isDestroyed && token == requestToken && server == requestServer && sceneEpoch == requestEpoch) ok(result) }
+                val result = if(offlineMode && method == "GET" && OfflineStore.cacheable(path) && store?.session() != null) {
+                    store.cache(path) ?: requestAt(requestServer, method, path, body, requestToken)
+                } else requestAt(requestServer, method, path, body, requestToken)
+                if(!offlineMode && method == "GET" && OfflineStore.cacheable(path)) store?.saveCache(path, result)
+                runOnUiThread { if (!isFinishing && !isDestroyed && token == requestToken && server == requestServer && sceneEpoch == requestEpoch) {
+                    if(offlineMode && method == "GET" && OfflineStore.cacheable(path)) { lastCacheTime = store?.cacheTime(path) ?: 0; updateConnectionStatus() }
+                    ok(result)
+                } }
             } catch (e: Exception) {
+                if(method == "GET" && store != null && OfflineStore.cacheable(path) && unavailable(e) && store.session() != null) {
+                    val cached = runCatching { store.cache(path) }.getOrNull()
+                    if(cached != null) {
+                        runOnUiThread {
+                            if(!isDestroyed && token == requestToken && server == requestServer && sceneEpoch == requestEpoch) {
+                                offlineMode = true; lastCacheTime = store.cacheTime(path); updateConnectionStatus(); ok(cached)
+                            }
+                        }
+                        return@execute
+                    }
+                }
+                if(e is ApiError && e.status in listOf(403,404)) store?.forgetCache(path)
                 runOnUiThread {
                     if (isFinishing || isDestroyed || token != requestToken || server != requestServer || sceneEpoch != requestEpoch) return@runOnUiThread
                     val message = e.message ?: "Помилка підключення"
@@ -475,6 +613,17 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if(requestCode == offlineUnlockRequest) {
+            val session = pendingOfflineSession; pendingOfflineSession = null
+            if(resultCode == RESULT_OK && session != null) {
+                val user = session.getJSONObject("user")
+                val store = OfflineStore(this, server, user.getLong("id"))
+                if(store.session() == null) { showError("Офлайн-доступ закінчився. Увійдіть із сервером."); return }
+                token = session.getString("token"); role = "psychologist"; userId = user.getLong("id"); userName = user.getString("name")
+                offlineMode = true; renderHomeScreen(); syncNow()
+            }
+            return
+        }
         if (requestCode == exportPdfRequest) {
             val file = pendingPdf; pendingPdf = null
             if (resultCode == RESULT_OK && data?.data != null && file != null && token.isNotBlank()) {
@@ -570,6 +719,20 @@ class MainActivity : Activity() {
                 acceptLogin(result as JSONObject)
             }
         })
+        body.addView(secondary("Відкрити офлайн-кабінет") {
+            val uid = prefs.getLong("offline_user:$server", 0)
+            val saved = if(uid > 0) runCatching { OfflineStore(this, server, uid).session() }.getOrNull() else null
+            if(saved == null) showError("Спочатку увійдіть із сервером і завантажте картки. Офлайн-доступ діє 12 годин після входу.")
+            else {
+                val guard = getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
+                if(!guard.isDeviceSecure) showError("Для офлайн-карток установіть PIN або пароль блокування Android.")
+                else {
+                    pendingOfflineSession = saved
+                    val unlock = guard.createConfirmDeviceCredentialIntent("SOLVIA", "Підтвердьте доступ до зашифрованого кабінету психолога")
+                    if(unlock != null) startActivityForResult(unlock, offlineUnlockRequest)
+                }
+            }
+        })
         body.addView(secondary("Змінити сервер") { setupScreen() })
         mount(scroll(body))
     }
@@ -585,7 +748,13 @@ class MainActivity : Activity() {
             return
         }
         token = receivedToken; role = "psychologist"; userName = user.getString("name"); userId = user.getLong("id")
+        offlineMode = false
+        offlineStore().saveSession(user, token)
+        prefs.edit().putLong("offline_user:$server", userId).apply()
         homeScreen()
+        syncNow(refresh = false)
+        val base = server; val auth = token; val store = offlineStore()
+        io.execute { try { warmCache(base, auth, store) } catch(_: Exception) { } }
     }
 
     private fun homeScreen() {
@@ -787,6 +956,11 @@ class MainActivity : Activity() {
     }
 
     private fun consultationDialog(patientId: Long, patientName: String) {
+        val journal = offlineStore()
+        if(journal.pendingFor(patientId) != null) {
+            showError("Завершена консультація вже збережена в черзі. Її текст зафіксовано для безпечного повторного передавання. Відкрийте «Синхронізація».")
+            return
+        }
         val draftStore = DraftStore(this, server, userId)
         val savedDraft = try { draftStore.read(patientId) } catch (_: Exception) {
             Toast.makeText(this, "Локальну чернетку не вдалося розшифрувати. Її не видалено.", Toast.LENGTH_LONG).show(); null
@@ -952,6 +1126,7 @@ class MainActivity : Activity() {
 
             val draftStatus = caption("Чернетка зашифрована на цьому пристрої · $draftDate")
             wrap.addView(draftStatus)
+            if(offlineMode) wrap.addView(caption("Офлайн · прийом обрано зі збереженої копії розкладу. Сервер перевірить доступ під час передавання."))
             val textFields = linkedMapOf("note" to note, "goals" to goals, "next_plan" to next,
                 "homework" to homework, "recommendations" to recommendations, "request_text" to requestText,
                 "state_text" to stateText, "work_done" to workDone, "result_text" to resultText)
@@ -974,6 +1149,33 @@ class MainActivity : Activity() {
                     .put("risk_level", riskValues[riskSpinner.selectedItemPosition]).put("risk_flags", flags)
                 textFields.forEach { (key, field) -> value.put(key, field.text.toString()) }; return value
             }
+            wrap.addView(secondary("Перенести цілі й план попередньої консультації") {
+                apiAsync("GET", "/api/patients/$patientId") { result ->
+                    val history = (result as JSONObject).optJSONArray("consultations")
+                    if(history == null || history.length() == 0) showError("Попередніх консультацій немає")
+                    else AlertDialog.Builder(this).setTitle("Перенести план?").setMessage("Буде замінено лише цілі та план наступної зустрічі. Нотатки й оцінка ризиків залишаться вашими.")
+                        .setNegativeButton("Скасувати", null).setPositiveButton("Перенести") { _, _ ->
+                            goals.setText(history.getJSONObject(0).optString("goals")); next.setText(history.getJSONObject(0).optString("next_plan"))
+                        }.show()
+                }
+            })
+            wrap.addView(secondary("Перевірити підсумок перед збереженням") {
+                AlertDialog.Builder(this).setTitle("Підсумок консультації")
+                    .setMessage(textFields.entries.joinToString("\n\n") { (key, field) -> field.hint.toString() + ":\n" + field.text.toString().ifBlank { "—" } })
+                    .setPositiveButton("Повернутися до запису", null).show()
+            })
+            wrap.addView(secondary("Шаблон первинного / повторного прийому") {
+                val labels = arrayOf("Первинний прийом", "Повторний прийом")
+                AlertDialog.Builder(this).setTitle("Структура нотатки").setItems(labels) { _, index ->
+                    if(note.text.isNotBlank()) { showError("Нотатка вже містить текст. Шаблон доступний для порожньої нотатки.") }
+                    else {
+                        typeSpinner.setSelection(index)
+                        note.setText(if(index == 0) "Запит пацієнта:\n\nВажливі відомості:\n\nСпостереження психолога:\n\nУзгоджені цілі:\n\nПроведена робота:\n\nПодальший план:\n" else "Зміни від попередньої зустрічі:\n\nДомашнє завдання — виконання:\n\nПроведена робота:\n\nРезультат зустрічі:\n\nПодальший план:\n")
+                        note.requestFocus()
+                    }
+                }.show()
+            })
+            textFields.values.forEach { it.filters = arrayOf(android.text.InputFilter.LengthFilter(10000)) }
             var submitted = false
             var serverRevision = savedDraft?.optInt("server_version", 0) ?: 0
             fun persistDraft() {
@@ -998,7 +1200,7 @@ class MainActivity : Activity() {
                 .setTitle("Підсумок консультації")
                 .setView(scroll)
                 .setNegativeButton("Залишити чернетку", null)
-                .setPositiveButton("Зберегти", null)
+                .setPositiveButton("Завершити й передати", null)
                 .create()
             consultationWindow = dialog
             dialog.setOnDismissListener { persistDraft(); if (consultationWindow === dialog) consultationWindow = null }
@@ -1037,7 +1239,7 @@ class MainActivity : Activity() {
             dialog.setOnShowListener {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                     val minutes = duration.text.toString().toIntOrNull() ?: 0
-                    if (note.text.toString().isBlank()) {
+                    if (note.text.toString().isBlank() || note.text.toString().trimEnd().endsWith("Подальший план:")) {
                         Toast.makeText(this, "Заповніть приватну нотатку психолога.", Toast.LENGTH_LONG).show()
                         return@setOnClickListener
                     }
@@ -1054,6 +1256,7 @@ class MainActivity : Activity() {
                     val payload = JSONObject()
                         .put("client_key", clientKey)
                         .put("patient_id", patientId)
+                        .put("consult_date", draftDate)
                         .put("appointment_id", appointment.getLong("id"))
                         .put("note", note.text.toString())
                         .put("goals", goals.text.toString())
@@ -1076,31 +1279,19 @@ class MainActivity : Activity() {
                     listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.isEnabled = false }
                     flagChecks.forEach { it.isEnabled = false }
                     persistDraft()
-                    val requestToken = token; val requestServer = server
-                    io.execute {
-                        try {
-                            requestAt(requestServer, "POST", "/api/consultations", payload, requestToken)
-                            try { draftStore.remove(patientId) } catch (_: Exception) { /* Consultation is already committed; do not misreport it as failed. */ }
-                            runOnUiThread {
-                                if (token == requestToken && server == requestServer && !isDestroyed) {
-                                    submitted = true; dialog.dismiss()
-                                    Toast.makeText(this, "Консультацію збережено в SOLVIA.", Toast.LENGTH_LONG).show(); patientScreen(patientId)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            runOnUiThread {
-                                if (token == requestToken && server == requestServer && !isDestroyed) {
-                                    if (e is ApiError && e.status == 401) { dialog.dismiss(); logout(); return@runOnUiThread }
-                                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
-                                    textFields.values.forEach { it.isEnabled = true }
-                                    duration.isEnabled = true
-                                    listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.isEnabled = true }
-                                    flagChecks.forEach { it.isEnabled = true }
-                                    draftStatus.text = "Не відправлено. Чернетка залишилась на пристрої; повторіть збереження."
-                                    showError(e.message ?: "Немає зв’язку із сервером")
-                                }
-                            }
-                        }
+                    try {
+                        journal.enqueue(payload, patientName)
+                        submitted = true
+                        runCatching { draftStore.remove(patientId) }
+                        dialog.dismiss()
+                        Toast.makeText(this, "Збережено на телефоні. Запис буде передано на сервер після відновлення зв’язку.", Toast.LENGTH_LONG).show()
+                        updateConnectionStatus(); syncNow(refresh = false); syncScreen()
+                    } catch(e: Exception) {
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                        textFields.values.forEach { it.isEnabled = true }; duration.isEnabled = true
+                        listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.isEnabled = true }
+                        flagChecks.forEach { it.isEnabled = true }
+                        showError(e.message ?: "Не вдалося зафіксувати запис. Чернетка залишилась на телефоні.")
                     }
                 }
             }
@@ -1114,8 +1305,10 @@ class MainActivity : Activity() {
         consultationWindow?.dismiss(); consultationWindow = null
         val oldToken = token
         val oldServer = server
+        if(userId > 0) runCatching { offlineStore().revokeSession() }
         token = ""
         role = ""
+        offlineMode = false
         workspaceReady = false
         userId = 0
         pendingPdf = null
