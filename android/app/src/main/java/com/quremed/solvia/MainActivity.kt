@@ -997,23 +997,25 @@ class MainActivity : Activity() {
 
     private fun consultationDialog(patientId: Long, patientName: String) {
         val journal = offlineStore()
-        if(journal.pendingFor(patientId) != null) {
-            showError("Завершена консультація вже збережена в черзі. Її текст зафіксовано для безпечного повторного передавання. Відкрийте «Синхронізація».")
-            return
-        }
         val draftStore = DraftStore(this, server, userId)
         val savedDraft = try { draftStore.read(patientId) } catch (_: Exception) {
-            Toast.makeText(this, "Локальну чернетку не вдалося розшифрувати. Її не видалено.", Toast.LENGTH_LONG).show(); null
+            Toast.makeText(this, "Локальну чернетку не вдалося розшифрувати. Її не видалено; новий текст не перезапише її.", Toast.LENGTH_LONG).show(); return
         }
         val draftDate = savedDraft?.optString("consult_date", LocalDate.now().toString()) ?: LocalDate.now().toString()
         val clientKey = savedDraft?.optString("client_key")?.takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString()
         apiAsync("GET", "/api/appointments?date=" + draftDate) { result ->
             val apps = result as JSONArray
             val eligible = mutableListOf<JSONObject>()
+            val queued = journal.queue()
+            val queuedAppointments = (0 until queued.length()).map { queued.getJSONObject(it) }.filter {
+                it.optString("state") in listOf("pending", "blocked") && it.getJSONObject("payload").optLong("patient_id") == patientId
+            }.map { it.getJSONObject("payload").optLong("appointment_id") }
+
             for (i in 0 until apps.length()) {
                 val appointment = apps.getJSONObject(i)
                 val status = appointment.optString("status")
                 if (status != "scheduled" && status != "confirmed") continue
+                if(appointment.optLong("id") in queuedAppointments) continue
                 val patients = appointment.optJSONArray("patients") ?: JSONArray()
                 for (j in 0 until patients.length()) {
                     if (patients.getJSONObject(j).optLong("id") == patientId) {
@@ -1034,7 +1036,7 @@ class MainActivity : Activity() {
                 return@apiAsync
             }
             if (eligible.isEmpty()) {
-                showError("На сьогодні немає активного запису цього пацієнта.")
+                showError(if(queuedAppointments.isNotEmpty()) "Консультація для доступного прийому вже у черзі. Відкрийте «Синхронізація» для перегляду." else "На обрану дату немає завантаженого активного запису цього пацієнта.")
                 return@apiAsync
             }
 

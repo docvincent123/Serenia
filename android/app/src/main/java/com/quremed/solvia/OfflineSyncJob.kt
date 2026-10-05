@@ -15,10 +15,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Android runs the network-constrained queue even when the activity is no longer open. */
 class OfflineSyncJob : JobService() {
-    private val cancelled = AtomicBoolean(false)
+    private val active = java.util.concurrent.ConcurrentHashMap<Int, AtomicBoolean>()
     private val executor = Executors.newSingleThreadExecutor()
     override fun onStartJob(params: JobParameters): Boolean {
-        cancelled.set(false)
+        val cancelled = AtomicBoolean(false)
+        active.put(params.jobId, cancelled)?.set(true)
         executor.execute {
             var retry = false
             try {
@@ -35,12 +36,12 @@ class OfflineSyncJob : JobService() {
                 val queue = store.queue()
                 retry = authorized && (0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" }
             } catch(_: Exception) { retry = true }
-            finally { if(!cancelled.get()) jobFinished(params, retry) }
+            finally { active.remove(params.jobId, cancelled); if(!cancelled.get()) jobFinished(params, retry) }
         }
         return true
     }
-    override fun onStopJob(params: JobParameters): Boolean { cancelled.set(true); return true }
-    override fun onDestroy() { cancelled.set(true); executor.shutdownNow(); super.onDestroy() }
+    override fun onStopJob(params: JobParameters): Boolean { active[params.jobId]?.set(true); return true }
+    override fun onDestroy() { active.values.forEach { it.set(true) }; executor.shutdownNow(); super.onDestroy() }
     private fun send(base: String, auth: String, payload: JSONObject): JSONObject {
         val connection = URL(base + "/api/consultations").openConnection() as HttpURLConnection
         try {
