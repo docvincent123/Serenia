@@ -44,13 +44,16 @@ class NativeWorkflowTest {
             }
         }
         PatientWorkspace(activity, api, "psychologist", "https://synthetic.example", { view, _ ->
-            current = view; activity.setContentView(ScrollView(activity).apply { addView(view) })
+            current = view
+            MainActivity::class.java.getDeclaredMethod("mount", View::class.java).apply { isAccessible = true }
+                .invoke(activity, ScrollView(activity).apply { addView(view) })
         }, {}, { _, _ -> }, { model, _ -> preview(model) }).open(7, tab)
         return { current }
     }
     private fun screenshot(activity: MainActivity, name: String) {
         InstrumentationRegistry.getInstrumentation().runOnMainSync { activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
         val folder = File(activity.getExternalFilesDir(null), "previews").apply { mkdirs() }
+        Thread.sleep(350)
         val image = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
         File(folder, "$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
         image.recycle()

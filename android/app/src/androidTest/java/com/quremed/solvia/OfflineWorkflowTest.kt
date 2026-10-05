@@ -86,6 +86,7 @@ class OfflineWorkflowTest {
             dialog?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         }
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(350)
         val image = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
         val folder = java.io.File(activity!!.getExternalFilesDir(null), "previews").apply { mkdirs() }
         java.io.File(folder, "$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; image.recycle()

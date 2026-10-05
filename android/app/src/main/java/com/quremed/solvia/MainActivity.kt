@@ -271,6 +271,14 @@ class MainActivity : Activity() {
             shell.addView(bar)
         }
         setContentView(shell)
+        lightSystemBars(window)
+    }
+
+    private fun lightSystemBars(target: android.view.Window) {
+        if(Build.VERSION.SDK_INT >= 30) target.insetsController?.setSystemBarsAppearance(
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
+        else target.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
     }
 
     private fun mobileApi(): MobileApi = object : MobileApi {
@@ -302,12 +310,18 @@ class MainActivity : Activity() {
         val body = root(); body.addView(title("Мій кабінет", 28f)); body.addView(caption(userName))
         val work = card(); work.addView(title("Робота", 18f)); body.addView(work)
         val personal = card(); personal.addView(title("Особисте", 18f))
-        work.addView(secondary("Документи пацієнтів") { patientsScreen(documentLibrary = true) })
-        work.addView(secondary("Мої чернетки") { draftsScreen() })
-        work.addView(secondary("Синхронізація та офлайн-доступ") { syncScreen() })
-        work.addView(secondary("Звіт за зміну") { reportScreen() })
-        work.addView(secondary("Мої супервізії") { supervisionsScreen() })
-        personal.addView(secondary("Мої налаштування") { settingsScreen() }); body.addView(personal)
+        fun row(label: String, action: () -> Unit): Button = secondary(label, action).apply {
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(forestSoft), rounded(Color.WHITE, 8), null)
+            layoutParams = LinearLayout.LayoutParams(-1, dp(48))
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+        }
+        work.addView(row("Документи пацієнтів") { patientsScreen(documentLibrary = true) })
+        work.addView(row("Мої чернетки") { draftsScreen() })
+        work.addView(row("Синхронізація та офлайн-доступ") { syncScreen() })
+        work.addView(row("Звіт за зміну") { reportScreen() })
+        work.addView(row("Мої супервізії") { supervisionsScreen() })
+        personal.addView(row("Мої налаштування") { settingsScreen() }); body.addView(personal)
         body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}"))
         body.addView(secondary("Вийти") {
             AlertDialog.Builder(this).setTitle("Вийти з облікового запису?")
@@ -1016,7 +1030,7 @@ class MainActivity : Activity() {
             val scroll = ScrollView(this).apply { addView(wrap) }
 
             wrap.addView(title(patientName, 20f))
-            wrap.addView(caption("Заповніть підсумок прийому. Текст автоматично зберігається як зашифрована чернетка."))
+            wrap.addView(caption("Зміни зберігаються автоматично."))
 
             val appointmentSpinner = Spinner(this)
             val appointmentLabels = eligible.map {
@@ -1071,6 +1085,7 @@ class MainActivity : Activity() {
             val flagChecks = flagValues.map { pair ->
                 CheckBox(this).apply {
                     text = pair.second
+                    minHeight = dp(48)
                     setTextColor(ink)
                     textSize = 13f
                 }
@@ -1100,14 +1115,13 @@ class MainActivity : Activity() {
             fun section(name: String, hint: String, build: (LinearLayout) -> Unit) {
                 val box = card()
                 box.background = rounded(Color.WHITE, 18, line)
-                box.addView(title(name, 17f))
                 box.addView(caption(hint))
                 build(box)
                 stages.add(box); box.visibility = if(stages.size == 1) View.VISIBLE else View.GONE
                 wrap.addView(box)
             }
 
-            section("1 · Прийом", "Оберіть конкретний запис із календаря. Після збереження консультація буде прив’язана саме до нього.") { box ->
+            section("1 · Прийом", "Запис, формат і тривалість прийому.") { box ->
                 box.addView(caption("Запис у календарі"))
                 box.addView(appointmentSpinner)
                 addGap(box)
@@ -1117,7 +1131,7 @@ class MainActivity : Activity() {
                 box.addView(duration)
             }
 
-            section("2 · Запит і стан", "Фіксуйте факти та слова пацієнта окремо від власної інтерпретації.") { box ->
+            section("2 · Запит і стан", "Запит пацієнта й поточний стан.") { box ->
                 box.addView(caption("Основний запит — коротко, бажано словами пацієнта"))
                 box.addView(requestText)
                 addGap(box)
@@ -1125,7 +1139,7 @@ class MainActivity : Activity() {
                 box.addView(stateText)
             }
 
-            section("3 · Робота психолога", "Опишіть що реально проводилось на консультації. Приватна нотатка доступна лише ролям із клінічним доступом.") { box ->
+            section("3 · Робота психолога", "Нотатка, проведена робота, цілі та результат.") { box ->
                 box.addView(caption("Проведена робота / техніки / інтервенції"))
                 box.addView(workDone)
                 addGap(box)
@@ -1139,7 +1153,7 @@ class MainActivity : Activity() {
                 box.addView(resultText)
             }
 
-            section("4 · План після консультації", "Ці поля SOLVIA використовує для наступної зустрічі та автоматичного формування виписки.") { box ->
+            section("4 · План після консультації", "Домашнє завдання й план наступної зустрічі.") { box ->
                 box.addView(caption("План наступної консультації"))
                 box.addView(next)
                 addGap(box)
@@ -1150,7 +1164,7 @@ class MainActivity : Activity() {
                 box.addView(recommendations)
             }
 
-            section("5 · Ризики та контроль", "Оберіть рівень ризику і тільки ті позначки, які були реально оцінені під час консультації.") { box ->
+            section("5 · Ризики та контроль", "Позначте лише оцінені вами ризики.") { box ->
                 box.addView(caption("Рівень ризику"))
                 box.addView(riskSpinner)
                 addGap(box)
@@ -1234,7 +1248,7 @@ class MainActivity : Activity() {
             listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.onItemSelectedListener = selectionWatcher }
 
             val dialog = AlertDialog.Builder(this)
-                .setTitle("Підсумок консультації")
+                .setTitle("Консультація")
                 .setView(scroll)
                 .setNegativeButton("Чернетка", null)
                 .setNeutralButton("Назад", null)
@@ -1338,7 +1352,9 @@ class MainActivity : Activity() {
                 }
             }
             dialog.show()
+            dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(bg))
             dialog.window?.setLayout(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
+            dialog.window?.let { lightSystemBars(it) }
             dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
     }
