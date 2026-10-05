@@ -150,4 +150,21 @@ class NativeWorkflowTest {
             screenshot(reference!!, "native-menu")
         }
     }
+    @Test fun patientWorkspaceGroupsClinicalRecordsAndDocumentsForPhone() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            var activity: MainActivity? = null
+            scenario.onActivity {
+                activity = it
+                val current = fixture(it, "summary")
+                for(label in listOf("Огляд", "Записи", "Документи", "Курс супроводу", "Направлення")) assertNotNull(button(current(), label))
+                assertFalse(views(current()).filterIsInstance<EditText>().any { it.isShown })
+            }
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            screenshot(activity!!, "patient-overview")
+            scenario.onActivity { fixture(it, "documents") }
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            screenshot(activity!!, "patient-documents")
+        }
+    }
+
 }

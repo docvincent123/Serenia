@@ -100,7 +100,15 @@ class OfflineWorkflowTest {
             assertTrue("Cached consultation form must open", opened)
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
-                views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }.setText("Консультація завершена без Wi-Fi")
+                val note = views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }
+                assertFalse("Clinical fields must not clutter admission step", note.isShown)
+                views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "3" }.performClick()
+                assertTrue("Clinical note must be reachable in work step", note.isShown)
+                note.setText("Консультація завершена без Wi-Fi")
+                views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "1" }.performClick()
+                repeat(4) { dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick() }
+                assertEquals("Завершити й передати", dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).text.toString())
+                assertEquals("Консультація завершена без Wi-Fi", views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }.text.toString())
                 dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
                 val server = MainActivity::class.java.getDeclaredField("server").apply { isAccessible = true }.get(activity) as String
                 val row = OfflineStore(activity, server, 42).queue().getJSONObject(0)

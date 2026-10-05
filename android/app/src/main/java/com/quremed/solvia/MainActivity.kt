@@ -44,7 +44,7 @@ class MainActivity : Activity() {
     private var cachePreparing = false
     private val openConfigRequest = 4101
 
-    private val bg = Color.rgb(240, 246, 249)
+    private val bg = MobileUi.background
     private val ink = Color.rgb(25, 48, 62)
     private val muted = Color.rgb(104, 124, 137)
     private val forest = Color.rgb(16, 111, 117)
@@ -90,7 +90,7 @@ class MainActivity : Activity() {
     private fun updateConnectionStatus() {
         if(token.isBlank()) return
         val count = runCatching { val q = offlineStore().queue(); (0 until q.length()).count { q.getJSONObject(it).optString("state") in listOf("pending", "blocked") } }.getOrDefault(0)
-        statusView?.text = (if(offlineMode) "Без мережі · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "З’єднання із сервером") +
+        statusView?.text = (if(offlineMode) "Офлайн · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "Онлайн") +
             (if(count > 0) " · у черзі: $count" else "") + (if(cachePreparing) " · завантаження карток…" else "")
     }
     private fun syncNow(refresh: Boolean = false) {
@@ -249,11 +249,12 @@ class MainActivity : Activity() {
                 bar.addView(Button(this).apply {
                     text = label; isAllCaps = false; textSize = 11f; contentDescription = label
                     setTextColor(if (selectedNavigation == key) forest else muted)
-                    background = rounded(if (selectedNavigation == key) forestSoft else Color.WHITE, 12)
+                    backgroundTintList = null; stateListAnimator = null; elevation = 0f
+                    background = rounded(if (selectedNavigation == key) forestSoft else Color.WHITE, 18)
                     val drawable = getDrawable(icon)?.mutate()
                     drawable?.setTint(if(selectedNavigation == key) forest else muted)
                     drawable?.setBounds(0, 0, dp(22), dp(22)); setCompoundDrawables(null, drawable, null, null)
-                    setPadding(dp(3), dp(8), dp(3), dp(5))
+                    setPadding(dp(3), dp(8), dp(3), dp(5)); minWidth = 0; minimumWidth = 0
                     setOnClickListener {
                         val navigate = { when(key) {
                             "home" -> homeScreen(); "calendar" -> calendarScreen(); "patients" -> patientsScreen()
@@ -298,14 +299,16 @@ class MainActivity : Activity() {
 
     private fun moreScreen() {
         selectedNavigation = "more"; backAction = { homeScreen() }
-        val body = root(); body.addView(title("Меню психолога", 30f)); body.addView(caption(userName))
-        body.addView(primary("Документи пацієнтів") { patientsScreen(documentLibrary = true) })
-        body.addView(secondary("Мої чернетки") { draftsScreen() })
-        body.addView(secondary("Синхронізація та офлайн-доступ") { syncScreen() })
-        body.addView(secondary("Звіт за зміну") { reportScreen() })
-        body.addView(secondary("Мої супервізії") { supervisionsScreen() })
-        body.addView(secondary("Мої налаштування") { settingsScreen() })
-        body.addView(spacer()); body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME} · для психологів"))
+        val body = root(); body.addView(title("Мій кабінет", 28f)); body.addView(caption(userName))
+        val work = card(); work.addView(title("Робота", 18f)); body.addView(work)
+        val personal = card(); personal.addView(title("Особисте", 18f))
+        work.addView(secondary("Документи пацієнтів") { patientsScreen(documentLibrary = true) })
+        work.addView(secondary("Мої чернетки") { draftsScreen() })
+        work.addView(secondary("Синхронізація та офлайн-доступ") { syncScreen() })
+        work.addView(secondary("Звіт за зміну") { reportScreen() })
+        work.addView(secondary("Мої супервізії") { supervisionsScreen() })
+        personal.addView(secondary("Мої налаштування") { settingsScreen() }); body.addView(personal)
+        body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}"))
         body.addView(secondary("Вийти") {
             AlertDialog.Builder(this).setTitle("Вийти з облікового запису?")
                 .setMessage("Зашифровані чернетки залишаться для наступного входу цього психолога.")
@@ -368,7 +371,7 @@ class MainActivity : Activity() {
     private fun root(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(bg)
-        setPadding(dp(18), dp(12), dp(18), dp(16))
+        setPadding(dp(16), dp(16), dp(16), dp(24))
     }
 
     private fun logo(size: Int = 82): ImageView = ImageView(this).apply {
@@ -400,7 +403,7 @@ class MainActivity : Activity() {
         setHintTextColor(Color.GRAY)
         setPadding(dp(14), dp(13), dp(14), dp(13))
         if (password) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        background = rounded(Color.WHITE, 13, line)
+        MobileUi.input(this)
     }
 
     private fun Button.minimalIcon(label: String, color: Int) {
@@ -425,38 +428,9 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun primary(label: String, action: () -> Unit): Button = Button(this).apply {
-        text = label
-        minHeight = dp(48)
-        isAllCaps = false
-        textSize = 14f
-        setTextColor(Color.WHITE)
-        setTypeface(typeface, Typeface.BOLD)
-        setPadding(dp(14), dp(10), dp(14), dp(10))
-        background = rounded(forest, 13)
-        minimalIcon(label, Color.WHITE)
-        setOnClickListener { action() }
-    }
-
-    private fun secondary(label: String, action: () -> Unit): Button = Button(this).apply {
-        text = label
-        minHeight = dp(48)
-        isAllCaps = false
-        textSize = 13f
-        setTextColor(forestDark)
-        setTypeface(typeface, Typeface.BOLD)
-        setPadding(dp(12), dp(10), dp(12), dp(10))
-        background = rounded(forestSoft, 13, line)
-        minimalIcon(label, forestDark)
-        setOnClickListener { action() }
-    }
-
-    private fun card(): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(16), dp(15), dp(16), dp(15))
-        background = rounded(Color.WHITE, 17, line)
-        elevation = dp(1).toFloat()
-    }
+    private fun primary(label: String, action: () -> Unit): Button = MobileUi.button(this, label, primary = true, action = action).apply { minimalIcon(label, Color.WHITE) }
+    private fun secondary(label: String, action: () -> Unit): Button = MobileUi.button(this, label, action = action).apply { minimalIcon(label, forest) }
+    private fun card(): LinearLayout = MobileUi.card(this)
 
     private fun scroll(content: View): ScrollView = ScrollView(this).apply {
         isFillViewport = true
@@ -693,7 +667,7 @@ class MainActivity : Activity() {
         val importCard = card()
         importCard.background = rounded(forestSoft, 17, line)
         importCard.addView(title("Автоматичне підключення", 18f))
-        importCard.addView(caption("На серверному ПК файл знаходиться у Public Documents → QureMed → SOLVIA. Скопіюйте його на телефон або планшет."))
+        importCard.addView(caption("Отримайте файл підключення в адміністратора центру й відкрийте його на телефоні."))
         importCard.addView(primary("Відкрити файл SOLVIA-Mobile.solvia") { openServerConfigFile() })
         body.addView(importCard)
         body.addView(spacer(14))
@@ -737,15 +711,14 @@ class MainActivity : Activity() {
     private fun loginScreen() {
         backAction = { setupScreen() }
         val body = root()
-        body.addView(logo())
-        body.addView(title("SOLVIA " + BuildConfig.VERSION_NAME, 20f))
-        body.addView(title("Вхід до центру"))
-        body.addView(caption(server))
+        body.addView(logo(56))
+        body.addView(title("SOLVIA", 32f))
+        body.addView(caption("Кабінет психолога"))
+        body.addView(title("Вхід", 24f))
         val login = edit("Логін")
         val password = edit("Пароль", true)
-        body.addView(login)
-        body.addView(spacer(6))
-        body.addView(password)
+        body.addView(caption("Логін")); body.addView(login)
+        body.addView(caption("Пароль")); body.addView(password)
         body.addView(spacer())
         body.addView(primary("Увійти") {
             val payload = JSONObject()
@@ -772,7 +745,8 @@ class MainActivity : Activity() {
                 }
             }
         })
-        body.addView(secondary("Змінити сервер") { setupScreen() })
+        body.addView(spacer(12)); body.addView(secondary("Підключення до центру") { setupScreen() })
+        body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}"))
         mount(scroll(body))
     }
 
@@ -823,32 +797,30 @@ class MainActivity : Activity() {
 
     private fun renderHomeScreen() {
         workspaceReady = true; selectedNavigation = "home"; backAction = null
-        val body = root(); body.addView(logo(48))
-        body.addView(title("Вітаємо, " + userName.substringBefore(' '), 27f))
-        body.addView(caption(roleLabel(role) + " · " + LocalDate.now()))
-        val hero = card(); hero.background = rounded(forestSoft, 20)
-        hero.addView(title("Ваш робочий день", 22f))
-        hero.addView(caption("Розклад прийомів, записи та документи команди."))
-        hero.addView(primary("Відкрити розклад") {
-            calendarScreen()
-        }); body.addView(hero); body.addView(spacer(14))
-        if (role != "director") {
-            body.addView(primary(if(role == "psychologist") "Мої пацієнти" else "Пацієнти центру") { patientsScreen() })
-            body.addView(spacer()); body.addView(secondary("Документи та виписки") { patientsScreen(documentLibrary = true) })
-        }
-        if (role == "psychologist") body.addView(secondary("Продовжити чернетку") { draftsScreen() })
+        val body = root()
+        body.addView(title("Сьогодні", 30f))
+        body.addView(caption(userName + " · " + LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", java.util.Locale.forLanguageTag("uk")))))
         val today = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(today)
+        val quick = card(); quick.addView(title("Продовжити роботу", 18f))
+        quick.addView(secondary("Продовжити чернетку") { draftsScreen() })
+        quick.addView(secondary("Документи та виписки") { patientsScreen(documentLibrary = true) })
+        body.addView(quick)
         mount(scroll(body))
         if(role != "director") apiAsync("GET", "/api/appointments?date=" + LocalDate.now()) { value ->
-            val entries = value as JSONArray; today.addView(title("Прийоми сьогодні · " + entries.length(), 20f))
+            val entries = value as JSONArray; today.addView(title("Прийоми · " + entries.length(), 18f))
             if(entries.length() == 0) today.addView(caption("Сьогодні записів поки немає."))
-            for(i in 0 until entries.length().coerceAtMost(8)) {
-                val item = entries.getJSONObject(i); val row = card()
+            val ordered = (0 until entries.length()).map { entries.getJSONObject(it) }.sortedWith(compareBy<JSONObject> { it.optString("status") !in listOf("scheduled", "confirmed") }.thenBy { it.optString("start") })
+            for(item in ordered) {
+                val row = card()
                 row.addView(title(item.optString("start").takeLast(5) + " — " + item.optString("end").takeLast(5), 18f))
                 row.addView(caption(item.optString("room") + " · " + statusLabel(item.optString("status"))))
                 val patients = item.optJSONArray("patients") ?: JSONArray()
                 for(j in 0 until patients.length()) { val patient = patients.getJSONObject(j)
-                    row.addView(secondary(patient.optString("name")) { patientScreen(patient.getLong("id")) })
+                    row.addView(title(patient.optString("name"), 19f))
+                    if(item.optString("status") in listOf("scheduled", "confirmed")) row.addView(primary("Почати консультацію") {
+                        consultationDialog(patient.getLong("id"), patient.optString("name"), item.getLong("id"))
+                    })
+                    row.addView(secondary("Картка пацієнта") { patientScreen(patient.getLong("id")) })
                 }
                 today.addView(row); today.addView(spacer())
             }
@@ -858,7 +830,9 @@ class MainActivity : Activity() {
     private fun topBar(label: String, back: () -> Unit): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(secondary("Назад") { back() })
+        addView(secondary("Назад") { back() }.apply {
+            text = "‹"; contentDescription = "Назад"; textSize = 28f; setCompoundDrawablesRelative(null, null, null, null)
+        }, LinearLayout.LayoutParams(dp(48), dp(48)))
         addView(TextView(this@MainActivity).apply {
             text = label
             textSize = 20f
@@ -882,17 +856,10 @@ class MainActivity : Activity() {
         }
         body.addView(dateInput)
         val days = LinearLayout(this)
-        days.addView(secondary("Попередній") { calendarScreen(LocalDate.parse(date).minusDays(1).toString()) }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        days.addView(secondary("‹") { calendarScreen(LocalDate.parse(date).minusDays(1).toString()) }, LinearLayout.LayoutParams(0, dp(48), 1f))
         days.addView(secondary("Сьогодні") { calendarScreen() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        days.addView(secondary("Наступний") { calendarScreen(LocalDate.parse(date).plusDays(1).toString()) }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        days.addView(secondary("›") { calendarScreen(LocalDate.parse(date).plusDays(1).toString()) }, LinearLayout.LayoutParams(0, dp(48), 1f))
         body.addView(days)
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        actions.addView(primary("Показати день") { calendarScreen(dateInput.text.toString()) },
-            LinearLayout.LayoutParams(0, dp(46), 1f))
-        body.addView(actions)
         body.addView(spacer(12))
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(list)
@@ -930,12 +897,12 @@ class MainActivity : Activity() {
         selectedNavigation = "patients"
         backAction = { homeScreen() }
         val body = root()
-        body.addView(topBar(if (role == "psychologist") "Мої пацієнти" else "Пацієнти", ::homeScreen))
+        body.addView(title(if(documentLibrary) "Документи" else "Пацієнти", 28f))
         val search = edit("Пошук за №, ПІБ, телефоном, категорією")
         body.addView(search)
         val filters = LinearLayout(this)
         for ((key, label) in listOf("active" to "Активні", "completed" to "Завершені", "archived" to "Архів")) {
-            filters.addView(secondary(label) { patientsScreen(key, documentLibrary) }, LinearLayout.LayoutParams(0, dp(48), 1f))
+            filters.addView(MobileUi.button(this, label, selected = key == status) { patientsScreen(key, documentLibrary) }, LinearLayout.LayoutParams(0, dp(48), 1f))
         }
         body.addView(filters)
         if (documentLibrary) body.addView(caption("Оберіть пацієнта, щоб відкрити його документи."))
@@ -962,11 +929,11 @@ class MainActivity : Activity() {
                     val box = card()
                     box.background = rounded(Color.WHITE, 17, line)
                     box.setOnClickListener { patientWorkspace(patientId, if(documentLibrary) "documents" else "summary") }
-                    box.addView(caption("ПАЦІЄНТ · №" + patient.optString("patient_no", "—")))
+                    box.addView(caption("№" + patient.optString("patient_no", "—")))
                     box.addView(title(patient.optString("name"), 18f))
                     box.addView(caption(patient.optString("category") + " · " + patient.optString("phone")))
-                    val psychologist = patient.optString("psychologist")
-                    if (psychologist.isNotBlank()) box.addView(caption("Психолог: $psychologist"))
+                    box.contentDescription = "Відкрити картку " + patient.optString("name")
+                    box.isFocusable = true
                     list.addView(box)
                     list.addView(spacer(9))
                 }
@@ -995,7 +962,8 @@ class MainActivity : Activity() {
         workspace.open(id, tab)
     }
 
-    private fun consultationDialog(patientId: Long, patientName: String) {
+    private fun consultationDialog(patientId: Long, patientName: String) = consultationDialog(patientId, patientName, 0L)
+    private fun consultationDialog(patientId: Long, patientName: String, preferredAppointment: Long) {
         val journal = offlineStore()
         val draftStore = DraftStore(this, server, userId)
         val savedDraft = try { draftStore.read(patientId) } catch (_: Exception) {
@@ -1055,6 +1023,10 @@ class MainActivity : Activity() {
                 it.optString("start").takeLast(5) + " · " + it.optString("room")
             }
             appointmentSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, appointmentLabels)
+            if(savedDraft == null && preferredAppointment > 0) {
+                val chosen = eligible.indexOfFirst { it.optLong("id") == preferredAppointment }
+                if(chosen >= 0) appointmentSpinner.setSelection(chosen)
+            }
 
             val typeValues = listOf("primary", "repeat", "crisis", "individual", "family", "child", "group")
             val typeLabels = listOf("Первинна", "Повторна", "Кризова", "Індивідуальна", "Сімейна", "Дитяча", "Групова")
@@ -1104,6 +1076,26 @@ class MainActivity : Activity() {
                 }
             }
 
+            val stageNames = listOf("Прийом", "Запит і стан", "Робота", "Подальший план", "Ризики")
+            val stages = mutableListOf<View>()
+            var currentStage = 0
+            val stageHeading = title("1 з 5 · Прийом", 18f); wrap.addView(stageHeading)
+            val stageBar = LinearLayout(this); wrap.addView(stageBar)
+            val stageButtons = mutableListOf<Button>()
+            fun showStage(index: Int) {
+                currentStage = index
+                stages.forEachIndexed { i, view -> view.visibility = if(i == index) View.VISIBLE else View.GONE }
+                stageButtons.forEachIndexed { i, button -> button.background = rounded(if(i == index) forestSoft else Color.WHITE, 12, line) }
+                stageHeading.text = "${index + 1} з 5 · ${stageNames[index]}"
+                consultationWindow?.getButton(AlertDialog.BUTTON_POSITIVE)?.text = if(index == 4) "Завершити й передати" else "Далі"
+                consultationWindow?.getButton(AlertDialog.BUTTON_NEUTRAL)?.isEnabled = index > 0
+                scroll.smoothScrollTo(0, 0)
+            }
+            stageNames.forEachIndexed { i, name ->
+                val button = MobileUi.button(this, "${i + 1}", selected = i == 0) { showStage(i) }
+                button.contentDescription = "Етап ${i + 1}: $name"
+                stageBar.addView(button, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4); bottomMargin = dp(12) }); stageButtons.add(button)
+            }
             fun addGap(parent: LinearLayout, value: Int = 8) = parent.addView(spacer(value))
             fun section(name: String, hint: String, build: (LinearLayout) -> Unit) {
                 val box = card()
@@ -1111,8 +1103,8 @@ class MainActivity : Activity() {
                 box.addView(title(name, 17f))
                 box.addView(caption(hint))
                 build(box)
+                stages.add(box); box.visibility = if(stages.size == 1) View.VISIBLE else View.GONE
                 wrap.addView(box)
-                wrap.addView(spacer(10))
             }
 
             section("1 · Прийом", "Оберіть конкретний запис із календаря. Після збереження консультація буде прив’язана саме до нього.") { box ->
@@ -1191,7 +1183,10 @@ class MainActivity : Activity() {
                     .put("risk_level", riskValues[riskSpinner.selectedItemPosition]).put("risk_flags", flags)
                 textFields.forEach { (key, field) -> value.put(key, field.text.toString()) }; return value
             }
-            wrap.addView(secondary("Перенести цілі й план попередньої консультації") {
+            val tools = card().apply { visibility = View.GONE }
+            wrap.addView(secondary("Інструменти запису") { tools.visibility = if(tools.visibility == View.VISIBLE) View.GONE else View.VISIBLE })
+            wrap.addView(tools)
+            tools.addView(secondary("Перенести цілі й план попередньої консультації") {
                 apiAsync("GET", "/api/patients/$patientId") { result ->
                     val history = (result as JSONObject).optJSONArray("consultations")
                     if(history == null || history.length() == 0) showError("Попередніх консультацій немає")
@@ -1201,19 +1196,19 @@ class MainActivity : Activity() {
                         }.show()
                 }
             })
-            wrap.addView(secondary("Перевірити підсумок перед збереженням") {
+            tools.addView(secondary("Перевірити підсумок перед збереженням") {
                 AlertDialog.Builder(this).setTitle("Підсумок консультації")
                     .setMessage(textFields.entries.joinToString("\n\n") { (key, field) -> field.hint.toString() + ":\n" + field.text.toString().ifBlank { "—" } })
                     .setPositiveButton("Повернутися до запису", null).show()
             })
-            wrap.addView(secondary("Шаблон первинного / повторного прийому") {
+            tools.addView(secondary("Шаблон первинного / повторного прийому") {
                 val labels = arrayOf("Первинний прийом", "Повторний прийом")
                 AlertDialog.Builder(this).setTitle("Структура нотатки").setItems(labels) { _, index ->
                     if(note.text.isNotBlank()) { showError("Нотатка вже містить текст. Шаблон доступний для порожньої нотатки.") }
                     else {
                         typeSpinner.setSelection(index)
                         note.setText(if(index == 0) "Запит пацієнта:\n\nВажливі відомості:\n\nСпостереження психолога:\n\nУзгоджені цілі:\n\nПроведена робота:\n\nПодальший план:\n" else "Зміни від попередньої зустрічі:\n\nДомашнє завдання — виконання:\n\nПроведена робота:\n\nРезультат зустрічі:\n\nПодальший план:\n")
-                        note.requestFocus()
+                        showStage(2); note.requestFocus()
                     }
                 }.show()
             })
@@ -1241,12 +1236,13 @@ class MainActivity : Activity() {
             val dialog = AlertDialog.Builder(this)
                 .setTitle("Підсумок консультації")
                 .setView(scroll)
-                .setNegativeButton("Залишити чернетку", null)
-                .setPositiveButton("Завершити й передати", null)
+                .setNegativeButton("Чернетка", null)
+                .setNeutralButton("Назад", null)
+                .setPositiveButton("Далі", null)
                 .create()
             consultationWindow = dialog
             dialog.setOnDismissListener { persistDraft(); if (consultationWindow === dialog) consultationWindow = null }
-            wrap.addView(secondary("Зберегти чернетку на сервері") {
+            tools.addView(secondary("Зберегти чернетку на сервері") {
                 apiAsync("GET", "/api/patients/$patientId/draft") { value ->
                     val remote = value as JSONObject
                     val version = remote.optInt("version")
@@ -1261,7 +1257,7 @@ class MainActivity : Activity() {
                     }
                 }
             })
-            wrap.addView(secondary("Відновити серверну чернетку") {
+            tools.addView(secondary("Відновити серверну чернетку") {
                 apiAsync("GET", "/api/patients/$patientId/draft") { value ->
                     val remote = value as JSONObject
                     val payload = remote.optJSONObject("payload")
@@ -1279,14 +1275,17 @@ class MainActivity : Activity() {
             })
 
             dialog.setOnShowListener {
+                showStage(0)
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { showStage((currentStage - 1).coerceAtLeast(0)) }
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    if(currentStage < 4) { showStage(currentStage + 1); return@setOnClickListener }
                     val minutes = duration.text.toString().toIntOrNull() ?: 0
                     if (note.text.toString().isBlank() || note.text.toString().trimEnd().endsWith("Подальший план:")) {
-                        Toast.makeText(this, "Заповніть приватну нотатку психолога.", Toast.LENGTH_LONG).show()
+                        showStage(2); note.requestFocus(); Toast.makeText(this, "Заповніть приватну нотатку психолога.", Toast.LENGTH_LONG).show()
                         return@setOnClickListener
                     }
                     if (minutes !in 10..480) {
-                        Toast.makeText(this, "Тривалість має бути від 10 до 480 хвилин.", Toast.LENGTH_LONG).show()
+                        showStage(0); duration.requestFocus(); Toast.makeText(this, "Тривалість має бути від 10 до 480 хвилин.", Toast.LENGTH_LONG).show()
                         return@setOnClickListener
                     }
 

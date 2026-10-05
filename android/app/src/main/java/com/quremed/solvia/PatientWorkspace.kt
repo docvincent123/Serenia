@@ -41,22 +41,16 @@ class PatientWorkspace(
     private val clinical get() = role == "admin" || role == "psychologist"
     init { require(role == "psychologist") { "Мобільний кабінет доступний лише психологу" } }
     private fun dp(n: Int) = (activity.resources.displayMetrics.density * n).toInt()
-    private fun box(): LinearLayout = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(16))
-        background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(18).toFloat() }
-    }
+    private fun box(): LinearLayout = MobileUi.card(activity)
     private fun text(value: String, size: Float = 15f, bold: Boolean = false): TextView = TextView(activity).apply {
         text = value; textSize = size; setTextColor(ink); setPadding(0, dp(6), 0, dp(8))
         setTextIsSelectable(true); if (bold) setTypeface(typeface, Typeface.BOLD)
     }
-    private fun button(label: String, action: () -> Unit): Button = Button(activity).apply {
-        text = label; isAllCaps = false; textSize = 14f; setTextColor(teal); minHeight = dp(48)
-        setOnClickListener { action() }
-    }
+    private fun button(label: String, action: () -> Unit): Button = MobileUi.button(activity, label, primary = label in listOf("Нова консультація", "Оформити документ", "Зберегти"), action = action)
     private fun input(label: String, value: String = "", lines: Int = 1): EditText = EditText(activity).apply {
         hint = label; setText(value); textSize = 16f; setTextColor(ink); minLines = lines
         inputType = InputType.TYPE_CLASS_TEXT or if (lines > 1) InputType.TYPE_TEXT_FLAG_MULTI_LINE else InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        gravity = Gravity.TOP; setPadding(dp(12), dp(12), dp(12), dp(12)); maxLengthHint(this, if (lines > 1) 30000 else 200)
+        gravity = Gravity.TOP; MobileUi.input(this); maxLengthHint(this, if (lines > 1) 30000 else 200)
     }
     private fun maxLengthHint(field: EditText, length: Int) { field.filters = arrayOf(android.text.InputFilter.LengthFilter(length)) }
     private fun select(labels: List<String>): Spinner = Spinner(activity).apply {
@@ -89,33 +83,49 @@ class PatientWorkspace(
     }
     private fun render() {
         val id = patient.getLong("id")
-        val body = box(); body.setBackgroundColor(Color.rgb(240, 246, 249))
+        val body = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(20)); setBackgroundColor(MobileUi.background) }
         body.addView(button("Усі пацієнти", back))
-        body.addView(text(patient.optString("name"), 25f, true))
-        body.addView(text("№ ${patient.optString("patient_no")} · ${displayStatus(patient.optString("status"))}", 13f))
-        val chips = LinearLayout(activity)
-        val tabs = mutableListOf("summary" to "Профіль", "documents" to "Документи", "courses" to "Курси", "referrals" to "Направлення")
-        if (clinical) { tabs.add(1, "history" to "Консультації"); tabs.add("discharges" to "Виписки") }
-        tabs.forEach { (key, label) -> chips.addView(button(label) { selected = key; render() }.apply {
-            if (selected == key) { setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(teal) }
-        }) }
-        body.addView(HorizontalScrollView(activity).apply { isHorizontalScrollBarEnabled = false; addView(chips) })
+        val header = box()
+        header.addView(text(patient.optString("name"), 24f, true))
+        header.addView(text("№ ${patient.optString("patient_no")} · ${displayStatus(patient.optString("status"))}", 13f))
+        body.addView(header)
+        val tabs = LinearLayout(activity)
+        val mainTab = when(selected) { "history" -> "history"; "documents", "discharges" -> "documents"; else -> "summary" }
+        listOf("summary" to "Огляд", "history" to "Записи", "documents" to "Документи").forEach { (key, label) ->
+            tabs.addView(MobileUi.button(activity, label, selected = mainTab == key) { selected = key; render() },
+                LinearLayout.LayoutParams(0, dp(50), 1f).apply { marginEnd = dp(4); bottomMargin = dp(12) })
+        }
+        body.addView(tabs)
+        if(mainTab == "documents") {
+            val types = LinearLayout(activity)
+            listOf("documents" to "Згоди й форми", "discharges" to "Виписки").forEach { (key, label) ->
+                types.addView(MobileUi.button(activity, label, selected = selected == key) { selected = key; render() },
+                    LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4); bottomMargin = dp(12) })
+            }
+            body.addView(types)
+        }
         val content = box(); body.addView(content)
         show(body, back)
         when(selected) {
             "documents" -> documents(content, id)
             "history" -> history(content, id)
             "discharges" -> discharges(content, id)
-            "courses" -> courses(content, id)
-            "referrals" -> referrals(content, id)
+            "courses" -> { content.addView(button("Назад до огляду") { selected = "summary"; render() }); content.addView(text("Курс супроводу", 20f, true)); courses(content, id) }
+            "referrals" -> { content.addView(button("Назад до огляду") { selected = "summary"; render() }); content.addView(text("Направлення", 20f, true)); referrals(content, id) }
             else -> summary(content, id)
         }
     }
     private fun summary(content: LinearLayout, id: Long) {
         if (role == "psychologist") content.addView(button("Нова консультація") { consult(id, patient.optString("name")) })
+        content.addView(text("Супровід", 18f, true))
+        content.addView(button("Курс супроводу") { selected = "courses"; render() })
+        content.addView(button("Направлення") { selected = "referrals"; render() })
+        val details = box().apply { visibility = View.GONE }
+        content.addView(button("Контакти й дані пацієнта") { details.visibility = if(details.visibility == View.VISIBLE) View.GONE else View.VISIBLE })
+        content.addView(details)
         listOf("phone" to "Телефон", "dob" to "Дата народження", "category" to "Категорія", "psychologist" to "Психолог",
             "family" to "Сім’я", "family_role" to "Роль у сім’ї", "address" to "Адреса", "referral_source" to "Джерело направлення",
-            "referral_source_details" to "Деталі направлення").forEach { (key, label) -> section(content, label, patient.optString(key)) }
+            "referral_source_details" to "Деталі направлення").forEach { (key, label) -> section(details, label, patient.optString(key)) }
         if (clinical) {
             content.addView(text("Анкети та оцінювання", 19f, true))
             val assessments = patient.optJSONArray("assessments")
@@ -296,7 +306,7 @@ class PatientWorkspace(
     }
     /** Forms stay open on server/network errors and block duplicate taps. */
     private fun form(title: String, build: (LinearLayout, (( ((Boolean) -> Unit) -> Unit) -> Unit)) -> Unit) {
-        val body = box(); body.tag = "unsaved_form"; body.addView(text(title, 24f, true)); val fields = box(); body.addView(fields)
+        val body = box(); body.tag = "unsaved_form"; body.addView(text(title, 24f, true)); val fields = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }; body.addView(fields)
         val save = button("Зберегти") {}; body.addView(save)
         body.addView(button("Скасувати") {
             AlertDialog.Builder(activity).setTitle("Закрити форму?").setMessage("Незбережені зміни цієї форми буде втрачено.")

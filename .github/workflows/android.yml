@@ -45,20 +45,20 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :app:lintDebug :app:lintRelease
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-2.4.0-Android-test-APK
+          name: SOLVIA-2.5.0-Android-test-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-2.4.0-Android-unsigned-release
+          name: SOLVIA-2.5.0-Android-unsigned-release
           path: android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: ignore
           retention-days: 14
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: SOLVIA-2.4.0-Android-lint
+          name: SOLVIA-2.5.0-Android-lint
           path: android/app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
@@ -79,7 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: github.event_name != 'pull_request' && env.SOLVIA_ANDROID_KEYSTORE_BASE64 != ''
         with:
-          name: SOLVIA-2.4.0-Android-release-APK
+          name: SOLVIA-2.5.0-Android-release-APK
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -124,6 +124,8 @@ jobs:
             sleep 2
           done
           test "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = 1
+          adb shell wm size 720x1280
+          adb shell wm density 320
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
@@ -135,7 +137,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: SOLVIA-2.4.0-native-mobile-checks
+          name: SOLVIA-2.5.0-native-mobile-checks
           path: out/
           retention-days: 14
 

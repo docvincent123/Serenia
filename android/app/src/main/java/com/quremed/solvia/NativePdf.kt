@@ -138,9 +138,9 @@ class NativePdfPreview(private val activity: Activity, val file: File, private v
             }
             counter.text = "Сторінка ${current + 1} з ${renderer.pageCount}"
         }
-        fun button(label: String, action: () -> Unit) = Button(activity).apply { text = label; isAllCaps = false; setOnClickListener { action() } }
-        controls.addView(button("Попередня") { if (current > 0) { current--; render() } })
-        controls.addView(button("Наступна") { if (current + 1 < renderer.pageCount) { current++; render() } })
+        fun button(label: String, action: () -> Unit) = MobileUi.button(activity, label, action = action)
+        controls.addView(button("Попередня") { if (current > 0) { current--; render() } }, LinearLayout.LayoutParams(0, -2, 1f))
+        controls.addView(button("Наступна") { if (current + 1 < renderer.pageCount) { current++; render() } }, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(counter); root.addView(controls)
         root.addView(button("Зберегти PDF") { export(file) })
         root.addView(button("Друк") { NativePdf.print(activity, file, title) })
