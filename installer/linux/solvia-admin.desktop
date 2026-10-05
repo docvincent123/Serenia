@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=SOLVIA Admin
+GenericName=SOLVIA Administration
+Comment=Адміністрування психологічного реабілітаційного центру
+Exec=/usr/local/bin/solvia-admin-app
+Icon=solvia-admin
+Terminal=false
+Categories=Utility;
+StartupNotify=true
+StartupWMClass=SOLVIAAdmin
+Keywords=SOLVIA;QureMed;пацієнти;реєстратура;психологія;
+Actions=Update;
+
+[Desktop Action Update]
+Name=Оновити SOLVIA
+Exec=/usr/local/bin/solvia-admin-app --update

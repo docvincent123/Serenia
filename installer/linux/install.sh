@@ -13,12 +13,12 @@ source /etc/os-release
   echo 'Цей пакет підтримує Ubuntu 24.04 / elementary OS 8 (x86_64).'; exit 1;
 }
 package=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-[[ -f $package/SolviaServer && -f $package/ui/index.html ]] || { echo 'Розпакуйте весь Linux-пакет поруч з install.sh'; exit 1; }
+[[ -f $package/SolviaServer && -f $package/ui/index.html && -f $package/solvia-admin-app && -f $package/solvia-admin.desktop && -f $package/solvia-updater && -f $package/VERSION ]] || { echo 'Розпакуйте весь Linux-пакет поруч з install.sh'; exit 1; }
 cd "$package"
 sha256sum --check SHA256SUMS
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3
+apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 iproute2 xdg-utils libnss3-tools desktop-file-utils
 libraries=$(ldd ./SolviaServer)
 printf '%s\n' "$libraries"
 if grep -q 'not found' <<< "$libraries"; then echo 'Відсутні бібліотеки сервера'; exit 1; fi
@@ -59,16 +59,10 @@ if [[ $count == 0 ]]; then
 fi
 old_ip=''
 [[ ! -f /etc/solvia/address ]] || old_ip=$(cat /etc/solvia/address)
-ip=${SOLVIA_SERVER_IP:-$old_ip}
-if [[ -z $ip ]]; then read -r -p 'Стала IPv4-адреса Linux-сервера в LAN (наприклад 192.168.1.105): ' ip; fi
-python3 - "$ip" <<'PY'
-import ipaddress, sys
-ip = ipaddress.IPv4Address(sys.argv[1])
-if ip.is_unspecified or ip.is_multicast or ip.is_loopback or not any(ip in ipaddress.ip_network(n) for n in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16')):
-    raise SystemExit('Потрібна приватна IPv4-адреса LAN')
-PY
+ip=$(python3 "$package/network-address.py" "${SOLVIA_SERVER_IP:-$old_ip}")
+echo "Визначено LAN-адресу SOLVIA: $ip"
 # Stop writers before the update snapshot and migrations.
-systemctl stop solvia.service 2>/dev/null || true
+systemctl stop solvia-network.timer solvia-network-refresh.service solvia-network.service solvia-certificate.timer solvia-certificate.service solvia-http.service solvia.service 2>/dev/null || true
 # A failed update never deletes or silently replaces data.
 if [[ $count != 0 ]]; then
   snapshot="/var/backups/solvia/pre-update-$(date -u +%Y%m%dT%H%M%S).dump"
@@ -79,6 +73,7 @@ install -d -m 0755 /opt/solvia
 # Keep the previous application for diagnosis; do not roll back migrated schemas automatically.
 if [[ -f /opt/solvia/SolviaServer ]]; then cp -a /opt/solvia/SolviaServer /opt/solvia/SolviaServer.previous; fi
 install -m 0755 SolviaServer /opt/solvia/SolviaServer
+install -m 0644 VERSION /opt/solvia/VERSION
 rm -rf /opt/solvia/ui.previous
 if [[ -d /opt/solvia/ui ]]; then mv /opt/solvia/ui /opt/solvia/ui.previous; fi
 cp -r ui /opt/solvia/ui
@@ -86,19 +81,56 @@ chmod -R a+rX /opt/solvia/ui
 runuser -u solvia --preserve-environment -- /opt/solvia/SolviaServer --init
 unset SOLVIA_ADMIN_PASSWORD SOLVIA_ADMIN_LOGIN SOLVIA_ADMIN_NAME confirmation
 printf '%s\n' "$ip" > /etc/solvia/address
-printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\n' "$SOLVIA_DATABASE_URL" "$ip" > /etc/solvia/server.env
-chmod 0640 /etc/solvia/server.env /etc/solvia/address
-chown root:solvia /etc/solvia/server.env /etc/solvia/address
+install -d -m 0755 /usr/local/share/solvia
+install -m 0644 /etc/solvia/address /usr/local/share/solvia/address
+printf 'SOLVIA_DATABASE_URL="%s"\nSOLVIA_HOST=%s\nSOLVIA_LAN_IP=%s\n' "$SOLVIA_DATABASE_URL" "0.0.0.0" "$ip" > /etc/solvia/server.env
+chmod 0640 /etc/solvia/server.env
+chmod 0644 /etc/solvia/address
+chown root:solvia /etc/solvia/server.env
+chown root:root /etc/solvia/address
 install -m 0755 solvia-admin /usr/local/sbin/solvia-admin
+install -m 0755 solvia-updater /usr/local/sbin/solvia-updater
+install -m 0755 solvia-admin-app /usr/local/bin/solvia-admin-app
+install -m 0644 solvia-admin.desktop /usr/share/applications/solvia-admin.desktop
+if [[ -f /opt/solvia/ui/solvia-icon.png ]]; then
+  install -D -m 0644 /opt/solvia/ui/solvia-icon.png /usr/share/icons/hicolor/256x256/apps/solvia-admin.png
+fi
+install -m 0755 network-address.py sync-network.sh /opt/solvia/
 install -m 0755 renew-certificate.sh /opt/solvia/renew-certificate.sh
 /opt/solvia/renew-certificate.sh --force
+install -D -m 0644 /etc/solvia/ca/QureMed-Local-CA.crt /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
+update-ca-certificates >/dev/null
+update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 install -m 0644 ./*.service ./*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now solvia.service solvia-certificate.timer solvia-backup.timer
-systemctl restart solvia.service
+systemctl enable --now solvia.service solvia-http.service solvia-certificate.timer solvia-backup.timer solvia-network.timer
+systemctl restart solvia.service solvia-http.service
 /usr/local/sbin/solvia-admin health
+
+mobile_config=/usr/local/share/solvia/SOLVIA-Mobile.solvia
+python3 - "$ip" "$mobile_config" <<'PY'
+import json,sys
+ip,path=sys.argv[1:3]
+data={
+  "format":"quremed.solvia.mobile",
+  "version":1,
+  "center":"SOLVIA",
+  "preferred":"https",
+  "api_url":f"https://{ip}:8443",
+  "https_url":f"https://{ip}:8443",
+}
+with open(path,"w",encoding="utf-8") as f:
+    json.dump(data,f,ensure_ascii=False,indent=2)
+PY
+chmod 0644 "$mobile_config"
+
 printf '\nSOLVIA готова: https://%s:8443\n' "$ip"
+echo 'HTTP 8765 доступний лише локально; телефони підключаються через HTTPS 8443.'
+printf 'Файл підключення телефона: %s\n' "$mobile_config"
+echo 'Linux Admin: відкрийте «SOLVIA Admin» у меню програм або виконайте solvia-admin-app.'
+echo 'Оновлення: sudo solvia-admin check-update / sudo solvia-admin update'
 echo 'Сертифікат для ПК/Android: /etc/solvia/ca/QureMed-Local-CA.crt'
 openssl x509 -in /etc/solvia/ca/QureMed-Local-CA.crt -noout -fingerprint -sha256
 echo 'Установіть довіру тільки до цього CA. Збережіть його відбиток для звірки.'
-echo 'Якщо firewall активний: дозвольте TCP 8443 лише з підмережі центру (див. LINUX.md).'
+echo 'Якщо firewall активний: дозвольте TCP 8443 лише з підмережі центру (див. LINUX.md). HTTP 8765 не відкривайте для LAN або інтернету.'
+

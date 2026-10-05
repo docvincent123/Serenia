@@ -3,13 +3,15 @@ plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'com.quremed.solvia'
     compileSdk 35
+    buildFeatures { buildConfig true }
 
     defaultConfig {
         applicationId 'com.quremed.solvia'
         minSdk 26
         targetSdk 35
-        versionCode 20
-        versionName '2.0.0'
+        versionCode 25
+        versionName '2.5.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
     compileOptions {
@@ -20,7 +22,21 @@ android {
         jvmTarget = '17'
     }
 
+    signingConfigs {
+        production {
+            if (System.getenv('SOLVIA_ANDROID_KEYSTORE_PATH')) {
+                storeFile file(System.getenv('SOLVIA_ANDROID_KEYSTORE_PATH'))
+                storePassword System.getenv('SOLVIA_ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('SOLVIA_ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('SOLVIA_ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
+        release {
+            if (System.getenv('SOLVIA_ANDROID_KEYSTORE_PATH')) signingConfig signingConfigs.production
+        }
+
         debug {
             applicationIdSuffix '.test'
             versionNameSuffix '-test'
@@ -41,3 +57,11 @@ tasks.register('materializeSolviaBrand') {
     }
 }
 tasks.named('preBuild').configure { dependsOn('materializeSolviaBrand') }
+
+
+
+dependencies {
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test:core:1.6.1'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}

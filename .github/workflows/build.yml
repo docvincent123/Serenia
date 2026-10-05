@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -19,9 +20,9 @@ jobs:
     timeout-minutes: 40
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -46,10 +47,13 @@ jobs:
       - name: Install React dependencies
         shell: pwsh
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Check connection address validation
-        run: node tests/connection.mjs
+        run: |
+          node tests/connection.mjs
+          node tests/auth-session.mjs
+          node tests/drafts.mjs
 
       - name: Build React interface
         shell: pwsh
@@ -58,7 +62,7 @@ jobs:
           npm run build
           if (!(Test-Path dist/index.html)) { throw 'React build did not produce index.html' }
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
           key: solvia-vcpkg-postgres-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
@@ -67,7 +71,7 @@ jobs:
         shell: pwsh
         run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-solvia -DVCPKG_OVERLAY_TRIPLETS="${{ github.workspace }}/cmake/triplets" -DBUILD_TESTING=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with:
           path: C:/Users/runneradmin/AppData/Local/vcpkg/archives
           key: solvia-vcpkg-postgres-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
@@ -90,7 +94,7 @@ jobs:
         shell: pwsh
         run: ./tests/windows-ui.ps1 -BuildDir build/Release
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: SOLVIA-react-UI-check
@@ -123,17 +127,17 @@ jobs:
       - name: Install and open Windows client without local server
         shell: powershell
         timeout-minutes: 3
-        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-2.0.0-Windows-x64.exe
+        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-2.2.0-Windows-x64.exe
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-2.0.0-Windows-x64-portable
+          name: SOLVIA-2.2.0-Windows-x64-portable
           path: out/SOLVIA/
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-2.0.0-Setup-EXE
+          name: SOLVIA-2.2.0-Setup-EXE
           path: out/installer/*.exe
           if-no-files-found: error
           retention-days: 14
@@ -157,9 +161,9 @@ jobs:
           --health-retries 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -181,27 +185,34 @@ jobs:
 
 
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Build Linux browser interface
         run: |
-          npm --prefix frontend install --no-audit --no-fund
+          npm --prefix frontend ci --no-audit --no-fund
           npm --prefix frontend run build
           node tests/connection.mjs
+          python3 tests/network-address.py
+          node tests/auth-session.mjs
+          node tests/drafts.mjs
 
       - name: Stage Linux server installer
         run: |
           mkdir -p out/SOLVIA-Linux/ui out/SOLVIA-Linux/licenses
           cp build-server/SolviaServer out/SOLVIA-Linux/
           cp -r frontend/dist/. out/SOLVIA-Linux/ui/
-          cp installer/linux/* out/SOLVIA-Linux/
+          find installer/linux -maxdepth 1 -type f -exec cp {} out/SOLVIA-Linux/ \;
           cp docs/LINUX.md out/SOLVIA-Linux/
+          version=$(sed -n 's/^project(Solvia VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
+          test -n "$version"
+          printf '%s\n' "$version" > out/SOLVIA-Linux/VERSION
           find build-server/vcpkg_installed/x64-linux/share -name copyright -exec sh -c 'cp "$1" "out/SOLVIA-Linux/licenses/$(basename "$(dirname "$1")").txt"' _ {} \;
-          chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin
+          chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
+          bash -n out/SOLVIA-Linux/install.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
           cd out/SOLVIA-Linux
-          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          find . -type f ! -name SHA256SUMS ! -name LINUX.md -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 
       - name: Verify Linux install, HTTPS, backup, restore and upgrade
         timeout-minutes: 8
@@ -210,15 +221,40 @@ jobs:
       - name: Linux diagnostics
         if: failure()
         run: |
-          sudo journalctl -u solvia -u postgresql@16-solvia -n 100 --no-pager || true
+          sudo journalctl -u solvia -u solvia-http -u solvia-network -u solvia-network-refresh -u postgresql@16-solvia -n 100 --no-pager || true
           sudo pg_lsclusters || true
 
       - name: Archive Linux package
-        run: tar -C out -czf out/SOLVIA-2.0.0-Linux-x64.tar.gz SOLVIA-Linux
+        run: tar -C out -czf out/SOLVIA-2.2.0-Linux-x64.tar.gz SOLVIA-Linux
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-2.0.0-Linux-x64-installer
-          path: out/SOLVIA-2.0.0-Linux-x64.tar.gz
+          name: SOLVIA-2.2.0-Linux-x64-installer
+          path: out/SOLVIA-2.2.0-Linux-x64.tar.gz
           if-no-files-found: error
           retention-days: 14
+
+  design-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm --prefix frontend ci --no-audit --no-fund
+      - run: npm --prefix frontend run build
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix /tmp/solvia-browser-tests --no-save playwright@1.62.1
+          /tmp/solvia-browser-tests/node_modules/.bin/playwright install --with-deps chromium
+      - name: Test rendered UI and capture synthetic-data previews
+        env:
+          SOLVIA_PLAYWRIGHT_MODULE: /tmp/solvia-browser-tests/node_modules/playwright
+        run: node tests/ui-regression.mjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: SOLVIA-design-previews
+          path: out/design/
+          if-no-files-found: ignore
