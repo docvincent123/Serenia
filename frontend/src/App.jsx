@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
 import WaitingList from './WaitingList.jsx';
+import { navigationFor, flatNavigation } from './navigation.mjs';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -342,29 +343,7 @@ async function request(base, token, method, path, body) {
   return data;
 }
 
-function navFor(role) {
-  if (role === 'admin') {
-    return [
-      ['dashboard', 'Огляд центру'],
-      ['calendar', 'Календар'],
-      ['waiting-list', 'Лист очікування'],
-      ['patients', 'Пацієнти'],
-      ['families', 'Сім’ї'],
-      ['team', 'Команда'],
-      ['rooms', 'Кабінети'],
-      ['reports', 'Звіти психологів'],
-      ['workload', 'Навантаження'],
-      ['supervisions', 'Супервізії'],
-      ['archive', 'Архів'],
-      ['devices', 'Пристрої'],
-      ['settings', 'Налаштування'],
-      ['audit', 'Журнал дій']
-    ];
-  }
-  if (role === 'reception') return [['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
-  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
-  return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
-}
+const navFor = flatNavigation;
 
 function defaultPage(role) {
   return role === 'admin' || role === 'director' ? 'dashboard' : 'calendar';
@@ -397,9 +376,26 @@ function Spinner() {
 }
 
 function Dialog({ title, subtitle, onClose, children, wide = false }) {
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    const dialog = dialogRef.current;
+    const controls = () => [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')].filter(el => el.getClientRects().length);
+    (controls()[0] || dialog).focus();
+    const keydown = e => {
+      if (e.key === 'Tab') {
+        const list = controls(), first = list[0], last = list.at(-1);
+        if (!first) { e.preventDefault(); dialog.focus(); }
+        else if (e.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    dialog.addEventListener('keydown', keydown);
+    return () => { dialog.removeEventListener('keydown', keydown); if (opener?.isConnected) opener.focus(); };
+  }, []);
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
         <div className="dialog-head">
           <div>
             <h2>{title}</h2>
@@ -3043,28 +3039,50 @@ function Settings({ api, apiBase, onSwitchApi }) {
   );
 }
 
-function GlobalSearch({ api, onPatient, onNavigate }) {
+function GlobalSearch({ api, onPatient, onNavigate, role }) {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+  const allowed = new Set(flatNavigation(role).map(([key]) => key));
   useEffect(() => {
-    if (query.trim().length < 2) { setResult(null); return; }
+    let alive = true;
+    setResult(null); setBusy(false);
+    if (query.trim().length < 2) return;
     const timer = setTimeout(async () => {
       setBusy(true);
-      try { setResult(await api('GET', `/api/search?q=${encodeURIComponent(query.trim())}`)); }
-      catch { setResult(null); }
-      finally { setBusy(false); }
+      try {
+        const found = await api('GET', `/api/search?q=${encodeURIComponent(query.trim())}`);
+        if (alive) setResult({ ...found,
+          families: allowed.has('families') ? found.families : [],
+          rooms: allowed.has('rooms') ? found.rooms : [],
+          users: allowed.has('team') ? found.users : [] });
+      } catch { if (alive) setResult(null); }
+      finally { if (alive) setBusy(false); }
     }, 250);
-    return () => clearTimeout(timer);
-  }, [query]);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [query, role]);
+  useEffect(() => {
+    const keydown = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !document.querySelector('[role="dialog"]')) {
+        e.preventDefault(); inputRef.current?.focus();
+      }
+      if (e.key === 'Escape') { setQuery(''); setResult(null); }
+    };
+    const outside = e => { if (!wrapRef.current?.contains(e.target)) { setQuery(''); setResult(null); } };
+    document.addEventListener('keydown', keydown);
+    document.addEventListener('pointerdown', outside);
+    return () => { document.removeEventListener('keydown', keydown); document.removeEventListener('pointerdown', outside); };
+  }, []);
 
   const total = result ? Object.values(result).reduce((n, arr) => n + (arr?.length || 0), 0) : 0;
   return (
-    <div className="global-search-wrap">
+    <div className="global-search-wrap" ref={wrapRef}>
       <div className="global-search">
         <span><AppIcon name="search" /></span>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Пошук пацієнта, сім’ї, працівника, кабінету…" />
+        <input ref={inputRef} aria-label="Пошук у центрі" maxLength={100} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={role === 'psychologist' ? 'Пошук моїх пацієнтів…' : 'Пошук пацієнта, номеру, телефону…'} /><kbd>Ctrl K</kbd>
         {busy && <small>Пошук…</small>}
       </div>
       {result && (
@@ -3556,9 +3574,44 @@ function Audit({ api }) {
   );
 }
 
+function WorkspaceNavigation({ role, page, origin, locked, navigate }) {
+  const sections = navigationFor(role);
+  const active = page === 'patient-card' ? origin : page;
+  const [filter, setFilter] = useState('');
+  const [expanded, setExpanded] = useState(() => Object.fromEntries(sections.map(section => [section.id, section.items.some(([key]) => key === active)])));
+  useEffect(() => {
+    const section = navigationFor(role).find(group => group.items.some(([key]) => key === active));
+    if (section) setExpanded(previous => ({ ...previous, [section.id]: true }));
+  }, [active, role]);
+  const query = filter.trim().toLocaleLowerCase('uk');
+  const matching = sections.map(section => ({ ...section,
+    items: section.label.toLocaleLowerCase('uk').includes(query) ? section.items : section.items.filter(([, label]) => label.toLocaleLowerCase('uk').includes(query))
+  })).filter(section => section.items.length);
+  const item = ([key, label]) => <button key={key} disabled={locked} aria-current={active === key ? 'page' : undefined} className={`nav-item ${active === key ? 'active' : ''}`} onClick={() => navigate(key)}><span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span></button>;
+  return <nav aria-label="Головне меню">
+    <label className="menu-filter"><AppIcon name="search" size={16} /><input aria-label="Знайти розділ меню" placeholder="Знайти розділ…" value={filter} onChange={e => setFilter(e.target.value)} /></label>
+    {(role === 'admin' || role === 'director') && (!query || 'огляд центру'.includes(query)) && item(['dashboard', 'Огляд центру'])}
+    {matching.map(section => {
+      const open = Boolean(query) || expanded[section.id];
+      return <section className="nav-section" key={section.id}>
+        <button className={`nav-group ${section.items.some(([key]) => key === active) ? 'current-group' : ''}`} aria-expanded={open} aria-controls={`menu-${section.id}`} onClick={() => setExpanded(previous => ({ ...previous, [section.id]: !previous[section.id] }))}>
+          <AppIcon name={section.icon} /><span>{section.label}</span><svg className="nav-chevron" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+        </button>
+        <div className="nav-children" id={`menu-${section.id}`} hidden={!open}>{section.items.map(item)}</div>
+      </section>;
+    })}
+    {query && !matching.length && !((role === 'admin' || role === 'director') && 'огляд центру'.includes(query)) && <p className="menu-empty" role="status">Розділ не знайдено</p>}
+  </nav>;
+}
+
 function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
   const [patientId, setPatientId] = useState(null);
+  const [patientOrigin, setPatientOrigin] = useState('patients');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuToggleRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const workspaceRef = useRef(null);
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
@@ -3567,8 +3620,42 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
   const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
-  function openPatient(id) { setPatientId(id); setPage('patient-card'); }
-  function navigate(target) { setPatientId(null); setPage(target); }
+  function openPatient(id) {
+    if (user.role === 'director') return;
+    setPatientOrigin(page === 'patient-card' ? patientOrigin : page);
+    setPatientId(id); setPage('patient-card'); setMenuOpen(false);
+    workspaceRef.current?.scrollTo({ top: 0 });
+  }
+  function navigate(target) {
+    if (!navigation.some(([key]) => key === target)) return;
+    setPatientId(null); setPage(target); setMenuOpen(false);
+    workspaceRef.current?.scrollTo({ top: 0 });
+  }
+  useEffect(() => {
+    if (!menuOpen) return;
+    const opener = document.activeElement;
+    const sidebar = sidebarRef.current;
+    const controls = () => [...sidebar.querySelectorAll('button:not(:disabled), input, a[href]')].filter(el => el.getClientRects().length);
+    controls()[0]?.focus();
+    const keyboard = e => {
+      if (e.key === 'Escape') { e.preventDefault(); setMenuOpen(false); }
+      if (e.key === 'Tab') {
+        const list = controls(), first = list[0], last = list.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener('keydown', keyboard);
+    return () => { document.removeEventListener('keydown', keyboard); if (opener?.isConnected) opener.focus(); };
+  }, [menuOpen]);
+  useEffect(() => {
+    const resize = () => { if (window.innerWidth > 760) setMenuOpen(false); };
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+  const contextPage = page === 'patient-card' ? patientOrigin : page;
+  const sectionLabel = navigationFor(user.role).find(section => section.items.some(([key]) => key === contextPage))?.label || roleLabels[user.role];
+
 
   async function loadShift() {
     try {
@@ -3587,7 +3674,16 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     finally { setShiftBusy(false); }
   }
 
-  useEffect(() => { loadShift(); }, []);
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      try { const next = await api('GET', '/api/shift-day'); if (alive) { setShift(next); setShiftError(''); } }
+      catch (e) { if (alive) setShiftError(e.message); }
+    };
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
   useEffect(() => {
     let alive = true;
     async function ping() {
@@ -3604,7 +3700,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }, [apiBase]);
 
   const content = (() => {
-    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} draftSession={draftSession} />;
+    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
     if (page === 'dashboard') return <Dashboard api={api} />;
     if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
@@ -3626,21 +3722,16 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const locked = shift && !shift.open;
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={`app-shell desktop-mvp ${menuOpen ? 'menu-open' : ''}`}>
+      {menuOpen && <button className="menu-backdrop" aria-label="Закрити меню" onClick={() => setMenuOpen(false)} />}
+      <aside ref={sidebarRef} id="workspace-menu" className="sidebar" aria-label="Меню SOLVIA">
         <div className="sidebar-brand">
           <div className="product-mark inverse"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
-          <div><strong>SOLVIA</strong><span>by QureMed</span></div>
+          <div><strong>SOLVIA</strong><span>Простір центру</span></div>
+          <button className="menu-close icon-button" aria-label="Згорнути меню" onClick={() => setMenuOpen(false)}><AppIcon name="close" /></button>
         </div>
 
-        <nav className={locked ? 'nav-locked' : ''}>
-          <div className="nav-label">РОБОЧИЙ ПРОСТІР</div>
-          {navigation.filter(([key]) => key !== 'settings' && key !== 'preferences').map(([key, label]) => (
-            <button key={key} disabled={locked && key !== 'preferences' && !(user.role === 'admin' && key === 'settings')} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
-              <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
-            </button>
-          ))}
-        </nav>
+        <WorkspaceNavigation role={user.role} page={page} origin={patientOrigin} locked={locked} navigate={navigate} />
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
@@ -3661,28 +3752,26 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         </div>
       </aside>
 
-      <main className="workspace">
+      <main className="workspace" ref={workspaceRef} inert={menuOpen || undefined}>
         {shift?.open && (
           <div className="shift-bar">
             <div><span className="shift-dot" /> Зміна відкрита · {shift.shift_date} · {shift.opened_by_name || 'Адміністратор'}</div>
             {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={() => changeShift('close')}>Завершити зміну</Button>}
           </div>
         )}
-        {!locked && <>
-          <ReminderBar api={api} role={user.role} />
-          <div className="workspace-topbar">
-            <div className="topbar-context">
-              <div><small>РОБОЧИЙ ПРОСТІР</small><strong>{activePageLabel}</strong></div>
-              <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase}>
-                <span className="connection-led" />
-                <div><strong>{connectionKind}</strong><small>{health.online ? `SOLVIA ${health.version}` : 'Немає зв’язку'}</small></div>
-              </div>
-            </div>
-            {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
+        <div className="workspace-topbar">
+          <div className="topbar-context">
+            <button ref={menuToggleRef} className="menu-toggle icon-button" aria-label="Відкрити меню" aria-expanded={menuOpen} aria-controls="workspace-menu" onClick={() => setMenuOpen(true)}><AppIcon name="audit" /></button>
+            <div className="workspace-breadcrumb"><small>{sectionLabel}</small><strong>{activePageLabel}</strong></div>
           </div>
-        </>}
+          {!locked && user.role !== 'director' && <GlobalSearch api={api} role={user.role} onPatient={openPatient} onNavigate={navigate} />}
+          <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase} role="status">
+            <span className="connection-led" /><div><strong>{health.online ? 'Сервер доступний' : 'Немає зв’язку'}</strong><small>SOLVIA {health.version || '2.2'} · {connectionKind === 'LOCAL' ? 'Мережа центру' : 'VPS'}</small></div>
+          </div>
+        </div>
+        {!locked && <ReminderBar api={api} role={user.role} />}
         <div className="workspace-inner">
-          {shiftError && <div className="alert error">{shiftError}</div>}
+          {shiftError && <div className="alert error" role="alert">{shiftError} <Button variant="secondary" onClick={loadShift}>Повторити підключення</Button></div>}
           {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? <Spinner /> : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
