@@ -40,6 +40,8 @@ private class ApiError(val status: Int, message: String) : Exception(message)
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("solvia_settings", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
+    private val cacheIo = Executors.newSingleThreadExecutor()
+    private var cachePreparing = false
     private val openConfigRequest = 4101
 
     private val bg = Color.rgb(240, 246, 249)
@@ -80,14 +82,16 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         syncHandler.removeCallbacks(syncTick)
         networkCallback?.let { runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(it) } }
-        io.shutdown(); super.onDestroy()
+        consultationWindow?.dismiss(); consultationWindow = null
+        pdfPreview?.close(); pdfPreview = null
+        io.shutdown(); cacheIo.shutdown(); super.onDestroy()
     }
     private fun unavailable(error: Exception) = error is java.io.IOException && error !is javax.net.ssl.SSLException
     private fun updateConnectionStatus() {
         if(token.isBlank()) return
         val count = runCatching { val q = offlineStore().queue(); (0 until q.length()).count { q.getJSONObject(it).optString("state") in listOf("pending", "blocked") } }.getOrDefault(0)
         statusView?.text = (if(offlineMode) "Без мережі · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "З’єднання із сервером") +
-            (if(count > 0) " · у черзі: $count" else "")
+            (if(count > 0) " · у черзі: $count" else "") + (if(cachePreparing) " · завантаження карток…" else "")
     }
     private fun syncNow(refresh: Boolean = false) {
         if(token.isBlank() || role != "psychologist" || syncRunning || isDestroyed) return
@@ -105,7 +109,7 @@ class MainActivity : Activity() {
                     catch(e: ApiError) { throw SyncFailure(e.status, e.message ?: "Помилка сервера") }
                 }.run()
                 authExpired = !authorized
-                if(authorized && refresh) warmCache(base, sessionToken, store)
+                if(authorized && refresh) runOnUiThread { prepareOfflineCache(base, sessionToken, store) }
             } catch(e: ApiError) { authExpired = e.status == 401 }
             catch(_: Exception) { }
             runOnUiThread {
@@ -114,6 +118,23 @@ class MainActivity : Activity() {
                 offlineMode = !connected; updateConnectionStatus()
                 if(authExpired) { store.revokeSession(); logout() }
                 else if(refresh) syncScreen()
+            }
+        }
+    }
+    private fun prepareOfflineCache(base: String, auth: String, store: OfflineStore) {
+        if(cachePreparing) return
+        cachePreparing = true; updateConnectionStatus()
+        cacheIo.execute {
+            var message = "Офлайн-копії оновлено"
+            var denied = false
+            try { warmCache(base, auth, store) }
+            catch(e: Exception) { denied = e is ApiError && e.status == 401; message = "Завантаження перервано. Уже завантажені копії збережено." }
+            runOnUiThread {
+                cachePreparing = false
+                if(token == auth && server == base && !isDestroyed) {
+                    updateConnectionStatus()
+                    if(denied) logout() else Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -139,7 +160,7 @@ class MainActivity : Activity() {
     }
     private fun syncScreen() {
         backAction = { moreScreen() }; val body = root(); body.addView(topBar("Синхронізація", ::moreScreen))
-        body.addView(caption("Завершені записи зберігаються зашифрованими. Передавання запускається при поверненні мережі, відкритті застосунку та щохвилини, поки він відкритий."))
+        body.addView(caption("Завершені записи зберігаються зашифрованими. Передавання запускається при поверненні мережі. Android також повторює спроби у фоні та після перезавантаження телефона. Якщо сесія закінчилася, увійдіть знову — черга збережеться."))
         body.addView(primary("Синхронізувати й оновити офлайн-копії") { syncNow(refresh = true) })
         val rows = runCatching { offlineStore().queue() }.getOrElse { showError("Не вдалося прочитати чергу. Дані не видалені."); JSONArray() }
         if(rows.length() == 0) body.addView(caption("Черга порожня"))
@@ -253,7 +274,25 @@ class MainActivity : Activity() {
 
     private fun mobileApi(): MobileApi = object : MobileApi {
         override fun call(method: String, path: String, body: JSONObject?, success: (Any) -> Unit, failure: (String) -> Unit) {
-            apiAsync(method, path, body, onError = failure, ok = success)
+            apiAsync(method, path, body, onError = failure) { result ->
+                if(method == "GET" && path.matches(Regex("/api/patients/[0-9]+")) && result is JSONObject) {
+                    val patient = JSONObject(result.toString())
+                    val history = patient.optJSONArray("consultations") ?: JSONArray()
+                    val queue = offlineStore().queue()
+                    for(i in queue.length()-1 downTo 0) {
+                        val row = queue.getJSONObject(i); val payload = row.getJSONObject("payload")
+                        if(payload.optLong("patient_id") != patient.optLong("id") || row.optString("state") == "reviewed") continue
+                        val serverId = row.optLong("server_id")
+                        if((0 until history.length()).any { history.getJSONObject(it).optString("client_key") == payload.optString("client_key") || (serverId > 0 && history.getJSONObject(it).optLong("id") == serverId) }) continue
+                        val local = JSONObject(payload.toString()).put("created", payload.optString("consult_date"))
+                            .put("psychologist", userName).put("sync_status", when(row.optString("state")) {
+                                "sent" -> "Передано на сервер"; "blocked" -> "Не передано: " + row.optString("error"); else -> "Збережено на телефоні · очікує передавання"
+                            })
+                        history.put(local)
+                    }
+                    patient.put("consultations", history); success(patient)
+                } else success(result)
+            }
         }
     }
 
@@ -620,7 +659,7 @@ class MainActivity : Activity() {
                 val store = OfflineStore(this, server, user.getLong("id"))
                 if(store.session() == null) { showError("Офлайн-доступ закінчився. Увійдіть із сервером."); return }
                 token = session.getString("token"); role = "psychologist"; userId = user.getLong("id"); userName = user.getString("name")
-                offlineMode = true; renderHomeScreen(); syncNow()
+                offlineMode = true; OfflineSyncJob.schedule(this, server, userId); renderHomeScreen(); syncNow()
             }
             return
         }
@@ -751,10 +790,11 @@ class MainActivity : Activity() {
         offlineMode = false
         offlineStore().saveSession(user, token)
         prefs.edit().putLong("offline_user:$server", userId).apply()
+        OfflineSyncJob.schedule(this, server, userId)
         homeScreen()
         syncNow(refresh = false)
         val base = server; val auth = token; val store = offlineStore()
-        io.execute { try { warmCache(base, auth, store) } catch(_: Exception) { } }
+        prepareOfflineCache(base, auth, store)
     }
 
     private fun homeScreen() {
@@ -1281,6 +1321,7 @@ class MainActivity : Activity() {
                     persistDraft()
                     try {
                         journal.enqueue(payload, patientName)
+                        OfflineSyncJob.schedule(this, server, userId)
                         submitted = true
                         runCatching { draftStore.remove(patientId) }
                         dialog.dismiss()
@@ -1491,9 +1532,4 @@ class MainActivity : Activity() {
         backAction?.invoke() ?: super.onBackPressed()
     }
 
-    override fun onDestroy() {
-        io.shutdownNow()
-        pdfPreview?.close(); pdfPreview = null
-        super.onDestroy()
-    }
 }

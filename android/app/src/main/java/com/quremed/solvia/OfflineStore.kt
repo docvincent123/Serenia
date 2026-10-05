@@ -101,7 +101,7 @@ class SyncFailure(val status: Int, message: String) : Exception(message)
 
 /** A lost response retries the same immutable payload/key; only an acknowledged response marks sent. */
 class ConsultationSync(private val store: OfflineStore, private val send: (JSONObject) -> JSONObject) {
-    fun run(): Boolean {
+    fun run(): Boolean = synchronized(syncLock) {
         val rows = store.queue()
         for(i in 0 until rows.length()) {
             val row = rows.getJSONObject(i)
@@ -111,13 +111,14 @@ class ConsultationSync(private val store: OfflineStore, private val send: (JSONO
                 val result = send(JSONObject(payload.toString()))
                 store.mark(key, "sent", serverId = result.getLong("id"))
             } catch(error: SyncFailure) {
-                if(error.status == 401) return false
+                if(error.status == 401) return@synchronized false
                 if(error.status in 400..499 && error.status != 408 && error.status != 429) store.mark(key, "blocked", error.message ?: "Сервер відхилив запис")
-                else { store.mark(key, "pending", error.message ?: "Спробуємо пізніше"); return true }
+                else { store.mark(key, "pending", error.message ?: "Спробуємо пізніше"); return@synchronized true }
             } catch(error: Exception) {
-                store.mark(key, "pending", error.message ?: "Немає зв’язку із сервером"); return true
+                store.mark(key, "pending", error.message ?: "Немає зв’язку із сервером"); return@synchronized true
             }
         }
-        return true
+        true
     }
+    companion object { private val syncLock = Any() }
 }

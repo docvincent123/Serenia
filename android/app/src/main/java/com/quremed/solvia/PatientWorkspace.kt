@@ -143,6 +143,7 @@ class PatientWorkspace(
         rows(entries) { entry ->
             val card = box(); card.addView(text(entry.optString("created").replace('T', ' '), 18f, true))
             card.addView(text(entry.optString("psychologist") + " · ${entry.optInt("duration_minutes")} хв", 13f))
+            if(entry.optString("sync_status").isNotBlank()) card.addView(text(entry.optString("sync_status"), 13f, true))
             card.addView(text(entry.optString("request_text").ifBlank { entry.optString("note") }.take(180)))
             card.addView(button("Повний запис") {
                 val detail = box(); detail.addView(button("Назад до історії") { render() })
@@ -153,7 +154,7 @@ class PatientWorkspace(
         }
     }
     private fun consultationSections(entry: JSONObject): List<DocumentSection> = listOf(
-        "created" to "Дата", "psychologist" to "Психолог", "consultation_type" to "Тип консультації", "duration_minutes" to "Тривалість, хв",
+        "created" to "Дата", "sync_status" to "Синхронізація", "psychologist" to "Психолог", "consultation_type" to "Тип консультації", "duration_minutes" to "Тривалість, хв",
         "request_text" to "Запит", "state_text" to "Стан", "work_done" to "Проведена робота", "note" to "Приватна нотатка",
         "goals" to "Цілі", "result_text" to "Результат / динаміка", "next_plan" to "Подальший план", "homework" to "Домашнє завдання",
         "recommendations" to "Рекомендації", "risk_level" to "Рівень ризику", "risk_flags" to "Оцінені ризики"
