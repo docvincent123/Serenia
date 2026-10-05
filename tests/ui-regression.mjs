@@ -135,9 +135,19 @@ try {
   await page.screenshot({path:'out/design/mobile-menu.png',fullPage:true});
   await exit.click(); await page.locator('input[autocomplete="username"]').waitFor({timeout:1500});
   assert.equal(await page.evaluate(() => sessionStorage.getItem('solvia_token')),null);
+  await page.screenshot({path:'out/design/login-mobile.png',fullPage:true});
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
   await page.setViewportSize({width:1280,height:800}); currentUser = {id:3,name:'Тестовий психолог',role:'psychologist'};
+  await page.screenshot({path:'out/design/login-desktop.png',fullPage:true});
+  await page.getByRole('button',{name:'Підключення до центру',exact:false}).click();
+  await page.getByRole('button',{name:'Перевірити підключення',exact:true}).click();
+  await page.getByText('З’єднання з центром встановлено. Можна входити.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Підключення до центру',exact:false}).click();
   await page.locator('input[autocomplete="username"]').fill('synthetic-psychologist');
   await page.locator('input[autocomplete="current-password"]').fill('synthetic-password-long');
+  await page.getByRole('button',{name:'Показати пароль',exact:true}).click();
+  assert.equal(await page.locator('input[autocomplete="current-password"]').getAttribute('type'),'text');
+  await page.getByRole('button',{name:'Приховати пароль',exact:true}).click();
   await page.locator('.login-submit').click();
   await page.getByRole('button',{name:'Пацієнти та супровід',exact:true}).click();
   await page.getByRole('button',{name:'Мої пацієнти',exact:true}).click();
@@ -166,7 +176,7 @@ try {
   await consultationDialog.waitFor({state:'detached'});
   assert.equal(consultations.length,1,'Lost response retry must not duplicate the consultation');
   for (const role of ['admin','reception','psychologist','director']) {
-    currentUser = {id:role === 'psychologist' ? 3 : 1,name:'Тестовий користувач',role};
+    currentUser = {id:100+['admin','reception','psychologist','director'].indexOf(role),name:'Тестовий користувач',role};
     await page.reload();
     await page.locator('.desktop-mvp').waitFor();
     const groups = page.locator('.nav-group');
@@ -190,12 +200,41 @@ try {
       assert.equal(await page.getByRole('button',{name:'Тестовий кабінет',exact:false}).count(),0);
       await page.keyboard.press('Escape');
     }
+    await page.getByRole('button',{name:'Профіль і налаштування',exact:true}).click();
+    await page.getByRole('heading',{name:'Профіль і налаштування',exact:true}).waitFor();
+    const identity = await page.locator('.account-identity').innerText();
+    assert(identity.includes('Тестовий користувач'));
+    assert(identity.includes({admin:'Адміністратор',reception:'Реєстратура',psychologist:'Психолог',director:'Керівник центру'}[role]));
+    assert(!/sudo|linux|windows|https:|APK|офіційні випуски/i.test(await page.locator('.account-layout').innerText()));
+    const compact = page.getByRole('switch',{name:/Компактні списки/});
+    assert.equal(await compact.isChecked(),false,'Another account must not inherit appearance preferences');
+    await compact.check();
+    await page.screenshot({path:`out/design/profile-${role}.png`,fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    await page.screenshot({path:`out/design/profile-${role}-mobile.png`,fullPage:true});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
+    await page.setViewportSize({width:1280,height:600});
   }
   currentUser = {id:1,name:'Тестовий адміністратор',role:'admin'};
   shiftFails = true; await page.reload();
   await page.getByRole('button',{name:'Повторити підключення',exact:true}).waitFor();
   shiftFails = false; await page.getByRole('button',{name:'Повторити підключення',exact:true}).click();
   await page.getByRole('heading',{name:'Огляд центру',exact:true}).waitFor();
+  // Returning to the same account restores only its own saved preferences.
+  currentUser = {id:102,name:'Тестовий користувач',role:'psychologist'};
+  await page.reload(); await page.locator('.desktop-mvp').waitFor();
+  await page.getByRole('button',{name:'Профіль і налаштування',exact:true}).click();
+  assert.equal(await page.getByRole('switch',{name:/Компактні списки/}).isChecked(),true);
+  const passwordForm = page.locator('.account-password-form');
+  await passwordForm.getByLabel('Поточний пароль',{exact:true}).fill('synthetic-old-password');
+  await passwordForm.getByLabel('Новий пароль',{exact:true}).fill('synthetic-new-password');
+  await passwordForm.getByLabel('Повторіть новий пароль',{exact:true}).fill('synthetic-other-password');
+  await passwordForm.getByRole('button',{name:'Змінити пароль',exact:true}).click();
+  await page.getByText('Нові паролі не збігаються. Перевірте їх і спробуйте ще раз.',{exact:true}).waitFor();
+  await passwordForm.getByLabel('Повторіть новий пароль',{exact:true}).fill('synthetic-new-password');
+  await passwordForm.getByRole('button',{name:'Змінити пароль',exact:true}).click();
+  await page.getByRole('heading',{name:'Вхід до SOLVIA',exact:true}).waitFor();
+  await page.waitForFunction(() => document.documentElement.dataset.compact === 'false');
   assert(searchRequests >= 3);
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
   console.log('PASS: grouped menu for four roles, menu filter, archive return, stale search, mobile drawer keyboard, shift retry, short-screen actions, settings with closed shift, waiting list create, offline logout, encrypted draft recovery and consultation retry');
