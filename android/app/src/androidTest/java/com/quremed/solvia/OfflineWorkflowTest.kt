@@ -77,6 +77,24 @@ class OfflineWorkflowTest {
         assertEquals("pending", cache.queue().getJSONObject(0).getString("state"))
     }
     private fun views(view: View): List<View> = listOf(view) + if(view is ViewGroup) (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
+    private fun capture(scenario: ActivityScenario<MainActivity>, name: String) {
+        var activity: MainActivity? = null
+        scenario.onActivity {
+            activity = it
+            it.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(it) as? android.app.AlertDialog
+            dialog?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        val image = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
+        val folder = java.io.File(activity!!.getExternalFilesDir(null), "previews").apply { mkdirs() }
+        java.io.File(folder, "$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; image.recycle()
+        scenario.onActivity {
+            it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(it) as? android.app.AlertDialog
+            dialog?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
     @Test fun consultationCanOpenFromCachedCalendarAndFinishWithoutWifi() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { activity ->
             val server = "https://" + UUID.randomUUID() + ".invalid"
@@ -105,10 +123,18 @@ class OfflineWorkflowTest {
                 views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "3" }.performClick()
                 assertTrue("Clinical note must be reachable in work step", note.isShown)
                 note.setText("Консультація завершена без Wi-Fi")
+            }
+            capture(scenario, "consultation-work")
+            scenario.onActivity { activity ->
+                val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
                 views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "1" }.performClick()
                 repeat(4) { dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick() }
                 assertEquals("Завершити й передати", dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).text.toString())
                 assertEquals("Консультація завершена без Wi-Fi", views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }.text.toString())
+            }
+            capture(scenario, "consultation-finish")
+            scenario.onActivity { activity ->
+                val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
                 dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
                 val server = MainActivity::class.java.getDeclaredField("server").apply { isAccessible = true }.get(activity) as String
                 val row = OfflineStore(activity, server, 42).queue().getJSONObject(0)
