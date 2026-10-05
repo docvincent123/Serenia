@@ -211,6 +211,7 @@ try {
     await compact.check();
     await page.screenshot({path:`out/design/profile-${role}.png`,fullPage:true});
     await page.setViewportSize({width:390,height:844});
+    assert((await page.locator('.account-identity h2').boundingBox()).width >= 200, 'Mobile account name must remain readable');
     await page.screenshot({path:`out/design/profile-${role}-mobile.png`,fullPage:true});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
     await page.setViewportSize({width:1280,height:600});

@@ -200,6 +200,7 @@
 @media (max-width: 1000px) {
   .account-layout { grid-template-columns: 1fr; }
   .account-identity { flex-wrap: wrap; }
+  .account-identity > div:nth-child(2) { flex-basis: calc(100% - 68px); }
   .product-login { grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr); }
   .product-login .login-brand { padding: 32px; }
   .product-login .login-brand-copy h1 { font-size: 34px; }
