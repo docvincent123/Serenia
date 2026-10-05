@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
 import WaitingList from './WaitingList.jsx';
+import { navigationFor, flatNavigation } from './navigation.mjs';
+import { preferencesKey, readPreferences, applyPreferences } from './preferences.mjs';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -325,7 +327,7 @@ async function request(base, token, method, path, body) {
       signal: AbortSignal.timeout(15000)
     });
   } catch {
-    throw Object.assign(new Error('Немає зв’язку із сервером. Перевірте адресу Linux/Windows-сервера, мережу центру та довіру до його CA-сертифіката.'), { status: 0 });
+    throw Object.assign(new Error('Немає зв’язку із сервером. Перевірте підключення до мережі. Якщо проблема повторюється, зверніться до адміністратора центру.'), { status: 0 });
   }
 
   const text = await response.text();
@@ -342,29 +344,7 @@ async function request(base, token, method, path, body) {
   return data;
 }
 
-function navFor(role) {
-  if (role === 'admin') {
-    return [
-      ['dashboard', 'Огляд центру'],
-      ['calendar', 'Календар'],
-      ['waiting-list', 'Лист очікування'],
-      ['patients', 'Пацієнти'],
-      ['families', 'Сім’ї'],
-      ['team', 'Команда'],
-      ['rooms', 'Кабінети'],
-      ['reports', 'Звіти психологів'],
-      ['workload', 'Навантаження'],
-      ['supervisions', 'Супервізії'],
-      ['archive', 'Архів'],
-      ['devices', 'Пристрої'],
-      ['settings', 'Налаштування'],
-      ['audit', 'Журнал дій']
-    ];
-  }
-  if (role === 'reception') return [['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
-  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
-  return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
-}
+const navFor = flatNavigation;
 
 function defaultPage(role) {
   return role === 'admin' || role === 'director' ? 'dashboard' : 'calendar';
@@ -397,9 +377,26 @@ function Spinner() {
 }
 
 function Dialog({ title, subtitle, onClose, children, wide = false }) {
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    const dialog = dialogRef.current;
+    const controls = () => [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')].filter(el => el.getClientRects().length);
+    (controls()[0] || dialog).focus();
+    const keydown = e => {
+      if (e.key === 'Tab') {
+        const list = controls(), first = list[0], last = list.at(-1);
+        if (!first) { e.preventDefault(); dialog.focus(); }
+        else if (e.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    dialog.addEventListener('keydown', keydown);
+    return () => { dialog.removeEventListener('keydown', keydown); if (opener?.isConnected) opener.focus(); };
+  }, []);
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
         <div className="dialog-head">
           <div>
             <h2>{title}</h2>
@@ -443,6 +440,7 @@ function Login({ initialBase, onLogin }) {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [showServer, setShowServer] = useState(!initialBase);
+  const [showPassword, setShowPassword] = useState(false);
   const [connection, setConnection] = useState('');
   const [checking, setChecking] = useState(false);
 
@@ -451,9 +449,9 @@ function Login({ initialBase, onLogin }) {
     try {
       const base = cleanBase(server);
       const health = await request(base, '', 'GET', '/api/health');
-      if (health.ok !== true || !health.version) throw new Error('За цією адресою немає SOLVIA API.');
+      if (health.ok !== true || !health.version) throw new Error('Не вдалося підключитися до SOLVIA. Уточніть адресу в адміністратора центру.');
       localStorage.setItem('solvia_api', base);
-      setConnection(`Сервер SOLVIA ${health.version} доступний · ${health.platform || 'HTTPS'}`);
+      setConnection('З’єднання з центром встановлено. Можна входити.');
     } catch (e) { setError(e.message); }
     finally { setChecking(false); }
   }
@@ -462,6 +460,7 @@ function Login({ initialBase, onLogin }) {
 
   async function submit(e) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
@@ -476,70 +475,41 @@ function Login({ initialBase, onLogin }) {
   }
 
   return (
-    <div className="login-screen">
+    <div className="login-screen product-login">
       <section className="login-brand">
-        <div className="brand-orbit">
-          <img className="brand-logo" src="/solvia-icon.png" alt="SOLVIA" />
-        </div>
+        <div className="login-wordmark"><img src="/solvia-icon.png" alt="" /><div><strong>SOLVIA</strong><span>QureMed Industries</span></div></div>
         <div className="login-brand-copy">
-          <div className="eyebrow light">PSYCHOLOGICAL CARE PLATFORM</div>
-          <h1>Простір, де допомога має структуру.</h1>
-          <p>SOLVIA об’єднує реєстратуру, психологів і керівника центру, не змішуючи приватні записи з адміністративними даними.</p>
-        </div>
-        <div className="privacy-note">
-          <span>●</span>
-          <div>
-            <strong>Privacy by role</strong>
-            <small>Кожна роль бачить лише той обсяг інформації, який потрібен для роботи.</small>
+          <div className="eyebrow light">ПРОСТІР ВАШОГО ЦЕНТРУ</div>
+          <h1>Більше уваги людям.<br /><span>Менше зайвої роботи.</span></h1>
+          <p>Розклад, картки пацієнтів і документи — в одному зручному просторі для вашої команди.</p>
+          <div className="login-features">
+            <div><AppIcon name="calendar" /><span>Записи та розклад</span></div>
+            <div><AppIcon name="patients" /><span>Супровід пацієнтів</span></div>
+            <div><AppIcon name="documents" /><span>Документи та звіти</span></div>
           </div>
         </div>
+        <div className="login-brand-footer"><AppIcon name="lock" size={16} /><span>Персональний доступ для кожного працівника</span></div>
       </section>
-
-      <section className="login-panel">
+      <section className="login-panel" aria-label="Вхід до SOLVIA">
         <form className="login-card" onSubmit={submit}>
-          <div className="product">
-            <div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
-            <div>
-              <strong>SOLVIA</strong>
-              <span>by QureMed</span>
-            </div>
-          </div>
-
-          <div className="login-copy">
-            <h2>Вхід до центру</h2>
-            <p>Використайте персональний обліковий запис працівника.</p>
-          </div>
-
-          {error && <div className="alert error">{error}</div>}
-
+          <div className="login-mobile-brand"><img src="/solvia-icon.png" alt="" /><strong>SOLVIA</strong></div>
+          <div className="login-copy"><div className="eyebrow">ЛАСКАВО ПРОСИМО</div><h2>Вхід до SOLVIA</h2><p>Увійдіть до свого облікового запису, щоб почати роботу.</p></div>
+          {error && <div className="alert error" role="alert">{error}</div>}
           <Field label="Логін" full>
-            <input value={login} onChange={(e) => setLogin(e.target.value)} autoFocus autoComplete="username" placeholder="Ваш логін" required />
+            <input value={login} onChange={e => setLogin(e.target.value)} autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Введіть свій логін" required />
           </Field>
-
           <Field label="Пароль" full>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••••••" required />
+            <div className="password-control"><input aria-label="Пароль" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" placeholder="Введіть пароль" required /><button type="button" aria-label={showPassword ? 'Приховати пароль' : 'Показати пароль'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>{showPassword ? 'Приховати' : 'Показати'}</button></div>
           </Field>
-
-          <Button type="submit" className="login-submit" disabled={busy || !server.trim()}>
-            {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
-          </Button>
-
-          <button type="button" className="server-toggle" onClick={() => setShowServer((v) => !v)}>
-            {showServer ? 'Сховати адресу сервера' : 'Налаштувати адресу сервера'}
-          </button>
-
-          {showServer && (
-            <>
-              <Field label="Адреса сервера центру" hint="Linux-сервер: https://192.168.1.105:8443. Адресу покаже інсталятор сервера." full>
-                <input value={server} onChange={(e) => { setServer(e.target.value); setConnection(''); }} spellCheck="false" placeholder="https://192.168.1.105:8443" />
-              </Field>
-              <Button type="button" variant="secondary" onClick={checkConnection} disabled={checking}>{checking ? 'Перевіряємо…' : 'Перевірити та зберегти адресу'}</Button>
-              <p>Перед підключенням установіть CA-сертифікат, отриманий від адміністратора вашого Linux-сервера.</p>
-              {connection && <div className="alert" role="status">{connection}</div>}
-            </>
-          )}
-
-          <div className="login-foot">Версія 2.2 • by QureMed</div>
+          <Button type="submit" className="login-submit" disabled={busy || checking || !server.trim()}>{busy ? 'Входимо…' : 'Увійти до SOLVIA'}<span aria-hidden="true">→</span></Button>
+          <p className="login-help">Забули пароль або не маєте доступу?<br />Зверніться до адміністратора вашого центру.</p>
+          <button type="button" className="server-toggle" aria-expanded={showServer} aria-controls="login-connection" onClick={() => setShowServer(value => !value)}>Підключення до центру <span aria-hidden="true">{showServer ? '−' : '+'}</span></button>
+          {showServer && <div id="login-connection" className="login-connection">
+            <Field label="Адреса центру" hint="Адресу для підключення надає адміністратор центру." full><input value={server} onChange={e => { setServer(e.target.value); setConnection(''); }} spellCheck={false} autoCapitalize="none" placeholder="https://…" /></Field>
+            <Button type="button" variant="secondary" onClick={checkConnection} disabled={checking || busy || !server.trim()}>{checking ? 'Перевіряємо…' : 'Перевірити підключення'}</Button>
+            {connection && <div className="alert info" role="status">{connection}</div>}
+          </div>}
+          <div className="login-foot">SOLVIA · QureMed Industries</div>
         </form>
       </section>
     </div>
@@ -2298,7 +2268,7 @@ function Team({ api, currentUser }) {
       <PageHead
         eyebrow="АДМІНІСТРУВАННЯ"
         title="Команда центру"
-        subtitle="Контакти, ролі, платформи входу та активні сесії працівників."
+        subtitle="Працівники центру, їхні ролі та доступ до програми."
         actions={<Button onClick={openCreate}>+ Додати працівника</Button>}
       />
       {error && <div className="alert error">{error}</div>}
@@ -2710,7 +2680,7 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
         <ServerMaintenance api={api} apiBase={apiBase} />
       </section>
       <WorkflowSettings api={api} />
-      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />
+      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />
       <section className="surface">
         <div className="section-head"><div><div className="eyebrow">ПІДКЛЮЧЕННЯ</div><h2>Телефони, планшети та ПК</h2></div><Badge tone="stone">{sessions.length}</Badge></div>
         <div className="device-list">
@@ -2756,44 +2726,53 @@ function openProductUpdates() {
   else window.open('https://github.com/docvincent123/Serenia/releases', '_blank', 'noopener,noreferrer');
 }
 
-function AccountSettings({ api, apiBase, onLogout }) {
-  const [prefs, setPrefs] = useState(() => { try { return JSON.parse(localStorage.getItem('solvia_preferences') || '{}'); } catch { return {}; } });
-  const [password, setPassword] = useState({current_password:'',new_password:'',confirm:''});
+function AccountSettings({ api, apiBase, onLogout, user }) {
+  const [prefs, setPrefs] = useState(() => readPreferences(apiBase, user));
+  const [password, setPassword] = useState({ current_password: '', new_password: '', confirm: '' });
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [health, setHealth] = useState(null);
-  useEffect(() => { api('GET','/api/health').then(setHealth).catch(e=>setMessage(e.message)); }, []);
-  function change(key,value) {
-    const next={...prefs,[key]:value}; setPrefs(next);
-    localStorage.setItem('solvia_preferences',JSON.stringify(next));
-    document.documentElement.dataset.reducedMotion=next.reducedMotion ? 'true':'false';
-    document.documentElement.dataset.compact=next.compact ? 'true':'false';
+  useEffect(() => {
+    let alive = true;
+    api('GET', '/api/health').then(value => { if (alive) setHealth(value); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  function change(key, value) {
+    const next = { ...prefs, [key]: value };
+    try { localStorage.setItem(preferencesKey(apiBase, user), JSON.stringify(next)); }
+    catch { setMessage('Не вдалося зберегти вигляд програми на цьому пристрої.'); return; }
+    setPrefs(next); applyPreferences(next);
   }
   async function changePassword(e) {
-    e.preventDefault(); setMessage('');
-    if(password.new_password!==password.confirm){setMessage('Нові паролі не збігаються.');return;}
+    e.preventDefault(); if (busy) return; setMessage('');
+    if (password.new_password !== password.confirm) { setMessage('Нові паролі не збігаються. Перевірте їх і спробуйте ще раз.'); return; }
     setBusy(true);
-    try { await api('POST','/api/account/password',{current_password:password.current_password,new_password:password.new_password}); await onLogout(); }
-    catch(e){setMessage(e.message);}finally{setBusy(false);}
+    try { await api('POST', '/api/account/password', { current_password: password.current_password, new_password: password.new_password }); onLogout(); }
+    catch (e) { setMessage(e.message); } finally { setBusy(false); }
   }
   return <>
-    <PageHead eyebrow="ОСОБИСТИЙ ПРОСТІР" title="Мої налаштування" subtitle="Налаштування цього пристрою та захист облікового запису." />
-    {message && <div className="alert error" role="alert">{message}</div>}
-    <section className="surface settings-panel"><h2>Інтерфейс</h2><div className="weekday-options">
-      <label><input type="checkbox" checked={!!prefs.reducedMotion} onChange={e=>change('reducedMotion',e.target.checked)} /> Зменшити анімації</label>
-      <label><input type="checkbox" checked={!!prefs.compact} onChange={e=>change('compact',e.target.checked)} /> Компактні списки</label>
-    </div></section>
-    <section className="surface settings-panel"><h2>Змінити пароль</h2><p>Після зміни потрібно увійти з новим паролем на всіх пристроях.</p><form className="form-grid" onSubmit={changePassword}>
-      <Field label="Поточний пароль"><input type="password" autoComplete="current-password" value={password.current_password} onChange={e=>setPassword({...password,current_password:e.target.value})} required /></Field>
-      <Field label="Новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
-      <Field label="Повторіть новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field>
-      <div className="form-actions full-span"><Button disabled={busy}>Змінити пароль</Button></div>
-    </form></section>
-    <section className="surface settings-panel"><h2>Версія та оновлення</h2><p>Сервер: SOLVIA {health?.version || '…'} · {health?.platform || ''}</p><p>{apiBase}</p>
-      <Button variant="secondary" onClick={openProductUpdates}>Відкрити офіційні випуски</Button>
-      <p>Linux: sudo solvia-admin check-update / update. Windows: установник нового випуску поверх поточного клієнта. Android: APK нового випуску з тим самим підписом.</p>
-      <a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a>
+    <PageHead eyebrow="ОСОБИСТИЙ КАБІНЕТ" title="Профіль і налаштування" subtitle="Ваш обліковий запис, пароль і зручний вигляд програми." />
+    <section className="account-identity surface">
+      <div className="avatar">{user.name?.slice(0, 1).toUpperCase()}</div>
+      <div><small>ВИ УВІЙШЛИ ЯК</small><h2>{user.name}</h2><span>{roleLabels[user.role]}</span></div>
+      <Badge tone="forest">Особистий обліковий запис</Badge>
     </section>
+    {message && <div className="alert error" role="alert">{message}</div>}
+    <div className="account-layout">
+      <div className="account-stack">
+        <section className="surface account-panel"><div className="account-panel-heading"><AppIcon name="preferences" /><h2>Вигляд програми</h2></div><p>Оберіть, як вам зручніше працювати. Зміни зберігаються автоматично для вашого акаунта на цьому пристрої.</p>
+          <label className="preference-option"><span><strong>Компактні списки</strong><small>Більше записів на екрані.</small></span><input role="switch" type="checkbox" checked={!!prefs.compact} onChange={e => change('compact', e.target.checked)} /></label>
+          <label className="preference-option"><span><strong>Менше анімацій</strong><small>Спокійні переходи між екранами.</small></span><input role="switch" type="checkbox" checked={!!prefs.reducedMotion} onChange={e => change('reducedMotion', e.target.checked)} /></label>
+        </section>
+        <section className="surface account-panel"><div className="account-panel-heading"><AppIcon name="documents" /><h2>Про SOLVIA</h2></div><p>Програма для щоденної роботи вашого центру.</p><div className="account-version"><strong>SOLVIA</strong><span>{health?.version ? `Версія ${health.version}` : 'QureMed Industries'}</span></div><p className="account-support-copy">Потрібна допомога з доступом або оновленням? Зверніться до адміністратора центру.</p><a className="account-support-link" href="mailto:quremedindastriessupport@gmail.com">Написати в підтримку QureMed <span aria-hidden="true">↗</span></a></section>
+      </div>
+      <section className="surface account-panel password-panel"><div className="account-panel-heading"><AppIcon name="lock" /><h2>Безпека облікового запису</h2></div><p>Після зміни пароля потрібно повторно увійти на всіх пристроях.</p><form onSubmit={changePassword} className="account-password-form">
+        <Field label="Поточний пароль"><input type="password" autoComplete="current-password" value={password.current_password} onChange={e => setPassword({ ...password, current_password: e.target.value })} required /></Field>
+        <Field label="Новий пароль" hint="Щонайменше 12 символів."><input type="password" minLength="12" autoComplete="new-password" value={password.new_password} onChange={e => setPassword({ ...password, new_password: e.target.value })} required /></Field>
+        <Field label="Повторіть новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.confirm} onChange={e => setPassword({ ...password, confirm: e.target.value })} required /></Field>
+        <Button type="submit" disabled={busy}>{busy ? 'Змінюємо пароль…' : 'Змінити пароль'}</Button>
+      </form></section>
+    </div>
   </>;
 }
 
@@ -3043,28 +3022,50 @@ function Settings({ api, apiBase, onSwitchApi }) {
   );
 }
 
-function GlobalSearch({ api, onPatient, onNavigate }) {
+function GlobalSearch({ api, onPatient, onNavigate, role }) {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+  const allowed = new Set(flatNavigation(role).map(([key]) => key));
   useEffect(() => {
-    if (query.trim().length < 2) { setResult(null); return; }
+    let alive = true;
+    setResult(null); setBusy(false);
+    if (query.trim().length < 2) return;
     const timer = setTimeout(async () => {
       setBusy(true);
-      try { setResult(await api('GET', `/api/search?q=${encodeURIComponent(query.trim())}`)); }
-      catch { setResult(null); }
-      finally { setBusy(false); }
+      try {
+        const found = await api('GET', `/api/search?q=${encodeURIComponent(query.trim())}`);
+        if (alive) setResult({ ...found,
+          families: allowed.has('families') ? found.families : [],
+          rooms: allowed.has('rooms') ? found.rooms : [],
+          users: allowed.has('team') ? found.users : [] });
+      } catch { if (alive) setResult(null); }
+      finally { if (alive) setBusy(false); }
     }, 250);
-    return () => clearTimeout(timer);
-  }, [query]);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [query, role]);
+  useEffect(() => {
+    const keydown = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !document.querySelector('[role="dialog"]')) {
+        e.preventDefault(); inputRef.current?.focus();
+      }
+      if (e.key === 'Escape') { setQuery(''); setResult(null); }
+    };
+    const outside = e => { if (!wrapRef.current?.contains(e.target)) { setQuery(''); setResult(null); } };
+    document.addEventListener('keydown', keydown);
+    document.addEventListener('pointerdown', outside);
+    return () => { document.removeEventListener('keydown', keydown); document.removeEventListener('pointerdown', outside); };
+  }, []);
 
   const total = result ? Object.values(result).reduce((n, arr) => n + (arr?.length || 0), 0) : 0;
   return (
-    <div className="global-search-wrap">
+    <div className="global-search-wrap" ref={wrapRef}>
       <div className="global-search">
         <span><AppIcon name="search" /></span>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Пошук пацієнта, сім’ї, працівника, кабінету…" />
+        <input ref={inputRef} aria-label="Пошук у центрі" maxLength={100} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={role === 'psychologist' ? 'Пошук моїх пацієнтів…' : 'Пошук пацієнта, номеру, телефону…'} /><kbd>Ctrl K</kbd>
         {busy && <small>Пошук…</small>}
       </div>
       {result && (
@@ -3556,19 +3557,87 @@ function Audit({ api }) {
   );
 }
 
+function WorkspaceNavigation({ role, page, origin, locked, navigate }) {
+  const sections = navigationFor(role);
+  const active = page === 'patient-card' ? origin : page;
+  const [filter, setFilter] = useState('');
+  const [expanded, setExpanded] = useState(() => Object.fromEntries(sections.map(section => [section.id, section.items.some(([key]) => key === active)])));
+  useEffect(() => {
+    const section = navigationFor(role).find(group => group.items.some(([key]) => key === active));
+    if (section) setExpanded(previous => ({ ...previous, [section.id]: true }));
+  }, [active, role]);
+  const query = filter.trim().toLocaleLowerCase('uk');
+  const matching = sections.map(section => ({ ...section,
+    items: section.label.toLocaleLowerCase('uk').includes(query) ? section.items : section.items.filter(([, label]) => label.toLocaleLowerCase('uk').includes(query))
+  })).filter(section => section.items.length);
+  const item = ([key, label]) => <button key={key} disabled={locked} aria-current={active === key ? 'page' : undefined} className={`nav-item ${active === key ? 'active' : ''}`} onClick={() => navigate(key)}><span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span></button>;
+  return <nav aria-label="Головне меню">
+    <label className="menu-filter"><AppIcon name="search" size={16} /><input aria-label="Знайти розділ меню" placeholder="Знайти розділ…" value={filter} onChange={e => setFilter(e.target.value)} /></label>
+    {(role === 'admin' || role === 'director') && (!query || 'огляд центру'.includes(query)) && item(['dashboard', 'Огляд центру'])}
+    {matching.map(section => {
+      const open = Boolean(query) || expanded[section.id];
+      return <section className="nav-section" key={section.id}>
+        <button className={`nav-group ${section.items.some(([key]) => key === active) ? 'current-group' : ''}`} aria-expanded={open} aria-controls={`menu-${section.id}`} onClick={() => setExpanded(previous => ({ ...previous, [section.id]: !previous[section.id] }))}>
+          <AppIcon name={section.icon} /><span>{section.label}</span><svg className="nav-chevron" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+        </button>
+        <div className="nav-children" id={`menu-${section.id}`} hidden={!open}>{section.items.map(item)}</div>
+      </section>;
+    })}
+    {query && !matching.length && !((role === 'admin' || role === 'director') && 'огляд центру'.includes(query)) && <p className="menu-empty" role="status">Розділ не знайдено</p>}
+  </nav>;
+}
+
 function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
   const [patientId, setPatientId] = useState(null);
+  const [patientOrigin, setPatientOrigin] = useState('patients');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuToggleRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const workspaceRef = useRef(null);
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
   const [health, setHealth] = useState({ online: true, version: '2.2.0' });
-  const navigation = [...navFor(user.role), ['preferences', 'Мої налаштування']];
+  const navigation = [...navFor(user.role), ['preferences', 'Профіль і налаштування']];
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
-  const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
-  function openPatient(id) { setPatientId(id); setPage('patient-card'); }
-  function navigate(target) { setPatientId(null); setPage(target); }
+  function openPatient(id) {
+    if (user.role === 'director') return;
+    setPatientOrigin(page === 'patient-card' ? patientOrigin : page);
+    setPatientId(id); setPage('patient-card'); setMenuOpen(false);
+    workspaceRef.current?.scrollTo({ top: 0 });
+  }
+  function navigate(target) {
+    if (!navigation.some(([key]) => key === target)) return;
+    setPatientId(null); setPage(target); setMenuOpen(false);
+    workspaceRef.current?.scrollTo({ top: 0 });
+  }
+  useEffect(() => {
+    if (!menuOpen) return;
+    const opener = document.activeElement;
+    const sidebar = sidebarRef.current;
+    const controls = () => [...sidebar.querySelectorAll('button:not(:disabled), input, a[href]')].filter(el => el.getClientRects().length);
+    controls()[0]?.focus();
+    const keyboard = e => {
+      if (e.key === 'Escape') { e.preventDefault(); setMenuOpen(false); }
+      if (e.key === 'Tab') {
+        const list = controls(), first = list[0], last = list.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener('keydown', keyboard);
+    return () => { document.removeEventListener('keydown', keyboard); if (opener?.isConnected) opener.focus(); };
+  }, [menuOpen]);
+  useEffect(() => {
+    const resize = () => { if (window.innerWidth > 760) setMenuOpen(false); };
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+  const contextPage = page === 'patient-card' ? patientOrigin : page;
+  const sectionLabel = navigationFor(user.role).find(section => section.items.some(([key]) => key === contextPage))?.label || roleLabels[user.role];
+
 
   async function loadShift() {
     try {
@@ -3587,7 +3656,16 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     finally { setShiftBusy(false); }
   }
 
-  useEffect(() => { loadShift(); }, []);
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      try { const next = await api('GET', '/api/shift-day'); if (alive) { setShift(next); setShiftError(''); } }
+      catch (e) { if (alive) setShiftError(e.message); }
+    };
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
   useEffect(() => {
     let alive = true;
     async function ping() {
@@ -3604,7 +3682,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }, [apiBase]);
 
   const content = (() => {
-    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} draftSession={draftSession} />;
+    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
     if (page === 'dashboard') return <Dashboard api={api} />;
     if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
@@ -3618,7 +3696,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
     if (page === 'devices') return <Devices api={api} />;
     if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
-    if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />;
+    if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
   })();
@@ -3626,26 +3704,21 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const locked = shift && !shift.open;
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={`app-shell desktop-mvp ${menuOpen ? 'menu-open' : ''}`}>
+      {menuOpen && <button className="menu-backdrop" aria-label="Закрити меню" onClick={() => setMenuOpen(false)} />}
+      <aside ref={sidebarRef} id="workspace-menu" className="sidebar" aria-label="Меню SOLVIA">
         <div className="sidebar-brand">
           <div className="product-mark inverse"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
-          <div><strong>SOLVIA</strong><span>by QureMed</span></div>
+          <div><strong>SOLVIA</strong><span>Простір центру</span></div>
+          <button className="menu-close icon-button" aria-label="Згорнути меню" onClick={() => setMenuOpen(false)}><AppIcon name="close" /></button>
         </div>
 
-        <nav className={locked ? 'nav-locked' : ''}>
-          <div className="nav-label">РОБОЧИЙ ПРОСТІР</div>
-          {navigation.filter(([key]) => key !== 'settings' && key !== 'preferences').map(([key, label]) => (
-            <button key={key} disabled={locked && key !== 'preferences' && !(user.role === 'admin' && key === 'settings')} className={`nav-item ${(page === key || (page === 'patient-card' && key === 'patients')) ? 'active' : ''}`} onClick={() => navigate(key)}>
-              <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
-            </button>
-          ))}
-        </nav>
+        <WorkspaceNavigation role={user.role} page={page} origin={patientOrigin} locked={locked} navigate={navigate} />
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
           {user.role === 'admin' && <button aria-label="Налаштування системи" className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span className="desktop-label">Налаштування системи</span><span className="mobile-label" aria-hidden="true">Система</span></button>}
-          <button aria-label="Мої налаштування" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Мої налаштування</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
+          <button aria-label="Профіль і налаштування" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Профіль і налаштування</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
           <button className="nav-item" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
         </div>
         <div className="sidebar-support">
@@ -3661,28 +3734,26 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         </div>
       </aside>
 
-      <main className="workspace">
+      <main className="workspace" ref={workspaceRef} inert={menuOpen || undefined}>
         {shift?.open && (
           <div className="shift-bar">
             <div><span className="shift-dot" /> Зміна відкрита · {shift.shift_date} · {shift.opened_by_name || 'Адміністратор'}</div>
             {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={() => changeShift('close')}>Завершити зміну</Button>}
           </div>
         )}
-        {!locked && <>
-          <ReminderBar api={api} role={user.role} />
-          <div className="workspace-topbar">
-            <div className="topbar-context">
-              <div><small>РОБОЧИЙ ПРОСТІР</small><strong>{activePageLabel}</strong></div>
-              <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase}>
-                <span className="connection-led" />
-                <div><strong>{connectionKind}</strong><small>{health.online ? `SOLVIA ${health.version}` : 'Немає зв’язку'}</small></div>
-              </div>
-            </div>
-            {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
+        <div className="workspace-topbar">
+          <div className="topbar-context">
+            <button ref={menuToggleRef} className="menu-toggle icon-button" aria-label="Відкрити меню" aria-expanded={menuOpen} aria-controls="workspace-menu" onClick={() => setMenuOpen(true)}><AppIcon name="audit" /></button>
+            <div className="workspace-breadcrumb"><small>{sectionLabel}</small><strong>{activePageLabel}</strong></div>
           </div>
-        </>}
+          {!locked && user.role !== 'director' && <GlobalSearch api={api} role={user.role} onPatient={openPatient} onNavigate={navigate} />}
+          <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase} role="status">
+            <span className="connection-led" /><div><strong>{health.online ? 'Сервер доступний' : 'Немає зв’язку'}</strong><small>{health.online ? 'Можна працювати' : 'Перевірте підключення'}</small></div>
+          </div>
+        </div>
+        {!locked && <ReminderBar api={api} role={user.role} />}
         <div className="workspace-inner">
-          {shiftError && <div className="alert error">{shiftError}</div>}
+          {shiftError && <div className="alert error" role="alert">{shiftError} <Button variant="secondary" onClick={loadShift}>Повторити підключення</Button></div>}
           {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? <Spinner /> : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
@@ -3707,9 +3778,6 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 }
 
 export default function App() {
-  useEffect(() => {
-    try { const p=JSON.parse(localStorage.getItem('solvia_preferences') || '{}');document.documentElement.dataset.reducedMotion=p.reducedMotion?'true':'false';document.documentElement.dataset.compact=p.compact?'true':'false'; } catch {}
-  }, []);
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');
   const appMode = params.get('mode') || 'center';
@@ -3720,6 +3788,7 @@ export default function App() {
   const [draftSession, setDraftSession] = useState(null);
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(Boolean(token));
+  useEffect(() => { applyPreferences(user ? readPreferences(apiBase, user) : {}); }, [user, apiBase]);
 
   useEffect(() => {
     if (queryBase) {
