@@ -65,7 +65,7 @@ try {
     await route.fulfill({ contentType:'application/json',body:JSON.stringify(data) });
   });
   await page.goto(base); await page.getByRole('heading',{name:'Огляд центру',exact:true}).waitFor();
-  const systemSettings = page.getByRole('button',{name:'Налаштування системи',exact:true});
+  const systemSettings = page.getByRole('button',{name:'Налаштування центру',exact:true});
   const exit = page.getByRole('button',{name:'Вийти',exact:true});
   for (const target of [systemSettings, exit]) {
     const box = await target.boundingBox(); assert(box && box.y >= 0 && box.y+box.height <= 600, 'Account actions must be in the visible viewport');
@@ -76,6 +76,7 @@ try {
   // Settings remain accessible even with the shift closed.
   open = false; await page.reload(); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   open = true; await page.reload();
+  await page.getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('button',{name:'Лист очікування',exact:true}).click();
   await page.getByRole('button',{name:'Додати пацієнта',exact:true}).click();
   const dialog = page.getByRole('dialog',{name:'Нове очікування'});
@@ -87,7 +88,9 @@ try {
   await page.screenshot({ path:'out/design/mobile-waiting-list.png',fullPage:true });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   assert.equal(overflow,false,'No page-wide horizontal overflow at mobile width');
+  await page.getByRole('button',{name:'Відкрити меню',exact:true}).click();
   await exit.click(); await page.locator('input[autocomplete="username"]').waitFor({timeout:1500});
+  await page.screenshot({path:'out/design/mobile-login.png',fullPage:true});
   assert.equal(await page.evaluate(() => sessionStorage.getItem('solvia_token')),null);
   await page.setViewportSize({width:1280,height:800}); currentUser = {id:3,name:'Тестовий психолог',role:'psychologist'};
   await page.locator('input[autocomplete="username"]').fill('synthetic-psychologist');
@@ -100,6 +103,7 @@ try {
   await consultationDialog.waitFor({timeout:5000});
   await page.screenshot({path:'out/design/desktop-consultation-form.png',fullPage:true});
   await consultationDialog.getByLabel('Запис у календарі', {exact:true}).selectOption('7');
+  await consultationDialog.getByRole('button',{name:'3. Робота',exact:true}).click();
   draftOffline = true;
   await consultationDialog.getByLabel('Приватна нотатка',{exact:true}).fill('Синтетична чернетка: тест відновлення після обриву Wi-Fi');
   await page.locator('.draft-status.offline').waitFor();
@@ -110,6 +114,7 @@ try {
   consultationDialog = page.getByRole('dialog',{name:'Підсумок консультації',exact:true});
   assert.match(await consultationDialog.getByLabel('Приватна нотатка',{exact:true}).inputValue(), /Синтетична чернетка/);
   await page.locator('.draft-status.saved').waitFor();
+  await consultationDialog.getByRole('button',{name:'5. Ризики',exact:true}).click();
   await consultationDialog.getByRole('button',{name:'Зберегти консультацію',exact:true}).click();
   await consultationDialog.getByText('Немає зв’язку із сервером.',{exact:false}).waitFor();
   await consultationDialog.getByRole('button',{name:'Зберегти консультацію',exact:true}).click();
@@ -118,3 +123,4 @@ try {
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
   console.log('PASS: short-screen actions, settings with closed shift, waiting list create, mobile layout, offline logout, encrypted draft recovery and consultation retry');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+

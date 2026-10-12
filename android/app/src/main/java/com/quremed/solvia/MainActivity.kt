@@ -1102,7 +1102,7 @@ class MainActivity : Activity() {
                 stages.forEachIndexed { i, view -> view.visibility = if(i == index) View.VISIBLE else View.GONE }
                 stageButtons.forEachIndexed { i, button -> button.background = rounded(if(i == index) forestSoft else Color.WHITE, 12, line) }
                 stageHeading.text = "${index + 1} з 5 · ${stageNames[index]}"
-                consultationWindow?.getButton(AlertDialog.BUTTON_POSITIVE)?.text = if(index == 4) "Завершити й передати" else "Далі"
+                consultationWindow?.getButton(AlertDialog.BUTTON_POSITIVE)?.text = if(index == 4) "Завершити" else "Далі"
                 consultationWindow?.getButton(AlertDialog.BUTTON_NEUTRAL)?.isEnabled = index > 0
                 scroll.smoothScrollTo(0, 0)
             }
@@ -1226,7 +1226,7 @@ class MainActivity : Activity() {
                     }
                 }.show()
             })
-            textFields.values.forEach { it.filters = arrayOf(android.text.InputFilter.LengthFilter(10000)) }
+            textFields.values.forEach { it.filters = arrayOf(Utf8LengthFilter(10000)) }
             var submitted = false
             var serverRevision = savedDraft?.optInt("server_version", 0) ?: 0
             fun persistDraft() {
@@ -1550,3 +1550,4 @@ class MainActivity : Activity() {
     }
 
 }
+

@@ -52,7 +52,7 @@ class PatientWorkspace(
         inputType = InputType.TYPE_CLASS_TEXT or if (lines > 1) InputType.TYPE_TEXT_FLAG_MULTI_LINE else InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         gravity = Gravity.TOP; MobileUi.input(this); maxLengthHint(this, if (lines > 1) 30000 else 200)
     }
-    private fun maxLengthHint(field: EditText, length: Int) { field.filters = arrayOf(android.text.InputFilter.LengthFilter(length)) }
+    private fun maxLengthHint(field: EditText, length: Int) { field.filters = arrayOf(Utf8LengthFilter(length)) }
     private fun select(labels: List<String>): Spinner = Spinner(activity).apply {
         adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, labels)
         minimumHeight = dp(48)
@@ -321,3 +321,4 @@ class PatientWorkspace(
             .setNegativeButton("Продовжити", null).setPositiveButton("Залишити") { _, _ -> render() }.show() }
     }
 }
+

@@ -14,6 +14,14 @@ import java.io.IOException
 import java.util.UUID
 
 class OfflineWorkflowTest {
+    @Test fun ukrainianAndEmojiLimitsMatchServerWithoutBreakingCharacters() {
+        val filter = Utf8LengthFilter(8)
+        val value = filter.filter("аб🙂в", 0, 5, android.text.SpannableString(""), 0, 0).toString()
+        assertEquals("аб🙂", value)
+        assertEquals(8, value.toByteArray(Charsets.UTF_8).size)
+        val replacing = Utf8LengthFilter(6).filter("🙂а", 0, 3, android.text.SpannableString("абв"), 1, 2).toString()
+        assertEquals("", replacing)
+    }
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun store(user: Long = 42, server: String = "https://" + UUID.randomUUID() + ".invalid") = OfflineStore(context, server, user)
     private fun payload(key: String = UUID.randomUUID().toString()) = JSONObject().put("client_key", key).put("patient_id", 7)
@@ -130,7 +138,7 @@ class OfflineWorkflowTest {
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
                 views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "1" }.performClick()
                 repeat(4) { dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick() }
-                assertEquals("Завершити й передати", dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).text.toString())
+                assertEquals("Завершити", dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).text.toString())
                 assertEquals("Консультація завершена без Wi-Fi", views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }.text.toString())
             }
             capture(scenario, "consultation-finish")
@@ -146,3 +154,4 @@ class OfflineWorkflowTest {
         }
     }
 }
+
