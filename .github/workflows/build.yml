@@ -77,7 +77,7 @@ jobs:
           key: solvia-vcpkg-postgres-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'cmake/triplets/*') }}
 
       - name: Build native executables
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel 1
 
       - name: Verify Windows PostgreSQL initialization and Unicode
         timeout-minutes: 4
