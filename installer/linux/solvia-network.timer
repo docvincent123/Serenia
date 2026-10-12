@@ -1,0 +1,8 @@
+[Unit]
+Description=Watch SOLVIA LAN address changes
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+Unit=solvia-network-refresh.service
+[Install]
+WantedBy=timers.target

@@ -335,3 +335,166 @@ SET psychologist_name = u.name
 FROM users u
 WHERE d.psychologist_id = u.id
   AND d.psychologist_name = '';
+
+
+-- SOLVIA 2.1: courses, referrals, signed documents and staff supervision.
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS referral_source TEXT NOT NULL DEFAULT '';
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS referral_source_details TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS patient_courses(
+  id BIGSERIAL PRIMARY KEY,
+  patient_id BIGINT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  course_no INTEGER NOT NULL,
+  psychologist_id BIGINT NOT NULL REFERENCES users(id),
+  started_at TEXT NOT NULL,
+  ended_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','archived')),
+  reason TEXT NOT NULL DEFAULT '',
+  outcome TEXT NOT NULL DEFAULT '',
+  created_by BIGINT REFERENCES users(id),
+  created TEXT NOT NULL,
+  UNIQUE(patient_id,course_no)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_courses_one_active
+  ON patient_courses(patient_id) WHERE status='active';
+CREATE INDEX IF NOT EXISTS idx_patient_courses_patient ON patient_courses(patient_id,id DESC);
+
+INSERT INTO patient_courses(patient_id,course_no,psychologist_id,started_at,ended_at,status,reason,outcome,created_by,created)
+SELECT p.id,1,p.psychologist_id,substr(p.created,1,10),NULL,
+       CASE WHEN p.status='active' THEN 'active'
+            WHEN p.status='archived' THEN 'archived'
+            ELSE 'completed' END,
+       'Початковий курс','',NULL,p.created
+FROM patients p
+WHERE NOT EXISTS (SELECT 1 FROM patient_courses c WHERE c.patient_id=p.id);
+
+CREATE TABLE IF NOT EXISTS patient_referrals(
+  id BIGSERIAL PRIMARY KEY,
+  patient_id BIGINT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  destination_type TEXT NOT NULL,
+  destination_name TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'recommended' CHECK(status IN ('recommended','sent','completed','cancelled')),
+  created_by BIGINT NOT NULL REFERENCES users(id),
+  created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patient_referrals_patient ON patient_referrals(patient_id,id DESC);
+
+CREATE TABLE IF NOT EXISTS patient_documents(
+  id BIGSERIAL PRIMARY KEY,
+  patient_id BIGINT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  document_type TEXT NOT NULL CHECK(document_type IN ('informed_consent','data_processing','center_rules','family_consent','service_refusal','other')),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN ('signed','refused')),
+  signed_by_name TEXT NOT NULL DEFAULT '',
+  signature_data TEXT NOT NULL DEFAULT '',
+  signed_at TEXT NOT NULL,
+  patient_name TEXT NOT NULL DEFAULT '',
+  patient_no_snapshot TEXT NOT NULL DEFAULT '',
+  patient_dob TEXT NOT NULL DEFAULT '',
+  patient_category TEXT NOT NULL DEFAULT '',
+  center_name_snapshot TEXT NOT NULL DEFAULT '',
+  center_address_snapshot TEXT NOT NULL DEFAULT '',
+  center_phone_snapshot TEXT NOT NULL DEFAULT '',
+  center_email_snapshot TEXT NOT NULL DEFAULT '',
+  created_by BIGINT NOT NULL REFERENCES users(id),
+  created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patient_documents_patient ON patient_documents(patient_id,id DESC);
+
+CREATE TABLE IF NOT EXISTS supervisions(
+  id BIGSERIAL PRIMARY KEY,
+  psychologist_id BIGINT NOT NULL REFERENCES users(id),
+  supervisor_id BIGINT NOT NULL REFERENCES users(id),
+  scheduled_at TEXT NOT NULL,
+  duration_minutes INTEGER NOT NULL DEFAULT 60,
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','completed','cancelled')),
+  topic TEXT NOT NULL DEFAULT '',
+  case_summary TEXT NOT NULL DEFAULT '',
+  recommendations TEXT NOT NULL DEFAULT '',
+  created_by BIGINT NOT NULL REFERENCES users(id),
+  created TEXT NOT NULL,
+  updated TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_supervisions_psychologist_date ON supervisions(psychologist_id,scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_supervisions_supervisor_date ON supervisions(supervisor_id,scheduled_at);
+
+
+-- Repair timestamp dates written by the original 2.1 migration.
+UPDATE patient_courses SET started_at=substr(started_at,1,10)
+WHERE started_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T';
+
+-- Operational policy shared by Linux, Windows and mobile clients.
+CREATE TABLE IF NOT EXISTS workflow_settings(
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ opening_time TEXT NOT NULL DEFAULT '08:00',
+ closing_time TEXT NOT NULL DEFAULT '20:00',
+ working_days TEXT NOT NULL DEFAULT '1234567',
+ slot_step_minutes INTEGER NOT NULL DEFAULT 60,
+ default_duration_minutes INTEGER NOT NULL DEFAULT 60,
+ session_hours INTEGER NOT NULL DEFAULT 8
+);
+INSERT INTO workflow_settings(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
+
+-- Private drafts use optimistic revisions: a second device cannot silently overwrite.
+CREATE TABLE IF NOT EXISTS consultation_drafts (
+ patient_id BIGINT NOT NULL REFERENCES patients(id),
+ user_id BIGINT NOT NULL REFERENCES users(id),
+ version INTEGER NOT NULL DEFAULT 1,
+ payload TEXT NOT NULL,
+ updated TEXT NOT NULL,
+ PRIMARY KEY(patient_id,user_id)
+);
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS client_key TEXT;
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS request_fingerprint TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consultation_client_key
+ ON consultations(psychologist_id,client_key) WHERE client_key IS NOT NULL;
+CREATE TABLE IF NOT EXISTS waiting_list (
+ id BIGSERIAL PRIMARY KEY,
+ patient_id BIGINT NOT NULL REFERENCES patients(id),
+ psychologist_id BIGINT NOT NULL REFERENCES users(id),
+ date_from TEXT NOT NULL,
+ date_to TEXT NOT NULL,
+ time_from TEXT NOT NULL DEFAULT '09:00',
+ time_to TEXT NOT NULL DEFAULT '18:00',
+ priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('normal','high')),
+ contact_note TEXT NOT NULL DEFAULT '',
+ status TEXT NOT NULL DEFAULT 'waiting' CHECK(status IN ('waiting','offered','booked','cancelled')),
+ appointment_id BIGINT REFERENCES appointments(id),
+ version INTEGER NOT NULL DEFAULT 1,
+ created_by BIGINT NOT NULL REFERENCES users(id),
+ created TEXT NOT NULL,
+ updated TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_waiting_active_patient
+ ON waiting_list(patient_id) WHERE status IN ('waiting','offered');
+CREATE INDEX IF NOT EXISTS idx_waiting_status_dates ON waiting_list(status,date_from,date_to);
+
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_no_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_dob TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_category TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS center_name_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS center_address_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS center_phone_snapshot TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS center_email_snapshot TEXT NOT NULL DEFAULT '';
+
+UPDATE patient_documents d
+SET patient_name = p.name,
+    patient_no_snapshot = p.patient_no,
+    patient_dob = p.dob,
+    patient_category = p.category
+FROM patients p
+WHERE d.patient_id = p.id
+  AND (d.patient_name = '' OR d.patient_no_snapshot = '');
+
+UPDATE patient_documents d
+SET center_name_snapshot = cs.center_name,
+    center_address_snapshot = cs.address,
+    center_phone_snapshot = cs.phone,
+    center_email_snapshot = cs.email
+FROM center_settings cs
+WHERE cs.id = 1
+  AND d.center_name_snapshot = '';

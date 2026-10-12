@@ -1,0 +1,10 @@
+{
+  "name": "SOLVIA by QureMed",
+  "short_name": "SOLVIA",
+  "description": "Робочий простір психологічного реабілітаційного центру",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eff6f2",
+  "theme_color": "#175b42"
+}

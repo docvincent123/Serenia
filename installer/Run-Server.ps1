@@ -32,7 +32,7 @@ if ($existing) {
     $owner.WaitForExit(10000) | Out-Null
 }
 $args = Get-SolviaApiProcessArguments -Port $port -UiDirectory $uiDir
-Write-Host ('SOLVIA API bound to 127.0.0.1:' + $port + '; LAN HTTPS is provided by Caddy on ' + $httpsPort)
+Write-Host ('SOLVIA API bound to private-LAN HTTP port ' + $port + '; LAN HTTPS is provided by Caddy on ' + $httpsPort)
 $serverProcess = Start-Process -FilePath $serverExe -ArgumentList $args -WorkingDirectory $InstallDir -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logDir 'api-output.log') -RedirectStandardError (Join-Path $logDir 'api-error.log')
 
 $healthy = $false

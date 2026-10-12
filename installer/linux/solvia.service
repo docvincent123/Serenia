@@ -1,7 +1,7 @@
 [Unit]
 Description=SOLVIA rehabilitation center HTTPS server
-Requires=postgresql@16-solvia.service
-After=network-online.target postgresql@16-solvia.service
+Requires=postgresql@16-solvia.service solvia-network.service
+After=network-online.target postgresql@16-solvia.service solvia-network.service
 Wants=network-online.target
 StartLimitIntervalSec=0
 

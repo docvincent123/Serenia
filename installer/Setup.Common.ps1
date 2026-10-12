@@ -174,7 +174,7 @@ function Stop-SolviaServer([string]$InstallDir) {
 
 
 function Get-SolviaApiProcessArguments([string]$Port, [string]$UiDirectory) {
-    # The raw HTTP API handles credentials and health checks from this PC only.
-    # Caddy is the sole LAN listener and terminates HTTPS on port 8443.
-    return @('--host','127.0.0.1','--port',$Port,'--ui',('"' + $UiDirectory + '"'))
+    # HTTPS on 8443 remains the preferred LAN endpoint. HTTP 8765 is also bound
+    # to the host for native mobile clients and is restricted to LocalSubnet by firewall.
+    return @('--host','0.0.0.0','--port',$Port,'--ui',('"' + $UiDirectory + '"'))
 }

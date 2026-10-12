@@ -42,6 +42,7 @@ https://$ip`:$httpsPort {
 Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTP API' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 New-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort ([int]$httpsPort) -RemoteAddress LocalSubnet -Profile Private | Out-Null
+New-NetFirewallRule -DisplayName 'SOLVIA Local HTTP API' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8765 -RemoteAddress LocalSubnet -Profile Private | Out-Null
 
 $mobileConfigDir = Join-Path $env:PUBLIC 'Documents\QureMed\SOLVIA'
 New-Item -ItemType Directory -Force $mobileConfigDir | Out-Null
@@ -52,6 +53,7 @@ $mobileConfig = [ordered]@{
     preferred = 'https'
     api_url = ('https://' + $ip + ':' + $httpsPort)
     https_url = ('https://' + $ip + ':' + $httpsPort)
+    http_url = ('http://' + $ip + ':8765')
     generated = [DateTime]::UtcNow.ToString('o')
 }
 [IO.File]::WriteAllText(
@@ -69,6 +71,6 @@ if (Test-Path $caddyPidPath) {
     Remove-Item $caddyPidPath -Force -ErrorAction SilentlyContinue
 }
 & (Join-Path $InstallDir 'installer\Run-Server.ps1') -InstallDir $InstallDir
-Write-Host ('Нова HTTPS-адреса SOLVIA: https://' + $ip + ':' + $httpsPort) -ForegroundColor Green
+Write-Host ('Нові адреси SOLVIA: https://' + $ip + ':' + $httpsPort + ' та http://' + $ip + ':8765') -ForegroundColor Green
 
 

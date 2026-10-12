@@ -95,7 +95,7 @@ class Scenario(unittest.TestCase):
         self.assertIn('Android',other_row['platforms'])
         self.api(admin,'PATCH','/api/users/1',{'active':False},status=409)
         family=self.api(rec,'POST','/api/families',{'name':'Тестова сім’я'})['id']
-        p={'name':'Тестовий Пацієнт','phone':'+380000000000','dob':'1990-01-01','category':'Ветеран/ветеранка','psychologist_id':3,'family_id':family,'family_role':'Військовий'}
+        p={'name':'Тестовий Пацієнт','phone':'+380000000000','dob':'1990-01-01','category':'Ветеран/ветеранка','psychologist_id':3,'family_id':family,'family_role':'Військовий','referral_source':'Військова частина','referral_source_details':'Тестовий підрозділ','course_reason':'Первинне звернення'}
         created_patient=self.api(rec,'POST','/api/patients',p)
         pid=created_patient['id']
         self.assertEqual(len(created_patient['patient_no']),5)
@@ -108,6 +108,19 @@ class Scenario(unittest.TestCase):
         self.api(director,'GET','/api/patients',status=403)
         self.api(director,'GET',f'/api/patients/{pid}',status=403)
         self.api(director,'GET','/api/appointments',status=403)
+        # Search must enforce the same privacy boundary as the patient card.
+        query='/api/search?q='+urllib.parse.quote('Ветеран')
+        self.api(director,'GET',query,status=403)
+        self.assertEqual({x['id'] for x in self.api(psy,'GET',query)['patients']},{pid})
+        self.assertEqual({x['id'] for x in self.api('other','GET',query)['patients']},{second})
+        self.assertEqual({x['id'] for x in self.api(rec,'GET',query)['patients']},{pid,second})
+        self.assertEqual(self.api(psy,'GET','/api/search?q='+urllib.parse.quote('Тестова'))['families'],[])
+        # Editing cannot assign a patient to a non-psychologist or corrupt demographics.
+        for bad in ({'psychologist_id':1},{'dob':'2999-01-01'},{'phone':'abc'},{'category':'invalid'}):
+            self.api(rec,'PATCH',f'/api/patients/{pid}',bad,status=400)
+        self.api(rec,'PATCH',f'/api/patients/{second}',{'psychologist_id':3})
+        self.assertEqual(self.api(rec,'GET',f'/api/patients/{second}')['courses'][0]['psychologist_id'],3)
+        self.api(rec,'PATCH',f'/api/patients/{second}',{'psychologist_id':other})
         self.api(rec,'GET','/api/stats',status=403)
         self.api(rec,'POST','/api/users',{'name':'bad'},status=403)
         day=(dt.date.today()-dt.timedelta(days=1)).isoformat()
@@ -118,6 +131,25 @@ class Scenario(unittest.TestCase):
         self.api(psy,'POST','/api/appointments',booking,status=403)
         self.assertNotIn('09:00',self.api(rec,'GET',f'/api/slots?date={day}&psychologist_id=3&room_id=1'))
         self.assertEqual(self.api('other','GET','/api/appointments?date='+day),[])
+        # Operational policy is authoritative across every client.
+        defaults=self.api(admin,'GET','/api/settings/workflow')
+        self.api(rec,'PATCH','/api/settings/workflow',{'session_hours':1},status=403)
+        self.api(admin,'PATCH','/api/settings/workflow',{'opening_time':'19:00','closing_time':'09:00'},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'session_hours':0},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'working_days':'0'},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'default_duration_minutes':241},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'opening_time':'09:30','closing_time':'18:30','slot_step_minutes':15,'default_duration_minutes':45,'session_hours':2})
+        slots=self.api(rec,'GET',f'/api/slots?date={day}&psychologist_id=3&room_id=1')
+        self.assertEqual(slots[0],'10:00')
+        self.assertIn('10:15',slots)
+        self.assertEqual(slots[-1],'17:45')
+        self.api(rec,'POST','/api/appointments',{**booking,'start':day+'T08:00','end':day+'T09:00'},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'working_days':str(dt.date.today().isoweekday())})
+        self.assertEqual(self.api(rec,'GET',f'/api/slots?date={day}&psychologist_id=3&room_id=1'),[])
+        self.api(rec,'POST','/api/appointments',{**booking,'start':day+'T16:00','end':day+'T17:00'},status=400)
+        self.assertTrue(all(x['expires'] <= time.time()+7201 for x in self.api(admin,'GET','/api/admin/sessions')))
+        self.api(admin,'PATCH','/api/settings/workflow',defaults)
+
         note={'patient_id':pid,'appointment_id':aid,'note':'ПРИВАТНА НОТАТКА','goals':'Цілі','next_plan':'План','homework':'Завдання','consultation_type':'primary','duration_minutes':60,'request_text':'Запит','state_text':'Стан','work_done':'Робота','recommendations':'Рекомендації','result_text':'Результат','risk_level':'moderate','risk_flags':['sleep','anxiety']}
         self.api(rec,'POST','/api/consultations',note,status=403)
         self.api('other','POST','/api/consultations',note,status=403)
@@ -149,6 +181,7 @@ class Scenario(unittest.TestCase):
         self.assertTrue(any(x['id']==pid for x in search['patients']))
         rid=self.api(admin,'POST','/api/rooms',{'name':'Тестова кімната','code':'T1','type':'family','capacity':4,'description':'Тест'})['id']
         self.api(admin,'PATCH',f'/api/rooms/{rid}',{'active':False})
+        self.api(rec,'POST','/api/appointments',{**booking,'room_id':rid,'start':day+'T18:00','end':day+'T19:00'},status=400)
         self.api(admin,'DELETE',f'/api/rooms/{rid}',{})
         discharge=self.api(psy,'POST','/api/discharges',{'patient_id':pid,'date_from':day,'date_to':dt.date.today().isoformat(),'summary':'Підсумок','dynamics':'Динаміка','recommendations':'Рекомендації','followup':'Контроль'})
         self.assertEqual(discharge['patient']['id'],pid)
@@ -171,9 +204,80 @@ class Scenario(unittest.TestCase):
         self.assertEqual(reports[0]['summary'],report['summary'])
         self.assertEqual(reports[0]['psychologist'],'Psychologist')
         self.api(rec,'GET',f'/api/shift-reports?from={day}&to={day}',status=403)
+
+        patient_detail=self.api(admin,'GET',f'/api/patients/{pid}')
+        self.assertEqual(patient_detail['referral_source'],'Військова частина')
+        self.assertEqual(len(patient_detail['courses']),1)
+        self.assertEqual(patient_detail['courses'][0]['status'],'active')
+
+        document=self.api(rec,'POST',f'/api/patients/{pid}/documents',{
+            'document_type':'informed_consent',
+            'title':'Тестова інформована згода',
+            'content':'Тестовий текст документа',
+            'status':'signed',
+            'signed_by_name':'Тестовий Пацієнт',
+            'signature_data':'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF0cAAAAASUVORK5CYII='
+        })
+        docs=self.api(rec,'GET',f'/api/patients/{pid}/documents')
+        self.assertEqual(docs[0]['id'],document['id'])
+        self.assertEqual(docs[0]['status'],'signed')
+        self.assertEqual(docs[0]['patient_name'],'Тестовий Пацієнт')
+        self.assertEqual(docs[0]['patient_no_snapshot'],created_patient['patient_no'])
+        self.assertEqual(docs[0]['patient_dob'],p['dob'])
+        self.assertEqual(docs[0]['patient_category'],p['category'])
+        self.assertEqual(docs[0]['center_name_snapshot'],'Тестовий центр')
+        self.assertEqual(docs[0]['center_email_snapshot'],'test@example.com')
+
+        referral=self.api(rec,'POST',f'/api/patients/{pid}/referrals',{
+            'destination_type':'Психіатр',
+            'destination_name':'Тестовий спеціаліст',
+            'reason':'Додаткова консультація'
+        })
+        self.api(rec,'PATCH',f"/api/referrals/{referral['id']}",{'status':'sent'})
+        referrals=self.api(psy,'GET',f'/api/patients/{pid}/referrals')
+        self.assertEqual(referrals[0]['status'],'sent')
+
+        workload=self.api(admin,'GET','/api/workload')
+        self.assertTrue(any(x['name']=='Psychologist' and x['active_patients'] >= 1 for x in workload['items']))
+        self.api(rec,'GET','/api/workload',status=403)
+
+        supervision=self.api(director,'POST','/api/supervisions',{
+            'psychologist_id':3,
+            'scheduled_at':dt.date.today().isoformat()+'T18:00',
+            'duration_minutes':60,
+            'topic':'Тестова супервізія'
+        })
+        self.api(psy,'PATCH',f"/api/supervisions/{supervision['id']}",{'case_summary':'Деідентифікований опис випадку'})
+        self.api(director,'PATCH',f"/api/supervisions/{supervision['id']}",{
+            'case_summary':'Деідентифікований опис випадку',
+            'recommendations':'Рекомендації супервізора',
+            'status':'completed'
+        })
+        supervisions=self.api(director,'GET','/api/supervisions')
+        self.assertTrue(any(x['id']==supervision['id'] and x['status']=='completed' for x in supervisions))
+
         stats=self.api(director,'GET','/api/stats')
         self.assertEqual(stats['consultations'],1)
         self.assertEqual(stats['total_patients'],2)
+        self.assertGreaterEqual(stats['active_courses'],2)
+        # Object authorization must hold for ancillary endpoints too.
+        for suffix in ('courses','documents','referrals'):
+            self.api('other','GET',f'/api/patients/{pid}/{suffix}',status=403)
+            self.api(director,'GET',f'/api/patients/{pid}/{suffix}',status=403)
+        self.api('other','PATCH',f"/api/referrals/{referral['id']}",{'status':'completed'},status=403)
+        self.api('other','PATCH',f"/api/supervisions/{supervision['id']}",{'case_summary':'attempt'},status=403)
+        for endpoint in ('/api/admin/system','/api/admin/sessions','/api/audit','/api/users','/api/rooms'):
+            for role in (rec,psy,director):self.api(role,'GET',endpoint,status=403)
+        self.assertEqual(self.call('GET','/api/patients',token='0'*64)[0],401)
+        self.api(rec,'POST',f'/api/patients/{pid}/documents',{
+            'document_type':'informed_consent','title':'bad','content':'','status':'signed',
+            'signed_by_name':'Test','signature_data':'data:image/png;base64,AAAA'},status=400)
+        self.api(rec,'POST','/api/patients',{'name':'bad\x00hidden','phone':'+380501234567','dob':'1990-01-01','category':'Ветеран/ветеранка','psychologist_id':3},status=400)
+        self.api(admin,'PATCH','/api/settings/workflow',{'session_hours':2**64-1},status=400)
+
+        self.assertGreaterEqual(stats['signed_documents'],1)
+        self.assertGreaterEqual(stats['outgoing_referrals'],1)
+        self.assertGreaterEqual(stats['supervisions_completed'],1)
         self.assertNotIn('ПРИВАТНА',json.dumps(stats,ensure_ascii=False))
         self.api(rec,'PATCH',f'/api/appointments/{aid}',{'status':'cancelled'},status=409)
         link=self.api(psy,'POST','/api/assessments',{'patient_id':pid})['link']
@@ -199,6 +303,45 @@ class Scenario(unittest.TestCase):
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             results=list(pool.map(lambda _: self.call('POST','/api/appointments',parallel_booking,self.tokens[rec]),range(2)))
         self.assertEqual(sorted(x[0] for x in results),[200,409])
+        current=self.api(admin,'GET',f'/api/patients/{pid}')
+        active_course=next(x for x in current['courses'] if x['status']=='active')
+        self.api(rec,'PATCH',f"/api/courses/{active_course['id']}",{
+            'status':'archived',
+            'ended_at':dt.date.today().isoformat(),
+            'outcome':'Курс завершено'
+        })
+        archived=self.api(rec,'GET','/api/patients?status=archived')
+        self.assertTrue(any(x['id']==pid for x in archived))
+        new_course=self.api(rec,'POST',f'/api/patients/{pid}/courses',{
+            'started_at':dt.date.today().isoformat(),
+            'reason':'Повторне звернення'
+        })
+        self.assertGreater(new_course['course_no'],1)
+        reopened=self.api(admin,'GET',f'/api/patients/{pid}')
+        self.assertEqual(reopened['status'],'active')
+        self.assertEqual(len(reopened['courses']),2)
+
+        # Password reset and deactivation must revoke sessions permanently.
+        code,old_login=self.call('POST','/api/login',{'login':'managed','password':'managed-test-password'})
+        self.assertEqual(code,200,old_login)
+        self.api(admin,'PATCH',f'/api/users/{managed}',{'password':'changed-test-password'})
+        self.assertEqual(self.call('GET','/api/me',token=old_login['token'])[0],401)
+        code,new_login=self.call('POST','/api/login',{'login':'managed','password':'changed-test-password'})
+        self.assertEqual(code,200,new_login)
+        self.api(admin,'PATCH',f'/api/users/{managed}',{'active':False})
+        self.api(admin,'PATCH',f'/api/users/{managed}',{'active':True})
+        self.assertEqual(self.call('GET','/api/me',token=new_login['token'])[0],401)
+        # Staff can change their own password; old sessions are all revoked.
+        code,account=self.call('POST','/api/login',{'login':'managed','password':'changed-test-password'})
+        self.assertEqual(code,200,account)
+        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'wrong-password','new_password':'another-test-password'},account['token'])[0],403)
+        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':'short'},account['token'])[0],400)
+        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':'another-test-password'},account['token'])[0],200)
+        self.assertEqual(self.call('GET','/api/me',token=account['token'])[0],401)
+        code,account=self.call('POST','/api/login',{'login':'managed','password':'another-test-password'})
+        self.assertEqual(code,200,account)
+
+
         self.api(admin,'DELETE',f'/api/users/{other}/sessions',{})
         self.api('other','GET','/api/me',status=401)
         closed=self.api(admin,'POST','/api/shift-day',{'action':'close'})
@@ -208,10 +351,20 @@ class Scenario(unittest.TestCase):
         self.api(rec,'GET','/api/me',status=401)
         self.api(director,'GET','/api/me',status=401)
 
+        # Simulate both a pre-course patient and a date written by the initial 2.1 migration.
+        subprocess.run(['psql',self.database,'-X','-v','ON_ERROR_STOP=1','-c',
+            f"DELETE FROM patient_courses WHERE patient_id={third}; "
+            f"UPDATE patient_courses SET started_at=started_at || 'T12:34:56' WHERE id={new_course['id']};"],
+            check=True,stdout=subprocess.DEVNULL)
         # Restart: data persist, while closed-shift staff sessions remain terminated.
         self.proc.terminate(); self.proc.wait(timeout=10); self.start()
         admin_detail=self.api(admin,'GET',f'/api/patients/{pid}')
         self.assertEqual(len(admin_detail['consultations']),2)
+        self.assertEqual(next(c for c in admin_detail['courses'] if c['id']==new_course['id'])['started_at'],dt.date.today().isoformat())
+        migrated=self.api(admin,'GET',f'/api/patients/{third}')['courses'][0]
+        self.assertEqual(migrated['started_at'],dt.date.today().isoformat())
+        self.api(admin,'PATCH',f"/api/courses/{migrated['id']}",{'status':'completed','ended_at':dt.date.today().isoformat()})
+
         self.assertEqual(self.api(admin,'GET','/api/stats')['repeat_visits'],1)
 
         _,psy_auth=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist'],'platform':'Android','device_id':'ci-psych','device_name':'CI Tablet'})
@@ -219,8 +372,79 @@ class Scenario(unittest.TestCase):
         self.api(psy,'GET','/api/patients',status=423)
         self.api(admin,'POST','/api/shift-day',{'action':'open'})
         self.assertEqual(len(self.api(psy,'GET',f'/api/patients/{pid}')['consultations']),2)
+        # Successful logins behind one reverse proxy must not exhaust the failure quota.
+        for _ in range(12):
+            code,login=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist']})
+            self.assertEqual(code,200,login)
+            self.call('POST','/api/logout',{},login['token'])
         self.api(psy,'POST','/api/logout',{})
         self.api(psy,'GET','/api/me',status=401)
 
-if __name__=='__main__': unittest.main()
+    def test_features_drafts_waiting_list_and_retry(self):
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        for name, role in [('draft_psy','psychologist'),('draft_other','psychologist'),('wait_rec','reception'),('wait_director','director')]:
+            user=self.api('admin','POST','/api/users',{'name':name,'login':name,'password':'feature-password-2026','role':role})
+            code, auth=self.call('POST','/api/login',{'login':name,'password':'feature-password-2026'})
+            self.assertEqual(code,200,auth); self.tokens[name]=auth['token']
+            if name=='draft_psy': psychologist=user['id']
+        patient=self.api('wait_rec','POST','/api/patients',{'name':'Synthetic waiting patient','phone':'+380009991111','dob':'1995-02-01','category':'Інше','psychologist_id':psychologist})['id']
+        path=f'/api/patients/{patient}/draft'
+        self.assertEqual(self.api('draft_psy','GET',path)['version'],0)
+        for role in ['admin','wait_rec','wait_director','draft_other']:
+            self.api(role,'GET',path,status=403)
+        payload={'note':'Private synthetic draft','goals':'Goal','appointment_id':'','client_key':'draft-test-client-key-2026'}
+        saved=self.api('draft_psy','PATCH',path,{'version':0,'payload':payload})
+        self.assertEqual(saved['version'],1)
+        self.api('draft_psy','PATCH',path,{'version':0,'payload':{'note':'Stale overwrite'}},status=409)
+        self.assertEqual(self.api('draft_psy','GET',path)['payload']['note'],payload['note'])
+        self.api('draft_psy','PATCH',path,{'version':1,'payload':{'note':'x'*10001}},status=400)
+        self.api('draft_psy','DELETE',path,{'version':0},status=409)
+        self.api('draft_psy','DELETE',path,{'version':1})
+        self.assertEqual(self.api('draft_psy','GET',path)['version'],2)
+        self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
+        room=self.api('admin','POST','/api/rooms',{'name':'Waiting room','capacity':1})['id']
+        self.api('admin','PATCH','/api/settings/workflow',{'opening_time':'09:00','closing_time':'18:00','working_days':'1234567'})
+        date=(dt.date.today()-dt.timedelta(days=1)).isoformat()
+        body={'patient_id':patient,'psychologist_id':psychologist,'date_from':date,'date_to':date,'time_from':'09:00','time_to':'18:00','priority':'normal','contact_note':'Call after 15:00'}
+        wait=self.api('wait_rec','POST','/api/waiting-list',body)['id']
+        self.api('wait_rec','POST','/api/waiting-list',body,status=409)
+        for role in ['draft_psy','wait_director']:
+            self.api(role,'GET','/api/waiting-list',status=403)
+        self.api('wait_rec','PATCH',f'/api/waiting-list/{wait}',{'status':'offered','version':1})
+        self.api('wait_rec','PATCH',f'/api/waiting-list/{wait}',{'status':'cancelled','version':1},status=409)
+        booking={'version':2,'room_id':room,'start':date+'T09:00','end':date+'T10:00'}
+        self.api('wait_rec','POST',f'/api/waiting-list/{wait}/book',{**booking,'start':date+'T08:00'},status=400)
+        appointment=self.api('wait_rec','POST',f'/api/waiting-list/{wait}/book',booking)['id']
+        repeat=self.api('wait_rec','POST',f'/api/waiting-list/{wait}/book',booking)
+        self.assertEqual(repeat['id'],appointment);self.assertTrue(repeat['already_booked'])
+        self.api('wait_rec','PATCH',f'/api/waiting-list/{wait}',{'status':'waiting','version':3},status=409)
+        second=self.api('wait_rec','POST','/api/patients',{'name':'Second waiting patient','phone':'+380009991112','dob':'1995-02-01','category':'Інше','psychologist_id':psychologist})['id']
+        otherwait=self.api('wait_rec','POST','/api/waiting-list',{**body,'patient_id':second})['id']
+        self.api('wait_rec','POST',f'/api/waiting-list/{otherwait}/book',{**booking,'version':1},status=409)
+        current=self.api('draft_psy','PATCH',path,{'version':2,'payload':payload})
+        consultation={'patient_id':patient,'appointment_id':appointment,'note':'Completed synthetic consultation','client_key':payload['client_key'],'draft_version':current['version']}
+        first=self.api('draft_psy','POST','/api/consultations',consultation)
+        again=self.api('draft_psy','POST','/api/consultations',consultation)
+        self.assertEqual(first['id'],again['id']);self.assertTrue(again['already_saved'])
+        self.api('draft_psy','POST','/api/consultations',{**consultation,'note':'Changed after a lost response'},status=409)
+        self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
+        self.assertEqual(len(self.api('draft_psy','GET',f'/api/patients/{patient}')['consultations']),1)
 
+    def test_z_security_inputs_and_rate_limit(self):
+        # Authentication checks work even if a browser or forged caller bypasses UI.
+        for login in ("' OR '1'='1",'admin\x00extra'):
+            status,_=self.call('POST','/api/login',{'login':login,'password':'invalid-password'})
+            self.assertIn(status,(400,401))
+        req=urllib.request.Request(self.base+'/api/health')
+        with urllib.request.urlopen(req) as r:
+            self.assertEqual(r.headers['X-Frame-Options'],'DENY')
+            self.assertEqual(r.headers['X-Content-Type-Options'],'nosniff')
+            self.assertIn("object-src 'none'",r.headers['Content-Security-Policy'])
+        for _ in range(12):
+            code,_=self.call('POST','/api/login',{'login':'missing-account','password':'invalid-password'})
+            if code==429:break
+            self.assertEqual(code,401)
+        self.assertEqual(code,429)
+        self.assertEqual(self.call('GET','/api/me',token='forged-token')[0],401)
+
+if __name__=='__main__': unittest.main()

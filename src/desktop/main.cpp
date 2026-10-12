@@ -138,6 +138,10 @@ void createWebView(HWND hwnd) {
                                         if (FAILED(args->TryGetWebMessageAsString(&raw)) || !raw) return S_OK;
                                         std::wstring message(raw);
                                         CoTaskMemFree(raw);
+                                        if (message == L"product-updates") {
+                                            ShellExecuteW(g_window, L"open", L"https://github.com/docvincent123/Serenia/releases", nullptr, nullptr, SW_SHOWNORMAL);
+                                            return S_OK;
+                                        }
                                         if (message != L"backup" && message != L"restore" && message != L"restart-server") return S_OK;
 
                                         const auto script = executableDirectory() / L"installer" /

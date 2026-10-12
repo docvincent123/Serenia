@@ -4,6 +4,51 @@ umask 077
 [[ $EUID == 0 ]] || { echo 'Використайте sudo solvia-admin'; exit 1; }
 install -d -m 0700 -o root -g root /run/solvia-admin
 export SOLVIA_DATABASE_URL='host=/var/run/postgresql port=55432 dbname=solvia user=solvia'
+
+record_event() {
+  local action=${1:-unknown} path=${2:-} status=${3:-success} details=${4:-}
+  runuser -u solvia -- psql -X "$SOLVIA_DATABASE_URL" -v ON_ERROR_STOP=1 \
+    -v action="$action" -v path="$path" -v status="$status" -v details="$details" \
+    >/dev/null 2>&1 <<'SQL' || true
+INSERT INTO backup_events(user_id,action,path,status,details,created)
+VALUES(NULL, :'action', :'path', :'status', :'details',
+       to_char(clock_timestamp(),'YYYY-MM-DD"T"HH24:MI:SSOF'));
+SQL
+}
+
+verify_backup() (
+  # Restore under a fresh unprivileged role: never run archive SQL as postgres.
+  local archive=$1 scratch="solvia_verify_${BASHPID}_${RANDOM}" made_db=0 made_role=0
+  exec 6>/run/solvia-admin/verify-backup.lock; flock 6 || exit 1
+  cleanup() {
+    local rc=$?
+    if [[ $made_db == 1 ]]; then runuser -u postgres -- /usr/lib/postgresql/16/bin/dropdb -p 55432 "$scratch" >/dev/null 2>&1 || rc=1; fi
+    if [[ $made_role == 1 ]]; then runuser -u postgres -- psql -X -p 55432 -v ON_ERROR_STOP=1 -c "DROP ROLE $scratch" >/dev/null 2>&1 || rc=1; fi
+    if [[ $rc == 0 ]]; then record_event verify "$archive" success 'isolated restore, required tables and validated constraints checked';
+    else record_event verify "$archive" failed 'isolated restore verification failed; production database unchanged'; fi
+    exit "$rc"
+  }
+  trap cleanup EXIT
+  /usr/lib/postgresql/16/bin/pg_restore --list "$archive" >/dev/null || exit 1
+  runuser -u postgres -- psql -X -p 55432 -v ON_ERROR_STOP=1 -c "CREATE ROLE $scratch NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE" >/dev/null || exit 1
+  made_role=1
+  runuser -u postgres -- /usr/lib/postgresql/16/bin/createdb -p 55432 -O "$scratch" "$scratch" || exit 1
+  made_db=1
+  runuser -u postgres -- psql -X -p 55432 -d "$scratch" -v ON_ERROR_STOP=1 -c "REVOKE CONNECT ON DATABASE $scratch FROM PUBLIC" >/dev/null || exit 1
+  runuser -u postgres -- /usr/lib/postgresql/16/bin/pg_restore -p 55432 -d "$scratch" --role="$scratch" --no-owner --no-privileges --single-transaction --exit-on-error < "$archive" >/dev/null || exit 1
+  # SQL deliberately fails for missing core tables; PostgreSQL restore validates FKs.
+  runuser -u postgres -- psql -X -p 55432 -d "$scratch" -v ON_ERROR_STOP=1 >/dev/null <<'SQL' || exit 1
+SELECT count(*) FROM users;
+SELECT count(*) FROM patients;
+SELECT count(*) FROM appointments;
+SELECT count(*) FROM consultations;
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_constraint WHERE connamespace='public'::regnamespace AND NOT convalidated)
+ THEN RAISE EXCEPTION 'Unvalidated constraints in backup'; END IF;
+END $$;
+SQL
+)
+
 case ${1:-help} in
   health)
     ip=$(cat /etc/solvia/address)
@@ -14,26 +59,42 @@ case ${1:-help} in
       sleep 1
     done
     journalctl -u solvia -n 40 --no-pager; exit 1 ;;
+  network) /opt/solvia/sync-network.sh; cat /etc/solvia/address ;;
   status) systemctl status solvia --no-pager ;;
   logs) journalctl -u solvia -n 100 --no-pager ;;
   restart) systemctl restart solvia; "$0" health ;;
+  version) cat /opt/solvia/VERSION 2>/dev/null || echo "unknown" ;;
+  check-update) /usr/local/sbin/solvia-updater check ;;
+  update) /usr/local/sbin/solvia-updater apply ;;
   backup)
     exec 7>/run/solvia-admin/backup.lock; flock 7
     target="/var/backups/solvia/solvia-$(date -u +%Y%m%dT%H%M%S)-$$.dump"
     trap 'rm -f "${target}.partial"' EXIT
-    runuser -u solvia -- /usr/lib/postgresql/16/bin/pg_dump -Fc "$SOLVIA_DATABASE_URL" > "$target.partial"
-    /usr/lib/postgresql/16/bin/pg_restore --list "$target.partial" >/dev/null
+    if ! runuser -u solvia -- /usr/lib/postgresql/16/bin/pg_dump -Fc "$SOLVIA_DATABASE_URL" > "$target.partial"; then
+      record_event backup "$target" failed "pg_dump failed"
+      exit 1
+    fi
+    if ! verify_backup "$target.partial"; then
+      record_event backup "$target" failed "isolated restore verification failed"
+      exit 1
+    fi
     mv "$target.partial" "$target"
+    chmod 0600 "$target"
+    record_event backup "$target" success "verified by real isolated PostgreSQL restore"
     echo "$target"
     # No silent retention deletion: operators archive copies and manage available space.
     ;;
+  verify-backup)
+    [[ $# == 2 && -f $2 ]] || { echo 'sudo solvia-admin verify-backup /path/backup.dump'; exit 1; }
+    verify_backup "$2"
+    echo 'SOLVIA: ізольоване відновлення перевірено; робоча база не змінена.' ;;
   restore)
     [[ $# == 2 && -f $2 ]] || { echo 'sudo solvia-admin restore /path/backup.dump'; exit 1; }
-    /usr/lib/postgresql/16/bin/pg_restore --list "$2" >/dev/null
+    verify_backup "$2"
     read -r -p 'Відновлення замінить дані центру. Введіть ВІДНОВИТИ: ' confirm
     [[ $confirm == ВІДНОВИТИ ]] || exit 1
     exec 9>/run/solvia-admin/install.lock; flock -n 9
-    systemctl stop solvia
+    systemctl stop solvia-network.timer solvia-network-refresh.service solvia-certificate.timer solvia-certificate.service solvia
     "$0" backup
     # Root opens the archive; postgres can read stdin even from a private directory.
     runuser -u postgres -- /usr/lib/postgresql/16/bin/pg_restore -p 55432 -d solvia --role=solvia --no-owner --no-privileges \
@@ -42,6 +103,27 @@ case ${1:-help} in
       }
     runuser -u solvia --preserve-environment -- /opt/solvia/SolviaServer --init
     systemctl start solvia
-    "$0" health ;;
-  *) echo 'sudo solvia-admin {health|status|logs|restart|backup|restore FILE}' ;;
+    "$0" health
+    systemctl start solvia-network.timer solvia-certificate.timer
+    record_event restore "$2" success "database restored and HTTPS health check passed" ;;
+  backups)
+    find /var/backups/solvia -maxdepth 1 -type f -name '*.dump' -printf '%TY-%Tm-%Td %TH:%TM  %10s bytes  %p\n' | sort -r ;;
+  db-status)
+    runuser -u solvia -- psql -X "$SOLVIA_DATABASE_URL" -At <<'SQL'
+SELECT 'database=' || current_database();
+SELECT 'postgres=' || current_setting('server_version');
+SELECT 'size=' || pg_size_pretty(pg_database_size(current_database()));
+SELECT 'patients=' || count(*) FROM patients;
+SELECT 'users=' || count(*) FROM users;
+SELECT 'consultations=' || count(*) FROM consultations;
+SELECT 'sessions=' || count(*) FROM sessions WHERE expires > extract(epoch from now())::bigint;
+SQL
+    ;;
+  doctor)
+    echo '== HTTPS =='; "$0" health
+    echo '== SERVICE =='; systemctl is-active solvia postgresql@16-solvia
+    echo '== DATABASE =='; "$0" db-status
+    echo '== BACKUPS =='; "$0" backups | head -5
+    ;;
+  *) echo 'sudo solvia-admin {health|network|status|logs|restart|version|check-update|update|backup|backups|verify-backup FILE|db-status|doctor|restore FILE}' ;;
 esac

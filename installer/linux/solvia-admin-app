@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if [[ ${1:-} == --update ]]; then
+  update_cmd='sudo /usr/local/sbin/solvia-admin update; rc=$?; echo; if [ $rc -eq 0 ]; then echo "SOLVIA update finished."; else echo "SOLVIA update failed (code $rc)."; fi; echo; read -r -p "Натисніть Enter, щоб закрити..."; exit $rc'
+  if command -v x-terminal-emulator >/dev/null 2>&1; then
+    exec x-terminal-emulator -e bash -lc "$update_cmd"
+  fi
+  if command -v gnome-terminal >/dev/null 2>&1; then
+    exec gnome-terminal -- bash -lc "$update_cmd"
+  fi
+  echo 'Відкрийте термінал і виконайте: sudo solvia-admin update' >&2
+  exit 1
+fi
+
+ADDRESS_FILE=/usr/local/share/solvia/address
+CA_FILE=/usr/local/share/ca-certificates/quremed-solvia-local-ca.crt
+
+if [[ ! -r "$ADDRESS_FILE" ]]; then
+  echo "SOLVIA не налаштована: немає $ADDRESS_FILE" >&2
+  exit 1
+fi
+
+ip=$(tr -d '[:space:]' < "$ADDRESS_FILE")
+url="https://localhost:8443"
+
+if [[ -r "$CA_FILE" ]] && command -v certutil >/dev/null 2>&1; then
+  nssdb="$HOME/.pki/nssdb"
+  mkdir -p "$nssdb"
+  if [[ ! -f "$nssdb/cert9.db" ]]; then
+    certutil -d "sql:$nssdb" -N --empty-password >/dev/null 2>&1 || true
+  fi
+  certutil -d "sql:$nssdb" -D -n "QureMed SOLVIA Local CA" >/dev/null 2>&1 || true
+  certutil -d "sql:$nssdb" -A -t "C,," -n "QureMed SOLVIA Local CA" -i "$CA_FILE" >/dev/null 2>&1 || true
+fi
+
+if [[ -r "$CA_FILE" ]]; then
+  if ! curl --silent --show-error --fail --noproxy '*' --connect-timeout 2 --max-time 5 \
+      --cacert "$CA_FILE" "$url/api/health" >/dev/null; then
+    if command -v notify-send >/dev/null 2>&1; then
+      notify-send "SOLVIA Admin" "Сервер SOLVIA недоступний за адресою $url"
+    fi
+  fi
+fi
+
+state_dir="$HOME/.local/share/solvia-admin"
+mkdir -p "$state_dir"
+
+for browser in google-chrome-stable google-chrome chromium chromium-browser microsoft-edge-stable brave-browser; do
+  if command -v "$browser" >/dev/null 2>&1; then
+    exec "$browser" \
+      --app="$url" \
+      --user-data-dir="$state_dir/browser" \
+      --class=SOLVIAAdmin \
+      --no-first-run \
+      --no-default-browser-check
+  fi
+done
+
+if command -v firefox >/dev/null 2>&1; then
+  exec firefox --new-window "$url"
+fi
+
+exec xdg-open "$url"
+

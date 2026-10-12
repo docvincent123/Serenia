@@ -14,13 +14,13 @@ ensure(path.join(root, 'assets', 'solvia-icon.png'), png);
 ensure(path.join(root, 'frontend', 'public', 'solvia-icon.png'), png);
 ensure(path.join(root, 'android', 'app', 'src', 'main', 'res', 'drawable', 'solvia_icon.png'), png);
 
-// ICO with one PNG-compressed 64x64 image.
+// ICO with one PNG-compressed 256x256 image.
 const header = Buffer.alloc(22);
 header.writeUInt16LE(0, 0);
 header.writeUInt16LE(1, 2);
 header.writeUInt16LE(1, 4);
-header.writeUInt8(64, 6);
-header.writeUInt8(64, 7);
+header.writeUInt8(0, 6);
+header.writeUInt8(0, 7);
 header.writeUInt8(0, 8);
 header.writeUInt8(0, 9);
 header.writeUInt16LE(1, 10);
@@ -29,4 +29,5 @@ header.writeUInt32LE(png.length, 14);
 header.writeUInt32LE(22, 18);
 ensure(path.join(root, 'assets', 'solvia.ico'), Buffer.concat([header, png]));
 
-console.log('SOLVIA 2.0 brand assets materialized.');
+console.log('SOLVIA minimalist brand assets materialized.');
+

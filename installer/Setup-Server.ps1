@@ -224,6 +224,7 @@ Invoke-SetupProcess $stableCaddy @('validate','--config',$caddyConfigPath,'--ada
 Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTP API' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 Get-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 New-NetFirewallRule -DisplayName 'SOLVIA Local HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8443 -RemoteAddress LocalSubnet -Profile Private | Out-Null
+New-NetFirewallRule -DisplayName 'SOLVIA Local HTTP API' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8765 -RemoteAddress LocalSubnet -Profile Private | Out-Null
 $runScript = Join-Path $InstallDir 'installer\Run-Server.ps1'
 $argument = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $runScript + '" -InstallDir "' + $InstallDir + '"'
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $argument
@@ -304,6 +305,7 @@ $mobileConfig = [ordered]@{
     preferred = 'https'
     api_url = ('https://' + $serverIp + ':8443')
     https_url = ('https://' + $serverIp + ':8443')
+    http_url = ('http://' + $serverIp + ':8765')
     generated = [DateTime]::UtcNow.ToString('o')
 }
 [IO.File]::WriteAllText(
@@ -315,7 +317,7 @@ $mobileConfig = [ordered]@{
 $settings['SOLVIA_SETUP_PENDING'] = '0'
 Write-ServerSettings $configPath $settings
 Protect-SetupPath $configPath
-Write-Host ('SOLVIA 2.0 готова. HTTPS: https://' + $serverIp + ':8443') -ForegroundColor Green
+Write-Host ('SOLVIA 2.0 готова. HTTPS: https://' + $serverIp + ':8443; LAN HTTP: http://' + $serverIp + ':8765') -ForegroundColor Green
 Write-Host ('Файл мобільного підключення: ' + $mobileConfigPath) -ForegroundColor Green
 
 
