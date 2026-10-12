@@ -79,6 +79,9 @@ td { font-size:13px; padding-top:15px; padding-bottom:15px; }
 .consult-step-nav button { flex:1; border:0; padding:11px 10px; min-height:43px; border-radius:9px; background:transparent; color:#657d87; font-size:12px; cursor:pointer; white-space:nowrap; }
 .consult-step-nav button[aria-pressed=true] { background:#fff; color:var(--forest); box-shadow:0 2px 8px #17333e09; font-weight:650; }
 .consult-stage { padding:0; margin:0; }
+.consultation-record { margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
+.consultation-record summary { cursor:pointer; color:var(--forest); font-size:13px; font-weight:600; padding:8px 0; }
+.consultation-record dd { white-space:pre-wrap; overflow-wrap:anywhere; }
 .draft-status { border-radius:12px; font-size:12px; padding:12px 14px; }
 .login-screen { grid-template-columns:minmax(360px,1fr) minmax(400px,1fr); background:#f5f8fa; min-height:100dvh; }
 .login-brand { background:radial-gradient(ellipse at 5% 95%,#237d8060,transparent 60%),linear-gradient(145deg,#113f49,#0d6268); padding:clamp(40px,6vw,90px); position:relative; overflow:hidden; }

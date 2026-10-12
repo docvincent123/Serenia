@@ -22,6 +22,7 @@ const browser = await chromium.launch({ headless: true });
 await mkdir('out/design', { recursive: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 600 } });
+  await page.emulateMedia({reducedMotion:'reduce'});
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   let open = true, waiting = [], currentUser = { id:1,name:'Адміністратор · тест',role:'admin' };
   let draft = { version:0,payload:null }, draftOffline = false, loseConsultationResponse = true;
@@ -93,6 +94,7 @@ try {
   await page.screenshot({path:'out/design/mobile-login.png',fullPage:true});
   assert.equal(await page.evaluate(() => sessionStorage.getItem('solvia_token')),null);
   await page.setViewportSize({width:1280,height:800}); currentUser = {id:3,name:'Тестовий психолог',role:'psychologist'};
+  await page.screenshot({path:'out/design/desktop-login.png',fullPage:true});
   await page.locator('input[autocomplete="username"]').fill('synthetic-psychologist');
   await page.locator('input[autocomplete="current-password"]').fill('synthetic-password-long');
   await page.locator('.login-submit').click();
@@ -106,6 +108,7 @@ try {
   await consultationDialog.getByRole('button',{name:'3. Робота',exact:true}).click();
   draftOffline = true;
   await consultationDialog.getByLabel('Приватна нотатка',{exact:true}).fill('Синтетична чернетка: тест відновлення після обриву Wi-Fi');
+  await consultationDialog.getByLabel('Виконана робота',{exact:true}).fill('Робота за синтетичним сценарієм');
   await page.locator('.draft-status.offline').waitFor();
   await page.screenshot({path:'out/design/desktop-offline-draft.png',fullPage:true});
   await consultationDialog.getByRole('button',{name:'Закрити · залишити чернетку',exact:true}).click();
@@ -120,6 +123,18 @@ try {
   await consultationDialog.getByRole('button',{name:'Зберегти консультацію',exact:true}).click();
   await consultationDialog.waitFor({state:'detached'});
   assert.equal(consultations.length,1,'Lost response retry must not duplicate the consultation');
+  await page.getByRole('button',{name:'Записи',exact:true}).click();
+  await page.locator('.consultation-record summary').click();
+  await page.getByText('Робота за синтетичним сценарієм',{exact:true}).waitFor();
+  await page.screenshot({path:'out/design/desktop-full-consultation.png',fullPage:true});
+  for(const role of ['reception','director']) {
+    currentUser = {id:role === 'reception' ? 2 : 4,name:'Тестова роль',role};
+    await page.reload();
+    await page.getByRole('button',{name:'Налаштування профілю',exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Center administration must not be in other role menus');
+    if(role === 'director') assert.equal(await page.getByRole('button',{name:'Пацієнти',exact:true}).count(),0,'Director must not get patient navigation');
+    await page.screenshot({path:`out/design/desktop-${role}.png`,fullPage:true});
+  }
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
   console.log('PASS: short-screen actions, settings with closed shift, waiting list create, mobile layout, offline logout, encrypted draft recovery and consultation retry');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

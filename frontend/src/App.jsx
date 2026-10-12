@@ -89,6 +89,7 @@ const categoryTone = {
 function AppIcon({ name, size = 18 }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
   const paths = {
+    menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     'waiting-list': <><rect x="3" y="4" width="12" height="17" rx="2"/><path d="M6 8h6M6 12h5M6 16h3"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/></>,
     documents: <><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></>,
     preferences: <><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M18 3l1 1 2-2"/></>,
@@ -404,6 +405,20 @@ function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
 
 function defaultPage(role) {
   return role === 'admin' || role === 'director' ? 'dashboard' : 'calendar';
+}
+
+function displayStatus(value) {
+  return ({ active:'Активний', completed:'Завершено', archived:'Архів', signed:'Підписано', refused:'Відмова',
+    scheduled:'Заплановано', cancelled:'Скасовано', recommended:'Рекомендовано', sent:'Направлено',
+    normal:'Звичайний', important:'Важливо', urgent:'Терміново', low:'Низький', moderate:'Помірний',
+    high:'Високий', critical:'Критичний' })[value] || value || '—';
+}
+
+function riskFlagsText(value) {
+  try {
+    const flags = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(flags) ? flags.map(flag => riskFlagOptions.find(([key]) => key === flag)?.[1] || 'Інша позначка').join(', ') || '—' : '—';
+  } catch { return '—'; }
 }
 
 function Button({ children, variant = 'primary', className = '', ...props }) {
@@ -1738,7 +1753,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
                   <span>{c.psychologist}</span>
                 </div>
                 <div>
-                  <Badge tone={c.status === 'active' ? 'forest' : 'stone'}>{c.status}</Badge>
+                  <Badge tone={c.status === 'active' ? 'forest' : 'stone'}>{displayStatus(c.status)}</Badge>
                   {c.reason && <p><b>Причина:</b> {c.reason}</p>}
                   {c.outcome && <p><b>Підсумок:</b> {c.outcome}</p>}
                 </div>
@@ -1759,7 +1774,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
               {card.documents.map((d) => (
                 <div className="assessment-row" key={d.id}>
                   <div><strong>{d.title}</strong><span>{d.signed_at?.replace('T',' ')} · {d.signed_by_name || 'без підписанта'}</span></div>
-                  <div className="row-actions"><Badge tone={d.status === 'signed' ? 'forest' : 'rose'}>{d.status}</Badge><Button variant="secondary" onClick={() => previewDocument(d.id)}>Перегляд / PDF</Button></div>
+                  <div className="row-actions"><Badge tone={d.status === 'signed' ? 'forest' : 'rose'}>{displayStatus(d.status)}</Badge><Button variant="secondary" onClick={() => previewDocument(d.id)}>Перегляд / PDF</Button></div>
                 </div>
               ))}
             </div>
@@ -1814,6 +1829,14 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
                       <div><span>Наступна консультація</span><p>{c.next_plan || '—'}</p></div>
                       <div><span>Домашнє завдання</span><p>{c.homework || '—'}</p></div>
                     </div>
+                    <details className="consultation-record">
+                      <summary>Повний запис консультації</summary>
+                      <dl className="profile-list">
+                        {[[ 'request_text','Запит' ],['state_text','Поточний стан'],['work_done','Проведена робота'],['result_text','Результат / динаміка'],['recommendations','Рекомендації'],['duration_minutes','Тривалість, хв']].map(([key,label]) => <div key={key}><dt>{label}</dt><dd>{c[key] || '—'}</dd></div>)}
+                        <div><dt>Рівень ризику</dt><dd>{displayStatus(c.risk_level)}</dd></div>
+                        <div><dt>Оцінені ризики</dt><dd>{riskFlagsText(c.risk_flags)}</dd></div>
+                      </dl>
+                    </details>
                   </article>
                 ))}
               </div>
@@ -1866,7 +1889,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
               {card.admin_notes.map((n) => (
                 <article className="consultation-card" key={n.id}>
                   <div className="consultation-date">{n.created?.replace('T',' ')} · {n.author}</div>
-                  <Badge tone={n.priority === 'urgent' ? 'rose' : n.priority === 'important' ? 'sand' : 'stone'}>{n.priority}</Badge>
+                  <Badge tone={n.priority === 'urgent' ? 'rose' : n.priority === 'important' ? 'sand' : 'stone'}>{displayStatus(n.priority)}</Badge>
                   <p>{n.note}</p>
                 </article>
               ))}
@@ -3514,7 +3537,7 @@ function Supervisions({ api, role, user }) {
                     <div className="eyebrow">{x.scheduled_at?.replace('T',' ')} · {x.duration_minutes} хв</div>
                     <h3>{x.psychologist}</h3>
                   </div>
-                  <Badge tone={x.status === 'completed' ? 'forest' : x.status === 'cancelled' ? 'rose' : 'sand'}>{x.status}</Badge>
+                  <Badge tone={x.status === 'completed' ? 'forest' : x.status === 'cancelled' ? 'rose' : 'sand'}>{displayStatus(x.status)}</Badge>
                 </div>
                 <p><strong>Тема:</strong> {x.topic || '—'}</p>
                 <p><strong>Супервізор:</strong> {x.supervisor}</p>
@@ -3636,6 +3659,17 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [health, setHealth] = useState({ online: true, version: '2.2.0' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
+  const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width:760px)');
+    const update = () => { setCompactNav(media.matches); if(!media.matches) setMenuOpen(false); };
+    media.addEventListener('change', update); return () => media.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    if(!compactNav) return;
+    if(menuOpen) document.querySelector('.sidebar button:not(:disabled)')?.focus();
+    else document.querySelector('.mobile-menu-button')?.focus();
+  }, [compactNav, menuOpen]);
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
   const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
@@ -3700,7 +3734,15 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   return (
     <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`}>
       {menuOpen && <button className="nav-scrim" aria-label="Закрити меню" onClick={() => setMenuOpen(false)} />}
-      <aside className="sidebar" onKeyDown={e => { if(e.key === 'Escape') setMenuOpen(false); }}>
+      <aside className="sidebar" id="workspace-navigation" inert={compactNav && !menuOpen} aria-hidden={compactNav && !menuOpen ? true : undefined} onKeyDown={e => {
+        if(e.key === 'Escape') { e.preventDefault(); setMenuOpen(false); }
+        if(e.key === 'Tab' && compactNav && menuOpen) {
+          const controls = [...e.currentTarget.querySelectorAll('button:not(:disabled),a[href]')].filter(el => el.getClientRects().length);
+          const first = controls[0], last = controls.at(-1);
+          if(e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+          else if(!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+        }
+      }}>
         <div className="sidebar-brand">
           <div className="product-mark inverse"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
           <div><strong>SOLVIA</strong><span>by QureMed</span></div>
