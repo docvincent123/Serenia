@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
 import WaitingList from './WaitingList.jsx';
+import ShiftWorkspace from './ShiftWorkspace.jsx';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -95,6 +96,7 @@ function AppIcon({ name, size = 18 }) {
     preferences: <><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M18 3l1 1 2-2"/></>,
     dashboard: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></>,
+    'shift-workspace': <><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M9 3h6v3H9zM8 11h8M8 16h4M15 16l2 2 4-4"/></>,
     patients: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
     families: <><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M13.5 20a5 5 0 0 1 7.5-4.3"/></>,
     team: <><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/><circle cx="12" cy="7" r="4"/></>,
@@ -347,6 +349,7 @@ function navFor(role) {
   if (role === 'admin') {
     return [
       ['dashboard', 'Огляд центру'],
+      ['shift-workspace', 'Прийоми за зміну'],
       ['calendar', 'Календар'],
       ['waiting-list', 'Лист очікування'],
       ['patients', 'Пацієнти'],
@@ -362,7 +365,7 @@ function navFor(role) {
       ['audit', 'Журнал дій']
     ];
   }
-  if (role === 'reception') return [['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
+  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
   if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
   return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
 }
@@ -370,7 +373,7 @@ function navFor(role) {
 
 const navigationGroups = [
   ['overview', 'Огляд', ['dashboard']],
-  ['appointments', 'Прийоми', ['calendar', 'waiting-list']],
+  ['appointments', 'Прийоми', ['shift-workspace', 'calendar', 'waiting-list']],
   ['patients', 'Пацієнти та супровід', ['patients', 'families', 'archive']],
   ['team', 'Команда', ['team', 'rooms', 'supervisions']],
   ['reports', 'Звіти та аналітика', ['reports', 'workload']],
@@ -404,7 +407,7 @@ function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
 }
 
 function defaultPage(role) {
-  return role === 'admin' || role === 'director' ? 'dashboard' : 'calendar';
+  return role === 'admin' || role === 'director' ? 'dashboard' : role === 'reception' ? 'shift-workspace' : 'calendar';
 }
 
 function displayStatus(value) {
@@ -3653,6 +3656,7 @@ function Audit({ api }) {
 function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
   const [patientId, setPatientId] = useState(null);
+  const [patientOrigin, setPatientOrigin] = useState('patients');
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
@@ -3673,7 +3677,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
   const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
-  function openPatient(id) { setPatientId(id); setPage('patient-card'); setMenuOpen(false); }
+  function openPatient(id) { if(page !== 'patient-card') setPatientOrigin(page); setPatientId(id); setPage('patient-card'); setMenuOpen(false); }
   function navigate(target) { setPatientId(null); setPage(target); setMenuOpen(false); }
 
   async function loadShift() {
@@ -3693,7 +3697,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     finally { setShiftBusy(false); }
   }
 
-  useEffect(() => { loadShift(); }, []);
+  useEffect(() => { loadShift(); const timer = setInterval(loadShift, 30000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let alive = true;
     async function ping() {
@@ -3710,7 +3714,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }, [apiBase]);
 
   const content = (() => {
-    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate('patients')} draftSession={draftSession} />;
+    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
+    if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={shift} openPatient={openPatient} openCalendar={() => navigate('calendar')} />;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
     if (page === 'dashboard') return <Dashboard api={api} />;
     if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
@@ -3732,7 +3737,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const locked = shift && !shift.open;
 
   return (
-    <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`}>
+    <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`} data-role={user.role}>
       {menuOpen && <button className="nav-scrim" aria-label="Закрити меню" onClick={() => setMenuOpen(false)} />}
       <aside className="sidebar" id="workspace-navigation" inert={compactNav && !menuOpen} aria-hidden={compactNav && !menuOpen ? true : undefined} onKeyDown={e => {
         if(e.key === 'Escape') { e.preventDefault(); setMenuOpen(false); }
@@ -3792,7 +3797,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         </>}
         <div className="workspace-inner">
           {shiftError && <div className="alert error">{shiftError}</div>}
-          {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? <Spinner /> : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
+          {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
               <div className="eyebrow">ЩОДЕННЕ ВІДКРИТТЯ ЦЕНТРУ</div>

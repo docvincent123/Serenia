@@ -47,9 +47,9 @@ class MainActivity : Activity() {
     private val bg = MobileUi.background
     private val ink = Color.rgb(25, 48, 62)
     private val muted = Color.rgb(104, 124, 137)
-    private val forest = Color.rgb(16, 111, 117)
-    private val forestDark = Color.rgb(13, 83, 91)
-    private val forestSoft = Color.rgb(224, 240, 243)
+    private val forest = MobileUi.accent
+    private val forestDark = Color.rgb(4, 79, 134)
+    private val forestSoft = MobileUi.soft
     private val line = Color.rgb(213, 226, 232)
 
     private var server = ""
@@ -234,6 +234,26 @@ class MainActivity : Activity() {
         }
         statusView = null
         if(token.isNotBlank() && workspaceReady) {
+            val header = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setBackgroundColor(forest); setPadding(dp(12), dp(8), dp(16), dp(8))
+            }
+            header.addView(Button(this).apply {
+                text = "☰"; textSize = 25f; contentDescription = "Відкрити меню психолога"
+                setTextColor(Color.WHITE); background = rounded(forest, 8)
+                setOnClickListener {
+                    val child = if(content is ScrollView && content.childCount > 0) content.getChildAt(0) else content
+                    if(child.tag == "unsaved_form") AlertDialog.Builder(this@MainActivity).setTitle("Залишити форму?")
+                        .setMessage("Незбережені зміни буде втрачено.").setNegativeButton("Продовжити", null)
+                        .setPositiveButton("Залишити") { _, _ -> moreScreen() }.show()
+                    else moreScreen()
+                }
+            }, LinearLayout.LayoutParams(dp(48), dp(48)))
+            header.addView(TextView(this).apply {
+                text = "SOLVIA · Психолог"; textSize = 18f; setTextColor(Color.WHITE)
+                setPadding(dp(12), 0, 0, 0); setTypeface(typeface, Typeface.BOLD)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            shell.addView(header)
             statusView = caption("").apply { setPadding(dp(16), dp(6), dp(16), dp(6)); setOnClickListener { syncScreen() } }
             shell.addView(statusView); updateConnectionStatus()
         }
@@ -317,6 +337,8 @@ class MainActivity : Activity() {
             setPadding(dp(8), dp(4), dp(8), dp(4))
         }
         work.addView(row("Документи пацієнтів") { patientsScreen(documentLibrary = true) })
+        work.addView(row("Активні пацієнти за зміну") { renderHomeScreen() })
+        work.addView(row("Проконсультовані за зміну") { renderHomeScreen("completed") })
         work.addView(row("Мої чернетки") { draftsScreen() })
         work.addView(row("Синхронізація та офлайн-доступ") { syncScreen() })
         work.addView(row("Звіт за зміну") { reportScreen() })
@@ -809,11 +831,13 @@ class MainActivity : Activity() {
         mount(scroll(body))
     }
 
-    private fun renderHomeScreen() {
+    private fun renderHomeScreen(initialTab: String = "active") {
         workspaceReady = true; selectedNavigation = "home"; backAction = null
         val body = root()
-        body.addView(title("Сьогодні", 30f))
+        body.addView(title("Моя зміна", 28f))
         body.addView(caption(userName + " · " + LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", java.util.Locale.forLanguageTag("uk")))))
+        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        body.addView(tabs)
         val today = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(today)
         val quick = card(); quick.addView(title("Продовжити роботу", 18f))
         quick.addView(secondary("Продовжити чернетку") { draftsScreen() })
@@ -821,24 +845,55 @@ class MainActivity : Activity() {
         body.addView(quick)
         mount(scroll(body))
         if(role != "director") apiAsync("GET", "/api/appointments?date=" + LocalDate.now()) { value ->
-            val entries = value as JSONArray; today.addView(title("Прийоми · " + entries.length(), 18f))
-            if(entries.length() == 0) today.addView(caption("Сьогодні записів поки немає."))
-            val ordered = (0 until entries.length()).map { entries.getJSONObject(it) }.sortedWith(compareBy<JSONObject> { it.optString("status") !in listOf("scheduled", "confirmed") }.thenBy { it.optString("start") })
-            for(item in ordered) {
-                val row = card()
-                row.addView(title(item.optString("start").takeLast(5) + " — " + item.optString("end").takeLast(5), 18f))
-                row.addView(caption(item.optString("room") + " · " + statusLabel(item.optString("status"))))
+            val entries = value as JSONArray
+            val visits = mutableListOf<Pair<JSONObject, JSONObject>>()
+            for(i in 0 until entries.length()) {
+                val item = entries.getJSONObject(i)
                 val patients = item.optJSONArray("patients") ?: JSONArray()
-                for(j in 0 until patients.length()) { val patient = patients.getJSONObject(j)
-                    row.addView(title(patient.optString("name"), 19f))
-                    if(item.optString("status") in listOf("scheduled", "confirmed")) row.addView(primary("Почати консультацію") {
-                        consultationDialog(patient.getLong("id"), patient.optString("name"), item.getLong("id"))
-                    })
-                    row.addView(secondary("Картка пацієнта") { patientScreen(patient.getLong("id")) })
-                }
-                today.addView(row); today.addView(spacer())
+                for(j in 0 until patients.length()) visits.add(item to patients.getJSONObject(j))
             }
+            val queued = offlineStore().queue()
+            fun localState(item: JSONObject, patient: JSONObject): String = (0 until queued.length()).map { queued.getJSONObject(it) }.lastOrNull {
+                val payload = it.getJSONObject("payload")
+                payload.optLong("appointment_id") == item.optLong("id") && payload.optLong("patient_id") == patient.optLong("id") && it.optString("state") in listOf("pending", "blocked", "sent")
+            }?.optString("state") ?: ""
+            fun completed(item: JSONObject, patient: JSONObject) = VisitState.completed(patient.optString("completed_at"), item.optString("status"))
+            fun active(item: JSONObject, patient: JSONObject) = !completed(item,patient) && item.optString("status") in listOf("scheduled", "confirmed")
+            fun render(tab: String) {
+                tabs.removeAllViews(); today.removeAllViews()
+                val activeCount = visits.count { active(it.first,it.second) }
+                val completedCount = visits.count { completed(it.first,it.second) }
+                listOf("active" to "Активні · $activeCount", "completed" to "Проконсультовані · $completedCount").forEach { (key,label) ->
+                    tabs.addView(MobileUi.button(this,label,selected=tab==key) { render(key) }, LinearLayout.LayoutParams(0,dp(54),1f).apply { rightMargin=dp(4) })
+                }
+                today.addView(caption(if(tab=="completed") "Завершені консультації за сьогодні. Курс пацієнта залишається активним." else "Пацієнти, що очікують консультації. Прибуття відмічає реєстратура."))
+                val visible = visits.filter { if(tab=="completed") completed(it.first,it.second) else active(it.first,it.second) }
+                if(visible.isEmpty()) today.addView(caption(if(tab=="completed") "Завершених консультацій ще немає." else "Активних прийомів зараз немає."))
+                for((item,patient) in visible) {
+                    val row = card()
+                    row.addView(title(patient.optString("name"),22f))
+                    row.addView(caption("№ " + patient.optString("patient_no", "—") + " · " + item.optString("start").takeLast(5) + " — " + item.optString("end").takeLast(5)))
+                    row.addView(caption("Кабінет: " + item.optString("room")))
+                    val state = localState(item,patient)
+                    row.addView(caption(when {
+                        completed(item,patient) -> "Проконсультовано · " + patient.optString("completed_at").substringAfter('T').take(5)
+                        state=="blocked" -> "Потрібна перевірка синхронізації"
+                        state=="pending" -> "Збережено на телефоні · очікує передавання"
+                        state=="sent" -> "Передано на сервер · оновіть список"
+                        patient.optString("arrived_at").isNotBlank() -> "Пацієнт у центрі"
+                        else -> "Очікуємо прибуття"
+                    }))
+                    if(active(item,patient) && state.isBlank()) row.addView(primary("Почати консультацію") {
+                        consultationDialog(patient.getLong("id"),patient.optString("name"),item.getLong("id"))
+                    })
+                    if(state in listOf("pending","blocked","sent") && !completed(item,patient)) row.addView(secondary("Синхронізація") { syncScreen() })
+                    row.addView(secondary("Картка пацієнта") { patientScreen(patient.getLong("id")) })
+                    today.addView(row)
+                }
+            }
+            render(initialTab)
         }
+        body.addView(secondary("Оновити список зміни") { homeScreen() })
     }
 
     private fun topBar(label: String, back: () -> Unit): LinearLayout = LinearLayout(this).apply {
@@ -1000,7 +1055,7 @@ class MainActivity : Activity() {
                 if(appointment.optLong("id") in queuedAppointments) continue
                 val patients = appointment.optJSONArray("patients") ?: JSONArray()
                 for (j in 0 until patients.length()) {
-                    if (patients.getJSONObject(j).optLong("id") == patientId) {
+                    if (patients.getJSONObject(j).optLong("id") == patientId && patients.getJSONObject(j).optString("completed_at").isBlank()) {
                         eligible.add(appointment)
                         break
                     }
