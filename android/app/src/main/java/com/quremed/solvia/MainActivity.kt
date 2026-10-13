@@ -455,7 +455,7 @@ class MainActivity : Activity() {
         val previousScroll = if(selectedNavigation == "messages") findViewById<android.view.ViewGroup>(android.R.id.content)?.let { group ->
             fun find(view: View): ScrollView? = if(view is ScrollView) view else if(view is android.view.ViewGroup) (0 until view.childCount).firstNotNullOfOrNull { find(view.getChildAt(it)) } else null
             find(group)?.scrollY ?: 0
-        } else 0
+        } ?: 0 else 0
         selectedNavigation = "messages"; backAction = { homeScreen() }
         val body = root(); body.addView(topBar("Повідомлення", ::homeScreen))
         body.addView(title("Передавання записів", 18f))
