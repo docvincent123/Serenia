@@ -52,6 +52,7 @@ class MainActivity : Activity() {
     private val forestSoft = MobileUi.soft
     private val line = MobileUi.border
 
+    private val updates by lazy { MobileUpdates(this, { server }, { token }, { consultationWindow == null && !isFinishing && !isDestroyed }) }
     private var server = ""
     private var token = ""
     private var role = ""
@@ -90,18 +91,18 @@ class MainActivity : Activity() {
     private var homeAppointmentsRefresh: ((JSONArray) -> Unit)? = null
     private var appointmentRefreshRunning = false
     private val syncTick = object : Runnable {
-        override fun run() { syncNow(); refreshAppointments(); syncHandler.postDelayed(this, 60000) }
+        override fun run() { syncNow(); refreshAppointments(); if(token.isNotBlank()) updates.check(); syncHandler.postDelayed(this, 60000) }
     }
     private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
     private fun offlineStore() = OfflineStore(this, server, userId)
-    override fun onResume() { super.onResume(); syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick) }
+    override fun onResume() { super.onResume(); updates.resume(); syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick) }
     override fun onPause() { syncHandler.removeCallbacks(syncTick); super.onPause() }
     override fun onDestroy() {
         syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(draftSyncTick)
         networkCallback?.let { runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(it) } }
         consultationWindow?.dismiss(); consultationWindow = null
         pdfPreview?.close(); pdfPreview = null
-        io.shutdown(); cacheIo.shutdown(); super.onDestroy()
+        updates.close(); io.shutdown(); cacheIo.shutdown(); super.onDestroy()
     }
     private fun unavailable(error: Exception) = error is java.io.IOException && error !is javax.net.ssl.SSLException
     private fun updateConnectionStatus() {
@@ -976,7 +977,7 @@ class MainActivity : Activity() {
         offlineStore().saveSession(user, token)
         prefs.edit().putLong("offline_user:$server", userId).apply()
         OfflineSyncJob.schedule(this, server, userId)
-        homeScreen()
+        homeScreen(); updates.check()
         AppointmentReminders.channel(this)
         if(Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4200)
@@ -1798,9 +1799,9 @@ class MainActivity : Activity() {
             }
         })
         body.addView(secondary("Оновлення SOLVIA") {
-            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/docvincent123/Serenia/releases")))
+            updates.check(manual = true)
         })
-        body.addView(caption("Установлюйте APK нового випуску з тим самим підписом. Налаштування з’єднання зберігаються."))
+        body.addView(caption("Версії надходять із сервера центру. Оновлення встановлюється поверх програми й зберігає ваші дані. Android попросить підтвердити встановлення."))
         body.addView(secondary("Вийти й змінити сервер") {
             AlertDialog.Builder(this).setTitle("Змінити сервер?")
                 .setMessage("Поточну сесію буде завершено. Перевірте нову HTTPS-адресу та сертифікат.")

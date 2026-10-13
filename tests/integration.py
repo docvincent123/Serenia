@@ -1,4 +1,6 @@
 """Exercise the real C++ HTTP server and PostgreSQL database, with synthetic data."""
+import base64
+import hashlib
 import concurrent.futures
 import datetime as dt
 import json
@@ -19,6 +21,8 @@ BINARY = str(pathlib.Path(sys.argv.pop(1)).resolve())
 class Scenario(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.update_dir=tempfile.TemporaryDirectory()
+        os.environ['SOLVIA_MOBILE_UPDATE_DIR']=cls.update_dir.name
         cls.database = os.environ.get('SOLVIA_TEST_DATABASE_URL', '')
         if not cls.database:
             raise RuntimeError('SOLVIA_TEST_DATABASE_URL is required')
@@ -75,6 +79,22 @@ class Scenario(unittest.TestCase):
     def test_end_to_end_and_privacy(self):
         self.api(None,'GET','/api/patients',status=401)
         admin='admin'; rec='reception'; psy='psychologist'; director='director'
+        self.assertFalse(self.api(psy,'GET','/api/mobile-update')['available'])
+        apk=b'PK\x03\x04'+b'synthetic-update-only'
+        sha=hashlib.sha256(apk).hexdigest()
+        release={'version_code':100,'version_name':'test-100','package_name':'com.quremed.solvia','sha256':sha,'apk_base64':base64.b64encode(apk).decode(),'release_notes':'Synthetic test'}
+        self.api(rec,'POST','/api/mobile-update',release,status=403)
+        self.api(psy,'POST','/api/mobile-update',release,status=403)
+        self.api(admin,'POST','/api/mobile-update',{**release,'sha256':'0'*64},status=400)
+        self.api(admin,'POST','/api/mobile-update',release)
+        info=self.api(psy,'GET','/api/mobile-update')
+        self.assertEqual(info['version_code'],100)
+        self.assertNotIn('apk_base64',info)
+        request=urllib.request.Request(self.base+'/api/mobile-update/apk?sha='+sha,headers={'Authorization':'Bearer '+self.tokens[psy]})
+        with urllib.request.urlopen(request) as response:self.assertEqual(response.read(),apk)
+        self.api(admin,'POST','/api/mobile-update',{**release,'version_code':99},status=409)
+        self.api(admin,'POST','/api/mobile-update',{**release,'package_name':'com.other.app'},status=400)
+        self.api(psy,'GET','/api/mobile-update/apk?sha=../secret',status=400)
         shift=self.api(admin,'GET','/api/shift-day')
         self.assertFalse(shift['open'])
         shift=self.api(admin,'POST','/api/shift-day',{'action':'open'})

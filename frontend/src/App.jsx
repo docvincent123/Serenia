@@ -2791,7 +2791,7 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
       {error && <div className="alert error">{error}</div>}
       {showSettings && <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />}
       <div className="server-status-grid">
-        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.2</p></article>
+        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.3</p></article>
         <article className="stat-card"><strong>{shift?.open ? 'OPEN' : 'CLOSED'}</strong><h3>Робоча зміна</h3><p>{shift?.shift_date || localDate()}</p></article>
         <article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Онлайн пристроїв</h3><p>{sessions.length} активних сесій</p></article>
         <article className="stat-card"><strong>{reminders.length}</strong><h3>Найближчих записів</h3><p>Нагадування психологам і адміну</p></article>
@@ -2886,6 +2886,29 @@ function AccountSettings({ api, apiBase, onLogout }) {
       <a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a>
     </section>
   </>;
+}
+
+function MobileReleaseSettings({ api }) {
+  const [release,setRelease] = useState(null), [apk,setApk] = useState(null), [busy,setBusy] = useState(false), [message,setMessage] = useState(''), [current,setCurrent] = useState(null);
+  useEffect(()=>{api('GET','/api/mobile-update').then(setCurrent).catch(e=>setMessage(e.message));},[]);
+  async function publish(e) {
+    e.preventDefault(); if(busy) return; setBusy(true); setMessage('');
+    try {
+      if(!release || !apk) throw new Error('Оберіть release.json і підписаний APK.');
+      const info=JSON.parse(await release.text()); if(apk.size>8*1024*1024) throw new Error('APK: максимум 8 МБ.');
+      const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.readAsDataURL(apk);});
+      await api('POST','/api/mobile-update',{...info,apk_base64:encoded});
+      setCurrent(await api('GET','/api/mobile-update')); setMessage('Оновлення опубліковано на сервері центру. Телефони побачать його після входу або наступної перевірки.');
+    } catch(e) {setMessage(e.message);} finally {setBusy(false);}
+  }
+  return <section className="surface settings-panel"><h2>Оновлення Android</h2><p>{current?.available ? `На сервері: SOLVIA ${current.version_name}` : 'Підписаний APK ще не завантажено.'}</p>
+    <p>Встановлення поза Play Market. Наступні APK мають використовувати той самий постійний підпис.</p>
+    <form className="form-grid" onSubmit={publish}>
+      <Field label="Опис випуску — release.json"><input type="file" accept=".json" disabled={busy} onChange={e=>setRelease(e.target.files[0]||null)} /></Field>
+      <Field label="Підписаний APK"><input type="file" accept=".apk" disabled={busy} onChange={e=>setApk(e.target.files[0]||null)} /></Field>
+      <div className="form-actions full-span"><Button disabled={busy}>{busy?'Завантажуємо…':'Опублікувати оновлення телефона'}</Button></div>
+    </form>{message && <p role="status">{message}</p>}
+  </section>;
 }
 
 function Settings({ api, apiBase, onSwitchApi }) {
@@ -2988,6 +3011,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
             ['center','Центр','Реквізити та бренд'],
             ['documents','Документи','Виписки та підписи'],
             ['connection','Підключення','Local / VPS'],
+            ['mobile','Оновлення Android','APK для телефонів'],
             ['workflow','Правила роботи','Розклад і безпека'],
             ['maintenance','Backup','Резервні копії']
           ].map(([key,title,text]) => (
@@ -3006,7 +3030,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
                   <div className="eyebrow">{activeSection === 'center' ? 'ПРОФІЛЬ ЦЕНТРУ' : 'ДОКУМЕНТИ'}</div>
                   <h2>{activeSection === 'center' ? 'Реквізити та оформлення' : 'Виписки та підписи'}</h2>
                 </div>
-                <Badge tone="forest">SOLVIA 2.2</Badge>
+                <Badge tone="forest">SOLVIA 2.3</Badge>
               </div>
 
               <form className="form-grid" onSubmit={save}>
@@ -3103,7 +3127,8 @@ function Settings({ api, apiBase, onSwitchApi }) {
           )}
 
           {activeSection === 'workflow' && <WorkflowSettings api={api} />}
-          {activeSection === 'maintenance' && (
+          {activeSection === 'mobile' && <MobileReleaseSettings api={api} />}
+            {activeSection === 'maintenance' && (
             <section className="surface settings-panel">
               <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Backup / Restore</h2></div><Badge tone="sand">Admin only</Badge></div>
               <ServerMaintenance api={api} apiBase={apiBase} />
@@ -3636,7 +3661,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
-  const [health, setHealth] = useState({ online: true, version: '2.2.0' });
+  const [health, setHealth] = useState({ online: true, version: '2.3.0' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
@@ -3679,7 +3704,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.2.0' });
+        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.3.0' });
       } catch {
         if (alive) setHealth({ online: false, version: '' });
       }

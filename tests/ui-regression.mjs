@@ -36,9 +36,10 @@ try {
     let data = [];
     if (path === '/api/me') data = currentUser;
     else if (path === '/api/login') data = { token:'synthetic-psychologist-token',user:currentUser };
-    else if (path === '/api/health') data = { ok:true,version:'2.2.0',platform:'linux' };
+    else if (path === '/api/health') data = { ok:true,version:'2.3.0',platform:'linux' };
     else if (path === '/api/shift-day') data = { open,shift_date:'2026-10-02' };
     else if (path === '/api/stats') data = { total_patients: 24,active_patients:18,archived_patients:6,new_patients:4,consultations:42,avg_duration_minutes:60,active_courses:18,completed_courses:6,signed_documents:24,outgoing_referrals:3,supervisions_completed:2,load:[] };
+    else if (path === '/api/mobile-update') data = { available:false };
     else if (path === '/api/mobile-config') data = { format:'quremed.solvia.mobile',version:1,api_url:'https://192.168.1.100:8443',https_url:'https://192.168.1.100:8443',preferred:'https' };
     else if (path === '/api/settings/center') data = { center_name:'SOLVIA · демонстрація', connection_mode:'local' };
     else if (path === '/api/settings/workflow') data = { opening_time:'09:00',closing_time:'18:00',working_days:'1234567',slot_step_minutes:60,default_duration_minutes:60,session_hours:8 };
@@ -79,6 +80,15 @@ try {
   await page.screenshot({ path:'out/design/desktop-dashboard.png',fullPage:true });
   await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   await page.screenshot({ path:'out/design/desktop-settings.png',fullPage:true });
+  await page.locator('.settings-nav').getByRole('button',{name:/Оновлення Android/}).click();
+  await page.getByRole('heading',{name:'Оновлення Android',exact:true}).waitFor();
+  await page.getByLabel('Опис випуску — release.json',{exact:true}).setInputFiles({name:'release.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version_code:32,version_name:'3.0.0',package_name:'com.quremed.solvia',sha256:'a'.repeat(64)}))});
+  await page.getByLabel('Підписаний APK',{exact:true}).setInputFiles({name:'app.apk',mimeType:'application/vnd.android.package-archive',buffer:Buffer.from('PK synthetic')});
+  const publication=page.waitForRequest(r=>r.url().endsWith('/api/mobile-update')&&r.method()==='POST');
+  await page.getByRole('button',{name:'Опублікувати оновлення телефона',exact:true}).click();
+  const published=JSON.parse((await publication).postData());
+  assert.equal(published.version_code,32);assert.equal(Buffer.from(published.apk_base64,'base64').toString(),'PK synthetic');
+  await page.getByText('Оновлення опубліковано на сервері центру.',{exact:false}).waitFor();
   await page.locator('.settings-nav').getByRole('button',{name:/Підключення/}).click();
   const configDownload = page.waitForEvent('download');
   await page.getByRole('button',{name:'Файл для телефону',exact:true}).click();
