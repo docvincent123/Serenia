@@ -126,6 +126,21 @@ class Scenario(unittest.TestCase):
         day=(dt.date.today()-dt.timedelta(days=1)).isoformat()
         booking={'patient_ids':[pid],'psychologist_id':3,'room_id':1,'kind':'individual','start':day+'T09:00','end':day+'T10:00'}
         aid=self.api(rec,'POST','/api/appointments',booking)['id']
+        self.api(psy,'GET',f'/api/shift-workspace?date={day}',status=403)
+        self.api(director,'GET',f'/api/shift-workspace?date={day}',status=403)
+        self.api(rec,'POST',f'/api/appointments/{aid}/arrival',{'patient_id':pid},status=409)
+        today_booking={**booking,'start':dt.date.today().isoformat()+'T09:00','end':dt.date.today().isoformat()+'T10:00'}
+        arrival_id=self.api(rec,'POST','/api/appointments',today_booking)['id']
+        self.api(psy,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid},status=403)
+        self.api(rec,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':second},status=404)
+        self.api(rec,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid})
+        arrival_rows=self.api(rec,'GET','/api/shift-workspace')
+        arrived=next(x for x in arrival_rows if x['appointment_id']==arrival_id and x['patient_id']==pid)
+        self.assertTrue(arrived['arrived_at'])
+        self.api(rec,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid})
+        self.assertEqual(next(x for x in self.api(rec,'GET','/api/shift-workspace') if x['appointment_id']==arrival_id)['arrived_at'],arrived['arrived_at'])
+        self.api(rec,'PATCH',f'/api/appointments/{arrival_id}',{'status':'cancelled'})
+        self.api(rec,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid},status=409)
         self.api(rec,'POST','/api/appointments',booking,status=409)
         self.api(rec,'POST','/api/appointments',{**booking,'start':day+'T09:30','end':day+'T10:30'},status=409)
         self.api(psy,'POST','/api/appointments',booking,status=403)
@@ -291,6 +306,12 @@ class Scenario(unittest.TestCase):
         group={**booking,'patient_ids':[pid,third],'kind':'group','start':day+'T11:00','end':day+'T12:00'}
         gid=self.api(rec,'POST','/api/appointments',group)['id']
         self.api(psy,'POST','/api/consultations',{**note,'appointment_id':gid})
+        partial=[x for x in self.api(rec,'GET',f'/api/shift-workspace?date={day}') if x['appointment_id']==gid]
+        self.assertEqual(len(partial),2)
+        self.assertTrue(next(x for x in partial if x['patient_id']==pid)['completed_at'])
+        self.assertFalse(next(x for x in partial if x['patient_id']==third)['completed_at'])
+        self.assertNotIn('ПРИВАТНА',json.dumps(partial,ensure_ascii=False))
+        self.assertNotIn('note',partial[0])
         self.api(rec,'PATCH',f'/api/appointments/{gid}',{'status':'cancelled'},status=409)
         self.api(psy,'POST','/api/consultations',{**note,'appointment_id':gid,'patient_id':third})
         status={x['id']:x['status'] for x in self.api(rec,'GET','/api/appointments?date='+day)}

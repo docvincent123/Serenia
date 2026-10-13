@@ -54,6 +54,7 @@ jobs:
           node tests/connection.mjs
           node tests/auth-session.mjs
           node tests/drafts.mjs
+          node tests/shift-workspace.mjs
 
       - name: Build React interface
         shell: pwsh

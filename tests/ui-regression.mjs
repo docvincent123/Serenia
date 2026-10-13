@@ -27,6 +27,8 @@ try {
   let open = true, waiting = [], currentUser = { id:1,name:'Адміністратор · тест',role:'admin' };
   let draft = { version:0,payload:null }, draftOffline = false, loseConsultationResponse = true;
   const consultations = [];
+  const visit = {appointment_id:7,patient_id:10,patient:'Тестовий пацієнт',patient_no:'12345',phone:'+380000000000',category:'Інше',psychologist_id:3,psychologist:'Тестовий психолог',room:'Кабінет 1',kind:'individual',status:'scheduled',start:'2026-10-02T09:00',end:'2026-10-02T10:00',arrived_at:'',completed_at:''};
+  let arrivalCalls = 0;
   await page.addInitScript(() => sessionStorage.setItem('solvia_token', 'synthetic-admin-token'));
   const patient = { id: 10, name: 'Тестовий пацієнт', patient_no: '12345', phone: '+380000000000', dob: '1995-01-01', category: 'Інше', status: 'active', psychologist_id: 3 };
   await page.route('**/api/**', async route => {
@@ -41,6 +43,8 @@ try {
     else if (path === '/api/settings/workflow') data = { opening_time:'09:00',closing_time:'18:00',working_days:'1234567',slot_step_minutes:60,default_duration_minutes:60,session_hours:8 };
     else if (path === '/api/admin/system') data = { database:{name:'solvia',size:'8 MB',version:'16'},counts:{patients:24,consultations:42},backups:[{id:1,action:'verify',status:'success',created:'2026-10-02T10:00',details:'isolated restore checked'}] };
     else if (path === '/api/meta') data = { rooms:[{id:2,name:'Кабінет 1'}],psychologists:[{id:3,name:'Тестовий психолог'}],categories:['Інше'],workflow:{default_duration_minutes:60} };
+    else if (path === '/api/shift-workspace') data = [{...visit}, {...visit,appointment_id:8,patient_id:11,patient:'Учасник групи · завершено',completed_at:'2026-10-02T09:50',kind:'group'}, {...visit,appointment_id:8,patient_id:12,patient:'Учасник групи · очікує',kind:'group'}];
+    else if (path === '/api/appointments/7/arrival' && method === 'POST') { ++arrivalCalls; visit.arrived_at='2026-10-02T08:55'; data={ok:true}; }
     else if (path === '/api/patients') data = [patient];
     else if (path === '/api/patients/10') data = { ...patient,courses:[],documents:[],referrals:[],discharges:[],assessments:[],consultations };
     else if (path === '/api/patients/10/draft') {
@@ -78,6 +82,26 @@ try {
   open = false; await page.reload(); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   open = true; await page.reload();
   await page.getByRole('button',{name:'Прийоми',exact:true}).click();
+  await page.getByRole('button',{name:'Прийоми за зміну',exact:true}).click();
+  await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
+  await page.locator('.shift-visit').first().waitFor();
+  assert.equal(await page.locator('.shift-visit').count(),2,'Completed group participant must not remain active');
+  await page.locator('.shift-visit').first().click();
+  await page.getByRole('button',{name:'Пацієнт прибув',exact:true}).click();
+  await page.locator('.shift-detail .visit-status.arrived').waitFor();
+  assert.equal(arrivalCalls,1);
+  await page.getByRole('button',{name:'Проконсультовані 1',exact:true}).click();
+  assert.equal(await page.locator('.shift-visit').count(),1);
+  await page.screenshot({path:'out/design/desktop-shift-completed.png',fullPage:true});
+  await page.getByRole('button',{name:'Активні 2',exact:true}).click();
+  await page.getByLabel('Знайти пацієнта',{exact:true}).fill('12345');
+  assert.equal(await page.locator('.shift-visit').count(),2);
+  await page.getByLabel('Психолог',{exact:true}).selectOption('3');
+  await page.screenshot({path:'out/design/desktop-shift-active.png',fullPage:true});
+  await page.locator('.shift-visit').first().click();
+  await page.getByRole('button',{name:'Відкрити картку пацієнта',exact:true}).click();
+  await page.getByRole('button',{name:'← До списку',exact:true}).click();
+  await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
   await page.getByRole('button',{name:'Лист очікування',exact:true}).click();
   await page.getByRole('button',{name:'Додати пацієнта',exact:true}).click();
   const dialog = page.getByRole('dialog',{name:'Нове очікування'});
@@ -133,6 +157,10 @@ try {
     await page.getByRole('button',{name:'Налаштування профілю',exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Center administration must not be in other role menus');
     if(role === 'director') assert.equal(await page.getByRole('button',{name:'Пацієнти',exact:true}).count(),0,'Director must not get patient navigation');
+    if(role === 'reception') {
+      await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
+      assert.equal(await page.getByRole('button',{name:'+ Консультація',exact:true}).count(),0);
+    }
     await page.screenshot({path:`out/design/desktop-${role}.png`,fullPage:true});
   }
   assert.deepEqual(errors,[],'No uncaught React runtime errors');

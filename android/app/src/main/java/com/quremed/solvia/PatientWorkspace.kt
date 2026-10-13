@@ -34,7 +34,7 @@ class PatientWorkspace(
     private val consult: (Long, String) -> Unit,
     private val preview: (NativeDocument, () -> Unit) -> Unit
 ) {
-    private val teal = Color.rgb(16, 111, 117)
+    private val teal = MobileUi.accent
     private val ink = Color.rgb(25, 48, 62)
     private var patient = JSONObject()
     private var selected = "summary"

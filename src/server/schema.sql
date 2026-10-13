@@ -73,6 +73,10 @@ CREATE TABLE IF NOT EXISTS attendees(
   PRIMARY KEY(appointment_id,patient_id)
 );
 
+-- Reception attendance is separate from booking confirmation and clinical completion.
+ALTER TABLE attendees ADD COLUMN IF NOT EXISTS arrived_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE attendees ADD COLUMN IF NOT EXISTS arrived_by BIGINT REFERENCES users(id);
+
 CREATE TABLE IF NOT EXISTS consultations(
   id BIGSERIAL PRIMARY KEY,
   patient_id BIGINT NOT NULL REFERENCES patients(id),

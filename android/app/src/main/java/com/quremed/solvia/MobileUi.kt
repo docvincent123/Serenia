@@ -17,8 +17,8 @@ object MobileUi {
     val background = Color.rgb(246, 248, 250)
     val ink = Color.rgb(25, 44, 55)
     val muted = Color.rgb(105, 124, 137)
-    val accent = Color.rgb(18, 113, 120)
-    val soft = Color.rgb(229, 243, 242)
+    val accent = Color.rgb(5, 110, 177)
+    val soft = Color.rgb(228, 241, 251)
     val border = Color.rgb(225, 233, 236)
     fun dp(context: Context, n: Int) = (n * context.resources.displayMetrics.density).toInt()
     fun surface(context: Context, color: Int = Color.WHITE, radius: Int = 16, outlined: Boolean = false) = GradientDrawable().apply {

@@ -4,6 +4,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONArray
@@ -102,6 +103,46 @@ class OfflineWorkflowTest {
             it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
             val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(it) as? android.app.AlertDialog
             dialog?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+    @Test fun shiftListsSeparateGroupCompletionAndPendingOfflineNotes() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val server="https://" + UUID.randomUUID() + ".invalid"
+                val cache=OfflineStore(activity,server,42)
+                cache.saveSession(JSONObject().put("id",42).put("role","psychologist"),"synthetic-token")
+                val day=java.time.LocalDate.now().toString()
+                val patients=JSONArray().put(JSONObject().put("id",7).put("name","Завершений учасник").put("patient_no","12345").put("completed_at",day+"T09:55"))
+                    .put(JSONObject().put("id",8).put("name","Учасник у черзі").put("patient_no","54321").put("arrived_at",day+"T08:55"))
+                cache.saveCache("/api/appointments?date=$day",JSONArray().put(JSONObject().put("id",12).put("status","confirmed")
+                    .put("start",day+"T09:00").put("end",day+"T10:00").put("room","Кабінет 1").put("patients",patients)))
+                cache.enqueue(payload().put("patient_id",8),"Учасник у черзі")
+                for((name,value) in listOf("server" to server,"token" to "synthetic-token","role" to "psychologist","userId" to 42L,"userName" to "Тестовий психолог","workspaceReady" to true,"offlineMode" to true))
+                    MainActivity::class.java.getDeclaredField(name).apply { isAccessible=true }.set(activity,value)
+                MainActivity::class.java.getDeclaredMethod("renderHomeScreen",String::class.java).apply { isAccessible=true }.invoke(activity,"active")
+            }
+            var ready=false
+            val deadline=System.currentTimeMillis()+5000
+            while(!ready && System.currentTimeMillis()<deadline) {
+                scenario.onActivity { activity -> ready=views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Активні · 1" } }
+                if(!ready) Thread.sleep(50)
+            }
+            assertTrue("Cached shift tabs must render",ready)
+            scenario.onActivity { activity ->
+                val root=activity.window.decorView
+                val labels=views(root).filterIsInstance<TextView>().map { it.text.toString() }
+                assertTrue(labels.contains("Учасник у черзі")); assertFalse(labels.contains("Завершений учасник"))
+                assertTrue(labels.contains("Збережено на телефоні · очікує передавання"))
+                assertFalse(views(root).filterIsInstance<Button>().any { it.text.toString()=="Почати консультацію" })
+                assertTrue(views(root).filterIsInstance<Button>().any { it.contentDescription=="Відкрити меню психолога" })
+            }
+            capture(scenario,"shift-active")
+            scenario.onActivity { activity ->
+                views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Проконсультовані · 1" }.performClick()
+                val labels=views(activity.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
+                assertTrue(labels.contains("Завершений учасник")); assertFalse(labels.contains("Учасник у черзі"))
+            }
+            capture(scenario,"shift-completed")
         }
     }
     @Test fun consultationCanOpenFromCachedCalendarAndFinishWithoutWifi() {
