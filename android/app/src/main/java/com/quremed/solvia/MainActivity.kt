@@ -1556,6 +1556,7 @@ class MainActivity : Activity() {
                             synchronized(DraftSync.lock) {
                                 check(token == auth && server == base) { "Сесію завершено. Запис залишається на телефоні." }
                                 val latest = draftStore.read(patientId)
+                                check(latest?.optBoolean("sync_blocked") != true) { "Перевірте серверну версію в інструментах запису. Локальний текст збережено." }
                                 if((latest?.optInt("server_version", 0) ?: 0) > 0) payload.put("draft_version", latest!!.optInt("server_version"))
                                 journal.enqueue(payload, patientName)
                                 draftStore.remove(patientId)

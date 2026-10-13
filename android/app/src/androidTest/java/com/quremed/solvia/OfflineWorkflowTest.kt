@@ -196,10 +196,22 @@ class OfflineWorkflowTest {
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
                 dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+            }
+            var finished = false
+            val finishDeadline = System.currentTimeMillis() + 15000
+            while(!finished && System.currentTimeMillis() < finishDeadline) {
+                scenario.onActivity { activity ->
+                    val server = MainActivity::class.java.getDeclaredField("server").apply { isAccessible = true }.get(activity) as String
+                    finished = OfflineStore(activity, server, 42).queue().length() > 0 && MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) == null
+                }
+                if(!finished) Thread.sleep(50)
+            }
+            assertTrue("Finalization must enqueue off the UI thread", finished)
+            scenario.onActivity { activity ->
                 val server = MainActivity::class.java.getDeclaredField("server").apply { isAccessible = true }.get(activity) as String
                 val row = OfflineStore(activity, server, 42).queue().getJSONObject(0)
                 assertEquals("Консультація завершена без Wi-Fi", row.getJSONObject("payload").getString("note"))
-                assertEquals("pending", row.getString("state")); assertFalse(dialog.isShowing)
+                assertEquals("pending", row.getString("state"))
                 assertNull(DraftStore(activity, server, 42).read(7))
             }
         }
