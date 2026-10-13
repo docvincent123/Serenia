@@ -43,7 +43,7 @@ class OfflineSyncJob : JobService() {
                 if(authorized && !cancelled.get()) {
                     val shift = get(base, auth, "/api/shift-day") as JSONObject
                     store.saveCache("/api/shift-day", shift)
-                    if(!shift.optBoolean("open")) AppointmentReminders.cancelScope(this, base, uid)
+                    if(!shift.optBoolean("open")) { AppointmentReminders.cancelScope(this, base, uid); ShiftNotifications.refresh(this, base, uid) }
                     else {
                         for(day in 0..1) {
                             val path = "/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())
@@ -56,7 +56,12 @@ class OfflineSyncJob : JobService() {
                 val queue = store.queue()
                 retry = authorized && ((0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" } ||
                     drafts.patients().any { drafts.read(it)?.let { value -> !DraftSync.transferred(value) && !value.optBoolean("sync_blocked") } ?: false })
-            } catch(_: Exception) { retry = true }
+            } catch(e: Exception) {
+                if(e is SyncFailure && e.status == 401) {
+                    val base = params.extras.getString("server").orEmpty(); val uid = params.extras.getLong("user")
+                    OfflineStore(this, base, uid).revokeSession(); AppointmentReminders.restore(this); ShiftNotifications.restore(this)
+                } else retry = true
+            }
             finally { active.remove(params.jobId, cancelled); if(!cancelled.get()) jobFinished(params, retry) }
         }
         return true

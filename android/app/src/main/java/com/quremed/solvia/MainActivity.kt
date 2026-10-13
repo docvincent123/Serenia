@@ -151,8 +151,9 @@ class MainActivity : Activity() {
             try {
                 val store = OfflineStore(this, base, uid)
                 val shift = requestAt(base, "GET", "/api/shift-day", authToken = auth) as JSONObject
+                store.saveCache("/api/shift-day", shift)
                 if(!shift.optBoolean("open")) {
-                    if(token == auth && server == base) AppointmentReminders.cancelScope(this, base, uid)
+                    if(token == auth && server == base) { AppointmentReminders.cancelScope(this, base, uid); ShiftNotifications.refresh(this, base, uid) }
                 } else {
                     for(day in 0..1) {
                         val path = "/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())
@@ -727,6 +728,14 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onNewIntent(next: Intent) {
+        super.onNewIntent(next); setIntent(next)
+        next.data?.let { uri ->
+            if(token.isNotBlank()) Toast.makeText(this, "Для зміни сервера спочатку вийдіть із профілю.", Toast.LENGTH_LONG).show()
+            else importServerConfig(uri)
+        }
+    }
+
     private fun openServerConfigFile() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -738,7 +747,12 @@ class MainActivity : Activity() {
     private fun importServerConfig(uri: android.net.Uri) {
         io.execute {
             try {
-                val text = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                val text = contentResolver.openInputStream(uri)?.use { stream ->
+                    val buffer = java.io.ByteArrayOutputStream(); val chunk = ByteArray(4096)
+                    while(buffer.size() <= 65536) { val n = stream.read(chunk); if(n < 0) break; buffer.write(chunk, 0, n) }
+                    val bytes = buffer.toByteArray()
+                    require(bytes.size <= 65536) { "Файл підключення завеликий" }; String(bytes, Charsets.UTF_8)
+                }
                     ?: throw IllegalStateException("Не вдалося прочитати файл")
                 val json = JSONObject(text)
                 require(json.optString("format") == "quremed.solvia.mobile") { "Це не файл підключення SOLVIA" }
@@ -1644,6 +1658,7 @@ class MainActivity : Activity() {
     }
 
     private fun logout() {
+        ShiftNotifications.clear(this)
         consultationWindow?.dismiss(); consultationWindow = null
         AppointmentReminders.cancel(this)
         val oldToken = token
@@ -1659,6 +1674,16 @@ class MainActivity : Activity() {
         java.io.File(cacheDir, "documents").deleteRecursively()
         io.execute { try { requestAt(oldServer, "POST", "/api/logout", JSONObject(), oldToken) } catch (_: Exception) { } }
         loginScreen()
+    }
+
+    private fun requestNotificationAccess() {
+        if(Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4200)
+        else startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if(requestCode == 4200 && userId > 0) { ShiftNotifications.refresh(this, server, userId); refreshAppointments() }
     }
 
     private fun settingsScreen() {
@@ -1684,6 +1709,25 @@ class MainActivity : Activity() {
             }
         })
         body.addView(caption(if(AppointmentReminders.allowed(this)) "Оповіщення увімкнено" else "Android блокує оповіщення. Дозвольте їх у налаштуваннях телефона."))
+        body.addView(primary("Перевірити дзвінок консультації") {
+            if(AppointmentReminders.allowed(this)) AppointmentReminders.test(this)
+            else requestNotificationAccess()
+        })
+        body.addView(secondary("Зупинити тестовий дзвінок") { AppointmentReminders.stopTest(this) })
+        body.addView(secondary("Перевірити повідомлення у шторці") {
+            if(AppointmentReminders.allowed(this)) ShiftNotifications.testMessage(this)
+            else requestNotificationAccess()
+        })
+        listOf("shift_notification" to "Показувати активну зміну у шторці", "new_visit_notifications" to "Повідомляти про нові консультації").forEach { (key, label) ->
+            body.addView(CheckBox(this).apply {
+                text = label; setTextColor(ink); isChecked = prefs.getBoolean(key, true)
+                setOnCheckedChangeListener { _, enabled ->
+                    prefs.edit().putBoolean(key, enabled).apply()
+                    if(userId > 0) ShiftNotifications.refresh(this@MainActivity, server, userId)
+                }
+            })
+        }
+        body.addView(caption("Зміна залишається у шторці після закриття застосунку, поки діє сесія. Нові записи перевіряються у фоні; Android може затримати оновлення. Примусова зупинка вимикає фонову роботу до наступного запуску."))
         body.addView(secondary("Звук і дозволи оповіщень") {
             AppointmentReminders.channel(this)
             startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)

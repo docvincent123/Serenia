@@ -44,7 +44,8 @@ object AppointmentReminders {
         val p = prefs(c)
         p.getStringSet("keys", emptySet())!!.forEach { key -> alarm(c).cancel(pending(c, key)) }
         p.edit().clear().commit()
-        (c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancelAll()
+        val manager = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.activeNotifications.filter { it.id == 1 }.forEach { manager.cancel(it.tag, it.id) }
     }
     @Synchronized fun cancelScope(c: Context, server: String, user: Long) {
         if(prefs(c).getString("server", "") == server && prefs(c).getLong("user", 0) == user) cancel(c)
@@ -95,10 +96,25 @@ object AppointmentReminders {
             for(i in 0 until rows.length()) all.put(rows.getJSONObject(i))
         }
         update(c, server, user, all)
+        ShiftNotifications.refresh(c, server, user)
     }
     @Synchronized fun restore(c: Context) {
         val p = prefs(c); val base = p.getString("server", "").orEmpty(); val uid = p.getLong("user", 0)
         if(base.isNotBlank() && uid > 0) refreshFromCache(c, base, uid)
+        ShiftNotifications.restore(c)
+    }
+    fun stopTest(c: Context) = (c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel("test", 1)
+    fun test(c: Context) {
+        if(!allowed(c)) return
+        channel(c)
+        val dismiss = PendingIntent.getBroadcast(c, 0, Intent(c, ConsultationReminderReceiver::class.java)
+            .setAction("com.quremed.solvia.SILENCE").setData(Uri.parse("solvia://silence/test")).putExtra("key", "test"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
+            .setContentTitle("SOLVIA · тестовий дзвінок").setContentText("Перевірка мелодії консультації · 15 секунд")
+            .setCategory(Notification.CATEGORY_ALARM).setVisibility(Notification.VISIBILITY_PRIVATE).setAutoCancel(true).setTimeoutAfter(15000)
+            .addAction(Notification.Action.Builder(null, "Зупинити", dismiss).build()).build()
+        notification.flags = notification.flags or Notification.FLAG_INSISTENT
+        (c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify("test", 1, notification)
     }
     @Synchronized fun deliver(c: Context, key: String) {
         val p = prefs(c)
@@ -118,7 +134,7 @@ object AppointmentReminders {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val dismiss = PendingIntent.getBroadcast(c, 0, Intent(c, ConsultationReminderReceiver::class.java)
             .setAction("com.quremed.solvia.SILENCE").setData(Uri.parse("solvia://silence/$key")).putExtra("key", key), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_calendar)
+        val notification = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
             .setContentTitle("Час консультації").setContentText("Відкрийте SOLVIA та перевірте активні прийоми.")
             .setCategory(Notification.CATEGORY_ALARM).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(open).setAutoCancel(true).setTimeoutAfter(60000)

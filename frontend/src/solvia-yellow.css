@@ -1,0 +1,35 @@
+/* Shared SOLVIA identity. Yellow selects actions; status colors keep their meaning. */
+:root { --bg:#f5f5f2; --ink:#202731; --ink-2:#414a55; --muted:#717984; --line:#e3e4de; --forest:#f6c22c; --forest-dark:#785c06; --forest-soft:#fff5d4; }
+body,.workspace,.app-shell { background:var(--bg); }
+.app-shell .sidebar { background:#202731; border:0; color:#fff; }
+.sidebar .sidebar-brand strong,.sidebar .user-copy strong { color:#fff; }
+.sidebar .sidebar-brand span,.sidebar .user-copy span,.sidebar .nav-group-toggle { color:#b5bdc8; }
+.sidebar .nav-item,.sidebar .nav-icon { color:#dce0e7; }
+.sidebar .nav-item:hover { background:#343d48; color:#fff; }
+.sidebar .nav-item.active { background:#f6c22c; color:#181613; border-left-color:#f6c22c; }
+.sidebar .nav-item.active .nav-icon { color:#181613; }
+.sidebar .sidebar-support { background:#2b333f; border-color:#404855; }
+.sidebar .sidebar-support :is(strong,a,small) { color:#cbd1da; }
+.sidebar .sidebar-actions,.sidebar .user-card { border-color:#404855; }
+.sidebar .product-mark,.product-mark,.brand-orbit { background:transparent; border:0; box-shadow:none; }
+.product-logo,.brand-logo { object-fit:contain; }
+.button.primary { background:#f6c22c; color:#181613; border:1px solid #e0ae1b; box-shadow:0 3px 10px #a47b1520; font-weight:750; }
+.button.primary:hover { background:#ffcf45; border-color:#ba8d09; }
+.button.secondary { color:#39424e; background:#fff; border-color:#d9dce0; }
+.button.secondary:hover { background:#fff8e1; border-color:#d4b85e; }
+.button.ghost { color:#59616d; }
+button:focus-visible,a:focus-visible { outline:3px solid #c7970c; outline-offset:3px; }
+input:focus,select:focus,textarea:focus { border-color:#c7970c; box-shadow:0 0 0 3px #f6c22c35; }
+.shift-bar { background:#fff5d4; border-color:#eed991; color:#644d0b; }
+.connection-pill strong { color:#644d0b; }
+.page-head h1,.surface h2,.section-head h2,.stat-card>strong,.stat-value { color:#202731; }
+.login-brand { background:#202731; }
+.login-brand::after { opacity:.15; }
+.login-brand .brand-orbit::after { background:#f6c22c; }
+.login-brand :is(h1,strong,h2) { color:#fff; }
+.login-brand-copy p { color:#cbd1da; }
+.shift-summary article:first-child { border-top-color:#f6c22c; }
+.shift-tabs button.active { color:#181613; background:#f6c22c; border-color:#d4a31b; }
+.shift-visit.selected { background:#fff7db; border-color:#c7970c; box-shadow:inset 3px 0 #f6c22c; }
+.calendar-tabs button.active,.patient-tabs button.active,.segmented-control button.active { background:#fff5d4; color:#644d0b; }
+@media print { .button.primary { box-shadow:none; } }

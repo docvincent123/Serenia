@@ -2937,37 +2937,18 @@ function Settings({ api, apiBase, onSwitchApi }) {
     } catch (e) { setError(e.message); }
   }
 
-  function downloadMobileConfig() {
+  async function downloadMobileConfig() {
     try {
-      const preferred = form.connection_mode === 'vps' ? 'vps' : 'local';
-      const apiUrl = preferred === 'vps'
-        ? cleanBase(form.vps_api_url)
-        : cleanBase(form.local_api_url || apiBase);
-      if (!apiUrl.startsWith('https://')) throw new Error('Для телефону потрібне HTTPS-підключення.');
-      if (/127\.0\.0\.1|localhost/i.test(apiUrl)) {
-        throw new Error('Для телефона потрібна LAN-адреса серверного ПК, а не 127.0.0.1. Вкажіть Local API URL, наприклад https://192.168.1.100:8443.');
-      }
-      const config = {
-        format: 'quremed.solvia.mobile',
-        version: 1,
-        center: form.center_name || 'SOLVIA',
-        preferred,
-        api_url: apiUrl,
-        https_url: apiUrl.startsWith('https://') ? apiUrl : '',
-        generated: new Date().toISOString()
-      };
-      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json;charset=utf-8' });
+      const config = await api('GET', '/api/mobile-config');
+      if (config.format !== 'quremed.solvia.mobile' || !config.api_url) throw new Error('Сервер не створив файл підключення.');
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/vnd.solvia.connection+json' });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = href;
-      link.download = 'SOLVIA-Mobile.solvia';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      link.href = href; link.download = 'SOLVIA-Mobile.solvia';
+      document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(href), 1000);
-    } catch (e) {
-      setConnectionTest({ state: 'error', message: e.message });
-    }
+      setConnectionTest({ state: 'success', message: 'Файл створено сервером зі збережених налаштувань. Відкрийте його на телефоні у SOLVIA.' });
+    } catch (e) { setConnectionTest({ state: 'error', message: e.message }); }
   }
 
   function selectedEndpoint() {
