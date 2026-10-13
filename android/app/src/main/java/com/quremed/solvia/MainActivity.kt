@@ -744,6 +744,16 @@ class MainActivity : Activity() {
         startActivityForResult(intent, openConfigRequest)
     }
 
+    private fun configAddress(value: String): String {
+        val validated = normalize(value)
+        val supplied = URI(value.trim())
+        // A file contains a URL, so preserve its standard port instead of guessing the LAN port.
+        if(supplied.scheme != null && supplied.port == -1) {
+            val scheme = supplied.scheme.lowercase()
+            return URI(scheme, null, supplied.host.lowercase(), if(scheme == "https") 443 else 80, null, null, null).toString()
+        }
+        return validated
+    }
     private fun rememberServer(candidate: String) {
         val previous = prefs.getString("server", "").orEmpty()
         if(previous.isNotBlank() && previous != candidate) {
@@ -775,7 +785,7 @@ class MainActivity : Activity() {
                 }
                 val firstSource = if (preferred == "http" && httpSource.isNotBlank()) httpSource
                     else httpsSource.ifBlank { json.optString("api_url").ifBlank { httpSource } }
-                val candidate = normalize(firstSource)
+                val candidate = configAddress(firstSource)
 
                 try {
                     val health = requestAt(candidate, "GET", "/api/health", authToken = "") as JSONObject
@@ -787,7 +797,7 @@ class MainActivity : Activity() {
                     }
                 } catch (primary: Exception) {
                     if (candidate.startsWith("https://", true) && httpSource.isNotBlank()) {
-                        val localHttp = normalize(httpSource)
+                        val localHttp = configAddress(httpSource)
                         val health = requestAt(localHttp, "GET", "/api/health", authToken = "") as JSONObject
                         require(health.optBoolean("ok")) { "Локальний HTTP сервер не готовий" }
                         runOnUiThread {

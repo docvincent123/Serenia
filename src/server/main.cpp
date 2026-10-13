@@ -321,7 +321,9 @@ if(path=="/api/mobile-config"&&method=="GET"){
     if(url.empty()&&mode!="vps")url=settings.value("local_api_url",std::string());
     while(!url.empty()&&url.back()=='/')url.pop_back();
     check(std::regex_match(url,std::regex("https://[A-Za-z0-9.-]+(:[0-9]{1,5})?")),"Для телефона збережіть HTTPS адресу сервера без шляху",400);
-    auto host=url.substr(8);host=host.substr(0,host.find(':'));
+    auto host=url.substr(8);auto colon=host.find(':');
+    if(colon!=std::string::npos){auto port=std::stoi(host.substr(colon+1));check(port>=1&&port<=65535,"Порт сервера: 1–65535",400);}
+    host=host.substr(0,colon);
     check(host!="localhost"&&host!="0.0.0.0"&&host.rfind("127.",0)!=0,"Для телефона потрібна мережева адреса сервера",400);
     return {{"format","quremed.solvia.mobile"},{"version",1},{"center",settings.value("center_name",std::string("SOLVIA"))},{"preferred","https"},{"api_url",url},{"https_url",url},{"generated",now()}};
 }

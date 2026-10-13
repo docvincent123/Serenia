@@ -134,6 +134,14 @@ class NativeWorkflowTest {
             assertEquals("", MainActivity::class.java.getDeclaredField("role").apply { isAccessible = true }.get(activity))
         } }
     }
+    @Test fun connectionFilePreservesStandardAndExplicitPorts() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { activity ->
+            val normalize = MainActivity::class.java.getDeclaredMethod("configAddress", String::class.java).apply { isAccessible = true }
+            assertEquals("https://192.168.1.100:443", normalize.invoke(activity, "https://192.168.1.100"))
+            assertEquals("https://192.168.1.100:8443", normalize.invoke(activity, "https://192.168.1.100:8443"))
+            assertEquals("https://center.example:443", normalize.invoke(activity, "https://center.example"))
+        } }
+    }
     @Test fun loginIsLimitedToCredentialsAndConnectionLink() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             var reference: MainActivity? = null

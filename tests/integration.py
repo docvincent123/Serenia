@@ -191,6 +191,10 @@ class Scenario(unittest.TestCase):
         center_settings=self.api(admin,'GET','/api/settings/center')
         self.assertEqual(center_settings['connection_mode'],'local')
         self.assertEqual(center_settings['local_api_url'],'https://192.168.1.100:8443')
+        invalid_mobile=dict(center_settings,local_api_url='https://192.168.1.100:0')
+        self.api(admin,'PATCH','/api/settings/center',invalid_mobile)
+        self.api(admin,'GET','/api/mobile-config',status=400)
+        self.api(admin,'PATCH','/api/settings/center',center_settings)
         self.assertEqual(center_settings['vps_api_url'],'https://solvia.example.test')
         bad_vps={**center_settings,'connection_mode':'vps','vps_api_url':'http://insecure.example.test'}
         bad_vps.pop('id',None); bad_vps.pop('updated',None)
