@@ -1380,6 +1380,7 @@ class MainActivity : Activity() {
                 it.optString("start").takeLast(5) + " · " + it.optString("room")
             }
             appointmentSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, appointmentLabels)
+            appointmentSpinner.setSelection(0)
             if(preferredAppointment > 0 || savedDraft != null) {
                 val selectedId = savedDraft?.optLong("appointment_id") ?: preferredAppointment
                 val chosen = eligible.indexOfFirst { it.optLong("id") == selectedId }

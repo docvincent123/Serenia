@@ -74,14 +74,15 @@ object AppointmentReminders {
             }
             if(!unfinished) continue
             val at = runCatching { LocalDateTime.parse(a.getString("start")).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() - LEAD_MS }.getOrNull() ?: continue
-            if(at <= now && ("${id}_$at" !in previous || now - at > 15 * 60 * 1000L)) continue
+            if(at <= now && (("${id}_$at" !in previous && now - at > LEAD_MS) || now - at > 15 * 60 * 1000L)) continue
             val key = "${id}_$at"; keys.add(key); edit.putLong(key, at)
             // A fired reminder must not be rearmed by the next refresh.
-            if(p.getBoolean("fired:$key", false) || at <= now) continue
+            if(p.getBoolean("fired:$key", false)) continue
+            val trigger = maxOf(at, now + 500)
             try {
-                if(exact(c)) alarm(c).setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending(c, key))
-                else alarm(c).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending(c, key))
-            } catch(_: SecurityException) { alarm(c).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending(c, key)) }
+                if(exact(c)) alarm(c).setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pending(c, key))
+                else alarm(c).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pending(c, key))
+            } catch(_: SecurityException) { alarm(c).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pending(c, key)) }
         }
         (previous - keys).forEach { key ->
             alarm(c).cancel(pending(c, key)); edit.remove(key).remove("fired:$key")
