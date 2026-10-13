@@ -30,7 +30,12 @@ class OfflineSyncJob : JobService() {
                 val store = OfflineStore(this, base, uid)
                 val session = store.session() ?: return@execute
                 val auth = session.getString("token")
-                val authorized = ConsultationSync(store) { payload ->
+                val drafts = DraftStore(this, base, uid)
+                val draftsAuthorized = DraftSync(drafts, store) { method, path, body ->
+                    if(cancelled.get() || store.session()?.optString("token") != auth) throw SyncFailure(401, "Потрібен повторний вхід")
+                    if(method == "GET") get(base, auth, path) as JSONObject else send(base, auth, body!!, path, method)
+                }.run()
+                val authorized = draftsAuthorized && ConsultationSync(store) { payload ->
                     if(cancelled.get() || store.session()?.optString("token") != auth) throw SyncFailure(401, "Потрібен повторний вхід")
                     send(base, auth, payload)
                 }.run()
@@ -49,7 +54,8 @@ class OfflineSyncJob : JobService() {
                     }
                 }
                 val queue = store.queue()
-                retry = authorized && (0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" }
+                retry = authorized && ((0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" } ||
+                    drafts.patients().any { drafts.read(it)?.let { value -> !DraftSync.transferred(value) && !value.optBoolean("sync_blocked") } ?: false })
             } catch(_: Exception) { retry = true }
             finally { active.remove(params.jobId, cancelled); if(!cancelled.get()) jobFinished(params, retry) }
         }
@@ -57,10 +63,10 @@ class OfflineSyncJob : JobService() {
     }
     override fun onStopJob(params: JobParameters): Boolean { active[params.jobId]?.set(true); return true }
     override fun onDestroy() { active.values.forEach { it.set(true) }; executor.shutdownNow(); super.onDestroy() }
-    private fun send(base: String, auth: String, payload: JSONObject): JSONObject {
-        val connection = URL(base + "/api/consultations").openConnection() as HttpURLConnection
+    private fun send(base: String, auth: String, payload: JSONObject, path: String = "/api/consultations", method: String = "POST"): JSONObject {
+        val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
-            connection.instanceFollowRedirects = false; connection.requestMethod = "POST"
+            connection.instanceFollowRedirects = false; connection.requestMethod = method
             connection.connectTimeout = 6000; connection.readTimeout = 12000; connection.doOutput = true
             connection.setRequestProperty("Authorization", "Bearer $auth")
             connection.setRequestProperty("Accept", "application/json")

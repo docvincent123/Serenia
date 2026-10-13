@@ -143,6 +143,14 @@ class OfflineWorkflowTest {
                 assertTrue(labels.contains("Архів зміни"))
                 assertTrue(labels.contains("Завершений учасник")); assertTrue(labels.contains("Учасник у черзі"))
                 assertTrue(labels.contains("Збережено на телефоні · очікує передавання"))
+                val indicator = views(activity.window.decorView).first { it.tag == "unsent:8:12" }
+                assertEquals(View.VISIBLE, indicator.visibility)
+                val cache = OfflineStore(activity, MainActivity::class.java.getDeclaredField("server").apply { isAccessible=true }.get(activity) as String, 42)
+                MainActivity::class.java.getDeclaredMethod("updateTransferIndicators").apply { isAccessible=true }.invoke(activity)
+                assertEquals(View.VISIBLE, indicator.visibility)
+                cache.mark(cache.queue().getJSONObject(0).getJSONObject("payload").getString("client_key"), "sent", serverId=123)
+                MainActivity::class.java.getDeclaredMethod("updateTransferIndicators").apply { isAccessible=true }.invoke(activity)
+                assertEquals(View.GONE, indicator.visibility)
             }
             capture(scenario,"shift-completed")
         }

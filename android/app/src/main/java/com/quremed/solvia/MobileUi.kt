@@ -17,11 +17,12 @@ object MobileUi {
     val background = Color.rgb(12, 15, 19)
     val ink = Color.rgb(242, 245, 248)
     val muted = Color.rgb(172, 182, 193)
-    val accent = Color.rgb(0, 113, 181)
-    val soft = Color.rgb(24, 57, 79)
+    val accent = Color.rgb(246, 194, 44)
+    val onAccent = Color.rgb(24, 22, 16)
+    val soft = Color.rgb(65, 55, 25)
     val border = Color.rgb(67, 76, 87)
     val panel = Color.rgb(40, 45, 52)
-    val buttonInk = Color.rgb(225, 237, 248)
+    val buttonInk = Color.rgb(250, 238, 197)
     fun textScale(context: Context) = when(context.getSharedPreferences("solvia_settings", 0).getInt("text_size", 0)) { 1 -> 1.12f; 2 -> 1.25f; else -> 1f }
     fun dp(context: Context, n: Int) = (n * context.resources.displayMetrics.density).toInt()
     fun surface(context: Context, color: Int = panel, radius: Int = 16, outlined: Boolean = false) = GradientDrawable().apply {
@@ -31,11 +32,11 @@ object MobileUi {
     fun button(context: Context, label: String, primary: Boolean = false, selected: Boolean = false, action: () -> Unit): Button = Button(context).apply {
         text = label; isAllCaps = false; textSize = 14f * textScale(context); gravity = Gravity.CENTER
         setTypeface(typeface, if(primary || selected) Typeface.BOLD else Typeface.NORMAL)
-        setTextColor(if(primary) Color.WHITE else buttonInk)
+        setTextColor(if(primary) onAccent else buttonInk)
         minHeight = dp(context, 50); minimumHeight = dp(context, 50); minWidth = 0; minimumWidth = 0
         setPadding(dp(context, 14), dp(context, 9), dp(context, 14), dp(context, 9))
         backgroundTintList = null; stateListAnimator = null; elevation = 0f
-        background = RippleDrawable(ColorStateList.valueOf(Color.argb(35, 18, 113, 120)),
+        background = RippleDrawable(ColorStateList.valueOf(Color.argb(45, 246, 194, 44)),
             surface(context, if(primary) accent else if(selected) soft else panel, 10, !primary && !selected), null)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(context, 8) }
         setOnClickListener { action() }
