@@ -44,6 +44,9 @@ class RefreshScrollTest {
     @Test fun optionalChoicesPreserveTextWithoutInventingDefaultAssessment() {
         assertEquals("Опис психолога", ConsultationChoices.include("Опис психолога", "Стан", ConsultationChoices.emotionalStates, 0))
         assertEquals("Опис психолога\nСтан: Тривожний", ConsultationChoices.include("Опис психолога", "Стан", ConsultationChoices.emotionalStates, 2))
+        val original = org.json.JSONObject().put("note", "Текст").put("emotional_state", "Спокійний")
+        val changed = org.json.JSONObject(original.toString()).put("emotional_state", "Тривожний")
+        assertNotEquals(DraftSync.fingerprint(original), DraftSync.fingerprint(changed))
         assertEquals("", ConsultationChoices.include("", "Стан", ConsultationChoices.emotionalStates, -1))
     }
 }

@@ -1153,7 +1153,10 @@ class MainActivity : Activity() {
                         val item = updated.getJSONObject(i); val patients = item.optJSONArray("patients") ?: JSONArray()
                         for(j in 0 until patients.length()) visits.add(item to patients.getJSONObject(j))
                     }
+                    val listScroll = body.parent as? ScrollView
+                    val position = listScroll?.scrollY ?: 0
                     render(if(selectedNavigation == "archive") "completed" else "active")
+                    listScroll?.post { listScroll.scrollTo(0, position) }
                 }
             }
         }
