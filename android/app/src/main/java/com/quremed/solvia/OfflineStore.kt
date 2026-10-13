@@ -58,6 +58,9 @@ class OfflineStore(context: Context, server: String, userId: Long) {
         read("session")?.takeIf { it.optLong("expires") > now && it.optLong("expires") <= now + SESSION_TTL }
     }
     fun revokeSession() = synchronized(lock) { check(prefs.edit().remove("$scope|session").commit()) }
+    fun reportDraft(day: String): JSONObject? = synchronized(lock) { read("report:$day") }
+    fun saveReportDraft(day: String, report: JSONObject) = synchronized(lock) { write("report:$day", report) }
+    fun clearReportDraft(day: String) = synchronized(lock) { check(prefs.edit().remove("$scope|report:$day").commit()) }
     fun queue(): JSONArray = synchronized(lock) { read("queue")?.optJSONArray("items") ?: JSONArray() }
     fun enqueue(payload: JSONObject, patientName: String) = synchronized(lock) {
         require(payload.getString("client_key").isNotBlank())

@@ -45,12 +45,12 @@ class MainActivity : Activity() {
     private val openConfigRequest = 4101
 
     private val bg = MobileUi.background
-    private val ink = Color.rgb(25, 48, 62)
-    private val muted = Color.rgb(104, 124, 137)
+    private val ink = MobileUi.ink
+    private val muted = MobileUi.muted
     private val forest = MobileUi.accent
     private val forestDark = Color.rgb(4, 79, 134)
     private val forestSoft = MobileUi.soft
-    private val line = Color.rgb(213, 226, 232)
+    private val line = MobileUi.border
 
     private var server = ""
     private var token = ""
@@ -72,8 +72,9 @@ class MainActivity : Activity() {
     private var statusView: TextView? = null
     private var lastCacheTime = 0L
     private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var appointmentRefreshRunning = false
     private val syncTick = object : Runnable {
-        override fun run() { syncNow(); syncHandler.postDelayed(this, 60000) }
+        override fun run() { syncNow(); refreshAppointments(); syncHandler.postDelayed(this, 60000) }
     }
     private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
     private fun offlineStore() = OfflineStore(this, server, userId)
@@ -121,13 +122,34 @@ class MainActivity : Activity() {
             }
         }
     }
+    private fun refreshAppointments() {
+        if(token.isBlank() || role != "psychologist" || appointmentRefreshRunning) return
+        appointmentRefreshRunning = true
+        val base = server; val auth = token; val uid = userId
+        cacheIo.execute {
+            try {
+                val store = OfflineStore(this, base, uid)
+                val shift = requestAt(base, "GET", "/api/shift-day", authToken = auth) as JSONObject
+                if(!shift.optBoolean("open")) {
+                    if(token == auth && server == base) AppointmentReminders.cancelScope(this, base, uid)
+                } else {
+                    for(day in 0..1) {
+                        val path = "/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())
+                        store.saveCache(path, requestAt(base, "GET", path, authToken = auth))
+                    }
+                    if(token == auth && server == base) AppointmentReminders.refreshFromCache(this, base, uid)
+                }
+            } catch(_: Exception) { }
+            finally { runOnUiThread { appointmentRefreshRunning = false } }
+        }
+    }
     private fun prepareOfflineCache(base: String, auth: String, store: OfflineStore) {
         if(cachePreparing) return
         cachePreparing = true; updateConnectionStatus()
         cacheIo.execute {
             var message = "Офлайн-копії оновлено"
             var denied = false
-            try { warmCache(base, auth, store) }
+            try { warmCache(base, auth, store); if(token == auth && server == base) AppointmentReminders.refreshFromCache(this, base, userId) }
             catch(e: Exception) { denied = e is ApiError && e.status == 401; message = "Завантаження перервано. Уже завантажені копії збережено." }
             runOnUiThread {
                 cachePreparing = false
@@ -246,7 +268,7 @@ class MainActivity : Activity() {
                     if(child.tag == "unsaved_form") AlertDialog.Builder(this@MainActivity).setTitle("Залишити форму?")
                         .setMessage("Незбережені зміни буде втрачено.").setNegativeButton("Продовжити", null)
                         .setPositiveButton("Залишити") { _, _ -> moreScreen() }.show()
-                    else moreScreen()
+                    else openMenu()
                 }
             }, LinearLayout.LayoutParams(dp(48), dp(48)))
             header.addView(TextView(this).apply {
@@ -261,23 +283,23 @@ class MainActivity : Activity() {
         if (token.isNotBlank() && workspaceReady) {
             val bar = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
-                setBackgroundColor(Color.WHITE); elevation = dp(6).toFloat()
+                setBackgroundColor(MobileUi.panel); elevation = dp(6).toFloat()
             }
-            val links = listOf(Triple("home", "Головна", R.drawable.ic_home), Triple("calendar", "Розклад", R.drawable.ic_calendar),
+            val links = listOf(Triple("home", "Активні", R.drawable.ic_home), Triple("archive", "Архів зміни", R.drawable.ic_reports), Triple("calendar", "Розклад", R.drawable.ic_calendar),
                 Triple("patients", "Пацієнти", R.drawable.ic_patients), Triple("more", "Меню", R.drawable.ic_menu))
             links.forEach { (key, label, icon) ->
                 bar.addView(Button(this).apply {
                     text = label; isAllCaps = false; textSize = 11f; contentDescription = label
                     setTextColor(if (selectedNavigation == key) forest else muted)
                     backgroundTintList = null; stateListAnimator = null; elevation = 0f
-                    background = rounded(if (selectedNavigation == key) forestSoft else Color.WHITE, 18)
+                    background = rounded(if (selectedNavigation == key) forestSoft else MobileUi.panel, 18)
                     val drawable = getDrawable(icon)?.mutate()
                     drawable?.setTint(if(selectedNavigation == key) forest else muted)
                     drawable?.setBounds(0, 0, dp(22), dp(22)); setCompoundDrawables(null, drawable, null, null)
                     setPadding(dp(3), dp(8), dp(3), dp(5)); minWidth = 0; minimumWidth = 0
                     setOnClickListener {
                         val navigate = { when(key) {
-                            "home" -> homeScreen(); "calendar" -> calendarScreen(); "patients" -> patientsScreen()
+                            "home" -> homeScreen(); "archive" -> renderHomeScreen("completed"); "calendar" -> calendarScreen(); "patients" -> patientsScreen()
                             else -> moreScreen()
                         } }
                         val child = if(content is ScrollView && content.childCount > 0) content.getChildAt(0) else content
@@ -295,10 +317,9 @@ class MainActivity : Activity() {
     }
 
     private fun lightSystemBars(target: android.view.Window) {
-        if(Build.VERSION.SDK_INT >= 30) target.insetsController?.setSystemBarsAppearance(
-            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+        if(Build.VERSION.SDK_INT >= 30) target.insetsController?.setSystemBarsAppearance(0,
             android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
-        else target.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        else target.decorView.systemUiVisibility = 0
     }
 
     private fun mobileApi(): MobileApi = object : MobileApi {
@@ -325,24 +346,64 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun openMenu() {
+        val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(MobileUi.panel) }
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setBackgroundColor(forest); setPadding(dp(20), dp(28), dp(20), dp(20))
+        }
+        heading.addView(title(userName, 23f)); heading.addView(TextView(this).apply {
+            text = "Психолог · SOLVIA"; setTextColor(Color.WHITE); textSize = 14f
+        }); panel.addView(heading)
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(12)) }
+        val popup = android.widget.PopupWindow(panel, (resources.displayMetrics.widthPixels * 0.86f).toInt(), -1, true).apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(MobileUi.panel)); elevation = dp(16).toFloat(); isOutsideTouchable = true
+        }
+        fun row(label: String, icon: Int, action: () -> Unit) {
+            rows.addView(MobileUi.button(this, label) { popup.dismiss(); action() }.apply {
+                textSize = 18f; gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                background = rounded(MobileUi.panel, 0)
+                val image = getDrawable(icon)?.mutate(); image?.setTint(MobileUi.ink)
+                image?.setBounds(0, 0, dp(24), dp(24)); setCompoundDrawables(image, null, null, null)
+                compoundDrawablePadding = dp(16); minHeight = dp(58)
+            })
+        }
+        row("Активні консультації", R.drawable.ic_patients) { renderHomeScreen() }
+        row("Архів зміни", R.drawable.ic_reports) { renderHomeScreen("completed") }
+        row("Розклад", R.drawable.ic_calendar) { calendarScreen() }
+        row("Чернетки", R.drawable.ic_reports) { draftsScreen() }
+        row("Завершити зміну", R.drawable.ic_reports) { reportScreen() }
+        row("Конфігурація", R.drawable.ic_settings) { settingsScreen() }
+        row("Інформація", R.drawable.ic_home) { informationScreen() }
+        row("Перепідключення", R.drawable.ic_settings) { syncNow(refresh = true) }
+        row("Усі функції", R.drawable.ic_menu) { moreScreen() }
+        row("Відключення", R.drawable.ic_logout) {
+            AlertDialog.Builder(this).setTitle("Вийти?").setMessage("Чернетки залишаються на телефоні. Для передавання всіх записів скористайтеся завершенням зміни.")
+                .setNegativeButton("Залишитися", null).setPositiveButton("Вийти") { _, _ -> logout() }.show()
+        }
+        panel.addView(scroll(rows), LinearLayout.LayoutParams(-1, 0, 1f))
+        popup.showAtLocation(window.decorView, Gravity.TOP or Gravity.START, 0, 0)
+    }
+
     private fun moreScreen() {
         selectedNavigation = "more"; backAction = { homeScreen() }
-        val body = root(); body.addView(title("Мій кабінет", 28f)); body.addView(caption(userName))
+        val body = root(); body.addView(title("Меню психолога", 28f)); body.addView(caption(userName))
         val work = card(); work.addView(title("Робота", 18f)); body.addView(work)
         val personal = card(); personal.addView(title("Особисте", 18f))
         fun row(label: String, action: () -> Unit): Button = secondary(label, action).apply {
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
-            background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(forestSoft), rounded(Color.WHITE, 8), null)
+            background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(forestSoft), rounded(MobileUi.panel, 8), null)
             layoutParams = LinearLayout.LayoutParams(-1, dp(48))
             setPadding(dp(8), dp(4), dp(8), dp(4))
         }
         work.addView(row("Документи пацієнтів") { patientsScreen(documentLibrary = true) })
         work.addView(row("Активні пацієнти за зміну") { renderHomeScreen() })
-        work.addView(row("Проконсультовані за зміну") { renderHomeScreen("completed") })
+        work.addView(row("Архів зміни") { renderHomeScreen("completed") })
+        work.addView(row("Розклад консультацій") { calendarScreen() })
         work.addView(row("Мої чернетки") { draftsScreen() })
         work.addView(row("Синхронізація та офлайн-доступ") { syncScreen() })
         work.addView(row("Звіт за зміну") { reportScreen() })
         work.addView(row("Мої супервізії") { supervisionsScreen() })
+        personal.addView(row("Інформація про підключення") { informationScreen() })
         personal.addView(row("Мої налаштування") { settingsScreen() }); body.addView(personal)
         body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}"))
         body.addView(secondary("Вийти") {
@@ -350,6 +411,19 @@ class MainActivity : Activity() {
                 .setMessage("Зашифровані чернетки залишаться для наступного входу цього психолога.")
                 .setNegativeButton("Залишитися", null).setPositiveButton("Вийти") { _, _ -> logout() }.show()
         }); mount(scroll(body))
+    }
+
+    private fun informationScreen() {
+        val body = root(); backAction = { moreScreen() }
+        body.addView(topBar("Інформація", ::moreScreen))
+        val account = card(); account.addView(title(userName, 22f))
+        account.addView(caption("Психолог · користувач №$userId")); body.addView(account)
+        val connection = card(); connection.addView(title("Підключення", 20f)); connection.addView(caption(server))
+        connection.addView(caption(if(offlineMode) "Офлайн" else "Онлайн")); body.addView(connection)
+        body.addView(secondary("Перепідключення") { syncNow(refresh = true) })
+        body.addView(secondary("Налаштування та пароль") { settingsScreen() })
+        body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME} · QureMed Industries"))
+        mount(scroll(body))
     }
 
     private fun draftsScreen() {
@@ -419,7 +493,7 @@ class MainActivity : Activity() {
 
     private fun title(value: String, size: Float = 28f): TextView = TextView(this).apply {
         text = value
-        textSize = size
+        textSize = size * MobileUi.textScale(this@MainActivity)
         setTextColor(ink)
         setTypeface(typeface, Typeface.BOLD)
         setPadding(0, dp(8), 0, dp(10))
@@ -427,12 +501,13 @@ class MainActivity : Activity() {
 
     private fun caption(value: String): TextView = TextView(this).apply {
         text = value
-        textSize = 13f
+        textSize = 13f * MobileUi.textScale(this@MainActivity)
         setTextColor(muted)
         setPadding(0, 0, 0, dp(12))
     }
 
     private fun edit(hintText: String, password: Boolean = false): EditText = EditText(this).apply {
+        setSelectAllOnFocus(prefs.getBoolean("select_all", false))
         hint = hintText
         textSize = 16f
         setTextColor(ink)
@@ -802,6 +877,10 @@ class MainActivity : Activity() {
         prefs.edit().putLong("offline_user:$server", userId).apply()
         OfflineSyncJob.schedule(this, server, userId)
         homeScreen()
+        AppointmentReminders.channel(this)
+        if(Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4200)
+        refreshAppointments()
         syncNow(refresh = false)
         val base = server; val auth = token; val store = offlineStore()
         prepareOfflineCache(base, auth, store)
@@ -832,9 +911,9 @@ class MainActivity : Activity() {
     }
 
     private fun renderHomeScreen(initialTab: String = "active") {
-        workspaceReady = true; selectedNavigation = "home"; backAction = null
+        workspaceReady = true; selectedNavigation = if(initialTab == "completed") "archive" else "home"; backAction = null
         val body = root()
-        body.addView(title("Моя зміна", 28f))
+        body.addView(title(if(initialTab == "completed") "Архів зміни" else "Активні консультації", 26f))
         body.addView(caption(userName + " · " + LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", java.util.Locale.forLanguageTag("uk")))))
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         body.addView(tabs)
@@ -842,6 +921,7 @@ class MainActivity : Activity() {
         val quick = card(); quick.addView(title("Продовжити роботу", 18f))
         quick.addView(secondary("Продовжити чернетку") { draftsScreen() })
         quick.addView(secondary("Документи та виписки") { patientsScreen(documentLibrary = true) })
+        quick.addView(primary("Завершити зміну") { reportScreen() })
         body.addView(quick)
         mount(scroll(body))
         if(role != "director") apiAsync("GET", "/api/appointments?date=" + LocalDate.now()) { value ->
@@ -857,16 +937,16 @@ class MainActivity : Activity() {
                 val payload = it.getJSONObject("payload")
                 payload.optLong("appointment_id") == item.optLong("id") && payload.optLong("patient_id") == patient.optLong("id") && it.optString("state") in listOf("pending", "blocked", "sent")
             }?.optString("state") ?: ""
-            fun completed(item: JSONObject, patient: JSONObject) = VisitState.completed(patient.optString("completed_at"), item.optString("status"))
+            fun completed(item: JSONObject, patient: JSONObject) = VisitState.completed(patient.optString("completed_at"), item.optString("status"), localState(item, patient))
             fun active(item: JSONObject, patient: JSONObject) = !completed(item,patient) && item.optString("status") in listOf("scheduled", "confirmed")
             fun render(tab: String) {
                 tabs.removeAllViews(); today.removeAllViews()
                 val activeCount = visits.count { active(it.first,it.second) }
                 val completedCount = visits.count { completed(it.first,it.second) }
-                listOf("active" to "Активні · $activeCount", "completed" to "Проконсультовані · $completedCount").forEach { (key,label) ->
+                listOf("active" to "Активні · $activeCount", "completed" to "Архів · $completedCount").forEach { (key,label) ->
                     tabs.addView(MobileUi.button(this,label,selected=tab==key) { render(key) }, LinearLayout.LayoutParams(0,dp(54),1f).apply { rightMargin=dp(4) })
                 }
-                today.addView(caption(if(tab=="completed") "Завершені консультації за сьогодні. Курс пацієнта залишається активним." else "Пацієнти, що очікують консультації. Прибуття відмічає реєстратура."))
+                today.addView(caption(if(tab=="completed") "Проконсультовані за цю зміну. Статус передавання вказано під кожним записом." else "Пацієнти, що очікують консультації. Прибуття відмічає реєстратура."))
                 val visible = visits.filter { if(tab=="completed") completed(it.first,it.second) else active(it.first,it.second) }
                 if(visible.isEmpty()) today.addView(caption(if(tab=="completed") "Завершених консультацій ще немає." else "Активних прийомів зараз немає."))
                 for((item,patient) in visible) {
@@ -876,21 +956,22 @@ class MainActivity : Activity() {
                     row.addView(caption("Кабінет: " + item.optString("room")))
                     val state = localState(item,patient)
                     row.addView(caption(when {
-                        completed(item,patient) -> "Проконсультовано · " + patient.optString("completed_at").substringAfter('T').take(5)
+                        patient.optString("completed_at").isNotBlank() -> "Передано на сервер · " + patient.optString("completed_at").substringAfter('T').take(5)
                         state=="blocked" -> "Потрібна перевірка синхронізації"
                         state=="pending" -> "Збережено на телефоні · очікує передавання"
-                        state=="sent" -> "Передано на сервер · оновіть список"
+                        state=="sent" -> "Передано на сервер"
                         patient.optString("arrived_at").isNotBlank() -> "Пацієнт у центрі"
                         else -> "Очікуємо прибуття"
                     }))
                     if(active(item,patient) && state.isBlank()) row.addView(primary("Почати консультацію") {
                         consultationDialog(patient.getLong("id"),patient.optString("name"),item.getLong("id"))
                     })
-                    if(state in listOf("pending","blocked","sent") && !completed(item,patient)) row.addView(secondary("Синхронізація") { syncScreen() })
+                    if(state in listOf("pending","blocked")) row.addView(secondary("Синхронізація") { syncScreen() })
                     row.addView(secondary("Картка пацієнта") { patientScreen(patient.getLong("id")) })
                     today.addView(row)
                 }
             }
+            AppointmentReminders.refreshFromCache(this, server, userId)
             render(initialTab)
         }
         body.addView(secondary("Оновити список зміни") { homeScreen() })
@@ -942,7 +1023,7 @@ class MainActivity : Activity() {
                 val item = rows.getJSONObject(i)
                 val patients = item.optJSONArray("patients") ?: JSONArray()
                 val box = card()
-                box.background = rounded(if (item.optString("status") == "completed") Color.rgb(235, 245, 239) else Color.WHITE, 17, line)
+                box.background = rounded(if (item.optString("status") == "completed") MobileUi.soft else MobileUi.panel, 17, line)
                 box.addView(title(item.optString("start").takeLast(5) + " — " + item.optString("end").takeLast(5), 18f))
                 box.addView(caption(
                     item.optString("psychologist") + " · " +
@@ -996,7 +1077,7 @@ class MainActivity : Activity() {
                     if (query.isNotBlank() && !hay.contains(query.lowercase())) continue
                     val patientId = patient.getLong("id")
                     val box = card()
-                    box.background = rounded(Color.WHITE, 17, line)
+                    box.background = rounded(MobileUi.panel, 17, line)
                     box.setOnClickListener { patientWorkspace(patientId, if(documentLibrary) "documents" else "summary") }
                     box.addView(caption("№" + patient.optString("patient_no", "—")))
                     box.addView(title(patient.optString("name"), 18f))
@@ -1155,7 +1236,7 @@ class MainActivity : Activity() {
             fun showStage(index: Int) {
                 currentStage = index
                 stages.forEachIndexed { i, view -> view.visibility = if(i == index) View.VISIBLE else View.GONE }
-                stageButtons.forEachIndexed { i, button -> button.background = rounded(if(i == index) forestSoft else Color.WHITE, 12, line) }
+                stageButtons.forEachIndexed { i, button -> button.background = rounded(if(i == index) forestSoft else MobileUi.panel, 12, line) }
                 stageHeading.text = "${index + 1} з 5 · ${stageNames[index]}"
                 consultationWindow?.getButton(AlertDialog.BUTTON_POSITIVE)?.text = if(index == 4) "Завершити" else "Далі"
                 consultationWindow?.getButton(AlertDialog.BUTTON_NEUTRAL)?.isEnabled = index > 0
@@ -1169,7 +1250,7 @@ class MainActivity : Activity() {
             fun addGap(parent: LinearLayout, value: Int = 8) = parent.addView(spacer(value))
             fun section(name: String, hint: String, build: (LinearLayout) -> Unit) {
                 val box = card()
-                box.background = rounded(Color.WHITE, 18, line)
+                box.background = rounded(MobileUi.panel, 18, line)
                 box.addView(caption(hint))
                 build(box)
                 stages.add(box); box.visibility = if(stages.size == 1) View.VISIBLE else View.GONE
@@ -1396,7 +1477,8 @@ class MainActivity : Activity() {
                         runCatching { draftStore.remove(patientId) }
                         dialog.dismiss()
                         Toast.makeText(this, "Збережено на телефоні. Запис буде передано на сервер після відновлення зв’язку.", Toast.LENGTH_LONG).show()
-                        updateConnectionStatus(); syncNow(refresh = false); syncScreen()
+                        AppointmentReminders.refreshFromCache(this, server, userId)
+                        updateConnectionStatus(); syncNow(refresh = false); renderHomeScreen("completed")
                     } catch(e: Exception) {
                         dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
                         textFields.values.forEach { it.isEnabled = true }; duration.isEnabled = true
@@ -1416,6 +1498,7 @@ class MainActivity : Activity() {
 
     private fun logout() {
         consultationWindow?.dismiss(); consultationWindow = null
+        AppointmentReminders.cancel(this)
         val oldToken = token
         val oldServer = server
         if(userId > 0) runCatching { offlineStore().revokeSession() }
@@ -1437,6 +1520,47 @@ class MainActivity : Activity() {
         val body = root()
         body.addView(topBar("Налаштування") { homeScreen() })
         body.addView(caption("SOLVIA " + BuildConfig.VERSION_NAME + " · " + server))
+        body.addView(title("Оповіщення", 20f))
+        body.addView(CheckBox(this).apply {
+            text = "Звукове нагадування на час консультації"; setTextColor(ink)
+            isChecked = prefs.getBoolean("reminders_enabled", true)
+            setOnCheckedChangeListener { _, enabled ->
+                prefs.edit().putBoolean("reminders_enabled", enabled).apply()
+                if(enabled) refreshAppointments() else AppointmentReminders.cancel(this@MainActivity)
+            }
+        })
+        body.addView(caption(if(AppointmentReminders.allowed(this)) "Оповіщення увімкнено" else "Android блокує оповіщення. Дозвольте їх у налаштуваннях телефона."))
+        body.addView(secondary("Звук і дозволи оповіщень") {
+            AppointmentReminders.channel(this)
+            startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                .putExtra(Settings.EXTRA_CHANNEL_ID, AppointmentReminders.CHANNEL))
+        })
+        if(Build.VERSION.SDK_INT >= 31) {
+            body.addView(caption(if(AppointmentReminders.exact(this)) "Точний час нагадування дозволено" else "Без дозволу на точні будильники Android може затримати нагадування."))
+            body.addView(secondary("Дозволити точний час нагадування") {
+                startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.parse("package:$packageName")))
+            })
+        }
+        body.addView(title("Оформлення", 20f))
+        body.addView(caption("Розмір тексту"))
+        val sizes = listOf("Стандартний", "Збільшений", "Великий")
+        body.addView(Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, sizes)
+            setSelection(prefs.getInt("text_size", 0)); minimumHeight = dp(48)
+            onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    prefs.edit().putInt("text_size", position).apply()
+                }
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            }
+        })
+        body.addView(caption("Новий розмір застосовується при наступному відкритті екрана."))
+        body.addView(title("Редагування", 20f))
+        body.addView(CheckBox(this).apply {
+            text = "Виділяти весь текст при натисканні поля"; setTextColor(ink)
+            isChecked = prefs.getBoolean("select_all", false)
+            setOnCheckedChangeListener { _, value -> prefs.edit().putBoolean("select_all", value).apply() }
+        })
         val screenAwake = CheckBox(this).apply {
             text = "Не вимикати екран під час роботи"
             isChecked = prefs.getBoolean("keep_screen_on", false)
@@ -1465,7 +1589,7 @@ class MainActivity : Activity() {
         body.addView(primary("Зберегти новий пароль") {
             if (next.text.toString() != repeat.text.toString()) { showError("Паролі не збігаються"); return@primary }
             apiAsync("POST", "/api/account/password", JSONObject().put("current_password", old.text.toString()).put("new_password", next.text.toString())) {
-                token = ""; loginScreen()
+                logout()
                 Toast.makeText(this, "Пароль змінено. Увійдіть знову на всіх пристроях.", Toast.LENGTH_LONG).show()
             }
         })
@@ -1507,7 +1631,7 @@ class MainActivity : Activity() {
         val day = LocalDate.now().toString()
         val body = root()
         body.addView(topBar("Звіт за зміну", ::homeScreen))
-        body.addView(caption(day + " · дані зберігаються у PostgreSQL сервера"))
+        body.addView(caption(day + " · консультації та звіт доступні адміністрації центру після передавання"))
 
         val summary = edit("Підсумок роботи за зміну").apply { minLines = 4 }
         val incidents = edit("Важливі події / ризики").apply { minLines = 3 }
@@ -1542,31 +1666,87 @@ class MainActivity : Activity() {
         body.addView(statusCard)
         body.addView(spacer(10))
 
-        body.addView(primary("Зберегти / оновити звіт") {
-            if (summary.text.toString().isBlank()) {
-                Toast.makeText(this, "Заповніть підсумок роботи.", Toast.LENGTH_LONG).show()
-                return@primary
+        val reportStore = offlineStore()
+        val savedReport = reportStore.reportDraft(day)
+        fun payload() = JSONObject().put("shift_date", day)
+            .put("summary", summary.text.toString()).put("incidents", incidents.text.toString())
+            .put("handover", handover.text.toString()).put("critical_cases", critical.isChecked)
+            .put("notify_admin", notifyAdmin.isChecked).put("notify_director", notifyDirector.isChecked)
+        fun fill(current: JSONObject) {
+            summary.setText(current.optString("summary")); incidents.setText(current.optString("incidents"))
+            handover.setText(current.optString("handover")); critical.isChecked = current.optBoolean("critical_cases")
+            notifyAdmin.isChecked = current.optBoolean("notify_admin"); notifyDirector.isChecked = current.optBoolean("notify_director")
+        }
+        if(savedReport != null) fill(savedReport)
+        val watcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                runCatching { reportStore.saveReportDraft(day, payload()) }.onFailure { statusText.text = "Не вдалося зберегти чернетку звіту" }
             }
-            val payload = JSONObject()
-                .put("shift_date", day)
-                .put("summary", summary.text.toString())
-                .put("incidents", incidents.text.toString())
-                .put("handover", handover.text.toString())
-                .put("critical_cases", critical.isChecked)
-                .put("notify_admin", notifyAdmin.isChecked)
-                .put("notify_director", notifyDirector.isChecked)
-
-            apiAsync("POST", "/api/shift-reports", payload) { result ->
-                val count = (result as JSONObject).optInt("consultations_count")
-                Toast.makeText(this, "Звіт збережено · консультацій: $count", Toast.LENGTH_LONG).show()
-                reportScreen()
+            override fun afterTextChanged(s: Editable?) {}
+        }
+        listOf(summary, incidents, handover).forEach { it.addTextChangedListener(watcher) }
+        listOf(critical, notifyAdmin, notifyDirector).forEach { check -> check.setOnCheckedChangeListener { _, _ ->
+            runCatching { reportStore.saveReportDraft(day, payload()) }
+        } }
+        body.addView(caption("Текст звіту зберігається як зашифрована чернетка. Завершіть або перевірте всі консультації перед виходом."))
+        var submitting = false
+        var saveButton: Button? = null
+        var finishButton: Button? = null
+        fun submit(finish: Boolean) {
+            if(submitting) return
+            if(summary.text.toString().isBlank()) { showError("Заповніть підсумок роботи."); return }
+            val drafts = DraftStore(this, server, userId)
+            if(finish && drafts.patients().isNotEmpty()) {
+                showError("Є незавершені чернетки консультацій. Перевірте їх у меню «Мої чернетки» перед завершенням зміни."); return
             }
-        })
+            val report = payload()
+            try { reportStore.saveReportDraft(day, report) } catch(_: Exception) { showError("Не вдалося зберегти чернетку звіту"); return }
+            submitting = true; saveButton?.isEnabled = false; finishButton?.isEnabled = false
+            listOf(summary, incidents, handover).forEach { it.isEnabled = false }
+            listOf(critical, notifyAdmin, notifyDirector).forEach { it.isEnabled = false }
+            val auth = token; val base = server; val epoch = sceneEpoch
+            statusText.text = "Передаємо консультації та звіт…"
+            io.execute {
+                var error: String? = null; var count = 0
+                try {
+                    val authorized = ConsultationSync(reportStore) { record ->
+                        try { requestAt(base, "POST", "/api/consultations", record, auth) as JSONObject }
+                        catch(e: ApiError) { throw SyncFailure(e.status, e.message ?: "Помилка сервера") }
+                    }.run()
+                    check(authorized) { "Сесія завершилась. Увійдіть знову; записи залишаються на телефоні." }
+                    val rows = reportStore.queue()
+                    check(!(0 until rows.length()).any { rows.getJSONObject(it).optString("state") in listOf("pending", "blocked") }) {
+                        "Є записи, які сервер ще не підтвердив. Перевірте синхронізацію. Чернетка звіту збережена."
+                    }
+                    count = (requestAt(base, "POST", "/api/shift-reports", report, auth) as JSONObject).optInt("consultations_count")
+                    reportStore.clearReportDraft(day)
+                } catch(e: Exception) { error = e.message ?: "Немає з’єднання. Чернетка звіту збережена." }
+                runOnUiThread {
+                    if(token != auth || server != base || sceneEpoch != epoch || isDestroyed) return@runOnUiThread
+                    submitting = false; saveButton?.isEnabled = true; finishButton?.isEnabled = true
+                    listOf(summary, incidents, handover).forEach { it.isEnabled = true }
+                    listOf(critical, notifyAdmin, notifyDirector).forEach { it.isEnabled = true }
+                    if(error != null) { statusText.text = error; showError(error!!) }
+                    else {
+                        statusText.text = "Передано на сервер · консультацій: $count"
+                        Toast.makeText(this, if(finish) "Зміну завершено. Консультації та звіт доступні на ПК." else "Звіт передано на сервер", Toast.LENGTH_LONG).show()
+                        if(finish) logout()
+                    }
+                }
+            }
+        }
+        saveButton = primary("Зберегти / оновити звіт") { submit(false) }; body.addView(saveButton)
+        finishButton = primary("Завершити зміну й передати записи") {
+            AlertDialog.Builder(this).setTitle("Завершити мою зміну?")
+                .setMessage("Додаток передасть завершені консультації та звіт на сервер і вийде з облікового запису після підтвердження. Загальну зміну центру закриває адміністратор.")
+                .setNegativeButton("Продовжити роботу", null).setPositiveButton("Завершити") { _, _ -> submit(true) }.show()
+        }; body.addView(finishButton)
         mount(scroll(body))
 
-        apiAsync("GET", "/api/shift-reports?from=$day&to=$day") { result ->
+        apiAsync("GET", "/api/shift-reports?from=$day&to=$day", onError = { statusText.text = "Сервер недоступний. Чернетка звіту залишається на телефоні." }) { result ->
             val rows = result as JSONArray
-            if (rows.length() > 0) {
+            if (rows.length() > 0 && savedReport == null && !submitting && summary.text.isBlank() && incidents.text.isBlank() && handover.text.isBlank()) {
                 val current = rows.getJSONObject(0)
                 summary.setText(current.optString("summary"))
                 incidents.setText(current.optString("incidents"))
@@ -1576,7 +1756,7 @@ class MainActivity : Activity() {
                 notifyDirector.isChecked = current.optBoolean("notify_director")
                 statusText.text = "Звіт уже збережений · консультацій: " + current.optInt("consultations_count") + " · можна редагувати"
             } else {
-                statusText.text = "Звіт за сьогодні ще не подано."
+                statusText.text = if(savedReport != null) "Відновлено чернетку звіту з телефона." else "Звіт за сьогодні ще не подано."
             }
         }
     }

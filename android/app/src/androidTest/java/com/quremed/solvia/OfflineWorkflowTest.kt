@@ -124,23 +124,24 @@ class OfflineWorkflowTest {
             var ready=false
             val deadline=System.currentTimeMillis()+5000
             while(!ready && System.currentTimeMillis()<deadline) {
-                scenario.onActivity { activity -> ready=views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Активні · 1" } }
+                scenario.onActivity { activity -> ready=views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Активні · 0" } }
                 if(!ready) Thread.sleep(50)
             }
             assertTrue("Cached shift tabs must render",ready)
             scenario.onActivity { activity ->
                 val root=activity.window.decorView
                 val labels=views(root).filterIsInstance<TextView>().map { it.text.toString() }
-                assertTrue(labels.contains("Учасник у черзі")); assertFalse(labels.contains("Завершений учасник"))
-                assertTrue(labels.contains("Збережено на телефоні · очікує передавання"))
+                assertFalse(labels.contains("Учасник у черзі")); assertFalse(labels.contains("Завершений учасник"))
+                assertFalse(labels.contains("Збережено на телефоні · очікує передавання"))
                 assertFalse(views(root).filterIsInstance<Button>().any { it.text.toString()=="Почати консультацію" })
                 assertTrue(views(root).filterIsInstance<Button>().any { it.contentDescription=="Відкрити меню психолога" })
             }
             capture(scenario,"shift-active")
             scenario.onActivity { activity ->
-                views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Проконсультовані · 1" }.performClick()
+                views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Архів · 2" }.performClick()
                 val labels=views(activity.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
-                assertTrue(labels.contains("Завершений учасник")); assertFalse(labels.contains("Учасник у черзі"))
+                assertTrue(labels.contains("Завершений учасник")); assertTrue(labels.contains("Учасник у черзі"))
+                assertTrue(labels.contains("Збережено на телефоні · очікує передавання"))
             }
             capture(scenario,"shift-completed")
         }

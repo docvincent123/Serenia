@@ -43,5 +43,6 @@ class DraftStore(context: Context, server: String, userId: Long) {
             .put("data", Base64.encodeToString(cipher.doFinal(value.toString().toByteArray()), Base64.NO_WRAP))
         check(prefs.edit().putString("$scope|$patient", envelope.toString()).commit()) { "Не вдалося зберегти локальну чернетку" }
     }
+    fun patients(): List<Long> = prefs.all.keys.filter { it.startsWith("$scope|") }.mapNotNull { it.substringAfter('|').toLongOrNull() }
     fun remove(patient: Long) { check(prefs.edit().remove("$scope|$patient").commit()) }
 }
