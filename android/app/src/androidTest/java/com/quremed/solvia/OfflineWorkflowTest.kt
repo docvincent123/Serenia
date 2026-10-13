@@ -149,6 +149,19 @@ class OfflineWorkflowTest {
                 val base=MainActivity::class.java.getDeclaredField("server").apply { isAccessible=true }.get(activity) as String
                 callback(OfflineStore(activity,base,42).cache("/api/appointments?date="+LocalDate.now()) as JSONArray)
             }
+            scenario.onActivity { activity ->
+                assertFalse(views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Оновити список" })
+                assertTrue(views(activity.window.decorView).any { it is RefreshScrollView })
+                val badge = views(activity.window.decorView).first { it.tag == "connection-status" } as TextView
+                assertEquals("● Офлайн", badge.text.toString())
+                val emblem = views(activity.window.decorView).first { it.contentDescription == "Емблема SOLVIA" }
+                assertSame(emblem.parent, badge.parent)
+                MainActivity::class.java.getDeclaredField("offlineMode").apply { isAccessible=true }.set(activity,false)
+                MainActivity::class.java.getDeclaredMethod("updateConnectionStatus").apply { isAccessible=true }.invoke(activity)
+                assertEquals("● Онлайн", badge.text.toString())
+                MainActivity::class.java.getDeclaredField("offlineMode").apply { isAccessible=true }.set(activity,true)
+                MainActivity::class.java.getDeclaredMethod("updateConnectionStatus").apply { isAccessible=true }.invoke(activity)
+            }
             capture(scenario,"shift-active")
             scenario.onActivity { activity ->
                 views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Архів · 2" }.performClick()
@@ -204,7 +217,9 @@ class OfflineWorkflowTest {
                 val form = views(dialog.window!!.decorView)
                 assertFalse(form.filterIsInstance<Button>().any { it.text.toString() == "Інструменти запису" })
                 assertFalse(form.filterIsInstance<EditText>().any { it.hint?.toString()?.contains("Тривалість") == true })
-                assertEquals(2, form.filterIsInstance<android.widget.Spinner>().size)
+                assertEquals(4, form.filterIsInstance<android.widget.Spinner>().size)
+                (form.first { it.tag == "emotional-state" } as android.widget.Spinner).setSelection(2)
+                (form.first { it.tag == "followup-plan" } as android.widget.Spinner).setSelection(1)
             }
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
@@ -243,6 +258,8 @@ class OfflineWorkflowTest {
                 val row = OfflineStore(activity, server, 42).queue().getJSONObject(0)
                 assertEquals("Консультація завершена без Wi-Fi", row.getJSONObject("payload").getString("note"))
                 assertEquals("pending", row.getString("state"))
+                assertEquals("Емоційний стан: Тривожний", row.getJSONObject("payload").getString("state_text"))
+                assertEquals("Подальший супровід: Продовжити психологічний супровід", row.getJSONObject("payload").getString("recommendations"))
                 assertNull(DraftStore(activity, server, 42).read(7))
                 MainActivity::class.java.getDeclaredMethod("visitDetailsScreen", Long::class.javaPrimitiveType, Long::class.javaPrimitiveType, String::class.java)
                     .apply { isAccessible = true }.invoke(activity,7L,12L,"completed")

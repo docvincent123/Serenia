@@ -34,6 +34,7 @@ J privateDraft(DB&db,const J&u,int pid,const std::string&method,const J&body){
             payload[key]=input[key].is_string()?str(input,key,80,false):std::to_string(num(input,key));
         }
     }
+    for(auto key:{"emotional_state","followup_choice"})if(input.contains(key))payload[key]=str(input,key,200,false);
     auto flags=input.value("risk_flags",J::array());check(flags.is_array()&&flags.size()<=20,"Некоректні позначки");
     for(auto&flag:flags)check(flag.is_string()&&flag.get<std::string>().size()<=60&&flag.get<std::string>().find('\0')==std::string::npos,"Некоректна позначка");
     payload["risk_flags"]=flags;
