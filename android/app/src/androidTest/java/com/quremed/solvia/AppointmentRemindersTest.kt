@@ -42,6 +42,10 @@ class AppointmentRemindersTest {
             store.saveCache("/api/appointments?date=" + LocalDate.now(), rows)
             AppointmentReminders.refreshFromCache(context, base, 772)
             assertTrue(key in prefs.getStringSet("keys", emptySet())!!)
+            AppointmentReminders.deliver(context, key)
+            assertTrue(prefs.getBoolean("fired:$key", false))
+            AppointmentReminders.deliver(context, key)
+            assertTrue(prefs.getBoolean("fired:$key", false))
             rows.getJSONObject(0).put("status", "cancelled")
             store.saveCache("/api/appointments?date=" + LocalDate.now(), rows)
             AppointmentReminders.refreshFromCache(context, base, 772)
@@ -55,6 +59,10 @@ class AppointmentRemindersTest {
         assertEquals("Приватний підсумок зміни", store.reportDraft("2026-10-13")!!.getString("summary"))
         assertNull(other.reportDraft("2026-10-13"))
         assertFalse(context.getSharedPreferences("solvia_offline_v1", 0).all.values.any { it.toString().contains("Приватний підсумок зміни") })
+        val original = store.reportDraft("2026-10-13")!!
+        store.saveReportDraft("2026-10-13", JSONObject().put("summary", "Новий текст під час передавання"))
+        store.clearReportDraft("2026-10-13", original)
+        assertEquals("Новий текст під час передавання", store.reportDraft("2026-10-13")!!.getString("summary"))
         store.clearReportDraft("2026-10-13"); assertNull(store.reportDraft("2026-10-13"))
     }
 }

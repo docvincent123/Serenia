@@ -60,7 +60,9 @@ class OfflineStore(context: Context, server: String, userId: Long) {
     fun revokeSession() = synchronized(lock) { check(prefs.edit().remove("$scope|session").commit()) }
     fun reportDraft(day: String): JSONObject? = synchronized(lock) { read("report:$day") }
     fun saveReportDraft(day: String, report: JSONObject) = synchronized(lock) { write("report:$day", report) }
-    fun clearReportDraft(day: String) = synchronized(lock) { check(prefs.edit().remove("$scope|report:$day").commit()) }
+    fun clearReportDraft(day: String, expected: JSONObject? = null) = synchronized(lock) {
+        if(expected == null || read("report:$day")?.toString() == expected.toString()) check(prefs.edit().remove("$scope|report:$day").commit())
+    }
     fun queue(): JSONArray = synchronized(lock) { read("queue")?.optJSONArray("items") ?: JSONArray() }
     fun enqueue(payload: JSONObject, patientName: String) = synchronized(lock) {
         require(payload.getString("client_key").isNotBlank())

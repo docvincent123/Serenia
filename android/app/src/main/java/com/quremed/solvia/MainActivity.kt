@@ -137,7 +137,13 @@ class MainActivity : Activity() {
                         val path = "/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())
                         store.saveCache(path, requestAt(base, "GET", path, authToken = auth))
                     }
-                    if(token == auth && server == base) AppointmentReminders.refreshFromCache(this, base, uid)
+                    if(token == auth && server == base) {
+                        AppointmentReminders.refreshFromCache(this, base, uid)
+                        runOnUiThread {
+                            if(token == auth && server == base && workspaceReady && consultationWindow == null && selectedNavigation in listOf("home", "archive"))
+                                renderHomeScreen(if(selectedNavigation == "archive") "completed" else "active")
+                        }
+                    }
                 }
             } catch(_: Exception) { }
             finally { runOnUiThread { appointmentRefreshRunning = false } }
@@ -1711,6 +1717,7 @@ class MainActivity : Activity() {
                 var error: String? = null; var count = 0
                 try {
                     val authorized = ConsultationSync(reportStore) { record ->
+                        check(reportStore.session()?.optString("token") == auth) { "Сесію завершено. Увійдіть знову." }
                         try { requestAt(base, "POST", "/api/consultations", record, auth) as JSONObject }
                         catch(e: ApiError) { throw SyncFailure(e.status, e.message ?: "Помилка сервера") }
                     }.run()
@@ -1719,8 +1726,9 @@ class MainActivity : Activity() {
                     check(!(0 until rows.length()).any { rows.getJSONObject(it).optString("state") in listOf("pending", "blocked") }) {
                         "Є записи, які сервер ще не підтвердив. Перевірте синхронізацію. Чернетка звіту збережена."
                     }
+                    check(reportStore.session()?.optString("token") == auth) { "Сесію завершено. Увійдіть знову." }
                     count = (requestAt(base, "POST", "/api/shift-reports", report, auth) as JSONObject).optInt("consultations_count")
-                    reportStore.clearReportDraft(day)
+                    reportStore.clearReportDraft(day, report)
                 } catch(e: Exception) { error = e.message ?: "Немає з’єднання. Чернетка звіту збережена." }
                 runOnUiThread {
                     if(token != auth || server != base || sceneEpoch != epoch || isDestroyed) return@runOnUiThread
