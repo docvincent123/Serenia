@@ -32,4 +32,8 @@ input:focus,select:focus,textarea:focus { border-color:#c7970c; box-shadow:0 0 0
 .shift-tabs button.active { color:#181613; background:#f6c22c; border-color:#d4a31b; }
 .shift-visit.selected { background:#fff7db; border-color:#c7970c; box-shadow:inset 3px 0 #f6c22c; }
 .calendar-tabs button.active,.patient-tabs button.active,.segmented-control button.active { background:#fff5d4; color:#644d0b; }
+.settings-nav button.active { background:#fff5d4; color:#644d0b; border-color:#d5b449; }
+.segmented button.active { background:#f6c22c; color:#181613; }
+.appointment.selected { background:#fff7db; border-color:#c7970c; box-shadow:0 0 0 3px #f6c22c25; }
+.avatar.inverse,.user-card .avatar { color:#644d0b; background:#fff5d4; }
 @media print { .button.primary { box-shadow:none; } }
