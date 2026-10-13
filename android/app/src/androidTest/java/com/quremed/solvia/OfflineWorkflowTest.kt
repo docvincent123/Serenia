@@ -140,6 +140,7 @@ class OfflineWorkflowTest {
             scenario.onActivity { activity ->
                 views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Архів · 2" }.performClick()
                 val labels=views(activity.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
+                assertTrue(labels.contains("Архів зміни"))
                 assertTrue(labels.contains("Завершений учасник")); assertTrue(labels.contains("Учасник у черзі"))
                 assertTrue(labels.contains("Збережено на телефоні · очікує передавання"))
             }

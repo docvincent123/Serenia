@@ -61,6 +61,7 @@ class MainActivity : Activity() {
     private var backAction: (() -> Unit)? = null
     private var workspaceReady = false
     private var selectedNavigation = "home"
+    private val navigationButtons = mutableMapOf<String, Button>()
     private var sceneEpoch = 0L
     private var pdfPreview: NativePdfPreview? = null
     private var pendingPdf: java.io.File? = null
@@ -261,6 +262,7 @@ class MainActivity : Activity() {
             insets
         }
         statusView = null
+        navigationButtons.clear()
         if(token.isNotBlank() && workspaceReady) {
             val header = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -295,12 +297,13 @@ class MainActivity : Activity() {
                 Triple("patients", "Пацієнти", R.drawable.ic_patients), Triple("more", "Меню", R.drawable.ic_menu))
             links.forEach { (key, label, icon) ->
                 bar.addView(Button(this).apply {
+                    navigationButtons[key] = this
                     text = label; isAllCaps = false; textSize = 11f; contentDescription = label
-                    setTextColor(if (selectedNavigation == key) forest else muted)
+                    setTextColor(if (selectedNavigation == key) MobileUi.buttonInk else muted)
                     backgroundTintList = null; stateListAnimator = null; elevation = 0f
                     background = rounded(if (selectedNavigation == key) forestSoft else MobileUi.panel, 18)
                     val drawable = getDrawable(icon)?.mutate()
-                    drawable?.setTint(if(selectedNavigation == key) forest else muted)
+                    drawable?.setTint(if(selectedNavigation == key) MobileUi.buttonInk else muted)
                     drawable?.setBounds(0, 0, dp(22), dp(22)); setCompoundDrawables(null, drawable, null, null)
                     setPadding(dp(3), dp(8), dp(3), dp(5)); minWidth = 0; minimumWidth = 0
                     setOnClickListener {
@@ -546,7 +549,7 @@ class MainActivity : Activity() {
     }
 
     private fun primary(label: String, action: () -> Unit): Button = MobileUi.button(this, label, primary = true, action = action).apply { minimalIcon(label, Color.WHITE) }
-    private fun secondary(label: String, action: () -> Unit): Button = MobileUi.button(this, label, action = action).apply { minimalIcon(label, forest) }
+    private fun secondary(label: String, action: () -> Unit): Button = MobileUi.button(this, label, action = action).apply { minimalIcon(label, MobileUi.buttonInk) }
     private fun card(): LinearLayout = MobileUi.card(this)
 
     private fun scroll(content: View): ScrollView = ScrollView(this).apply {
@@ -919,7 +922,8 @@ class MainActivity : Activity() {
     private fun renderHomeScreen(initialTab: String = "active") {
         workspaceReady = true; selectedNavigation = if(initialTab == "completed") "archive" else "home"; backAction = null
         val body = root()
-        body.addView(title(if(initialTab == "completed") "Архів зміни" else "Активні консультації", 26f))
+        val pageTitle = title(if(initialTab == "completed") "Архів зміни" else "Активні консультації", 26f)
+        body.addView(pageTitle)
         body.addView(caption(userName + " · " + LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", java.util.Locale.forLanguageTag("uk")))))
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         body.addView(tabs)
@@ -946,6 +950,13 @@ class MainActivity : Activity() {
             fun completed(item: JSONObject, patient: JSONObject) = VisitState.completed(patient.optString("completed_at"), item.optString("status"), localState(item, patient))
             fun active(item: JSONObject, patient: JSONObject) = !completed(item,patient) && item.optString("status") in listOf("scheduled", "confirmed")
             fun render(tab: String) {
+                selectedNavigation = if(tab == "completed") "archive" else "home"
+                pageTitle.text = if(tab == "completed") "Архів зміни" else "Активні консультації"
+                navigationButtons.forEach { (key, button) ->
+                    val color = if(key == selectedNavigation) MobileUi.buttonInk else muted
+                    button.setTextColor(color); button.compoundDrawables.filterNotNull().forEach { it.setTint(color) }
+                    button.background = rounded(if(key == selectedNavigation) forestSoft else MobileUi.panel, 18)
+                }
                 tabs.removeAllViews(); today.removeAllViews()
                 val activeCount = visits.count { active(it.first,it.second) }
                 val completedCount = visits.count { completed(it.first,it.second) }
