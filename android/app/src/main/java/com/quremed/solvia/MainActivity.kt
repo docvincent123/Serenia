@@ -1091,8 +1091,8 @@ class MainActivity : Activity() {
         val body = root(); body.addView(topBar(if(from == "completed") "Запис консультації" else "Деталі прийому", back))
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(content)
         mount(scroll(body))
-        mobileApi().call("GET", "/api/patients/$patientId", null, { result ->
-            val patient = result as JSONObject
+        fun render(patient: JSONObject) {
+            content.removeAllViews()
             val identity = card(); identity.addView(title(patient.optString("name"), 23f))
             identity.addView(caption("№ " + patient.optString("patient_no", "—")))
             for((key,label) in listOf("dob" to "Дата народження", "category" to "Категорія", "phone" to "Телефон"))
@@ -1112,7 +1112,26 @@ class MainActivity : Activity() {
                 }
             } else if(from == "completed") content.addView(caption("Оновіть передавання, якщо запис ще зберігається на телефоні."))
             if(from != "completed") content.addView(primary("Відкрити консультацію") { consultationDialog(patientId, patient.optString("name"), appointmentId) })
-        }, { message -> content.addView(caption(message)) })
+        }
+        val journal = offlineStore()
+        val queue = journal.queue()
+        val local = (0 until queue.length()).map { queue.getJSONObject(it) }.lastOrNull {
+            val data = it.getJSONObject("payload")
+            data.optLong("patient_id") == patientId && data.optLong("appointment_id") == appointmentId && it.optString("state") in listOf("pending", "blocked", "sent")
+        }
+        fun localCopy(): JSONObject {
+            val record = JSONObject(local!!.getJSONObject("payload").toString())
+                .put("sync_status", if(local.optString("state") == "sent") "Передано на сервер" else "Запис очікує передавання")
+            return JSONObject().put("id",patientId).put("name",local.optString("patient_name"))
+                .put("consultations",JSONArray().put(record))
+        }
+        if(from == "completed" && local != null && offlineMode && journal.session() != null) {
+            render(localCopy()); return
+        }
+        mobileApi().call("GET", "/api/patients/$patientId", null, { result -> render(result as JSONObject) }, { message ->
+            if(from == "completed" && local != null && journal.session() != null) render(localCopy())
+            else content.addView(caption(message))
+        })
     }
 
     private fun calendarScreen(date: String = LocalDate.now().toString()) {
@@ -1287,7 +1306,7 @@ class MainActivity : Activity() {
                 setPadding(dp(12), dp(6), dp(12), dp(18))
                 setBackgroundColor(bg)
             }
-            val scroll = ScrollView(this).apply { addView(wrap) }
+            val scroll = ScrollView(this).apply { tag = "consultation-scroll"; addView(wrap) }
 
             val consultationHeader = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             consultationHeader.addView(title(patientName, 20f), LinearLayout.LayoutParams(0, -2, 1f))

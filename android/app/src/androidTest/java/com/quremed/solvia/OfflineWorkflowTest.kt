@@ -176,12 +176,22 @@ class OfflineWorkflowTest {
                 if(!opened) Thread.sleep(50)
             }
             assertTrue("Cached consultation form must open", opened)
+            var scrollReady = false
+            val layoutDeadline = System.currentTimeMillis() + 3000
+            while(!scrollReady && System.currentTimeMillis() < layoutDeadline) {
+                scenario.onActivity { activity ->
+                    val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
+                    scrollReady = views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first { it.tag == "consultation-scroll" }.canScrollVertically(1)
+                }
+                if(!scrollReady) Thread.sleep(30)
+            }
+            assertTrue("The actual consultation document must scroll", scrollReady)
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
                 val note = views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }
                 assertTrue("All clinical sections must belong to one scroll form", note.isShown)
                 assertFalse(views(dialog.window!!.decorView).filterIsInstance<Button>().any { it.text.toString() in listOf("1","2","3","4","5","Далі","Чернетка") })
-                val scroll = views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first()
+                val scroll = views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first { it.tag == "consultation-scroll" }
                 assertTrue(scroll.canScrollVertically(1))
                 scroll.scrollTo(0, note.top + (note.parent as View).top)
                 note.setText("Консультація завершена без Wi-Fi")
@@ -189,7 +199,7 @@ class OfflineWorkflowTest {
             capture(scenario, "consultation-work")
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
-                views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first().fullScroll(View.FOCUS_DOWN)
+                views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first { it.tag == "consultation-scroll" }.fullScroll(View.FOCUS_DOWN)
                 assertEquals("Завершити", dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).text.toString())
                 assertEquals("Консультація завершена без Wi-Fi", views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }.text.toString())
             }
@@ -214,6 +224,10 @@ class OfflineWorkflowTest {
                 assertEquals("Консультація завершена без Wi-Fi", row.getJSONObject("payload").getString("note"))
                 assertEquals("pending", row.getString("state"))
                 assertNull(DraftStore(activity, server, 42).read(7))
+                MainActivity::class.java.getDeclaredMethod("visitDetailsScreen", Long::class.javaPrimitiveType, Long::class.javaPrimitiveType, String::class.java)
+                    .apply { isAccessible = true }.invoke(activity,7L,12L,"completed")
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "Консультація завершена без Wi-Fi" })
+                assertFalse(views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString() in listOf("Оформити документ", "Нова консультація", "Підписати") })
             }
         }
     }
