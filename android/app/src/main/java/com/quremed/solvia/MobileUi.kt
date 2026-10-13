@@ -21,23 +21,23 @@ object MobileUi {
     val onAccent = Color.rgb(24, 22, 16)
     val soft = Color.rgb(65, 55, 25)
     val border = Color.rgb(67, 76, 87)
-    val panel = Color.rgb(40, 45, 52)
-    val buttonInk = Color.rgb(250, 238, 197)
+    val panel = Color.rgb(31, 37, 45)
+    val buttonInk = Color.rgb(233, 238, 244)
     fun textScale(context: Context) = when(context.getSharedPreferences("solvia_settings", 0).getInt("text_size", 0)) { 1 -> 1.12f; 2 -> 1.25f; else -> 1f }
     fun dp(context: Context, n: Int) = (n * context.resources.displayMetrics.density).toInt()
-    fun surface(context: Context, color: Int = panel, radius: Int = 16, outlined: Boolean = false) = GradientDrawable().apply {
+    fun surface(context: Context, color: Int = panel, radius: Int = 20, outlined: Boolean = false) = GradientDrawable().apply {
         setColor(color); cornerRadius = dp(context, radius).toFloat()
         if(outlined) setStroke(dp(context, 1), border)
     }
     fun button(context: Context, label: String, primary: Boolean = false, selected: Boolean = false, action: () -> Unit): Button = Button(context).apply {
-        text = label; isAllCaps = false; textSize = 14f * textScale(context); gravity = Gravity.CENTER
-        setTypeface(typeface, if(primary || selected) Typeface.BOLD else Typeface.NORMAL)
+        text = label; isAllCaps = false; textSize = 15f * textScale(context); gravity = Gravity.CENTER
+        setTypeface(typeface, Typeface.BOLD)
         setTextColor(if(primary) onAccent else buttonInk)
-        minHeight = dp(context, 50); minimumHeight = dp(context, 50); minWidth = 0; minimumWidth = 0
+        minHeight = dp(context, 52); minimumHeight = dp(context, 52); minWidth = 0; minimumWidth = 0
         setPadding(dp(context, 14), dp(context, 9), dp(context, 14), dp(context, 9))
         backgroundTintList = null; stateListAnimator = null; elevation = 0f
         background = RippleDrawable(ColorStateList.valueOf(Color.argb(45, 246, 194, 44)),
-            surface(context, if(primary) accent else if(selected) soft else panel, 10, !primary && !selected), null)
+            surface(context, if(primary) accent else if(selected) soft else Color.rgb(44, 51, 62), 14, false), null)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(context, 8) }
         setOnClickListener { action() }
     }

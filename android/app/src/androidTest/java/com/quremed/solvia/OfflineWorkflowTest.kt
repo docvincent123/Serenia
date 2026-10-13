@@ -179,16 +179,17 @@ class OfflineWorkflowTest {
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
                 val note = views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }
-                assertFalse("Clinical fields must not clutter admission step", note.isShown)
-                views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "3" }.performClick()
-                assertTrue("Clinical note must be reachable in work step", note.isShown)
+                assertTrue("All clinical sections must belong to one scroll form", note.isShown)
+                assertFalse(views(dialog.window!!.decorView).filterIsInstance<Button>().any { it.text.toString() in listOf("1","2","3","4","5","Далі","Чернетка") })
+                val scroll = views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first()
+                assertTrue(scroll.canScrollVertically(1))
+                scroll.scrollTo(0, note.top + (note.parent as View).top)
                 note.setText("Консультація завершена без Wi-Fi")
             }
             capture(scenario, "consultation-work")
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
-                views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "1" }.performClick()
-                repeat(4) { dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick() }
+                views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first().fullScroll(View.FOCUS_DOWN)
                 assertEquals("Завершити", dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).text.toString())
                 assertEquals("Консультація завершена без Wi-Fi", views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }.text.toString())
             }

@@ -11,7 +11,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
-import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import org.json.JSONArray
@@ -21,7 +20,7 @@ import java.time.ZoneId
 
 /** Only schedule identifiers are plaintext. Names and clinical text stay in encrypted OfflineStore. */
 object AppointmentReminders {
-    const val CHANNEL = "solvia_consultations_v1"
+    const val CHANNEL = "solvia_consultations_v2"
     private fun prefs(c: Context) = c.getSharedPreferences("solvia_reminders", Context.MODE_PRIVATE)
     private fun alarm(c: Context) = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     fun exact(c: Context) = Build.VERSION.SDK_INT < 31 || alarm(c).canScheduleExactAlarms()
@@ -29,11 +28,12 @@ object AppointmentReminders {
         (c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled()
     fun channel(c: Context) {
         val manager = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Час консультації", NotificationManager.IMPORTANCE_HIGH).apply {
+        val old = manager.getNotificationChannel("solvia_consultations_v1")
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Час консультації", old?.importance ?: NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Звукове нагадування про початок прийому"
-            enableVibration(true); vibrationPattern = longArrayOf(0, 700, 300, 700)
+            enableVibration(old?.shouldVibrate() ?: true); vibrationPattern = old?.vibrationPattern ?: longArrayOf(0, 700, 300, 700)
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-            setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), AudioAttributes.Builder()
+            setSound(if(old != null && old.sound == null) null else Uri.parse("android.resource://${c.packageName}/raw/solvia_consultation"), AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
         })
     }

@@ -13,6 +13,20 @@ class AppointmentRemindersTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun appointment(at: String) = JSONObject().put("id", 91).put("start", at).put("status", "confirmed")
         .put("patients", JSONArray().put(JSONObject().put("id", 7).put("name", "Секретне тестове ім’я")))
+    @Test fun originalToneResourceIsValidAndUsedByTheChannel() {
+        context.resources.openRawResource(R.raw.solvia_consultation).use { stream ->
+            val header = ByteArray(44); assertEquals(44, stream.read(header))
+            assertEquals("RIFF", String(header, 0, 4, Charsets.US_ASCII))
+            assertEquals("WAVE", String(header, 8, 4, Charsets.US_ASCII))
+            val values = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            assertEquals(24000, values.getInt(24)); assertEquals(1, values.getShort(22).toInt())
+            assertEquals(16, values.getShort(34).toInt()); assertEquals(278400, values.getInt(40))
+        }
+        AppointmentReminders.channel(context)
+        val manager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val channel = manager.getNotificationChannel(AppointmentReminders.CHANNEL)
+        assertTrue(channel.sound.toString().contains("/raw/solvia_consultation"))
+    }
     @Test fun cancellationAndLocalCompletionRemoveScheduledAlarm() {
         val base = "https://${UUID.randomUUID()}.invalid"; val store = OfflineStore(context, base, 771)
         store.saveSession(JSONObject().put("id", 771), "synthetic")

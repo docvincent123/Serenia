@@ -9,8 +9,8 @@ android {
         applicationId 'com.quremed.solvia'
         minSdk 26
         targetSdk 35
-        versionCode 28
-        versionName '2.7.1'
+        versionCode 29
+        versionName '2.8.0'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
@@ -66,3 +66,13 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }
 
+
+// Reproducible original sound; materialized before Android resource compilation.
+tasks.register('materializeSolviaTone') {
+    def source = rootProject.file('../assets/solvia-consultation.wav.b64')
+    def target = file('src/main/res/raw/solvia_consultation.wav')
+    inputs.file(source)
+    outputs.file(target)
+    doLast { target.parentFile.mkdirs(); target.bytes = source.text.trim().decodeBase64() }
+}
+tasks.named('preBuild').configure { dependsOn('materializeSolviaTone') }
