@@ -67,7 +67,7 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }
       <div className="shift-tabs" role="group" aria-label="Статус прийомів">{[['active','Активні'],['completed','Проконсультовані'],['excluded','Не проведені']].map(([key,label])=>
         <button key={key} aria-pressed={tab===key} className={tab===key?'active':''} onClick={()=>{setTab(key);setSelected('');}}>{label} <span>{counts[key]}</span></button>)}</div>
       <div className="shift-filters"><label>Дата зміни<input type="date" value={day} disabled={busy} onChange={e=>{if(e.target.value)setDay(e.target.value);}} /></label>
-        <label>Психолог<select value={psychologist} onChange={e=>setPsychologist(e.target.value)}><option value="">Усі психологи</option>
+        <label>Психолог<select aria-label="Психолог" value={psychologist} onChange={e=>setPsychologist(e.target.value)}><option value="">Усі психологи</option>
           {psychologists.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>
         <label className="shift-search">Знайти пацієнта<input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="ПІБ, номер картки або телефон" /></label></div>
     </section>

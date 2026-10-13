@@ -84,6 +84,7 @@ try {
   await page.getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('button',{name:'Прийоми за зміну',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
+  await page.locator('.shift-visit').first().waitFor();
   assert.equal(await page.locator('.shift-visit').count(),2,'Completed group participant must not remain active');
   await page.locator('.shift-visit').first().click();
   await page.getByRole('button',{name:'Пацієнт прибув',exact:true}).click();
