@@ -51,7 +51,7 @@ class DraftSync(private val drafts: DraftStore, private val journal: OfflineStor
         fun fingerprint(value: JSONObject): String {
             val canonical = JSONObject()
             for(key in listOf("note","goals","next_plan","homework","request_text","state_text","work_done","recommendations","result_text",
-                "consultation_type","risk_level","consult_date","client_key","appointment_id","duration_minutes")) canonical.put(key, value.optString(key))
+                "consultation_type","risk_level","consult_date","client_key","appointment_id","duration_minutes","emotional_state","followup_choice")) canonical.put(key, value.optString(key))
             canonical.put("risk_flags", value.optJSONArray("risk_flags") ?: JSONArray())
             return MessageDigest.getInstance("SHA-256").digest(canonical.toString().toByteArray()).joinToString("") { "%02x".format(it) }
         }

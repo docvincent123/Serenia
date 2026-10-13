@@ -69,6 +69,8 @@ class MainActivity : Activity() {
     private val offlineUnlockRequest = 4103
     private var pendingOfflineSession: JSONObject? = null
     private var offlineMode = false
+    private var connectionEpoch = 0L
+    private var checkingConnection = false
     private var syncRunning = false
     private var statusView: TextView? = null
     private var workspaceTitle: TextView? = null
@@ -108,13 +110,19 @@ class MainActivity : Activity() {
     private fun updateConnectionStatus() {
         if(token.isBlank()) return
         val count = runCatching { val q = offlineStore().queue(); (0 until q.length()).count { q.getJSONObject(it).optString("state") in listOf("pending", "blocked") } }.getOrDefault(0)
-        statusView?.text = (if(offlineMode) "Офлайн · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "Онлайн") +
-            (if(count > 0) " · у черзі: $count" else "") + (if(cachePreparing) " · завантаження карток…" else "")
+        statusView?.apply {
+            val online = !offlineMode && !checkingConnection
+            text = when { checkingConnection -> "● Перевірка"; online -> "● Онлайн"; else -> "● Офлайн" }
+            setTextColor(Color.parseColor(when { checkingConnection -> "#713F12"; online -> "#14532D"; else -> "#991B1B" }))
+            background = rounded(Color.parseColor(when { checkingConnection -> "#FEF3C7"; online -> "#DCFCE7"; else -> "#FEE2E2" }), 12)
+            contentDescription = text.toString() + ". Зв’язок із сервером центру. У черзі: $count" +
+                (if(cachePreparing) ". Завантаження офлайн-копій" else "")
+        }
     }
     private fun syncNow(refresh: Boolean = false) {
         if(token.isBlank() || role != "psychologist" || syncRunning || isDestroyed) return
         syncRunning = true
-        val base = server; val sessionToken = token; val uid = userId
+        val base = server; val sessionToken = token; val uid = userId; val networkEpoch = connectionEpoch
         val store = OfflineStore(this, base, uid)
         io.execute {
             var authExpired = false
@@ -138,7 +146,9 @@ class MainActivity : Activity() {
             runOnUiThread {
                 syncRunning = false
                 if(token != sessionToken || server != base || isDestroyed) return@runOnUiThread
-                offlineMode = !connected; updateConnectionStatus(); updateTransferIndicators()
+                if(connectionEpoch == networkEpoch) { offlineMode = !connected; checkingConnection = false }
+                updateConnectionStatus(); updateTransferIndicators()
+                if(connectionEpoch != networkEpoch) syncHandler.post { syncNow() }
                 if(authExpired) { store.revokeSession(); logout() }
                 else if(refresh) syncScreen()
                 else if(selectedNavigation == "messages" && consultationWindow == null) messagesScreen()
@@ -275,7 +285,15 @@ class MainActivity : Activity() {
         }
         val connectivity = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: android.net.Network) { runOnUiThread { syncNow(); refreshAppointments() } }
+            override fun onAvailable(network: android.net.Network) { runOnUiThread {
+                connectionEpoch++; checkingConnection = token.isNotBlank(); updateConnectionStatus()
+                syncNow(); refreshAppointments()
+            } }
+            override fun onLost(network: android.net.Network) { runOnUiThread {
+                connectionEpoch++
+                if(connectivity.activeNetwork == null) { offlineMode = true; checkingConnection = false; updateConnectionStatus() }
+                else { checkingConnection = token.isNotBlank(); updateConnectionStatus(); syncNow(); refreshAppointments() }
+            } }
         }
         connectivity.registerNetworkCallback(android.net.NetworkRequest.Builder().build(), networkCallback!!)
         if (intent?.data != null) {
@@ -317,10 +335,15 @@ class MainActivity : Activity() {
                 text = "SOLVIA"; textSize = 20f; setTextColor(MobileUi.onAccent)
                 setPadding(dp(12), 0, 0, 0); setTypeface(typeface, Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, -2, 1f))
+            statusView = TextView(this).apply {
+                tag = "connection-status"; textSize = 12f; gravity = Gravity.CENTER
+                setTypeface(typeface, Typeface.BOLD); setPadding(dp(8), dp(8), dp(8), dp(8))
+                minHeight = dp(40); setOnClickListener { syncScreen() }
+            }
+            header.addView(statusView, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) })
             header.addView(logo(36).apply { contentDescription = "Емблема SOLVIA" }, LinearLayout.LayoutParams(dp(36), dp(36)))
             shell.addView(header)
-            statusView = caption("").apply { setPadding(dp(16), dp(6), dp(16), dp(6)); setOnClickListener { syncScreen() } }
-            shell.addView(statusView); updateConnectionStatus()
+            updateConnectionStatus()
         }
         shell.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(shell)
@@ -429,6 +452,10 @@ class MainActivity : Activity() {
     }
 
     private fun messagesScreen() {
+        val previousScroll = if(selectedNavigation == "messages") findViewById<android.view.ViewGroup>(android.R.id.content)?.let { group ->
+            fun find(view: View): ScrollView? = if(view is ScrollView) view else if(view is android.view.ViewGroup) (0 until view.childCount).firstNotNullOfOrNull { find(view.getChildAt(it)) } else null
+            find(group)?.scrollY ?: 0
+        } ?: 0 else 0
         selectedNavigation = "messages"; backAction = { homeScreen() }
         val body = root(); body.addView(topBar("Повідомлення", ::homeScreen))
         body.addView(title("Передавання записів", 18f))
@@ -445,8 +472,8 @@ class MainActivity : Activity() {
         if(unsent > 0) body.addView(caption("Записів у роботі, що очікують передавання: $unsent"))
         body.addView(title("Нагадування", 18f))
         val notices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(notices)
-        body.addView(secondary("Оновити повідомлення") { syncNow(); messagesScreen() })
-        mount(scroll(body))
+        val messageScroll = scroll(body) { syncNow() }
+        mount(messageScroll); messageScroll.post { messageScroll.scrollTo(0, previousScroll) }
         apiAsync("GET", "/api/appointments?date=" + LocalDate.now(), onError = { notices.addView(caption("Нагадування поки недоступні. Перевірте підключення.")) }) { result ->
             val rows = result as JSONArray; var count = 0
             for(i in 0 until rows.length()) {
@@ -603,10 +630,11 @@ class MainActivity : Activity() {
     private fun secondary(label: String, action: () -> Unit): Button = MobileUi.button(this, label, action = action).apply { minimalIcon(label, MobileUi.buttonInk) }
     private fun card(): LinearLayout = MobileUi.card(this)
 
-    private fun scroll(content: View): ScrollView = ScrollView(this).apply {
-        isFillViewport = true
-        addView(content)
-    }
+    private fun scroll(content: View, refresh: (() -> Unit)? = null): ScrollView =
+        (if(refresh == null) ScrollView(this) else RefreshScrollView(this, refresh)).apply {
+            isFillViewport = true; isVerticalScrollBarEnabled = true
+            addView(content, android.widget.FrameLayout.LayoutParams(-1, -2))
+        }
 
     private fun spacer(h: Int = 10): Space = Space(this).apply {
         layoutParams = LinearLayout.LayoutParams(1, dp(h))
@@ -1022,7 +1050,7 @@ class MainActivity : Activity() {
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         body.addView(tabs)
         val today = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(today)
-        mount(scroll(body))
+        mount(scroll(body) { syncNow(); refreshAppointments() })
         if(role != "director") apiAsync("GET", "/api/appointments?date=" + LocalDate.now()) { value ->
             var entries = value as JSONArray
             val visits = mutableListOf<Pair<JSONObject, JSONObject>>()
@@ -1125,11 +1153,14 @@ class MainActivity : Activity() {
                         val item = updated.getJSONObject(i); val patients = item.optJSONArray("patients") ?: JSONArray()
                         for(j in 0 until patients.length()) visits.add(item to patients.getJSONObject(j))
                     }
+                    val listScroll = body.parent as? ScrollView
+                    val position = listScroll?.scrollY ?: 0
                     render(if(selectedNavigation == "archive") "completed" else "active")
+                    listScroll?.post { listScroll.scrollTo(0, position) }
                 }
             }
         }
-        body.addView(secondary("Оновити список") { refreshAppointments() })
+
     }
 
     private fun topBar(label: String, back: () -> Unit): LinearLayout = LinearLayout(this).apply {
@@ -1398,6 +1429,16 @@ class MainActivity : Activity() {
             val riskSpinner = Spinner(this)
             riskSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, riskLabels)
 
+            val emotionSpinner = Spinner(this).apply {
+                tag = "emotional-state"
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, ConsultationChoices.emotionalStates)
+            }
+            val followupSpinner = Spinner(this).apply {
+                tag = "followup-plan"
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, ConsultationChoices.followupPlans)
+            }
+            val consultationSpinners = listOf(appointmentSpinner, typeSpinner, riskSpinner, emotionSpinner, followupSpinner)
+
             fun plannedMinutes(): Int {
                 val a = eligible[appointmentSpinner.selectedItemPosition]
                 return runCatching { java.time.Duration.between(java.time.LocalDateTime.parse(a.getString("start")), java.time.LocalDateTime.parse(a.getString("end"))).toMinutes().toInt().coerceIn(10,480) }.getOrDefault(60)
@@ -1465,6 +1506,7 @@ class MainActivity : Activity() {
                 addGap(box)
                 box.addView(caption("Стан на початку — спостереження, скарги, важливі зміни"))
                 box.addView(stateText)
+                addGap(box); box.addView(caption("Емоційний стан — за вашою оцінкою (необов’язково)")); box.addView(emotionSpinner)
             }
 
             section("Проведена робота", "Нотатка, проведена робота, цілі та результат.") { box ->
@@ -1490,6 +1532,7 @@ class MainActivity : Activity() {
                 addGap(box)
                 box.addView(caption("Рекомендації"))
                 box.addView(recommendations)
+                addGap(box); box.addView(caption("Подальший супровід (необов’язково)")); box.addView(followupSpinner)
             }
 
             section("Ризики та контроль", "Позначте лише оцінені вами ризики.") { box ->
@@ -1509,6 +1552,8 @@ class MainActivity : Activity() {
                 textFields.forEach { (key, field) -> field.setText(savedDraft.optString(key)) }
                 typeSpinner.setSelection(typeValues.indexOf(savedDraft.optString("consultation_type", "repeat")).coerceAtLeast(0))
                 riskSpinner.setSelection(riskValues.indexOf(savedDraft.optString("risk_level", "low")).coerceAtLeast(0))
+                emotionSpinner.setSelection(ConsultationChoices.emotionalStates.indexOf(savedDraft.optString("emotional_state", "Не обрано")).coerceAtLeast(0))
+                followupSpinner.setSelection(ConsultationChoices.followupPlans.indexOf(savedDraft.optString("followup_choice", "Не обрано")).coerceAtLeast(0))
                 val selected = eligible.indexOfFirst { it.optLong("id") == savedDraft.optLong("appointment_id") }
                 if (selected >= 0) appointmentSpinner.setSelection(selected)
                 val flags = savedDraft.optJSONArray("risk_flags") ?: JSONArray()
@@ -1521,6 +1566,8 @@ class MainActivity : Activity() {
                     .put("duration_minutes", plannedMinutes())
                     .put("consultation_type", typeValues[typeSpinner.selectedItemPosition])
                     .put("risk_level", riskValues[riskSpinner.selectedItemPosition]).put("risk_flags", flags)
+                    .put("emotional_state", ConsultationChoices.emotionalStates[emotionSpinner.selectedItemPosition])
+                    .put("followup_choice", ConsultationChoices.followupPlans[followupSpinner.selectedItemPosition])
                 textFields.forEach { (key, field) -> value.put(key, field.text.toString()) }; return value
             }
             val tools = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16),dp(16),dp(16),dp(16)) }
@@ -1562,7 +1609,7 @@ class MainActivity : Activity() {
                 override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { persistDraft() }
                 override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
             }
-            listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.onItemSelectedListener = selectionWatcher }
+            consultationSpinners.forEach { it.onItemSelectedListener = selectionWatcher }
 
             val dialog = AlertDialog.Builder(this)
                 .setTitle("Консультація")
@@ -1619,18 +1666,22 @@ class MainActivity : Activity() {
                         .put("goals", goals.text.toString())
                         .put("next_plan", next.text.toString())
                         .put("homework", homework.text.toString())
-                        .put("recommendations", recommendations.text.toString())
+                        .put("recommendations", ConsultationChoices.include(recommendations.text.toString(), "Подальший супровід", ConsultationChoices.followupPlans, followupSpinner.selectedItemPosition))
                         .put("consultation_type", typeValues[typeSpinner.selectedItemPosition])
                         .put("duration_minutes", minutes)
                         .put("request_text", requestText.text.toString())
-                        .put("state_text", stateText.text.toString())
+                        .put("state_text", ConsultationChoices.include(stateText.text.toString(), "Емоційний стан", ConsultationChoices.emotionalStates, emotionSpinner.selectedItemPosition))
                         .put("work_done", workDone.text.toString())
                         .put("result_text", resultText.text.toString())
                         .put("risk_level", riskValues[riskSpinner.selectedItemPosition])
                         .put("risk_flags", flags)
+                    if(listOf("state_text", "recommendations").any { payload.optString(it).toByteArray(Charsets.UTF_8).size > 10000 }) {
+                        Toast.makeText(this, "Скоротіть опис стану або рекомендації: текст разом із вибраним значенням перевищує ліміт.", Toast.LENGTH_LONG).show()
+                        return@setOnClickListener
+                    }
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
                     textFields.values.forEach { it.isEnabled = false }
-                    listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.isEnabled = false }
+                    consultationSpinners.forEach { it.isEnabled = false }
                     flagChecks.forEach { it.isEnabled = false }
                     persistDraft(); submitted = true
                     val base = server; val auth = token; val uid = userId
@@ -1658,7 +1709,7 @@ class MainActivity : Activity() {
                                 submitted = false
                                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
                                 textFields.values.forEach { it.isEnabled = true }
-                                listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.isEnabled = true }
+                                consultationSpinners.forEach { it.isEnabled = true }
                                 flagChecks.forEach { it.isEnabled = true }
                                 showError(error!!)
                             }

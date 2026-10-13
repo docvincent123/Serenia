@@ -446,11 +446,14 @@ class Scenario(unittest.TestCase):
         self.assertEqual(self.api('draft_psy','GET',path)['version'],0)
         for role in ['admin','wait_rec','wait_director','draft_other']:
             self.api(role,'GET',path,status=403)
-        payload={'note':'Private synthetic draft','goals':'Goal','appointment_id':'','client_key':'draft-test-client-key-2026'}
+        payload={'note':'Private synthetic draft','goals':'Goal','appointment_id':'','client_key':'draft-test-client-key-2026','emotional_state':'Тривожний','followup_choice':'Продовжити психологічний супровід'}
         saved=self.api('draft_psy','PATCH',path,{'version':0,'payload':payload})
         self.assertEqual(saved['version'],1)
         self.api('draft_psy','PATCH',path,{'version':0,'payload':{'note':'Stale overwrite'}},status=409)
-        self.assertEqual(self.api('draft_psy','GET',path)['payload']['note'],payload['note'])
+        restored=self.api('draft_psy','GET',path)['payload']
+        for key in ['note','emotional_state','followup_choice']:
+            self.assertEqual(restored[key],payload[key])
+        self.api('draft_psy','PATCH',path,{'version':1,'payload':{'emotional_state':'x'*201}},status=400)
         self.api('draft_psy','PATCH',path,{'version':1,'payload':{'note':'x'*10001}},status=400)
         self.api('draft_psy','DELETE',path,{'version':0},status=409)
         self.api('draft_psy','DELETE',path,{'version':1})

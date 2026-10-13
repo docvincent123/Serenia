@@ -23,7 +23,7 @@ class MobileUpdatesTest {
     @Test fun signedUpgradeKeepsExistingPreferences() {
         val prefs=c.getSharedPreferences("solvia_update_probe",0)
         @Suppress("DEPRECATION") val version=c.packageManager.getPackageInfo(c.packageName,0).versionCode
-        if(version==32) assertTrue(prefs.edit().putString("connection","preserved-server").commit())
-        else { assertEquals(33,version); assertEquals("preserved-server",prefs.getString("connection","")) }
+        if(version==33) assertTrue(prefs.edit().putString("connection","preserved-server").commit())
+        else { assertEquals(34,version); assertEquals("preserved-server",prefs.getString("connection","")) }
     }
 }
