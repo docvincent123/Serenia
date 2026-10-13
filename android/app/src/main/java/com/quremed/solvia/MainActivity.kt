@@ -744,6 +744,15 @@ class MainActivity : Activity() {
         startActivityForResult(intent, openConfigRequest)
     }
 
+    private fun rememberServer(candidate: String) {
+        val previous = prefs.getString("server", "").orEmpty()
+        if(previous.isNotBlank() && previous != candidate) {
+            val uid = prefs.getLong("offline_user:$previous", 0)
+            if(uid > 0) OfflineStore(this, previous, uid).revokeSession()
+            AppointmentReminders.cancelScope(this, previous, uid); ShiftNotifications.clear(this)
+        }
+        server = candidate; prefs.edit().putString("server", candidate).apply()
+    }
     private fun importServerConfig(uri: android.net.Uri) {
         io.execute {
             try {
@@ -771,8 +780,7 @@ class MainActivity : Activity() {
                 try {
                     val health = requestAt(candidate, "GET", "/api/health", authToken = "") as JSONObject
                     require(health.optBoolean("ok")) { "Сервер не підтвердив готовність" }
-                    server = candidate
-                    prefs.edit().putString("server", server).apply()
+                    rememberServer(candidate)
                     runOnUiThread {
                         Toast.makeText(this, "Сервер SOLVIA підключено: $server", Toast.LENGTH_LONG).show()
                         loginScreen()
@@ -788,8 +796,7 @@ class MainActivity : Activity() {
                                 .setMessage("HTTPS не вдалося відкрити, але сервер доступний через $localHttp. Використовувати HTTP лише у приватній Wi-Fi/LAN мережі центру? Для VPS та інтернету використовуйте HTTPS.")
                                 .setNegativeButton("Ні") { _, _ -> setupScreen() }
                                 .setPositiveButton("Підключити локально") { _, _ ->
-                                    server = localHttp
-                                    prefs.edit().putString("server", server).apply()
+                                    rememberServer(localHttp)
                                     Toast.makeText(this, "Підключено локально: $server", Toast.LENGTH_LONG).show()
                                     loginScreen()
                                 }

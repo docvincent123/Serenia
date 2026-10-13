@@ -40,6 +40,7 @@ object ShiftNotifications {
         val settings = c.getSharedPreferences("solvia_settings", 0)
         val scope = "$base|$uid|$today"
         val same = p.getString("seen_scope", "") == scope
+        if(!same) manager(c).cancel(NEW_ID)
         val seen = if(same) p.getStringSet("seen", emptySet())!!.toSet() else emptySet()
         val ids = mutableSetOf<String>(); val queue = store.queue(); var count = 0; var next = ""
         for(i in 0 until rows.length()) {

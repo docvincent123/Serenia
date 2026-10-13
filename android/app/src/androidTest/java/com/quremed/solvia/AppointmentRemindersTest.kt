@@ -13,6 +13,11 @@ class AppointmentRemindersTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun appointment(at: String) = JSONObject().put("id", 91).put("start", at).put("status", "confirmed")
         .put("patients", JSONArray().put(JSONObject().put("id", 7).put("name", "Секретне тестове ім’я")))
+    private fun awaitNotification(condition: () -> Boolean) {
+        val end = android.os.SystemClock.elapsedRealtime() + 3000
+        while(!condition() && android.os.SystemClock.elapsedRealtime() < end) Thread.sleep(50)
+        assertTrue("Android notification state did not settle", condition())
+    }
     private fun allowNotifications() {
         InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS").use {
             android.os.ParcelFileDescriptor.AutoCloseInputStream(it).readBytes()
@@ -31,19 +36,21 @@ class AppointmentRemindersTest {
             ShiftNotifications.refresh(context, base, uid)
             assertFalse(manager.activeNotifications.any { it.id == ShiftNotifications.NEW_ID && it.tag == null })
             ShiftNotifications.restore(context)
+            awaitNotification { manager.activeNotifications.any { it.id == ShiftNotifications.SHIFT_ID } }
             val status = manager.activeNotifications.first { it.id == ShiftNotifications.SHIFT_ID }
             assertTrue(status.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0)
             assertFalse(status.notification.extras.toString().contains("Секретне"))
             rows.put(appointment(day + "T23:55").put("id", 92))
             store.saveCache("/api/appointments?date=$day", rows)
             ShiftNotifications.refresh(context, base, uid)
-            assertTrue(manager.activeNotifications.any { it.id == ShiftNotifications.NEW_ID && it.tag == null })
+            awaitNotification { manager.activeNotifications.any { it.id == ShiftNotifications.NEW_ID && it.tag == null } }
             manager.cancel(ShiftNotifications.NEW_ID)
+            awaitNotification { manager.activeNotifications.none { it.id == ShiftNotifications.NEW_ID && it.tag == null } }
             ShiftNotifications.restore(context)
             assertFalse(manager.activeNotifications.any { it.id == ShiftNotifications.NEW_ID && it.tag == null })
             store.saveCache("/api/shift-day", JSONObject().put("shift_date", day).put("open", false))
             ShiftNotifications.restore(context)
-            assertFalse(manager.activeNotifications.any { it.id == ShiftNotifications.SHIFT_ID })
+            awaitNotification { manager.activeNotifications.none { it.id == ShiftNotifications.SHIFT_ID } }
         } finally { ShiftNotifications.clear(context); store.revokeSession() }
     }
     @Test fun connectionFilesResolveToInstalledAppAndTestRingStops() {
@@ -58,9 +65,9 @@ class AppointmentRemindersTest {
         assertNotNull(context.packageManager.resolveActivity(byExtension, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY))
         AppointmentReminders.test(context)
         val manager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        assertTrue(manager.activeNotifications.any { it.tag == "test" && it.id == 1 })
+        awaitNotification { manager.activeNotifications.any { it.tag == "test" && it.id == 1 } }
         AppointmentReminders.stopTest(context)
-        assertFalse(manager.activeNotifications.any { it.tag == "test" && it.id == 1 })
+        awaitNotification { manager.activeNotifications.none { it.tag == "test" && it.id == 1 } }
     }
     @Test fun originalToneResourceIsValidAndUsedByTheChannel() {
         context.resources.openRawResource(R.raw.solvia_consultation).use { stream ->

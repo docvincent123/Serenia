@@ -79,6 +79,14 @@ try {
   await page.screenshot({ path:'out/design/desktop-dashboard.png',fullPage:true });
   await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   await page.screenshot({ path:'out/design/desktop-settings.png',fullPage:true });
+  await page.locator('.settings-nav').getByRole('button',{name:/Підключення/}).click();
+  const configDownload = page.waitForEvent('download');
+  await page.getByRole('button',{name:'Файл для телефону',exact:true}).click();
+  const downloaded = await configDownload;
+  assert.equal(downloaded.suggestedFilename(),'SOLVIA-Mobile.solvia');
+  const config = JSON.parse(await readFile(await downloaded.path(),'utf8'));
+  assert.equal(config.api_url,'https://192.168.1.100:8443');
+  assert.equal(config.format,'quremed.solvia.mobile');
   // Settings remain accessible even with the shift closed.
   open = false; await page.reload(); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   open = true; await page.reload();

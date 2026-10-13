@@ -2947,7 +2947,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
       link.href = href; link.download = 'SOLVIA-Mobile.solvia';
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(href), 1000);
-      setConnectionTest({ state: 'success', message: 'Файл створено сервером зі збережених налаштувань. Відкрийте його на телефоні у SOLVIA.' });
+      setConnectionTest({ state: 'ok', message: 'Файл створено сервером зі збережених налаштувань. Відкрийте його на телефоні у SOLVIA.' });
     } catch (e) { setConnectionTest({ state: 'error', message: e.message }); }
   }
 
