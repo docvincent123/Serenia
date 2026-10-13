@@ -92,6 +92,8 @@ class AppointmentRemindersTest {
         try {
             AppointmentReminders.update(context, base, 771, rows)
             assertEquals(1, prefs.getStringSet("keys", emptySet())!!.size)
+            val expected = LocalDateTime.parse(at).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() - AppointmentReminders.LEAD_MS
+            assertEquals(expected, prefs.getLong(prefs.getStringSet("keys", emptySet())!!.first(),0))
             assertFalse(prefs.all.values.any { it.toString().contains("Секретне тестове ім’я") })
             store.enqueue(JSONObject().put("client_key", "test").put("appointment_id", 91).put("patient_id", 7), "Тест")
             AppointmentReminders.update(context, base, 771, rows)
@@ -103,7 +105,7 @@ class AppointmentRemindersTest {
         store.saveSession(JSONObject().put("id", 772), "synthetic")
         val prefs = context.getSharedPreferences("solvia_reminders", 0)
         val at = LocalDateTime.now().minusMinutes(1).withSecond(0).withNano(0)
-        val time = at.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val time = at.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() - AppointmentReminders.LEAD_MS
         val key = "91_$time"
         try {
             AppointmentReminders.cancel(context)

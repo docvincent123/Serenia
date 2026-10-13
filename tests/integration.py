@@ -131,7 +131,8 @@ class Scenario(unittest.TestCase):
         self.api(rec,'POST',f'/api/appointments/{aid}/arrival',{'patient_id':pid},status=409)
         today_booking={**booking,'start':dt.date.today().isoformat()+'T09:00','end':dt.date.today().isoformat()+'T10:00'}
         arrival_id=self.api(rec,'POST','/api/appointments',today_booking)['id']
-        self.api(psy,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid},status=403)
+        self.api(psy,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid})
+        self.api('other','POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid},status=403)
         self.api(rec,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':second},status=404)
         self.api(rec,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid})
         arrival_rows=self.api(rec,'GET','/api/shift-workspace')

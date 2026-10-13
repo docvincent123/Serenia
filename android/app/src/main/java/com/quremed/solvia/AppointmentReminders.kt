@@ -20,6 +20,7 @@ import java.time.ZoneId
 
 /** Only schedule identifiers are plaintext. Names and clinical text stay in encrypted OfflineStore. */
 object AppointmentReminders {
+    const val LEAD_MS = 2 * 60 * 1000L
     const val CHANNEL = "solvia_consultations_v2"
     private fun prefs(c: Context) = c.getSharedPreferences("solvia_reminders", Context.MODE_PRIVATE)
     private fun alarm(c: Context) = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -72,7 +73,7 @@ object AppointmentReminders {
                 }
             }
             if(!unfinished) continue
-            val at = runCatching { LocalDateTime.parse(a.getString("start")).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull() ?: continue
+            val at = runCatching { LocalDateTime.parse(a.getString("start")).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() - LEAD_MS }.getOrNull() ?: continue
             if(at <= now && ("${id}_$at" !in previous || now - at > 15 * 60 * 1000L)) continue
             val key = "${id}_$at"; keys.add(key); edit.putLong(key, at)
             // A fired reminder must not be rearmed by the next refresh.
@@ -135,7 +136,7 @@ object AppointmentReminders {
         val dismiss = PendingIntent.getBroadcast(c, 0, Intent(c, ConsultationReminderReceiver::class.java)
             .setAction("com.quremed.solvia.SILENCE").setData(Uri.parse("solvia://silence/$key")).putExtra("key", key), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
-            .setContentTitle("Час консультації").setContentText("Відкрийте SOLVIA та перевірте активні прийоми.")
+            .setContentTitle("Консультація за 2 хвилини").setContentText("Перевірте активний прийом у SOLVIA. Відмітьте прибуття пацієнта.")
             .setCategory(Notification.CATEGORY_ALARM).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(open).setAutoCancel(true).setTimeoutAfter(60000)
             .addAction(Notification.Action.Builder(null, "Вимкнути звук", dismiss).build()).build()

@@ -282,9 +282,10 @@ if(path=="/api/shift-workspace"&&method=="GET"){
     return db.query("SELECT a.id appointment_id,a.start,a.\"end\",a.kind,a.status,a.psychologist_id,us.name psychologist,r.name room,p.id patient_id,p.patient_no,p.name patient,p.phone,p.category,t.arrived_at,COALESCE(c.completed_at,'') completed_at FROM appointments a JOIN users us ON us.id=a.psychologist_id JOIN rooms r ON r.id=a.room_id JOIN attendees t ON t.appointment_id=a.id JOIN patients p ON p.id=t.patient_id LEFT JOIN (SELECT appointment_id,patient_id,max(created) completed_at FROM consultations GROUP BY appointment_id,patient_id) c ON c.appointment_id=a.id AND c.patient_id=p.id WHERE substr(a.start,1,10)=? ORDER BY a.start,a.id,p.name",{day});
 }
 if(std::regex_match(path,std::regex("/api/appointments/[0-9]+/arrival"))&&method=="POST"){
-    allow(u,{"admin","reception"});int id=std::stoi(path.substr(18));int pid=num(b,"patient_id");
-    auto rows=db.query("SELECT a.start,a.status,t.arrived_at FROM appointments a JOIN attendees t ON t.appointment_id=a.id WHERE a.id=? AND t.patient_id=?",{id,pid});
+    allow(u,{"admin","reception","psychologist"});int id=std::stoi(path.substr(18));int pid=num(b,"patient_id");
+    auto rows=db.query("SELECT a.start,a.status,a.psychologist_id,t.arrived_at FROM appointments a JOIN attendees t ON t.appointment_id=a.id WHERE a.id=? AND t.patient_id=?",{id,pid});
     check(!rows.empty(),"Пацієнта немає в цьому прийомі",404);
+    if(u["role"]=="psychologist")check(rows[0]["psychologist_id"]==u["id"],"Це прийом іншого психолога",403);
     check(rows[0]["start"].get<std::string>().substr(0,10)==now().substr(0,10),"Прибуття можна відмітити лише за сьогодні",409);
     check(rows[0]["status"]=="scheduled"||rows[0]["status"]=="confirmed","Цей прийом уже не очікує прибуття",409);
     check(db.query("SELECT id FROM consultations WHERE appointment_id=? AND patient_id=?",{id,pid}).empty(),"Консультацію вже завершено",409);
@@ -292,7 +293,7 @@ if(std::regex_match(path,std::regex("/api/appointments/[0-9]+/arrival"))&&method
         db.query("UPDATE attendees SET arrived_at=?,arrived_by=? WHERE appointment_id=? AND patient_id=? AND arrived_at=''",{now(),u["id"],id,pid});
         audit(db,u,"arrival","appointment",id);
     }
-    return {{"ok",true}};
+    return {{"ok",true},{"arrived_at",db.query("SELECT arrived_at FROM attendees WHERE appointment_id=? AND patient_id=?",{id,pid})[0]["arrived_at"]}};
 }
 if(path=="/api/appointments"){allow(u,{"admin","reception","psychologist"});if(method=="POST")return book(db,u,b);check(method=="GET","Метод не дозволений",405);auto day=r.has_param("date")?r.get_param_value("date"):now().substr(0,10);validDate(day);J args={day};std::string sql="SELECT a.*,u.name psychologist,r.name room FROM appointments a JOIN users u ON u.id=a.psychologist_id JOIN rooms r ON r.id=a.room_id WHERE substr(start,1,10)=?";if(u["role"]=="psychologist"){sql+=" AND a.psychologist_id=?";args.push_back(u["id"]);}auto apps=db.query(sql+" ORDER BY start",args);for(auto&a:apps)a["patients"]=db.query("SELECT p.id,p.name,p.patient_no,t.arrived_at,COALESCE(c.created,'') completed_at FROM attendees t JOIN patients p ON p.id=t.patient_id LEFT JOIN consultations c ON c.appointment_id=t.appointment_id AND c.patient_id=t.patient_id WHERE t.appointment_id=?",{a["id"]});return apps;}
 if(std::regex_match(path,std::regex("/api/appointments/[0-9]+"))&&method=="PATCH"){allow(u,{"admin","reception"});int id=std::stoi(path.substr(18));auto status=b.value("status","");if(status=="cancelled"||status=="no_show"){auto a=db.query("SELECT status FROM appointments WHERE id=?",{id});check(!a.empty(),"Запис не знайдено",404);check(db.query("SELECT id FROM consultations WHERE appointment_id=?",{id}).empty(),"Проведений або частково проведений запис не можна змінити",409);db.query("UPDATE appointments SET status=?,cancellation_reason=? WHERE id=?",{status,str(b,"cancellation_reason",1000,false),id});audit(db,u,status=="cancelled"?"cancel":"no_show","appointment",id);return {{"ok",true}};}return book(db,u,b,id);}

@@ -557,13 +557,7 @@ function Login({ initialBase, onLogin }) {
           <h1>Час для допомоги. Простір для роботи.</h1>
           <p>Пацієнти, прийоми та документація — в одному зручному робочому просторі.</p>
         </div>
-        <div className="privacy-note">
-          <span>●</span>
-          <div>
-            <strong>Персональний кабінет</strong>
-            <small>Увійдіть своїм обліковим записом. Доступ до розділів залежить від ролі в центрі.</small>
-          </div>
-        </div>
+
       </section>
 
       <section className="login-panel">
