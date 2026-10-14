@@ -544,6 +544,19 @@ class Scenario(unittest.TestCase):
         self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
         self.assertEqual(len(self.api('draft_psy','GET',f'/api/patients/{patient}')['consultations']),1)
 
+    def prepare_synthetic_shift_close(self, day):
+        # Earlier scenarios leave completed appointments for psychologists without
+        # a current mobile heartbeat. Give this isolated fixture an empty queue.
+        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',f"""
+            UPDATE appointments SET status='no_show' WHERE substr(start,1,10)='{day}' AND status IN ('scheduled','confirmed');
+            UPDATE mobile_devices SET pending_count=0,blocked_count=0,last_seen_epoch=extract(epoch from now())::bigint;
+            INSERT INTO mobile_devices(user_id,device_id,device_name,version_code,version_name,last_seen,pending_count,blocked_count,last_seen_epoch)
+            SELECT DISTINCT psychologist_id,'synthetic-close-{day}','Synthetic close',37,'3.3.0','{day}T12:00:00',0,0,extract(epoch from now())::bigint
+            FROM appointments WHERE substr(start,1,10)='{day}'
+            ON CONFLICT(user_id,device_id) DO UPDATE SET last_seen=EXCLUDED.last_seen,last_seen_epoch=EXCLUDED.last_seen_epoch,pending_count=0,blocked_count=0;
+        """])
+        self.assertTrue(self.api('admin','GET','/api/shift-readiness')['ready'])
+
     def test_x2_shift_binding_survives_midnight_until_explicit_close(self):
         self.api('admin','POST','/api/shift-day',{'action':'open'})
         yesterday=(dt.date.today()-dt.timedelta(days=1)).isoformat()
@@ -552,7 +565,7 @@ class Scenario(unittest.TestCase):
         code,auth=self.call('POST','/api/login',{'login':'нічний_психолог','password':'3','platform':'Android','device_id':'night-shift-phone'})
         self.assertEqual(code,200,auth);self.assertTrue(auth['user']['shift_bound']);self.assertEqual(auth['user']['shift_date'],yesterday)
         code,shift=self.call('GET','/api/shift-day',token=auth['token']);self.assertEqual(code,200);self.assertEqual(shift['shift_date'],yesterday)
-        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',f"UPDATE appointments SET status='no_show' WHERE substr(start,1,10)='{yesterday}' AND status IN ('scheduled','confirmed'); UPDATE mobile_devices SET pending_count=0,blocked_count=0,last_seen_epoch=extract(epoch from now())::bigint;"])
+        self.prepare_synthetic_shift_close(yesterday)
         self.api('admin','POST','/api/shift-day',{'action':'close'})
         self.assertEqual(self.call('GET','/api/me',token=auth['token'])[0],401)
         self.api('admin','POST','/api/shift-day',{'action':'open'})
@@ -577,7 +590,7 @@ class Scenario(unittest.TestCase):
         self.api('admin','PATCH','/api/settings/center',center)
         self.assertEqual(self.call('GET','/api/me',token=again['token'])[1]['server_name'],'Додатковий')
         # Synthetic installation: complete readiness so the real close endpoint can run.
-        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',"UPDATE appointments SET status='no_show' WHERE substr(start,1,10)=current_date::text AND status IN ('scheduled','confirmed'); UPDATE mobile_devices SET pending_count=0,blocked_count=0,last_seen_epoch=extract(epoch from now())::bigint;"])
+        self.prepare_synthetic_shift_close(dt.date.today().isoformat())
         self.api('admin','POST','/api/shift-day',{'action':'close'})
         self.assertEqual(self.call('GET','/api/me',token=again['token'])[0],401)
         self.api('admin','POST','/api/shift-day',{'action':'open'})
