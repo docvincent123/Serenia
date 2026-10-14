@@ -116,9 +116,14 @@ class MainActivity : Activity() {
             text = if(syncTime.isBlank()) "" else "Остання синхронізація: " + syncTime.replace('T',' ')
             visibility = if(syncTime.isBlank()) View.GONE else View.VISIBLE
         }
-        statusView?.setTextColor(if(offlineMode) Color.rgb(255,185,160) else Color.rgb(122,223,162))
-        statusView?.text = (if(offlineMode) "○ Офлайн · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "● Онлайн") +
-            (if(count > 0) " · у черзі: $count" else "") + (if(cachePreparing) " · завантаження карток…" else "")
+        statusView?.apply {
+            setTextColor(if(offlineMode) Color.rgb(255,185,160) else Color.rgb(122,223,162))
+            text = if(offlineMode) "○ Офлайн" else "● Онлайн"
+            val detail = (if(offlineMode) "Офлайн · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "Онлайн") +
+                (if(count > 0) " · у черзі: $count" else "") + (if(cachePreparing) " · завантаження карток…" else "")
+            contentDescription = "Стан підключення: $detail. Відкрити стан передавання."
+            tooltipText = detail
+        }
     }
     private fun syncNow(refresh: Boolean = false) {
         if(token.isBlank() || role != "psychologist" || syncRunning || isDestroyed) return
@@ -328,13 +333,18 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(dp(48), dp(48)))
             header.addView(TextView(this).apply {
                 workspaceTitle = this
-                text = "SOLVIA"; textSize = 20f; setTextColor(MobileUi.onAccent)
+                text = "SOLVIA"; textSize = 18f; setTextColor(MobileUi.onAccent)
+                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(dp(12), 0, 0, 0); setTypeface(typeface, Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, -2, 1f))
-            header.addView(logo(36).apply { contentDescription = "Емблема SOLVIA" }, LinearLayout.LayoutParams(dp(36), dp(36)))
-            shell.addView(header)
-            statusView = caption("").apply { setPadding(dp(16), dp(6), dp(16), dp(6)); setOnClickListener { syncScreen() } }
-            shell.addView(statusView); updateConnectionStatus()
+            statusView = TextView(this).apply {
+                textSize = 12f; gravity = Gravity.CENTER; maxLines = 1
+                minHeight = dp(40); setPadding(dp(8), dp(6), dp(8), dp(6))
+                background = rounded(MobileUi.background, 10)
+                setOnClickListener { syncScreen() }
+            }
+            header.addView(statusView, LinearLayout.LayoutParams(dp(94), dp(40)).apply { marginStart = dp(8) })
+            shell.addView(header); updateConnectionStatus()
         }
         shell.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(shell)
@@ -406,7 +416,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(forest); setPadding(dp(18), dp(18), dp(18), dp(18))
         }
         val identity = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        identity.addView(logo(44), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(14) })
+        identity.addView(logo(44).apply { contentDescription = "Емблема SOLVIA" }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(14) })
         identity.addView(title(userName, 20f).apply { setTextColor(MobileUi.onAccent) }, LinearLayout.LayoutParams(0, -2, 1f))
         heading.addView(identity)
         heading.addView(TextView(this).apply { text = "Психолог · SOLVIA"; setTextColor(MobileUi.onAccent); textSize = 13f })
@@ -429,6 +439,10 @@ class MainActivity : Activity() {
             labels.forEach { label -> row(label, menuIcon(label)) { navigateMenu(label) } }
         }
         panel.addView(scroll(rows), LinearLayout.LayoutParams(-1, 0, 1f))
+        panel.addView(TextView(this).apply {
+            text = "QureMed Industries"; textSize = 13f; setTextColor(muted)
+            gravity = Gravity.CENTER; setPadding(dp(16), dp(14), dp(16), dp(24))
+        }, LinearLayout.LayoutParams(-1, -2))
         sideMenu = popup
         popup.setOnDismissListener { if(sideMenu === popup) sideMenu = null }
         popup.showAtLocation(window.decorView, Gravity.TOP or Gravity.START, 0, 0)
@@ -1095,7 +1109,6 @@ class MainActivity : Activity() {
         workspaceReady = false
         backAction = null
         val checking = root()
-        checking.addView(logo(64))
         checking.addView(title("SOLVIA " + BuildConfig.VERSION_NAME, 20f))
         checking.addView(caption("Перевіряємо відкриття зміни…"))
         mount(scroll(checking))
@@ -1113,7 +1126,7 @@ class MainActivity : Activity() {
     }
 
     private fun renderShiftGate(shift: JSONObject) {
-        val body = root(); body.addView(logo()); body.addView(title("Зміна ще не відкрита"))
+        val body = root(); body.addView(title("Зміна ще не відкрита"))
         body.addView(caption("Дата: " + shift.optString("shift_date", LocalDate.now().toString())))
         body.addView(caption("Адміністратор має відкрити зміну в програмі центру."))
         body.addView(secondary("Перевірити ще раз") { homeScreen() }); body.addView(secondary("Вийти") { logout() })
@@ -1163,9 +1176,8 @@ class MainActivity : Activity() {
                 pendingIndicators.clear()
                 val scrollPosition = homeScroll.scrollY
                 tabs.removeAllViews(); today.removeAllViews()
-                val activeCount = visits.count { active(it.first,it.second) }
                 val completedCount = visits.count { completed(it.first,it.second) }
-                listOf("active" to "Активні · $activeCount", "completed" to "Архів · $completedCount").forEach { (key,label) ->
+                listOf("active" to "Активні", "completed" to "Архів").forEach { (key,label) ->
                     tabs.addView(MobileUi.button(this,label,selected=tab==key) { render(key) }.apply {
                         background = rounded(if(tab == key) forestSoft else MobileUi.panel, 0)
                         setTextColor(if(tab == key) forest else ink)
@@ -1174,7 +1186,7 @@ class MainActivity : Activity() {
                 if(tab=="completed") today.addView(caption("Проконсультовані за цю зміну. Значок збоку означає, що запис ще не передано."))
                 val visible = visits.filter { if(tab=="completed") completed(it.first,it.second) else active(it.first,it.second) }
                 if(visible.isEmpty()) {
-                    val empty = card(); empty.addView(logo(48))
+                    val empty = card()
                     empty.addView(title(if(tab == "completed") "Завершених консультацій ще немає" else if(completedCount>0) "Усі консультації завершено" else "На сьогодні консультацій немає", 20f))
                     empty.addView(caption(if(tab == "completed") "Після завершення консультації запис з’явиться тут." else "Нові прийоми, призначені вам реєстратурою, з’являться в цьому списку."))
                     today.addView(empty)

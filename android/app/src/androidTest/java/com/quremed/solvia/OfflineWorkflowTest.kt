@@ -126,7 +126,7 @@ class OfflineWorkflowTest {
             var ready=false
             val deadline=System.currentTimeMillis()+5000
             while(!ready && System.currentTimeMillis()<deadline) {
-                scenario.onActivity { activity -> ready=views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Активні · 0" } }
+                scenario.onActivity { activity -> ready=views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Активні" } }
                 if(!ready) Thread.sleep(50)
             }
             assertTrue("Cached shift tabs must render",ready)
@@ -151,7 +151,7 @@ class OfflineWorkflowTest {
             }
             capture(scenario,"shift-active")
             scenario.onActivity { activity ->
-                views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Архів · 2" }.performClick()
+                views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Архів" }.performClick()
                 val labels=views(activity.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
                 assertTrue(labels.contains("Архів зміни"))
                 assertTrue(labels.contains("Завершений учасник")); assertTrue(labels.contains("Учасник у черзі"))
