@@ -85,6 +85,7 @@ class OfflineSyncJob : JobService() {
     override fun onStopJob(params: JobParameters): Boolean { active[params.jobId]?.set(true); return true }
     override fun onDestroy() { active.values.forEach { it.set(true) }; executor.shutdownNow(); super.onDestroy() }
     private fun send(base: String, auth: String, payload: JSONObject, path: String = "/api/consultations", method: String = "POST"): JSONObject {
+        PhoneNetworkStats.sent(this,base)
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = false; connection.requestMethod = method
@@ -93,23 +94,24 @@ class OfflineSyncJob : JobService() {
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("Content-Type", "application/json")
             connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-            val status = connection.responseCode
+            val status = connection.responseCode; PhoneNetworkStats.received(this,base)
             val stream = if(status in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             val response = if(text.isBlank()) JSONObject() else JSONTokener(text).nextValue() as JSONObject
             if(status !in 200..299) throw SyncFailure(status, response.optString("error", "Помилка сервера $status"))
             return response
-        } finally { connection.disconnect() }
+        } catch(e: Exception) { PhoneNetworkStats.failed(this,base);throw e } finally { connection.disconnect() }
     }
     private fun get(base: String, auth: String, path: String): Any {
+        PhoneNetworkStats.sent(this,base)
         val c = URL(base + path).openConnection() as HttpURLConnection
         try {
             c.instanceFollowRedirects = false; c.connectTimeout = 6000; c.readTimeout = 12000
             c.setRequestProperty("Authorization", "Bearer $auth"); c.setRequestProperty("Accept", "application/json")
-            val status = c.responseCode
+            val status = c.responseCode; PhoneNetworkStats.received(this,base)
             if(status !in 200..299) throw SyncFailure(status, "Не вдалося оновити розклад")
             return JSONTokener(c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }).nextValue()
-        } finally { c.disconnect() }
+        } catch(e: Exception) { PhoneNetworkStats.failed(this,base);throw e } finally { c.disconnect() }
     }
     companion object {
         fun schedule(context: Context, server: String, user: Long) {

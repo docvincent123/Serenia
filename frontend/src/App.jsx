@@ -2456,8 +2456,8 @@ function Team({ api, currentUser }) {
                 </select>
               </Field>
             )}
-            <Field label={dialog === 'create' ? 'Пароль' : 'Новий пароль'} hint={dialog === 'edit' ? 'Залиште порожнім, якщо пароль не змінюється.' : 'Мінімум 12 символів.'} full>
-              <input type="password" minLength={dialog === 'create' ? 12 : undefined} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={dialog === 'create'} />
+            <Field label={dialog === 'create' ? 'Пароль' : 'Новий пароль'} hint={dialog === 'edit' ? 'Залиште порожнім, якщо пароль не змінюється.' : 'Від одного символу; можна використовувати цифру.'} full>
+              <input type="password" minLength={dialog === 'create' ? 1 : undefined} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={dialog === 'create'} />
             </Field>
             <div className="form-actions full-span">
               <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
@@ -2885,8 +2885,8 @@ function AccountSettings({ api, apiBase, onLogout }) {
     </div></section>
     <section className="surface settings-panel"><h2>Змінити пароль</h2><p>Після зміни потрібно увійти з новим паролем на всіх пристроях.</p><form className="form-grid" onSubmit={changePassword}>
       <Field label="Поточний пароль"><input type="password" autoComplete="current-password" value={password.current_password} onChange={e=>setPassword({...password,current_password:e.target.value})} required /></Field>
-      <Field label="Новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
-      <Field label="Повторіть новий пароль"><input type="password" minLength="12" autoComplete="new-password" value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field>
+      <Field label="Новий пароль"><input type="password" minLength="1" autoComplete="new-password" value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
+      <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field>
       <div className="form-actions full-span"><Button disabled={busy}>Змінити пароль</Button></div>
     </form></section>
     <section className="surface settings-panel"><h2>Версія та оновлення</h2><p>Сервер: SOLVIA {health?.version || '…'} · {health?.platform || ''}</p><p>{apiBase}</p>
@@ -2925,7 +2925,7 @@ function MobileReleaseSettings({ api }) {
 
 function Settings({ api, apiBase, onSwitchApi }) {
   const empty = {
-    center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
+    server_name: 'Основний', center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
     director_name: '', admin_name: '', work_hours: '', document_footer: '', discharge_signatory: '',
     head_name: '', head_title: 'Завідувач центру', logo_data: '', appointment_reminder_minutes: 30,
     connection_mode: 'local', local_api_url: '', vps_api_url: '', vps_name: ''
@@ -3047,6 +3047,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
 
               <form className="form-grid" onSubmit={save}>
                 {activeSection === 'center' ? <>
+                  <Field label="Назва сервера на телефонах" full><input maxLength={120} value={form.server_name} onChange={e=>setForm({...form,server_name:e.target.value})} required placeholder="Основний / Додатковий" /></Field>
                   <Field label="Повна назва центру" full><input value={form.center_name} onChange={(e) => setForm({ ...form, center_name: e.target.value })} required /></Field>
                   <Field label="Коротка назва"><input value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} /></Field>
                   <Field label="Місто"><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>

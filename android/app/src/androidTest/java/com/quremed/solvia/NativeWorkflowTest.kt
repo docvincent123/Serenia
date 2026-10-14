@@ -186,7 +186,7 @@ class NativeWorkflowTest {
                 }
                 MainActivity::class.java.getDeclaredMethod("moreScreen").apply { isAccessible = true }.invoke(activity)
                 val root = activity.window.decorView
-                assertNotNull(button(root, "Повідомлення")); assertNotNull(button(root, "Налаштування")); assertNotNull(button(root, "Змінити пароль"))
+                assertNotNull(button(root, "Повідомлення")); assertNotNull(button(root, "Налаштування")); assertNotNull(button(root, "Мій профіль")); assertNull(button(root, "Архів зміни"))
                 val labels = views(root).filterIsInstance<Button>().map { it.text.toString() }
                 assertFalse(labels.any { it.contains("центру") || it.contains("Пристрої") || it.contains("очікування") })
                 assertFalse(labels.any { it in listOf("Розклад", "Чернетки", "Мої чернетки", "Завершити зміну", "Усі функції", "Активні", "Меню", "Пацієнти", "Документи пацієнтів") })

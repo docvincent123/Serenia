@@ -289,7 +289,7 @@ class MainActivity : Activity() {
         connectivity.registerNetworkCallback(android.net.NetworkRequest.Builder().build(), networkCallback!!)
         if (intent?.data != null) {
             importServerConfig(intent.data!!)
-        } else if (server.isBlank()) setupScreen() else loginScreen()
+        } else if (server.isBlank()) setupScreen() else restoreShiftSession()
     }
 
     private fun mount(content: View) {
@@ -367,8 +367,8 @@ class MainActivity : Activity() {
     }
 
     private fun menuSections() = listOf(
-        "Робота" to listOf("Активні консультації", "Архів зміни", "Повідомлення"),
-        "Особисте" to listOf("Мій профіль", "Налаштування", "Змінити пароль"),
+        "Робота" to listOf("Активні консультації", "Повідомлення"),
+        "Особисте" to listOf("Мій профіль", "Налаштування"),
         "Підключення" to listOf("Стан передавання", "Перепідключення", "Вийти")
     )
     private fun menuIcon(label: String) = when(label) {
@@ -411,11 +411,11 @@ class MainActivity : Activity() {
         }
         fun row(label: String, icon: Int, action: () -> Unit) {
             rows.addView(MobileUi.button(this, label) { popup.dismiss(); action() }.apply {
-                textSize = 18f; gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                textSize = 15f; gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 background = rounded(MobileUi.panel, 0)
                 val image = getDrawable(icon)?.mutate(); image?.setTint(MobileUi.ink)
                 image?.setBounds(0, 0, dp(24), dp(24)); setCompoundDrawables(image, null, null, null)
-                compoundDrawablePadding = dp(16); minHeight = dp(58)
+                compoundDrawablePadding = dp(12); minHeight = dp(48); minimumHeight = dp(48)
             })
         }
         menuSections().forEach { (section, labels) ->
@@ -518,17 +518,27 @@ class MainActivity : Activity() {
     }
 
     private fun informationScreen() {
-        val body = root(); backAction = { moreScreen() }
-        body.addView(topBar("Інформація", ::moreScreen))
-        val account = card(); account.addView(title(userName, 22f))
-        account.addView(caption("Психолог · користувач №$userId")); body.addView(account)
-        val connection = card(); connection.addView(title("Підключення", 20f)); connection.addView(caption(server))
-        connection.addView(caption(if(offlineMode) "Офлайн" else "Онлайн")); body.addView(connection)
-        body.addView(secondary("Перепідключення") { syncNow(refresh = true) })
-        body.addView(secondary("Налаштування") { settingsScreen() })
-        body.addView(secondary("Змінити пароль") { passwordScreen() })
-        body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME} · QureMed Industries"))
+        selectedNavigation = "more"
+        val body = root(); backAction = { moreScreen() }; body.addView(topBar("Мій профіль", ::moreScreen))
+        val cached = runCatching { JSONObject(prefs.getString("profile:$server:$userId", "{}")) }.getOrDefault(JSONObject())
+        val account = card(); val name = title(userName,22f); account.addView(name)
+        val number = caption("Працівник № " + cached.optString("staff_number", String.format(java.util.Locale.ROOT,"%04d",userId)))
+        account.addView(number); val status = caption(if(cached.optBoolean("shift_bound")) "● На зміні" else "○ Поза зміною"); status.setTextColor(forest); account.addView(status)
+        account.addView(secondary("Змінити пароль") { passwordScreen() }); body.addView(account)
+        val connection = card(); connection.addView(title("Підключення",20f)); val serverLabel = title(cached.optString("server_name","Сервер центру"),18f); connection.addView(serverLabel)
+        connection.addView(caption(server)); connection.addView(caption(if(offlineMode) "○ Офлайн" else "● Онлайн"))
+        val counters = PhoneNetworkStats.snapshot(this,server)
+        connection.addView(caption("RX: ${counters.first} відповідей  ·  TX: ${counters.second} запитів"))
+        connection.addView(caption("Помилки підключення та запитів: ${counters.third}")); connection.addView(secondary("Перевірити підключення") { informationScreen() }); body.addView(connection)
+        val device = card(); device.addView(title("Пристрій",20f));device.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}"))
+        device.addView(caption((Build.MANUFACTURER + " " + Build.MODEL).trim()))
+        device.addView(caption("ID: " + (Settings.Secure.getString(contentResolver,Settings.Secure.ANDROID_ID) ?: "Не визначено"))); body.addView(device)
         mount(scroll(body))
+        apiAsync("GET","/api/me",onError={ connection.addView(caption("Сервер поки не підтвердив підключення.")) }) { result ->
+            val profile = result as JSONObject; prefs.edit().putString("profile:$server:$userId",profile.toString()).apply()
+            name.text=profile.optString("name",userName);number.text="Працівник № " + profile.optString("staff_number",String.format(java.util.Locale.ROOT,"%04d",userId))
+            status.text=if(profile.optBoolean("shift_bound")) "● На зміні" else "○ Поза зміною";serverLabel.text=profile.optString("server_name","Сервер центру")
+        }
     }
 
     private fun draftsScreen() {
@@ -702,6 +712,7 @@ class MainActivity : Activity() {
     }
 
     private fun requestAt(base: String, method: String, path: String, body: JSONObject? = null, authToken: String = token): Any {
+        PhoneNetworkStats.sent(this,base)
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
         connection.instanceFollowRedirects = false
@@ -718,6 +729,7 @@ class MainActivity : Activity() {
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+        PhoneNetworkStats.received(this,base)
         val parsed: Any = if (text.isBlank()) JSONObject() else JSONTokener(text).nextValue()
         if (code !in 200..299) {
             val message = (parsed as? JSONObject)?.optString("error")?.takeIf { it.isNotBlank() }
@@ -725,7 +737,7 @@ class MainActivity : Activity() {
             throw ApiError(code, message)
         }
         return parsed
-        } finally { connection.disconnect() }
+        } catch(e: Exception) { PhoneNetworkStats.failed(this,base); throw e } finally { connection.disconnect() }
     }
 
     private fun request(method: String, path: String, body: JSONObject? = null): Any =
@@ -873,6 +885,14 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if(requestCode == 4201) {
+            if(resultCode == RESULT_OK) {
+                @Suppress("DEPRECATION") val uri = data?.getParcelableExtra<android.net.Uri>(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                prefs.edit().putString("consultation_ringtone",uri?.toString() ?: "").apply();AppointmentReminders.channel(this)
+                Toast.makeText(this,"Мелодію збережено",Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
         if(requestCode == offlineUnlockRequest) {
             val session = pendingOfflineSession; pendingOfflineSession = null
             if(resultCode == RESULT_OK && session != null) {
@@ -955,6 +975,34 @@ class MainActivity : Activity() {
         mount(scroll(body))
     }
 
+    private fun restoreShiftSession() {
+        val uid = prefs.getLong("offline_user:$server", 0)
+        val store = OfflineStore(this, server, uid)
+        val saved = runCatching { store.session() }.getOrNull()
+        val cachedUser = saved?.optJSONObject("user")
+        if(saved == null || cachedUser == null || !cachedUser.optBoolean("shift_bound")) { loginScreen(); return }
+        val body = root(); body.addView(logo(64)); body.addView(title("Відновлюємо вашу зміну…", 20f)); mount(scroll(body))
+        val savedToken = saved.optString("token"); val base = server
+        io.execute {
+            try {
+                val user = requestAt(base, "GET", "/api/me", null, savedToken) as JSONObject
+                runOnUiThread {
+                    if(isDestroyed || server != base) return@runOnUiThread
+                    if(!user.optBoolean("shift_bound") || user.optString("role") != "psychologist") { store.revokeSession(); loginScreen() }
+                    else acceptLogin(JSONObject().put("user",user).put("token",savedToken))
+                }
+            } catch(e: Exception) {
+                runOnUiThread {
+                    if(isDestroyed || server != base) return@runOnUiThread
+                    if(unavailable(e) && cachedUser.optString("shift_date") == LocalDate.now().toString()) {
+                        token = savedToken; role = "psychologist"; userId = uid; userName = cachedUser.optString("name"); offlineMode = true
+                        renderHomeScreen()
+                    } else { if(e is ApiError && e.status == 401) store.revokeSession(); loginScreen() }
+                }
+            }
+        }
+    }
+
     private fun loginScreen() {
         backAction = { setupScreen() }
         val body = root().apply {
@@ -967,13 +1015,18 @@ class MainActivity : Activity() {
         brand.addView(caption("Кабінет психолога").apply { gravity = Gravity.CENTER; textSize = 15f })
         body.addView(brand); body.addView(spacer(22))
         val form = card(); form.addView(title("Вхід до центру", 22f))
-        val login = edit("Ваш логін").apply {
+        val login = android.widget.AutoCompleteTextView(this).apply {
+            setTextColor(ink); setHintTextColor(muted); background = rounded(MobileUi.panel, 12, line); setPadding(dp(14),dp(12),dp(14),dp(12)); hint = "Ваш логін"
+            inputType = InputType.TYPE_CLASS_TEXT; threshold = 0
+            val history = runCatching { JSONArray(prefs.getString("login_history:$server", "[]")) }.getOrDefault(JSONArray())
+            setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, (0 until history.length()).map { history.getString(it) }))
+            setText(prefs.getString("last_login:$server", "")); setOnClickListener { showDropDown() }
             isSingleLine = true; imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_NEXT
             setAutofillHints(View.AUTOFILL_HINT_USERNAME)
         }
         val password = edit("Пароль", true).apply {
             isSingleLine = true; imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
-            setAutofillHints(View.AUTOFILL_HINT_PASSWORD)
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO; isSaveEnabled = false; setText("")
         }
         form.addView(caption("Логін")); form.addView(login)
         form.addView(caption("Пароль")); form.addView(password)
@@ -992,7 +1045,13 @@ class MainActivity : Activity() {
                         .put("device_name", (Build.MANUFACTURER + " " + Build.MODEL).trim())
                     apiAsync("POST", "/api/login", payload, onError = {
                         signingIn = false; submit?.isEnabled = true; error.text = it; error.visibility = View.VISIBLE
-                    }) { result -> signingIn = false; submit?.isEnabled = true; acceptLogin(result as JSONObject) }
+                    }) { result ->
+                        val value = login.text.toString().trim()
+                        val existing = runCatching { JSONArray(prefs.getString("login_history:$server", "[]")) }.getOrDefault(JSONArray())
+                        val names = listOf(value) + (0 until existing.length()).map { existing.getString(it) }.filter { it != value }
+                        prefs.edit().putString("last_login:$server",value).putString("login_history:$server",JSONArray(names.take(20)).toString()).apply()
+                        signingIn = false; submit?.isEnabled = true; acceptLogin(result as JSONObject)
+                    }
                 }
             }
         }
@@ -1019,6 +1078,7 @@ class MainActivity : Activity() {
             return
         }
         token = receivedToken; role = "psychologist"; userName = user.getString("name"); userId = user.getLong("id")
+        prefs.edit().putString("profile:$server:$userId",user.toString()).apply()
         offlineMode = false
         offlineStore().saveSession(user, token)
         prefs.edit().putLong("offline_user:$server", userId).apply()
@@ -1045,7 +1105,13 @@ class MainActivity : Activity() {
         mount(scroll(checking))
         apiAsync("GET", "/api/shift-day") { result ->
             val shift = result as JSONObject
-            if (shift.optBoolean("open", false)) renderHomeScreen()
+            if (shift.optBoolean("open", false)) {
+                apiAsync("GET","/api/me") { data ->
+                    val profile=data as JSONObject
+                    offlineStore().saveSession(profile,token);prefs.edit().putString("profile:$server:$userId",profile.toString()).apply()
+                    renderHomeScreen()
+                }
+            }
             else renderShiftGate(shift)
         }
     }
@@ -1836,6 +1902,15 @@ class MainActivity : Activity() {
         when(section) {
             "Оповіщення" -> {
         body.addView(title("Оповіщення", 20f))
+        body.addView(secondary("Вибрати мелодію консультації") {
+            val picker = Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION or android.media.RingtoneManager.TYPE_ALARM)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE,"Мелодія SOLVIA")
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT,true)
+            prefs.getString("consultation_ringtone",null)?.let { picker.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,android.net.Uri.parse(it)) }
+            runCatching { startActivityForResult(picker,4201) }.onFailure { showError("Вибір мелодії недоступний. Відкрийте налаштування оповіщень Android.") }
+        })
+        body.addView(secondary("Мелодія SOLVIA за замовчуванням") { prefs.edit().remove("consultation_ringtone").apply();AppointmentReminders.channel(this);Toast.makeText(this,"Мелодію SOLVIA відновлено",Toast.LENGTH_SHORT).show() })
         body.addView(CheckBox(this).apply {
             text = "Звукове нагадування на час консультації"; setTextColor(ink)
             isChecked = prefs.getBoolean("reminders_enabled", true)
@@ -1935,7 +2010,7 @@ class MainActivity : Activity() {
         selectedNavigation = "more"; backAction = { homeScreen() }
         val body = root(); body.addView(topBar("Змінити пароль", ::homeScreen))
         val old = edit("Поточний пароль", true)
-        val next = edit("Новий пароль — від 12 символів", true)
+        val next = edit("Новий пароль — від одного символу", true)
         val repeat = edit("Повторіть новий пароль", true)
         body.addView(old); body.addView(spacer()); body.addView(next); body.addView(spacer()); body.addView(repeat)
         body.addView(primary("Зберегти новий пароль") {

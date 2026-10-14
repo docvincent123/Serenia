@@ -52,10 +52,10 @@ class OfflineStore(context: Context, server: String, userId: Long) {
     fun cacheTime(path: String): Long = synchronized(lock) { read("cache:$path")?.optLong("time") ?: 0 }
     fun forgetCache(path: String) = synchronized(lock) { check(prefs.edit().remove("$scope|cache:$path").commit()) }
     fun saveSession(user: JSONObject, token: String, now: Long = System.currentTimeMillis()) = synchronized(lock) {
-        write("session", JSONObject().put("user", user).put("token", token).put("expires", now + SESSION_TTL))
+        write("session", JSONObject().put("user", user).put("token", token).put("expires", now + (if(user.optBoolean("shift_bound")) 24 * 60 * 60 * 1000L else SESSION_TTL)))
     }
     fun session(now: Long = System.currentTimeMillis()): JSONObject? = synchronized(lock) {
-        read("session")?.takeIf { it.optLong("expires") > now && it.optLong("expires") <= now + SESSION_TTL }
+        read("session")?.takeIf { it.optLong("expires") > now && it.optLong("expires") <= now + (if(it.optJSONObject("user")?.optBoolean("shift_bound") == true) 24 * 60 * 60 * 1000L else SESSION_TTL) }
     }
     fun revokeSession() = synchronized(lock) { check(prefs.edit().remove("$scope|session").commit()) }
     fun reportDraft(day: String): JSONObject? = synchronized(lock) { read("report:$day") }

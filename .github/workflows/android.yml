@@ -45,20 +45,20 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :app:lintDebug :app:lintRelease
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.2.2-Android-test-APK
+          name: SOLVIA-3.3.0-Android-test-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.2.2-Android-unsigned-release
+          name: SOLVIA-3.3.0-Android-unsigned-release
           path: android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: ignore
           retention-days: 14
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: SOLVIA-3.2.2-Android-lint
+          name: SOLVIA-3.3.0-Android-lint
           path: android/app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
@@ -79,7 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: github.event_name != 'pull_request' && env.SOLVIA_ANDROID_KEYSTORE_BASE64 != ''
         with:
-          name: SOLVIA-3.2.2-Android-release-APK
+          name: SOLVIA-3.3.0-Android-release-APK
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -134,14 +134,14 @@ jobs:
           timeout 360 adb shell am instrument -w com.quremed.solvia.test.test/androidx.test.runner.AndroidJUnitRunner | tee out/native-tests.log
           grep -Eq 'OK \([0-9]+ tests?\)' out/native-tests.log
           adb pull /sdcard/Android/data/com.quremed.solvia.test/files/previews out/mobile-previews || true
-          gradle -p android --no-daemon -PsolviaVersionCode=36 :app:assembleDebug
+          gradle -p android --no-daemon -PsolviaVersionCode=37 :app:assembleDebug
           adb install -r android/app/build/outputs/apk/debug/app-debug.apk
           timeout 120 adb shell am instrument -w -e class com.quremed.solvia.MobileUpdatesTest#signedUpgradeKeepsExistingPreferences com.quremed.solvia.test.test/androidx.test.runner.AndroidJUnitRunner | tee out/update-install-test.log
           grep -Eq 'OK \([0-9]+ tests?\)' out/update-install-test.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: SOLVIA-3.2.2-native-mobile-checks
+          name: SOLVIA-3.3.0-native-mobile-checks
           path: out/
           retention-days: 14
 

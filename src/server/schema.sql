@@ -558,3 +558,15 @@ CREATE TABLE IF NOT EXISTS staff_messages(
  UNIQUE(sender_id,client_key)
 );
 CREATE INDEX IF NOT EXISTS idx_staff_messages_recipient ON staff_messages(recipient_id,id);
+
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS shift_date TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS staff_number TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_staff_number ON users(staff_number);
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS server_name TEXT NOT NULL DEFAULT 'Основний';
+CREATE TABLE IF NOT EXISTS shift_device_bindings(
+ shift_date TEXT NOT NULL,
+ device_id TEXT NOT NULL,
+ user_id BIGINT NOT NULL REFERENCES users(id),
+ created TEXT NOT NULL,
+ PRIMARY KEY(shift_date,device_id)
+);

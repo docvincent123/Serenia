@@ -104,7 +104,7 @@ class Scenario(unittest.TestCase):
         shift=self.api(admin,'POST','/api/shift-day',{'action':'open'})
         self.assertTrue(shift['open'])
         other=self.api(admin,'POST','/api/users',{'name':'Інший психолог','login':'other','phone':'+380501112233','password':'long-test-password','role':'psychologist'})['id']
-        _,auth=self.call('POST','/api/login',{'login':'other','password':'long-test-password','platform':'Android'})
+        _,auth=self.call('POST','/api/login',{'login':'other','password':'long-test-password','platform':'Android','device_id':'other-test-phone'})
         self.tokens['other']=auth['token']
         device_sessions=self.api(admin,'GET','/api/admin/sessions')
         self.assertTrue(any(x['name']=='Інший психолог' and x['platform']=='Android' for x in device_sessions))
@@ -418,7 +418,7 @@ class Scenario(unittest.TestCase):
         code,account=self.call('POST','/api/login',{'login':'managed','password':'changed-test-password'})
         self.assertEqual(code,200,account)
         self.assertEqual(self.call('POST','/api/account/password',{'current_password':'wrong-password','new_password':'another-test-password'},account['token'])[0],403)
-        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':'short'},account['token'])[0],400)
+        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':''},account['token'])[0],400)
         self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':'another-test-password'},account['token'])[0],200)
         self.assertEqual(self.call('GET','/api/me',token=account['token'])[0],401)
         code,account=self.call('POST','/api/login',{'login':'managed','password':'another-test-password'})
@@ -447,7 +447,7 @@ class Scenario(unittest.TestCase):
         for who in readiness['unknown_psychologists']:
             login='psychologist' if who['id']==3 else 'other'
             password=self.passwords['psychologist'] if who['id']==3 else 'long-test-password'
-            code,account=self.call('POST','/api/login',{'login':login,'password':password,'device_id':'ci-cleanup','device_name':'Synthetic'})
+            code,account=self.call('POST','/api/login',{'login':login,'password':password,'device_id':f"ci-cleanup-{who['id']}",'device_name':'Synthetic'})
             self.assertEqual(code,200,account)
             code,info=self.call('POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''},account['token'])
             self.assertEqual(code,200,info)
@@ -544,6 +544,32 @@ class Scenario(unittest.TestCase):
         self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
         self.assertEqual(len(self.api('draft_psy','GET',f'/api/patients/{patient}')['consultations']),1)
 
+    def test_x_shift_device_binding_short_ukrainian_login_and_profile(self):
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        first=self.api('admin','POST','/api/users',{'name':'Психолог Перший По батькові','login':'психолог_перший','password':'1','role':'psychologist'})['id']
+        second=self.api('admin','POST','/api/users',{'name':'Психолог Другий','login':'психолог_другий','password':'2','role':'psychologist'})['id']
+        def login(name,password):
+            return self.call('POST','/api/login',{'login':name,'password':password,'platform':'Android','device_id':'bound-shift-phone','device_name':'Shift phone'})
+        code,first_auth=login('психолог_перший','1');self.assertEqual(code,200,first_auth)
+        user=first_auth['user'];self.assertTrue(user['shift_bound']);self.assertRegex(user['staff_number'],r'^\d{4}$')
+        self.assertEqual(login('психолог_другий','2')[0],409)
+        token=first_auth['token'];self.assertEqual(self.call('GET','/api/me',token=token)[0],200)
+        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',f"UPDATE sessions SET expires=0 WHERE token='{hashlib.sha256(token.encode()).hexdigest()}'"])
+        self.assertEqual(self.call('GET','/api/me',token=token)[0],200)
+        self.call('POST','/api/logout',{},token)
+        self.assertEqual(login('психолог_другий','2')[0],409)
+        code,again=login('психолог_перший','1');self.assertEqual(code,200)
+        self.assertEqual(again['user']['staff_number'],user['staff_number'])
+        center=self.api('admin','GET','/api/settings/center');center['server_name']='Додатковий'
+        self.api('admin','PATCH','/api/settings/center',center)
+        self.assertEqual(self.call('GET','/api/me',token=again['token'])[1]['server_name'],'Додатковий')
+        # Synthetic installation: complete readiness so the real close endpoint can run.
+        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',"UPDATE appointments SET status='no_show' WHERE substr(start,1,10)=current_date::text AND status IN ('scheduled','confirmed'); UPDATE mobile_devices SET pending_count=0,blocked_count=0,last_seen_epoch=extract(epoch from now())::bigint;"])
+        self.api('admin','POST','/api/shift-day',{'action':'close'})
+        self.assertEqual(self.call('GET','/api/me',token=again['token'])[0],401)
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        self.assertEqual(login('психолог_другий','2')[0],200)
+
     def test_y_staff_message_device_scope_and_receipts(self):
         def login(role, device):
             code, auth = self.call('POST','/api/login',{'login':role,'password':self.passwords[role],'platform':'Android','device_id':device,'device_name':device})
@@ -611,7 +637,7 @@ class Scenario(unittest.TestCase):
             uid=self.api('admin','POST','/api/users',{'name':f'Synthetic load {i}','login':login,'password':'synthetic-load-password','role':'psychologist'})['id']
             room=self.api('admin','POST','/api/rooms',{'name':f'Synthetic load room {i}','code':f'LOAD{i}','type':'individual','capacity':1,'description':'CI only'})['id']
             pid=self.api('admin','POST','/api/patients',{'name':f'Synthetic load patient {i}','phone':f'+38000888{i:04d}','dob':'1990-01-01','category':'Інше','psychologist_id':uid})['id']
-            code,account=self.call('POST','/api/login',{'login':login,'password':'synthetic-load-password','device_id':f'load-device-{i}','device_name':'Synthetic load','platform':'Android'})
+            code,account=self.call('POST','/api/login',{'login':login,'password':'synthetic-load-password','device_id':f'load-device-{i}','device_name':'Synthetic load','platform':'Android','device_id':'other-test-phone'})
             self.assertEqual(code,200,account)
             staff.append((i,uid,room,pid,account['token']))
         durations=[]
