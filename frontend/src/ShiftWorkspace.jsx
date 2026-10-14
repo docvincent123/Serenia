@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { filterVisits, visitKey, visitState } from './shift-workspace.mjs';
 
-const stateLabels = {expected:'Очікуємо',arrived:'У центрі',in_progress:'Консультація триває',completed:'Завершена',excluded:'Не проведено',draft:'Чернетка'};
+const stateLabels = {expected:'Очікуємо прибуття',arrived:'Пацієнт прибув',in_progress:'Консультація триває',completed:'Завершена',excluded:'Не проведено',draft:'Чернетка'};
 const kindLabels = {individual:'Індивідуальна',group:'Групова',family:'Сімейна',child:'Дитяча',crisis:'Кризова'};
 const time = value => value?.slice(11,16) || '—';
 

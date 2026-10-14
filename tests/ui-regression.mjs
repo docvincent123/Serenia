@@ -182,7 +182,7 @@ try {
   await page.getByLabel('Причина',{exact:true}).fill('Уточнення синтетичного запису');
   await page.getByLabel('Текст уточнення',{exact:true}).fill('Додаткове спостереження без зміни оригіналу');
   await page.getByRole('button',{name:'Зберегти доповнення',exact:true}).click();
-  await page.getByText('Додаткове спостереження без зміни оригіналу',{exact:true}).waitFor();
+  await page.locator('.record-addenda blockquote').getByText('Додаткове спостереження без зміни оригіналу',{exact:true}).waitFor();
   assert.equal(consultations[0].note,originalNote);
   await page.screenshot({path:'out/design/desktop-addendum.png',fullPage:true});
   await page.getByRole('button',{name:'Супровід',exact:true}).click();

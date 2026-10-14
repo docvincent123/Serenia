@@ -71,6 +71,7 @@ class MainActivity : Activity() {
     private var offlineMode = false
     private var syncRunning = false
     private var statusView: TextView? = null
+    private var syncTimestampView: TextView? = null
     private var workspaceTitle: TextView? = null
     private var draftIndicatorRefresh: (() -> Unit)? = null
     private val pendingIndicators = mutableListOf<Pair<ImageView, () -> Boolean>>()
@@ -108,6 +109,8 @@ class MainActivity : Activity() {
     private fun updateConnectionStatus() {
         if(token.isBlank()) return
         val count = runCatching { val q = offlineStore().queue(); (0 until q.length()).count { q.getJSONObject(it).optString("state") in listOf("pending", "blocked") } }.getOrDefault(0)
+        val syncTime=(offlineStore().cache("/local/sync-status") as? JSONObject)?.optString("server_time").orEmpty()
+        syncTimestampView?.text=if(syncTime.isBlank()) "Очікуємо підтвердження синхронізації" else "Остання синхронізація: "+syncTime.replace('T',' ')
         statusView?.setTextColor(if(offlineMode) Color.rgb(255,185,160) else Color.rgb(122,223,162))
         statusView?.text = (if(offlineMode) "○ Офлайн · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "● Онлайн") +
             (if(count > 0) " · у черзі: $count" else "") + (if(cachePreparing) " · завантаження карток…" else "")
@@ -301,7 +304,7 @@ class MainActivity : Activity() {
             view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
             insets
         }
-        statusView = null; workspaceTitle = null; pendingIndicators.clear()
+        statusView = null; syncTimestampView = null; workspaceTitle = null; pendingIndicators.clear()
         if(token.isNotBlank() && workspaceReady) {
             val header = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -1133,7 +1136,7 @@ class MainActivity : Activity() {
                 val report = DeviceStatus.payload(this@MainActivity, server, userId)
                 if(report.optInt("pending_count")+report.optInt("blocked_count")>0) today.addView(caption("! Перед завершенням роботи підключіть телефон: є записи, що потребують передавання або перевірки."))
                 val lastSync=(offlineStore().cache("/local/sync-status") as? JSONObject)?.optString("server_time").orEmpty()
-                today.addView(caption(if(lastSync.isBlank()) "Очікуємо підтвердження синхронізації" else "Остання синхронізація: "+lastSync.replace('T',' ')))
+                syncTimestampView=caption(if(lastSync.isBlank()) "Очікуємо підтвердження синхронізації" else "Остання синхронізація: "+lastSync.replace('T',' '));today.addView(syncTimestampView)
                 homeScroll.post {homeScroll.scrollTo(0,scrollPosition)}
             }
             AppointmentReminders.refreshFromCache(this, server, userId)
