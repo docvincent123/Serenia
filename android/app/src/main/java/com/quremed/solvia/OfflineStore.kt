@@ -98,7 +98,7 @@ class OfflineStore(context: Context, server: String, userId: Long) {
         const val CACHE_TTL = 7 * 24 * 60 * 60 * 1000L
         fun cacheable(path: String) = path == "/api/shift-day" || path == "/api/settings/center" ||
             path.startsWith("/api/appointments?") || path == "/api/patients" || path.startsWith("/api/patients?") ||
-            path.matches(Regex("/api/patients/[0-9]+(?:/(?:documents|courses|referrals))?"))
+            path.matches(Regex("/api/patients/[0-9]+(?:/(?:documents|courses|referrals|progress))?"))
     }
 }
 

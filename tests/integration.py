@@ -36,7 +36,7 @@ class Scenario(unittest.TestCase):
         cls.start()
         cls.tokens = {}
         for role, password in cls.passwords.items():
-            code, body = cls.call('POST', '/api/login', {'login':role, 'password':password, 'platform':'CI-'+role})
+            code, body = cls.call('POST', '/api/login', {'login':role, 'password':password, 'platform':'CI-'+role,'device_id':'ci-'+role,'device_name':'Synthetic device'})
             assert code == 200, (code, body)
             cls.tokens[role] = body['token']
     @classmethod
@@ -158,6 +158,17 @@ class Scenario(unittest.TestCase):
         arrival_rows=self.api(rec,'GET','/api/shift-workspace')
         arrived=next(x for x in arrival_rows if x['appointment_id']==arrival_id and x['patient_id']==pid)
         self.assertTrue(arrived['arrived_at'])
+        self.api(rec,'POST',f'/api/appointments/{arrival_id}/start',{'patient_id':pid},status=403)
+        self.api('other','POST',f'/api/appointments/{arrival_id}/start',{'patient_id':pid},status=404)
+        first=self.api(psy,'POST',f'/api/appointments/{arrival_id}/start',{'patient_id':pid})
+        self.assertTrue(first['started_at'])
+        self.assertEqual(first['started_at'],self.api(psy,'POST',f'/api/appointments/{arrival_id}/start',{'patient_id':pid})['started_at'])
+        self.assertEqual(first['started_at'],next(x for x in self.api(rec,'GET','/api/shift-workspace') if x['appointment_id']==arrival_id)['started_at'])
+        self.api(rec,'GET','/api/admin/devices',status=403)
+        self.api(director,'GET','/api/shift-readiness',status=403)
+        self.api(rec,'POST',f'/api/patients/{pid}/progress',{},status=403)
+        self.api(psy,'POST',f'/api/patients/{pid}/progress',{'goal':'Synthetic goal','status':'in_progress','observation':'Synthetic progress'})
+        self.assertEqual(self.api(psy,'GET',f'/api/patients/{pid}/progress')[0]['goal'],'Synthetic goal')
         self.api(rec,'POST',f'/api/appointments/{arrival_id}/arrival',{'patient_id':pid})
         self.assertEqual(next(x for x in self.api(rec,'GET','/api/shift-workspace') if x['appointment_id']==arrival_id)['arrived_at'],arrived['arrived_at'])
         self.api(rec,'PATCH',f'/api/appointments/{arrival_id}',{'status':'cancelled'})
@@ -398,6 +409,30 @@ class Scenario(unittest.TestCase):
 
         self.api(admin,'DELETE',f'/api/users/{other}/sessions',{})
         self.api('other','GET','/api/me',status=401)
+        records=self.api(admin,'GET',f'/api/patients/{pid}')['consultations']
+        own=next(c for c in records if c['psychologist_id']==3)
+        amendment={'reason':'Synthetic correction','content':'Additional observation','client_key':'synthetic-addendum-0001'}
+        self.api(rec,'GET',f"/api/consultations/{own['id']}/addenda",status=403)
+        self.api(admin,'POST',f"/api/consultations/{own['id']}/addenda",amendment,status=403)
+        self.api(psy,'POST',f"/api/consultations/{own['id']}/addenda",amendment)
+        self.assertTrue(self.api(psy,'POST',f"/api/consultations/{own['id']}/addenda",amendment)['already_saved'])
+        self.api(psy,'POST',f"/api/consultations/{own['id']}/addenda",{**amendment,'content':'Different'},status=409)
+        updated=next(c for c in self.api(admin,'GET',f'/api/patients/{pid}')['consultations'] if c['id']==own['id'])
+        self.assertEqual(updated['note'],own['note'])
+        self.assertEqual(len(updated['addenda']),1)
+        readiness=self.api(admin,'GET','/api/shift-readiness')
+        self.assertFalse(readiness['ready'])
+        self.api(admin,'POST','/api/shift-day',{'action':'close'},status=409)
+        for aid in {x['appointment_id'] for x in readiness['unfinished']}:
+            self.api(admin,'PATCH',f'/api/appointments/{aid}',{'status':'no_show','cancellation_reason':'Synthetic shift cleanup'})
+        for who in readiness['unknown_psychologists']:
+            login='psychologist' if who['id']==3 else 'other'
+            password=self.passwords['psychologist'] if who['id']==3 else 'long-test-password'
+            code,account=self.call('POST','/api/login',{'login':login,'password':password,'device_id':'ci-cleanup','device_name':'Synthetic'})
+            self.assertEqual(code,200,account)
+            code,info=self.call('POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''},account['token'])
+            self.assertEqual(code,200,info)
+        self.assertTrue(self.api(admin,'GET','/api/shift-readiness')['ready'])
         closed=self.api(admin,'POST','/api/shift-day',{'action':'close'})
         self.assertTrue(closed['sessions_terminated'])
         self.assertFalse(self.api(admin,'GET','/api/shift-day')['open'])
@@ -500,5 +535,56 @@ class Scenario(unittest.TestCase):
             self.assertEqual(code,401)
         self.assertEqual(code,429)
         self.assertEqual(self.call('GET','/api/me',token='forged-token')[0],401)
+
+    def test_z_40_concurrent_staff_write_and_retry(self):
+        """40 separate accounts book, arrive, start, save and retry real HTTP writes."""
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        today=dt.date.today().isoformat();previous=(dt.date.today()-dt.timedelta(days=1)).isoformat()
+        # Synthetic-only installation; no production credentials or clinical data.
+        staff=[]
+        for i in range(40):
+            login=f'load-{i}'
+            uid=self.api('admin','POST','/api/users',{'name':f'Synthetic load {i}','login':login,'password':'synthetic-load-password','role':'psychologist'})['id']
+            room=self.api('admin','POST','/api/rooms',{'name':f'Synthetic load room {i}','code':f'LOAD{i}','type':'individual','capacity':1,'description':'CI only'})['id']
+            pid=self.api('admin','POST','/api/patients',{'name':f'Synthetic load patient {i}','phone':f'+38000888{i:04d}','dob':'1990-01-01','category':'Інше','psychologist_id':uid})['id']
+            code,account=self.call('POST','/api/login',{'login':login,'password':'synthetic-load-password','device_id':f'load-device-{i}','device_name':'Synthetic load','platform':'Android'})
+            self.assertEqual(code,200,account)
+            staff.append((i,uid,room,pid,account['token']))
+        durations=[]
+        def worker(item):
+            i,uid,room,pid,token=item
+            def call(method,path,body=None):
+                began=time.monotonic();code,result=self.call(method,path,body,token);durations.append(time.monotonic()-began)
+                if code!=200:raise AssertionError((i,method,path,code,result))
+                return result
+            def book(date):
+                began=time.monotonic();code,data=self.call('POST','/api/appointments',{'patient_ids':[pid],'psychologist_id':uid,'room_id':room,'kind':'individual','start':date+'T09:00','end':date+'T10:00'},self.tokens['admin']);durations.append(time.monotonic()-began)
+                if code!=200:raise AssertionError((i,code,data))
+                return data['id']
+            current=book(today);old=book(previous)
+            call('POST',f'/api/appointments/{current}/arrival',{'patient_id':pid})
+            call('POST',f'/api/appointments/{current}/start',{'patient_id':pid})
+            appointments=call('GET','/api/appointments?date='+today)
+            if any(a['psychologist_id']!=uid for a in appointments):raise AssertionError('Cross-account schedule leak')
+            payload={'patient_id':pid,'appointment_id':old,'note':'Synthetic completed load consultation','client_key':f'synthetic-load-key-{i:04d}'}
+            saved=call('POST','/api/consultations',payload)
+            retry=call('POST','/api/consultations',payload)
+            if retry['id']!=saved['id'] or not retry['already_saved']:raise AssertionError('Duplicate consultation after retry')
+            history=call('GET',f'/api/patients/{pid}')['consultations']
+            if len(history)!=1:raise AssertionError('Lost or duplicated clinical record')
+            call('POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''})
+            return current,uid
+        began=time.monotonic()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=40) as pool:
+            finished=list(pool.map(worker,staff))
+        elapsed=time.monotonic()-began;ordered=sorted(durations);p95=ordered[int(len(ordered)*.95)-1]
+        print(f'LOAD40: {len(staff)} accounts, {len(durations)} requests, errors=0, duplicated=0, p95={p95:.3f}s, max={max(durations):.3f}s, elapsed={elapsed:.3f}s',flush=True)
+        self.assertLess(p95,10,'40-user p95 response time exceeds 10 seconds')
+        devices=self.api('admin','GET','/api/admin/devices')
+        self.assertEqual(sum(d['device_id'].startswith('load-device-') for d in devices),40)
+        for aid,uid in finished:
+            # Do not leave synthetic active visits influencing later shift checks.
+            self.api('admin','PATCH',f'/api/appointments/{aid}',{'status':'cancelled','cancellation_reason':'Synthetic load completed'})
+            self.api('admin','PATCH',f'/api/users/{uid}',{'active':False})
 
 if __name__=='__main__': unittest.main()

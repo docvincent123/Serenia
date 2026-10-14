@@ -37,3 +37,18 @@ input:focus,select:focus,textarea:focus { border-color:#c7970c; box-shadow:0 0 0
 .appointment.selected { background:#fff7db; border-color:#c7970c; box-shadow:0 0 0 3px #f6c22c25; }
 .avatar.inverse,.user-card .avatar { color:#644d0b; background:#fff5d4; }
 @media print { .button.primary { box-shadow:none; } }
+
+/* Shared status semantics: every colour has a visible label. */
+.visit-status.in_progress { background:#fff0a8; color:#554100; border:1px solid #d4af28; }
+.visit-status.completed { background:#e4f6eb; color:#17623d; }
+.visit-status.excluded { background:#fde7e5; color:#9f2920; }
+.visit-status.expected { background:#f0f1f3; color:#46505d; }
+.shift-readiness {margin:16px 0;padding:18px;border:1px solid #e2b42a;border-radius:16px;background:#fff8dc;color:#3e3420;max-height:50vh;overflow:auto;}
+.record-addenda {margin-top:16px;border-top:1px solid var(--line,#ddd);padding-top:14px;}
+.record-addenda blockquote {margin:12px 0;padding:12px 16px;border-left:4px solid #e7bd34;background:#fff9e4;}
+.record-addenda form {display:grid;gap:12px;}
+.record-addenda label {display:grid;gap:6px;}
+.preserve-lines {white-space:pre-wrap;overflow-wrap:anywhere;}
+.progress-entry {border-bottom:1px solid #ddd;padding:16px 0;}
+.progress-entry .badge {margin-left:12px;}
+button:focus-visible,a:focus-visible {outline:3px solid #987500;outline-offset:3px;}

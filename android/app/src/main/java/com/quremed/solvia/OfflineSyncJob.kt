@@ -53,6 +53,11 @@ class OfflineSyncJob : JobService() {
                         if(!cancelled.get() && store.session()?.optString("token") == auth) AppointmentReminders.refreshFromCache(this, base, uid)
                     }
                 }
+                if(authorized && !cancelled.get()) {
+                    val report = DeviceStatus.payload(this, base, uid)
+                    val response = send(base, auth, report, "/api/mobile-status")
+                    DeviceStatus.acknowledge(this, base, uid, report, response)
+                }
                 val queue = store.queue()
                 retry = authorized && ((0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" } ||
                     drafts.patients().any { drafts.read(it)?.let { value -> !DraftSync.transferred(value) && !value.optBoolean("sync_blocked") } ?: false })

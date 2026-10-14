@@ -1,3 +1,4 @@
+import {DeviceHealth,ShiftReadiness,Addenda,PatientProgress} from './Operations.jsx';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
@@ -1598,6 +1599,8 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
   }
 
   function printDocument() {
+    const d=documentPreview;
+    if(!d?.title?.trim()||!d?.patient_name?.trim()||!d?.content?.trim()||!d?.signed_at||(d.status==='signed'&&(!d.signed_by_name?.trim()||!d.signature_data))){setError('Документ не готовий до друку: перевірте назву, текст, пацієнта, дату та підпис.');return;}
     const node = document.querySelector('.consent-print');
     printStandaloneNode(
       node,
@@ -1735,6 +1738,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
         </section>
       </div>
 
+      {canReadConsultations && cardSection === 'followup' && <PatientProgress api={api} patientId={patientId} canWrite={isPsychologist} />}
       <section className="surface" hidden={cardSection !== 'followup'}>
         <div className="section-head">
           <div><div className="eyebrow">КУРСИ СУПРОВОДУ</div><h2>Історія курсів</h2></div>
@@ -1834,6 +1838,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
                         <div><dt>Оцінені ризики</dt><dd>{riskFlagsText(c.risk_flags)}</dd></div>
                       </dl>
                     </details>
+                    <Addenda api={api} record={c} canWrite={isPsychologist} onSaved={load} />
                   </article>
                 ))}
               </div>
@@ -2611,6 +2616,7 @@ function Devices({ api }) {
         actions={<Button variant="secondary" onClick={load}>Оновити</Button>}
       />
       {error && <div className="alert error">{error}</div>}
+      <DeviceHealth api={api} />
       <div className="stat-grid">
         <article className="stat-card"><strong>{sessions.length}</strong><h3>Активних сесій</h3><p>До завершення входу або 8 годин</p></article>
         <article className="stat-card"><strong>{online}</strong><h3>Онлайн зараз</h3><p>Активність протягом останніх 2 хвилин</p></article>
@@ -2677,9 +2683,7 @@ function ServerMaintenance({ api, apiBase }) {
       const health = await api('GET', '/api/health');
       setPlatform(health.platform || 'unknown');
       setServerVersion(health.version || '');
-      if (health.platform === 'linux') {
-        setSystem(await api('GET', '/api/admin/system'));
-      }
+      setSystem(await api('GET', '/api/admin/system'));
       setSystemError('');
     } catch (e) {
       setPlatform('offline');
@@ -2698,6 +2702,7 @@ function ServerMaintenance({ api, apiBase }) {
       <p>{system?.lan_url || apiBase}</p>
       <p>{platform === 'linux' ? 'systemd + PostgreSQL + HTTPS. Критичні root-операції виконуються локально на сервері.' : 'Обслуговування виконує адміністратор на сервері.'}</p>
       <Button variant="secondary" onClick={loadSystem}>Оновити діагностику</Button>
+      {system && (!system.backups?.some(x=>x.action==='backup'&&x.status==='success'&&new Date()-new Date(x.created)<36*3600000) || system.backups?.[0]?.status==='failed') && <div className="alert error" role="alert">Резервна копія потребує перевірки: немає свіжої успішної копії або остання операція завершилася помилкою.</div>}
       {systemError && <p className="danger-text">{systemError}</p>}
     </article>
 
@@ -2890,14 +2895,15 @@ function AccountSettings({ api, apiBase, onLogout }) {
 
 function MobileReleaseSettings({ api }) {
   const [release,setRelease] = useState(null), [apk,setApk] = useState(null), [busy,setBusy] = useState(false), [message,setMessage] = useState(''), [current,setCurrent] = useState(null);
-  useEffect(()=>{api('GET','/api/mobile-update').then(setCurrent).catch(e=>setMessage(e.message));},[]);
+  const [pilot,setPilot]=useState([]),[people,setPeople]=useState([]);
+  useEffect(()=>{api('GET','/api/mobile-update').then(x=>{setCurrent(x);setPilot(x.rollout_user_ids||[]);}).catch(e=>setMessage(e.message));api('GET','/api/users').then(x=>setPeople(x.filter(p=>p.role==='psychologist'&&p.active))).catch(e=>setMessage(e.message));},[]);
   async function publish(e) {
     e.preventDefault(); if(busy) return; setBusy(true); setMessage('');
     try {
       if(!release || !apk) throw new Error('Оберіть release.json і підписаний APK.');
       const info=JSON.parse(await release.text()); if(apk.size>8*1024*1024) throw new Error('APK: максимум 8 МБ.');
       const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.readAsDataURL(apk);});
-      await api('POST','/api/mobile-update',{...info,apk_base64:encoded});
+      await api('POST','/api/mobile-update',{...info,apk_base64:encoded,rollout_user_ids:pilot});
       setCurrent(await api('GET','/api/mobile-update')); setMessage('Оновлення опубліковано на сервері центру. Телефони побачать його після входу або наступної перевірки.');
     } catch(e) {setMessage(e.message);} finally {setBusy(false);}
   }
@@ -2906,6 +2912,8 @@ function MobileReleaseSettings({ api }) {
     <form className="form-grid" onSubmit={publish}>
       <Field label="Опис випуску — release.json"><input type="file" accept=".json" disabled={busy} onChange={e=>setRelease(e.target.files[0]||null)} /></Field>
       <Field label="Підписаний APK"><input type="file" accept=".apk" disabled={busy} onChange={e=>setApk(e.target.files[0]||null)} /></Field>
+      <Field label="Пробне встановлення — оберіть психологів" hint="Порожній список — оновлення доступне всім. Після перевірки повторно опублікуйте ті самі файли без обмеження групи."><select multiple value={pilot.map(String)} disabled={busy} onChange={e=>setPilot([...e.target.selectedOptions].map(x=>Number(x.value)))}>{people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
+      <button type="button" className="button secondary" disabled={busy} onClick={()=>setPilot([])}>Зробити доступним усім</button>
       <div className="form-actions full-span"><Button disabled={busy}>{busy?'Завантажуємо…':'Опублікувати оновлення телефона'}</Button></div>
     </form>{message && <p role="status">{message}</p>}
   </section>;
@@ -3661,7 +3669,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
-  const [health, setHealth] = useState({ online: true, version: '2.3.0' });
+  const [readiness,setReadiness]=useState(null);
+  const [health, setHealth] = useState({ online: true, version: '2.4.0' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
@@ -3689,11 +3698,15 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }
 
   async function changeShift(action) {
-    if (action === 'close' && !window.confirm('Закрити робочу зміну SOLVIA на сьогодні?')) return;
+    if(action==='close') {
+      try {const check=await api('GET','/api/shift-readiness');setReadiness(check);if(!check.ready){setShiftError('Спочатку завершіть або позначте неявку прийомів і підключіть телефони для передавання записів.');return;}}
+      catch(e){setShiftError(e.message);return;}
+      if(!window.confirm('Усі прийоми та передавання перевірено. Закрити зміну?'))return;
+    }
     setShiftBusy(true);
     try {
       await api('POST', '/api/shift-day', { action });
-      await loadShift();
+      setReadiness(null);await loadShift();
     } catch (e) { setShiftError(e.message); }
     finally { setShiftBusy(false); }
   }
@@ -3704,7 +3717,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.3.0' });
+        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.4.0' });
       } catch {
         if (alive) setHealth({ online: false, version: '' });
       }
@@ -3797,7 +3810,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           </div>
         </>}
         <div className="workspace-inner">
-          {shiftError && <div className="alert error">{shiftError}</div>}
+          {readiness && <ShiftReadiness data={readiness} />}{shiftError && <div className="alert error">{shiftError}</div>}
           {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />

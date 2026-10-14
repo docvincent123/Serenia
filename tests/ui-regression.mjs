@@ -39,6 +39,7 @@ try {
     else if (path === '/api/health') data = { ok:true,version:'2.3.0',platform:'linux' };
     else if (path === '/api/shift-day') data = { open,shift_date:'2026-10-02' };
     else if (path === '/api/stats') data = { total_patients: 24,active_patients:18,archived_patients:6,new_patients:4,consultations:42,avg_duration_minutes:60,active_courses:18,completed_courses:6,signed_documents:24,outgoing_referrals:3,supervisions_completed:2,load:[] };
+    else if(path === '/api/shift-readiness') data={ready:true,unfinished:[],devices:[],unknown_psychologists:[]};
     else if (path === '/api/mobile-update') data = { available:false };
     else if (path === '/api/mobile-config') data = { format:'quremed.solvia.mobile',version:1,api_url:'https://192.168.1.100:8443',https_url:'https://192.168.1.100:8443',preferred:'https' };
     else if (path === '/api/settings/center') data = { center_name:'SOLVIA · демонстрація', connection_mode:'local' };
