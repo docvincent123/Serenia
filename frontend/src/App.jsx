@@ -1738,7 +1738,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
         </section>
       </div>
 
-      {canReadConsultations && cardSection === 'followup' && <PatientProgress api={api} patientId={patientId} canWrite={isPsychologist} />}
+      {canReadConsultations && cardSection === 'followup' && <PatientProgress api={api} patientId={patientId} canWrite={isPsychologist} history={card.consultations||[]} />}
       <section className="surface" hidden={cardSection !== 'followup'}>
         <div className="section-head">
           <div><div className="eyebrow">КУРСИ СУПРОВОДУ</div><h2>Історія курсів</h2></div>

@@ -26,7 +26,7 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   let open = true, waiting = [], currentUser = { id:1,name:'Адміністратор · тест',role:'admin' };
   let draft = { version:0,payload:null }, draftOffline = false, loseConsultationResponse = true;
-  const consultations = [];
+  const consultations = [];const progress=[];
   const visit = {appointment_id:7,patient_id:10,patient:'Тестовий пацієнт',patient_no:'12345',phone:'+380000000000',category:'Інше',psychologist_id:3,psychologist:'Тестовий психолог',room:'Кабінет 1',kind:'individual',status:'scheduled',start:'2026-10-02T09:00',end:'2026-10-02T10:00',arrived_at:'',completed_at:''};
   let arrivalCalls = 0;
   await page.addInitScript(() => sessionStorage.setItem('solvia_token', 'synthetic-admin-token'));
@@ -50,6 +50,12 @@ try {
     else if (path === '/api/appointments/7/arrival' && method === 'POST') { ++arrivalCalls; visit.arrived_at='2026-10-02T08:55'; data={ok:true}; }
     else if (path === '/api/patients') data = [patient];
     else if (path === '/api/patients/10') data = { ...patient,courses:[],documents:[],referrals:[],discharges:[],assessments:[],consultations };
+    else if(path==='/api/patients/10/progress') {
+      if(method==='POST'){progress.unshift({...route.request().postDataJSON(),id:1,author:'Тестовий психолог',created:'2026-10-14T10:00'});data={id:1};}else data=progress;
+    }
+    else if(path==='/api/consultations/44/addenda'&&method==='POST') {const b=route.request().postDataJSON();consultations[0].addenda=[{...b,id:1,author:'Тестовий психолог',created:'2026-10-14T10:00'}];data={id:1};}
+    else if(path==='/api/admin/devices') data=[{user_id:3,device_id:'synthetic',device_name:'Тестовий телефон',name:'Тестовий психолог',version_code:34,version_name:'3.2.0',last_seen:'2026-10-14T10:00',last_sync:'2026-10-14T09:59',pending_count:2,blocked_count:0,fresh:false}];
+    else if(path==='/api/users') data=[{id:3,name:'Тестовий психолог',role:'psychologist',active:true}];
     else if (path === '/api/patients/10/draft') {
       if (method === 'PATCH') {
         if (draftOffline) { await route.abort('failed'); return; }
@@ -171,6 +177,27 @@ try {
   await page.locator('.consultation-record summary').click();
   await page.getByText('Робота за синтетичним сценарієм',{exact:true}).waitFor();
   await page.screenshot({path:'out/design/desktop-full-consultation.png',fullPage:true});
+  const originalNote=consultations[0].note;
+  await page.getByRole('button',{name:'Додати уточнення',exact:true}).click();
+  await page.getByLabel('Причина',{exact:true}).fill('Уточнення синтетичного запису');
+  await page.getByLabel('Текст уточнення',{exact:true}).fill('Додаткове спостереження без зміни оригіналу');
+  await page.getByRole('button',{name:'Зберегти доповнення',exact:true}).click();
+  await page.getByText('Додаткове спостереження без зміни оригіналу',{exact:true}).waitFor();
+  assert.equal(consultations[0].note,originalNote);
+  await page.screenshot({path:'out/design/desktop-addendum.png',fullPage:true});
+  await page.getByRole('button',{name:'Супровід',exact:true}).click();
+  await page.getByLabel('Ціль або рекомендація',{exact:true}).fill('Синтетична ціль');
+  await page.getByLabel('Стан',{exact:true}).selectOption('achieved');
+  await page.getByLabel('Спостереження',{exact:true}).fill('Синтетична оцінка виконання');
+  await page.getByRole('button',{name:'Зберегти оцінку',exact:true}).click();
+  await page.getByText('Синтетична оцінка виконання',{exact:true}).waitFor();
+  await page.screenshot({path:'out/design/desktop-progress.png',fullPage:true});
+  currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
+  await page.getByRole('button',{name:'Адміністрування',exact:true}).click();
+  await page.getByRole('button',{name:'Пристрої',exact:true}).click();
+  await page.getByRole('heading',{name:'Стан телефонів',exact:true}).waitFor();
+  await page.getByText('○ Поточний стан невідомий',{exact:true}).waitFor();
+  await page.screenshot({path:'out/design/desktop-device-health.png',fullPage:true});
   for(const role of ['reception','director']) {
     currentUser = {id:role === 'reception' ? 2 : 4,name:'Тестова роль',role};
     await page.reload();

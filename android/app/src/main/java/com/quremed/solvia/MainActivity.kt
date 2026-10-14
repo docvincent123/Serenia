@@ -1051,7 +1051,7 @@ class MainActivity : Activity() {
                 val payload = it.getJSONObject("payload")
                 payload.optLong("appointment_id") == item.optLong("id") && payload.optLong("patient_id") == patient.optLong("id") && it.optString("state") in listOf("pending", "blocked", "sent")
             }?.optString("state") ?: ""
-            fun completed(item: JSONObject, patient: JSONObject) = VisitState.completed(patient.optString("completed_at"), item.optString("status"), localState(item, patient))
+            fun completed(item: JSONObject, patient: JSONObject) = patient.optString("visit_status").isBlank() && VisitState.completed(patient.optString("completed_at"), item.optString("status"), localState(item, patient))
             fun active(item: JSONObject, patient: JSONObject) = patient.optString("visit_status").isBlank() && !completed(item,patient) && item.optString("status") in listOf("scheduled", "confirmed")
             fun render(tab: String) {
                 selectedNavigation = if(tab == "completed") "archive" else "home"
@@ -1240,6 +1240,13 @@ class MainActivity : Activity() {
 
     private fun progressScreen(patientId: Long, name: String, back: () -> Unit) {
         val body=root();body.addView(topBar("Цілі та рекомендації",back));backAction=back;body.addView(title(name,22f));mount(scroll(body))
+        val history=(offlineStore().cache("/api/patients/$patientId") as? JSONObject)?.optJSONArray("consultations") ?: JSONArray()
+        if(history.length()>0) {
+            val box=card();box.addView(title("Попередні рекомендації",18f))
+            for(i in 0 until minOf(3,history.length())) {val c=history.getJSONObject(i);box.addView(caption(c.optString("created").replace('T',' ')))
+                for((key,label) in listOf("goals" to "Цілі","recommendations" to "Рекомендації","homework" to "Домашнє завдання","next_plan" to "Подальший план")) if(c.optString(key).isNotBlank()) box.addView(MobileUi.label(this,label+": "+c.optString(key)))
+            };body.addView(box)
+        }
         mobileApi().call("GET","/api/patients/$patientId/progress",null,{value ->
             val rows=value as JSONArray
             if(rows.length()==0)body.addView(caption("Оцінок виконання цілей ще немає."))

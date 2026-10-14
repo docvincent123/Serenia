@@ -370,6 +370,14 @@ class Scenario(unittest.TestCase):
         self.api(psy,'POST','/api/consultations',{**note,'appointment_id':gid,'patient_id':third})
         status={x['id']:x['status'] for x in self.api(rec,'GET','/api/appointments?date='+day)}
         self.assertEqual(status[gid],'completed')
+        excluded_group=self.api(rec,'POST','/api/appointments',{**group,'start':day+'T12:00','end':day+'T13:00'})['id']
+        self.api(psy,'POST','/api/consultations',{**note,'appointment_id':excluded_group})
+        self.api(rec,'PATCH',f'/api/appointments/{excluded_group}/attendance',{'patient_id':pid,'status':'no_show','reason':'Must not replace a completed record'},status=409)
+        self.api(rec,'PATCH',f'/api/appointments/{excluded_group}/attendance',{'patient_id':third,'status':'no_show','reason':'Synthetic participant absent'})
+        excluded_rows=[x for x in self.api(rec,'GET',f'/api/shift-workspace?date={day}') if x['appointment_id']==excluded_group]
+        self.assertTrue(next(x for x in excluded_rows if x['patient_id']==pid)['completed_at'])
+        self.assertEqual(next(x for x in excluded_rows if x['patient_id']==third)['visit_status'],'no_show')
+        self.api(psy,'POST','/api/consultations',{**note,'appointment_id':excluded_group,'patient_id':third},status=403)
         move={**booking,'start':day+'T13:00','end':day+'T14:00'}
         mid=self.api(rec,'POST','/api/appointments',move)['id']
         self.api(rec,'PATCH',f'/api/appointments/{mid}',{**move,'start':day+'T14:00','end':day+'T15:00'})
@@ -442,6 +450,12 @@ class Scenario(unittest.TestCase):
             self.assertEqual(code,200,account)
             code,info=self.call('POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''},account['token'])
             self.assertEqual(code,200,info)
+        self.api(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':1,'blocked_count':0,'error_code':'pending'})
+        self.api(admin,'POST','/api/shift-day',{'action':'close'},status=409)
+        self.api(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'error_code':''})
+        subprocess.run(['psql',self.database,'-X','-v','ON_ERROR_STOP=1','-c',"UPDATE mobile_devices SET last_seen_epoch=0 WHERE user_id=3"],check=True,stdout=subprocess.DEVNULL)
+        self.assertFalse(self.api(admin,'GET','/api/shift-readiness')['ready'])
+        self.api(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'error_code':''})
         self.assertTrue(self.api(admin,'GET','/api/shift-readiness')['ready'])
         closed=self.api(admin,'POST','/api/shift-day',{'action':'close'})
         self.assertTrue(closed['sessions_terminated'])
@@ -458,19 +472,19 @@ class Scenario(unittest.TestCase):
         # Restart: data persist, while closed-shift staff sessions remain terminated.
         self.proc.terminate(); self.proc.wait(timeout=10); self.start()
         admin_detail=self.api(admin,'GET',f'/api/patients/{pid}')
-        self.assertEqual(len(admin_detail['consultations']),2)
+        self.assertEqual(len(admin_detail['consultations']),3)
         self.assertEqual(next(c for c in admin_detail['courses'] if c['id']==new_course['id'])['started_at'],dt.date.today().isoformat())
         migrated=self.api(admin,'GET',f'/api/patients/{third}')['courses'][0]
         self.assertEqual(migrated['started_at'],dt.date.today().isoformat())
         self.api(admin,'PATCH',f"/api/courses/{migrated['id']}",{'status':'completed','ended_at':dt.date.today().isoformat()})
 
-        self.assertEqual(self.api(admin,'GET','/api/stats')['repeat_visits'],1)
+        self.assertEqual(self.api(admin,'GET','/api/stats')['repeat_visits'],2)
 
         _,psy_auth=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist'],'platform':'Android','device_id':'ci-psych','device_name':'CI Tablet'})
         self.tokens[psy]=psy_auth['token']
         self.api(psy,'GET','/api/patients',status=423)
         self.api(admin,'POST','/api/shift-day',{'action':'open'})
-        self.assertEqual(len(self.api(psy,'GET',f'/api/patients/{pid}')['consultations']),2)
+        self.assertEqual(len(self.api(psy,'GET',f'/api/patients/{pid}')['consultations']),3)
         # Successful logins behind one reverse proxy must not exhaust the failure quota.
         for _ in range(12):
             code,login=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist']})

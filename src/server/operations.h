@@ -68,7 +68,7 @@ J operations(DB&db,const J&u,const httplib::Request&r,const J&b,const std::strin
     }
     if(std::regex_match(path,match,std::regex("/api/patients/([0-9]+)/progress"))){
         allow(u,{"admin","psychologist"});int pid=std::stoi(match[1]);getPatient(db,u,pid);
-        if(method=="GET")return db.query("SELECT p.*,u.name author FROM patient_progress p JOIN users u ON u.id=p.author_id WHERE p.patient_id=? ORDER BY p.id DESC",{pid});
+        if(method=="GET"){J args={pid};std::string filter;if(u["role"]=="psychologist"){filter=" AND p.author_id=?";args.push_back(u["id"]);}audit(db,u,"read_progress","patient",pid);return db.query("SELECT p.*,u.name author FROM patient_progress p JOIN users u ON u.id=p.author_id WHERE p.patient_id=?"+filter+" ORDER BY p.id DESC",args);}
         allow(u,{"psychologist"});check(method=="POST","Метод не дозволений",405);auto status=str(b,"status",20);
         check(status=="planned"||status=="in_progress"||status=="achieved"||status=="paused","Некоректний статус цілі");
         db.query("INSERT INTO patient_progress(patient_id,author_id,goal,status,observation,created) VALUES(?,?,?,?,?,?)",{pid,u["id"],str(b,"goal",1000),status,str(b,"observation",3000,false),now()});int id=db.id();audit(db,u,"progress","patient",pid);return {{"id",id}};

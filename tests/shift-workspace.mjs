@@ -15,3 +15,5 @@ console.log('Shift workspace classification checks passed');
 
 assert.equal(visitState({...group,started_at:'2026-10-13T09:00'}),'in_progress');
 assert.equal(filterVisits([{...group,started_at:'2026-10-13T09:00'}]).length,1);
+
+assert.equal(visitState({...group,status:'completed',visit_status:'no_show'}),'excluded');
