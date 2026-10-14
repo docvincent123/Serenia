@@ -185,9 +185,12 @@ class NativeWorkflowTest {
                 for ((name, value) in listOf("token" to "synthetic-token", "role" to "psychologist", "userName" to "Психолог · тест", "workspaceReady" to true)) {
                     MainActivity::class.java.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
                 }
-                MainActivity::class.java.getDeclaredMethod("moreScreen").apply { isAccessible = true }.invoke(activity)
-                val root = activity.window.decorView
+                MainActivity::class.java.getDeclaredMethod("openMenu").apply { isAccessible = true }.invoke(activity)
+                val popup = MainActivity::class.java.getDeclaredField("sideMenu").apply { isAccessible = true }.get(activity) as android.widget.PopupWindow
+                assertTrue(popup.isShowing)
+                val root = popup.contentView
                 assertNotNull(button(root, "Повідомлення")); assertNotNull(button(root, "Налаштування")); assertNotNull(button(root, "Мій профіль"))
+                assertFalse(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "Меню" })
                 val labels = views(root).filterIsInstance<Button>().map { it.text.toString() }
                 assertFalse(labels.contains("Архів зміни"))
                 assertFalse(labels.any { it.contains("центру") || it.contains("Пристрої") || it.contains("очікування") })
@@ -199,6 +202,18 @@ class NativeWorkflowTest {
             scenario.onActivity { reference = it }
             screenshot(reference!!, "native-menu")
         }
+    }
+    @Test fun profileBackReturnsToWorkWithoutCenteredMenuOrBackArrows() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { activity ->
+            for ((name, value) in listOf("token" to "synthetic-token", "role" to "psychologist", "userName" to "Психолог тест", "workspaceReady" to true))
+                MainActivity::class.java.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+            MainActivity::class.java.getDeclaredMethod("informationScreen").apply { isAccessible = true }.invoke(activity)
+            assertFalse(views(activity.window.decorView).any { it.contentDescription?.toString() == "Назад" })
+            assertTrue(views(activity.window.decorView).any { it.contentDescription?.toString() == "Відкрити меню психолога" })
+            MainActivity::class.java.getDeclaredMethod("handleBackNavigation").apply { isAccessible = true }.invoke(activity)
+            assertFalse(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "Меню" })
+            assertTrue(views(activity.window.decorView).any { it.contentDescription?.toString() == "Відкрити меню психолога" })
+        } }
     }
     @Test fun patientWorkspaceGroupsClinicalRecordsAndDocumentsForPhone() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->

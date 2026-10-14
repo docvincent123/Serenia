@@ -145,7 +145,7 @@ object AppointmentReminders {
         val dismiss = PendingIntent.getBroadcast(c, 0, Intent(c, ConsultationReminderReceiver::class.java)
             .setAction("com.quremed.solvia.SILENCE").setData(Uri.parse("solvia://silence/$key")).putExtra("key", key), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(c, channelId(c)).setSmallIcon(R.drawable.ic_solvia_notification)
-            .setContentTitle("Консультація за 2 хвилини").setContentText("Перевірте активний прийом у SOLVIA. Відмітьте прибуття пацієнта.")
+            .setContentTitle("Консультація за 2 хвилини").setContentText("Відкрийте активний прийом у SOLVIA.")
             .setCategory(Notification.CATEGORY_ALARM).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(open).setAutoCancel(true).setTimeoutAfter(60000)
             .addAction(Notification.Action.Builder(null, "Вимкнути звук", dismiss).build()).build()
