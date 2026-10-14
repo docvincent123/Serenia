@@ -22,6 +22,11 @@ import java.time.ZoneId
 object AppointmentReminders {
     const val LEAD_MS = 2 * 60 * 1000L
     const val CHANNEL = "solvia_consultations_v2"
+    fun channelId(c: Context): String {
+        val settings=c.getSharedPreferences("solvia_settings",0)
+        if(!settings.contains("consultation_ringtone")) return CHANNEL
+        return "solvia_consultations_custom_" + settings.getString("consultation_ringtone","").orEmpty().hashCode().toUInt().toString(16)
+    }
     private fun prefs(c: Context) = c.getSharedPreferences("solvia_reminders", Context.MODE_PRIVATE)
     private fun alarm(c: Context) = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     fun exact(c: Context) = Build.VERSION.SDK_INT < 31 || alarm(c).canScheduleExactAlarms()
@@ -30,11 +35,14 @@ object AppointmentReminders {
     fun channel(c: Context) {
         val manager = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val old = manager.getNotificationChannel("solvia_consultations_v1")
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Час консультації", old?.importance ?: NotificationManager.IMPORTANCE_HIGH).apply {
+        manager.createNotificationChannel(NotificationChannel(channelId(c), "Час консультації", old?.importance ?: NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Звукове нагадування про початок прийому"
             enableVibration(old?.shouldVibrate() ?: true); vibrationPattern = old?.vibrationPattern ?: longArrayOf(0, 700, 300, 700)
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-            setSound(if(old != null && old.sound == null) null else Uri.parse("android.resource://${c.packageName}/raw/solvia_consultation"), AudioAttributes.Builder()
+            val settings=c.getSharedPreferences("solvia_settings",0)
+            val selected=settings.getString("consultation_ringtone",null)
+            val sound=if(selected != null) selected.takeIf { it.isNotBlank() }?.let { Uri.parse(it) } else if(old != null && old.sound == null) null else Uri.parse("android.resource://${c.packageName}/raw/solvia_consultation")
+            setSound(sound, AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
         })
     }
@@ -111,7 +119,7 @@ object AppointmentReminders {
         channel(c)
         val dismiss = PendingIntent.getBroadcast(c, 0, Intent(c, ConsultationReminderReceiver::class.java)
             .setAction("com.quremed.solvia.SILENCE").setData(Uri.parse("solvia://silence/test")).putExtra("key", "test"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
+        val notification = Notification.Builder(c, channelId(c)).setSmallIcon(R.drawable.ic_solvia_notification)
             .setContentTitle("SOLVIA · тестовий дзвінок").setContentText("Перевірка мелодії консультації · 15 секунд")
             .setCategory(Notification.CATEGORY_ALARM).setVisibility(Notification.VISIBILITY_PRIVATE).setAutoCancel(true).setTimeoutAfter(15000)
             .addAction(Notification.Action.Builder(null, "Зупинити", dismiss).build()).build()
@@ -136,8 +144,8 @@ object AppointmentReminders {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val dismiss = PendingIntent.getBroadcast(c, 0, Intent(c, ConsultationReminderReceiver::class.java)
             .setAction("com.quremed.solvia.SILENCE").setData(Uri.parse("solvia://silence/$key")).putExtra("key", key), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
-            .setContentTitle("Консультація за 2 хвилини").setContentText("Перевірте активний прийом у SOLVIA. Відмітьте прибуття пацієнта.")
+        val notification = Notification.Builder(c, channelId(c)).setSmallIcon(R.drawable.ic_solvia_notification)
+            .setContentTitle("Консультація за 2 хвилини").setContentText("Відкрийте активний прийом у SOLVIA.")
             .setCategory(Notification.CATEGORY_ALARM).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(open).setAutoCancel(true).setTimeoutAfter(60000)
             .addAction(Notification.Action.Builder(null, "Вимкнути звук", dismiss).build()).build()

@@ -76,7 +76,7 @@ class PatientWorkspace(
     }
     fun open(id: Long, tab: String = "summary") {
         selected = tab
-        val loading = box(); loading.addView(button("Назад", back)); loading.addView(text("Завантаження картки…")); show(loading, back)
+        val loading = box(); loading.addView(text("Завантаження картки…")); show(loading, back)
         api.call("GET", "/api/patients/$id", success = { patient = it as JSONObject; render() }, failure = { message ->
             loading.addView(text(message)); loading.addView(button("Повторити") { open(id, tab) })
         })
@@ -110,8 +110,8 @@ class PatientWorkspace(
             "documents" -> documents(content, id)
             "history" -> history(content, id)
             "discharges" -> discharges(content, id)
-            "courses" -> { content.addView(button("Назад до огляду") { selected = "summary"; render() }); content.addView(text("Курс супроводу", 20f, true)); courses(content, id) }
-            "referrals" -> { content.addView(button("Назад до огляду") { selected = "summary"; render() }); content.addView(text("Направлення", 20f, true)); referrals(content, id) }
+            "courses" -> { content.addView(text("Курс супроводу", 20f, true)); courses(content, id) }
+            "referrals" -> { content.addView(text("Направлення", 20f, true)); referrals(content, id) }
             else -> summary(content, id)
         }
     }
@@ -156,7 +156,7 @@ class PatientWorkspace(
             if(entry.optString("sync_status").isNotBlank()) card.addView(text(entry.optString("sync_status"), 13f, true))
             card.addView(text(entry.optString("request_text").ifBlank { entry.optString("note") }.take(180)))
             card.addView(button("Повний запис") {
-                val detail = box(); detail.addView(button("Назад до історії") { render() })
+                val detail = box(); detail.addView(button("Записи") { render() })
                 consultationSections(entry).forEach { section(detail, it.label, it.value) }
                 detail.addView(button("Перегляд PDF / друк") { document("Запис консультації", consultationSections(entry)) })
                 show(detail) { render() }

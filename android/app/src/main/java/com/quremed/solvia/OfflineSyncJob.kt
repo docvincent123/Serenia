@@ -57,6 +57,17 @@ class OfflineSyncJob : JobService() {
                     val report = DeviceStatus.payload(this, base, uid)
                     val response = send(base, auth, report, "/api/mobile-status")
                     DeviceStatus.acknowledge(this, base, uid, report, response)
+                    val messages = get(base, auth, "/api/staff/messages") as JSONArray
+                    if(!cancelled.get() && store.session()?.optString("token") == auth) {
+                        val unread = (0 until messages.length()).map { messages.getJSONObject(it) }.filter { it.isNull("read_at") }
+                        for(message in unread.filter { it.isNull("delivered_at") }) {
+                            if(cancelled.get() || store.session()?.optString("token") != auth) break
+                            send(base, auth, JSONObject(), "/api/staff/messages/${message.optLong("id")}/delivered")
+                        }
+                        if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size)
+                        else StaffMessageNotifications.clear(this)
+                    }
+
                 }
                 val queue = store.queue()
                 retry = authorized && ((0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" } ||
@@ -74,6 +85,7 @@ class OfflineSyncJob : JobService() {
     override fun onStopJob(params: JobParameters): Boolean { active[params.jobId]?.set(true); return true }
     override fun onDestroy() { active.values.forEach { it.set(true) }; executor.shutdownNow(); super.onDestroy() }
     private fun send(base: String, auth: String, payload: JSONObject, path: String = "/api/consultations", method: String = "POST"): JSONObject {
+        PhoneNetworkStats.sent(this,base)
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = false; connection.requestMethod = method
@@ -82,23 +94,24 @@ class OfflineSyncJob : JobService() {
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("Content-Type", "application/json")
             connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-            val status = connection.responseCode
+            val status = connection.responseCode; PhoneNetworkStats.received(this,base)
             val stream = if(status in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             val response = if(text.isBlank()) JSONObject() else JSONTokener(text).nextValue() as JSONObject
             if(status !in 200..299) throw SyncFailure(status, response.optString("error", "Помилка сервера $status"))
             return response
-        } finally { connection.disconnect() }
+        } catch(e: Exception) { PhoneNetworkStats.failed(this,base);throw e } finally { connection.disconnect() }
     }
     private fun get(base: String, auth: String, path: String): Any {
+        PhoneNetworkStats.sent(this,base)
         val c = URL(base + path).openConnection() as HttpURLConnection
         try {
             c.instanceFollowRedirects = false; c.connectTimeout = 6000; c.readTimeout = 12000
             c.setRequestProperty("Authorization", "Bearer $auth"); c.setRequestProperty("Accept", "application/json")
-            val status = c.responseCode
+            val status = c.responseCode; PhoneNetworkStats.received(this,base)
             if(status !in 200..299) throw SyncFailure(status, "Не вдалося оновити розклад")
             return JSONTokener(c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }).nextValue()
-        } finally { c.disconnect() }
+        } catch(e: Exception) { PhoneNetworkStats.failed(this,base);throw e } finally { c.disconnect() }
     }
     companion object {
         fun schedule(context: Context, server: String, user: Long) {

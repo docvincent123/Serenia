@@ -24,6 +24,6 @@ class MobileUpdatesTest {
         val prefs=c.getSharedPreferences("solvia_update_probe",0)
         @Suppress("DEPRECATION") val version=c.packageManager.getPackageInfo(c.packageName,0).versionCode
         if(version==34) assertTrue(prefs.edit().putString("connection","preserved-server").commit())
-        else { assertEquals(35,version); assertEquals("preserved-server",prefs.getString("connection","")) }
+        else { assertEquals(39,version); assertEquals("preserved-server",prefs.getString("connection","")) }
     }
 }

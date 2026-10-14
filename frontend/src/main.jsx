@@ -6,6 +6,7 @@ import './redesign.css';
 import './workspace.css';
 import './desk.css';
 import './solvia-yellow.css';
+import './staff-workspace.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

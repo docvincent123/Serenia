@@ -29,7 +29,7 @@ J operations(DB&db,const J&u,const httplib::Request&r,const J&b,const std::strin
         allow(u,{"admin"});check(method=="GET","Метод не дозволений",405);
         return db.query("SELECT m.*,u.name,u.active,(m.last_seen_epoch >= extract(epoch from now())::bigint-120) fresh FROM mobile_devices m JOIN users u ON u.id=m.user_id ORDER BY fresh DESC,m.last_seen DESC");
     }
-    if(path=="/api/shift-readiness"){check(method=="GET","Метод не дозволений",405);return shiftReadiness(db,u,r.has_param("date")?r.get_param_value("date"):now().substr(0,10));}
+    if(path=="/api/shift-readiness"){check(method=="GET","Метод не дозволений",405);auto active=db.query("SELECT shift_date FROM shift_days WHERE closed_at IS NULL ORDER BY opened_at DESC LIMIT 1");auto day=active.empty()?now().substr(0,10):active[0]["shift_date"].get<std::string>();return shiftReadiness(db,u,r.has_param("date")?r.get_param_value("date"):day);}
     std::smatch match;
     if(std::regex_match(path,match,std::regex("/api/appointments/([0-9]+)/attendance"))){
         allow(u,{"admin","reception"});check(method=="PATCH","Метод не дозволений",405);

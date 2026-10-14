@@ -104,7 +104,7 @@ class Scenario(unittest.TestCase):
         shift=self.api(admin,'POST','/api/shift-day',{'action':'open'})
         self.assertTrue(shift['open'])
         other=self.api(admin,'POST','/api/users',{'name':'Інший психолог','login':'other','phone':'+380501112233','password':'long-test-password','role':'psychologist'})['id']
-        _,auth=self.call('POST','/api/login',{'login':'other','password':'long-test-password','platform':'Android'})
+        _,auth=self.call('POST','/api/login',{'login':'other','password':'long-test-password','platform':'Android','device_id':'other-test-phone'})
         self.tokens['other']=auth['token']
         device_sessions=self.api(admin,'GET','/api/admin/sessions')
         self.assertTrue(any(x['name']=='Інший психолог' and x['platform']=='Android' for x in device_sessions))
@@ -418,7 +418,7 @@ class Scenario(unittest.TestCase):
         code,account=self.call('POST','/api/login',{'login':'managed','password':'changed-test-password'})
         self.assertEqual(code,200,account)
         self.assertEqual(self.call('POST','/api/account/password',{'current_password':'wrong-password','new_password':'another-test-password'},account['token'])[0],403)
-        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':'short'},account['token'])[0],400)
+        self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':''},account['token'])[0],400)
         self.assertEqual(self.call('POST','/api/account/password',{'current_password':'changed-test-password','new_password':'another-test-password'},account['token'])[0],200)
         self.assertEqual(self.call('GET','/api/me',token=account['token'])[0],401)
         code,account=self.call('POST','/api/login',{'login':'managed','password':'another-test-password'})
@@ -447,7 +447,7 @@ class Scenario(unittest.TestCase):
         for who in readiness['unknown_psychologists']:
             login='psychologist' if who['id']==3 else 'other'
             password=self.passwords['psychologist'] if who['id']==3 else 'long-test-password'
-            code,account=self.call('POST','/api/login',{'login':login,'password':password,'device_id':'ci-cleanup','device_name':'Synthetic'})
+            code,account=self.call('POST','/api/login',{'login':login,'password':password,'device_id':f"ci-cleanup-{who['id']}",'device_name':'Synthetic'})
             self.assertEqual(code,200,account)
             code,info=self.call('POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''},account['token'])
             self.assertEqual(code,200,info)
@@ -543,6 +543,97 @@ class Scenario(unittest.TestCase):
         self.api('draft_psy','POST','/api/consultations',{**consultation,'note':'Changed after a lost response'},status=409)
         self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
         self.assertEqual(len(self.api('draft_psy','GET',f'/api/patients/{patient}')['consultations']),1)
+
+    def prepare_synthetic_shift_close(self, day):
+        # Earlier scenarios leave completed appointments for psychologists without
+        # a current mobile heartbeat. Give this isolated fixture an empty queue.
+        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',f"""
+            UPDATE appointments SET status='no_show' WHERE substr(start,1,10)='{day}' AND status IN ('scheduled','confirmed');
+            UPDATE mobile_devices SET pending_count=0,blocked_count=0,last_seen_epoch=extract(epoch from now())::bigint;
+            INSERT INTO mobile_devices(user_id,device_id,device_name,version_code,version_name,last_seen,pending_count,blocked_count,last_seen_epoch)
+            SELECT DISTINCT psychologist_id,'synthetic-close-{day}','Synthetic close',37,'3.3.0','{day}T12:00:00',0,0,extract(epoch from now())::bigint
+            FROM appointments WHERE substr(start,1,10)='{day}'
+            ON CONFLICT(user_id,device_id) DO UPDATE SET last_seen=EXCLUDED.last_seen,last_seen_epoch=EXCLUDED.last_seen_epoch,pending_count=0,blocked_count=0;
+        """])
+        self.assertTrue(self.api('admin','GET','/api/shift-readiness')['ready'])
+
+    def test_x2_shift_binding_survives_midnight_until_explicit_close(self):
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        yesterday=(dt.date.today()-dt.timedelta(days=1)).isoformat()
+        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',f"DELETE FROM shift_days WHERE shift_date='{yesterday}'; UPDATE shift_days SET shift_date='{yesterday}' WHERE shift_date=current_date::text;"])
+        self.api('admin','POST','/api/users',{'name':'Нічний Психолог','login':'нічний_психолог','password':'3','role':'psychologist'})
+        code,auth=self.call('POST','/api/login',{'login':'нічний_психолог','password':'3','platform':'Android','device_id':'night-shift-phone'})
+        self.assertEqual(code,200,auth);self.assertTrue(auth['user']['shift_bound']);self.assertEqual(auth['user']['shift_date'],yesterday)
+        code,shift=self.call('GET','/api/shift-day',token=auth['token']);self.assertEqual(code,200);self.assertEqual(shift['shift_date'],yesterday)
+        self.prepare_synthetic_shift_close(yesterday)
+        self.api('admin','POST','/api/shift-day',{'action':'close'})
+        self.assertEqual(self.call('GET','/api/me',token=auth['token'])[0],401)
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+
+    def test_x_shift_device_binding_short_ukrainian_login_and_profile(self):
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        first=self.api('admin','POST','/api/users',{'name':'Психолог Перший По батькові','login':'психолог_перший','password':'1','role':'psychologist'})['id']
+        second=self.api('admin','POST','/api/users',{'name':'Психолог Другий','login':'психолог_другий','password':'2','role':'psychologist'})['id']
+        def login(name,password):
+            return self.call('POST','/api/login',{'login':name,'password':password,'platform':'Android','device_id':'bound-shift-phone','device_name':'Shift phone'})
+        code,first_auth=login('психолог_перший','1');self.assertEqual(code,200,first_auth)
+        user=first_auth['user'];self.assertTrue(user['shift_bound']);self.assertRegex(user['staff_number'],r'^\d{4}$')
+        self.assertEqual(login('психолог_другий','2')[0],409)
+        token=first_auth['token'];self.assertEqual(self.call('GET','/api/me',token=token)[0],200)
+        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',f"UPDATE sessions SET expires=0 WHERE token='{hashlib.sha256(token.encode()).hexdigest()}'"])
+        self.assertEqual(self.call('GET','/api/me',token=token)[0],200)
+        self.call('POST','/api/logout',{},token)
+        self.assertEqual(login('психолог_другий','2')[0],409)
+        code,again=login('психолог_перший','1');self.assertEqual(code,200)
+        self.assertEqual(again['user']['staff_number'],user['staff_number'])
+        center=self.api('admin','GET','/api/settings/center');center['server_name']='Додатковий'
+        self.api('admin','PATCH','/api/settings/center',center)
+        self.assertEqual(self.call('GET','/api/me',token=again['token'])[1]['server_name'],'Додатковий')
+        # Synthetic installation: complete readiness so the real close endpoint can run.
+        self.prepare_synthetic_shift_close(dt.date.today().isoformat())
+        self.api('admin','POST','/api/shift-day',{'action':'close'})
+        self.assertEqual(self.call('GET','/api/me',token=again['token'])[0],401)
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        self.assertEqual(login('психолог_другий','2')[0],200)
+
+    def test_y_staff_message_device_scope_and_receipts(self):
+        def login(role, device):
+            code, auth = self.call('POST','/api/login',{'login':role,'password':self.passwords[role],'platform':'Android','device_id':device,'device_name':device})
+            self.assertEqual(code,200,auth)
+            return auth['token'], auth['user']['id']
+        admin,_=login('admin','staff-desktop')
+        psy,uid=login('psychologist','staff-phone')
+        second,_=login('psychologist','staff-other-phone')
+        rec,_=login('reception','staff-reception')
+        def call(token,method,path,body=None,status=200):
+            code,result=self.call(method,path,body,token)
+            self.assertEqual(code,status,result)
+            return result
+        call(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'test','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''})
+        people=call(rec,'GET','/api/staff/recipients')
+        self.assertTrue(any(p['id']==uid and any(d['device_id']=='staff-phone' for d in p['devices']) for p in people))
+        call(psy,'GET','/api/staff/recipients',status=403)
+        payload={'recipient_id':uid,'device_id':'staff-phone','body':'Службове тестове повідомлення','client_key':'staff-test-message'}
+        call(psy,'POST','/api/staff/messages',payload,status=403)
+        call(admin,'POST','/api/staff/messages',{**payload,'device_id':'unknown-phone'},status=400)
+        message=call(admin,'POST','/api/staff/messages',payload)
+        again=call(admin,'POST','/api/staff/messages',payload)
+        self.assertEqual(message['id'],again['id'])
+        call(admin,'POST','/api/staff/messages',{**payload,'body':'Змінений текст'},status=409)
+        self.assertTrue(any(m['id']==message['id'] for m in call(psy,'GET','/api/staff/messages')))
+        self.assertFalse(any(m['id']==message['id'] for m in call(second,'GET','/api/staff/messages')))
+        path=f"/api/staff/messages/{message['id']}"
+        call(second,'POST',path+'/read',{},status=404)
+        call(rec,'POST',path+'/read',{},status=403)
+        call(psy,'POST',path+'/delivered',{})
+        sent=next(m for m in call(admin,'GET','/api/staff/messages') if m['id']==message['id'])
+        self.assertIsNotNone(sent['delivered_at']); self.assertIsNone(sent['read_at'])
+        call(psy,'POST',path+'/read',{})
+        read=next(m for m in call(admin,'GET','/api/staff/messages') if m['id']==message['id'])
+        self.assertIsNotNone(read['read_at'])
+        call(psy,'POST',path+'/read',{})
+        call(admin,'POST','/api/staff/messages',{**payload,'device_id':'','client_key':'staff-all-phones'})
+        self.assertTrue(any(m['client_key']=='staff-all-phones' for m in call(second,'GET','/api/staff/messages')))
 
     def test_z_security_inputs_and_rate_limit(self):
         # Authentication checks work even if a browser or forged caller bypasses UI.
