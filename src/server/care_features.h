@@ -38,6 +38,12 @@ J privateDraft(DB&db,const J&u,int pid,const std::string&method,const J&body){
     for(auto&flag:flags)check(flag.is_string()&&flag.get<std::string>().size()<=60&&flag.get<std::string>().find('\0')==std::string::npos,"Некоректна позначка");
     payload["risk_flags"]=flags;
     check(payload.dump().size()<=100000,"Чернетка завелика");
+    auto aid=payload.value("appointment_id",std::string());
+    if(std::regex_match(aid,std::regex("[0-9]{1,9}"))) {
+        // Recover an offline start when its first draft reaches the server.
+        auto active=db.query("SELECT a.id FROM appointments a JOIN attendees t ON t.appointment_id=a.id WHERE a.id=? AND a.psychologist_id=? AND t.patient_id=? AND a.status IN ('scheduled','confirmed') AND t.visit_status='' AND t.arrived_at<>'' AND t.started_at='' AND substr(a.start,1,10)=? AND NOT EXISTS(SELECT 1 FROM consultations c WHERE c.appointment_id=a.id AND c.patient_id=t.patient_id)",{std::stoi(aid),u["id"],pid,now().substr(0,10)});
+        if(!active.empty())db.query("UPDATE attendees SET started_at=? WHERE appointment_id=? AND patient_id=? AND started_at=''",{now(),std::stoi(aid),pid});
+    }
     auto updated=now();
     db.query("INSERT INTO consultation_drafts(patient_id,user_id,version,payload,updated) VALUES(?,?,?,?,?) ON CONFLICT(patient_id,user_id) DO UPDATE SET version=EXCLUDED.version,payload=EXCLUDED.payload,updated=EXCLUDED.updated",{pid,u["id"],saved+1,payload.dump(),updated});
     return {{"version",saved+1},{"updated",updated}};

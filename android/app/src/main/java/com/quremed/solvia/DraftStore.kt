@@ -28,7 +28,7 @@ class DraftStore(context: Context, server: String, userId: Long) {
         }
         return store.getKey(alias, null) as SecretKey
     }
-    fun read(patient: Long): JSONObject? {
+    fun read(patient: Long): JSONObject? = synchronized(lock) {
         val stored = prefs.getString("$scope|$patient", null) ?: return null
         val envelope = JSONObject(stored)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -36,12 +36,39 @@ class DraftStore(context: Context, server: String, userId: Long) {
         cipher.updateAAD("$scope|$patient".toByteArray())
         return JSONObject(String(cipher.doFinal(Base64.decode(envelope.getString("data"), Base64.NO_WRAP)), Charsets.UTF_8))
     }
-    fun save(patient: Long, value: JSONObject) {
+    fun save(patient: Long, value: JSONObject) = synchronized(lock) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key()); cipher.updateAAD("$scope|$patient".toByteArray())
         val envelope = JSONObject().put("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .put("data", Base64.encodeToString(cipher.doFinal(value.toString().toByteArray()), Base64.NO_WRAP))
         check(prefs.edit().putString("$scope|$patient", envelope.toString()).commit()) { "Не вдалося зберегти локальну чернетку" }
     }
-    fun remove(patient: Long) { check(prefs.edit().remove("$scope|$patient").commit()) }
+    fun patients(): List<Long> = synchronized(lock) { prefs.all.keys.filter { it.startsWith("$scope|") }.mapNotNull { it.substringAfter('|').toLongOrNull() } }
+    fun remove(patient: Long) = synchronized(lock) { check(prefs.edit().remove("$scope|$patient").commit()) }
+    fun saveEditing(patient: Long, value: JSONObject): JSONObject = synchronized(lock) {
+        val current = read(patient)
+        if(current?.optString("client_key") == value.optString("client_key")) {
+            for(key in listOf("server_version", "synced_hash", "sync_error", "sync_blocked", "attempt_hash"))
+                if(current.has(key)) value.put(key, current.get(key))
+        }
+        save(patient, value); value
+    }
+    fun acknowledge(patient: Long, clientKey: String, hash: String, revision: Int) = synchronized(lock) {
+        val current = read(patient)
+        if(current != null && current.optString("client_key") == clientKey) {
+            current.put("server_version", revision).put("synced_hash", hash).remove("sync_error")
+            current.remove("sync_blocked"); current.remove("attempt_hash"); save(patient, current)
+        }
+    }
+    fun prepareTransfer(patient: Long, clientKey: String, hash: String) = synchronized(lock) {
+        val current = read(patient)
+        if(current != null && current.optString("client_key") == clientKey) save(patient, current.put("attempt_hash", hash))
+    }
+    fun transferError(patient: Long, clientKey: String, message: String, blocked: Boolean) = synchronized(lock) {
+        val current = read(patient)
+        if(current != null && current.optString("client_key") == clientKey)
+            save(patient, current.put("sync_error", message).put("sync_blocked", blocked))
+    }
+    companion object { private val lock = Any() }
+
 }

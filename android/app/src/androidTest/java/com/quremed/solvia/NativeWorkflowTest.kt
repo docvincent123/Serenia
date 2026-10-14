@@ -134,7 +134,51 @@ class NativeWorkflowTest {
             assertEquals("", MainActivity::class.java.getDeclaredField("role").apply { isAccessible = true }.get(activity))
         } }
     }
-    @Test fun nativeMenuContainsDocumentsDraftsAndSettings() {
+    @Test fun connectionFilePreservesStandardAndExplicitPorts() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { activity ->
+            val normalize = MainActivity::class.java.getDeclaredMethod("configAddress", String::class.java).apply { isAccessible = true }
+            assertEquals("https://192.168.1.100:443", normalize.invoke(activity, "https://192.168.1.100"))
+            assertEquals("https://192.168.1.100:8443", normalize.invoke(activity, "https://192.168.1.100:8443"))
+            assertEquals("https://center.example:443", normalize.invoke(activity, "https://center.example"))
+        } }
+    }
+    @Test fun loginIsLimitedToCredentialsAndConnectionLink() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            var reference: MainActivity? = null
+            scenario.onActivity { activity ->
+                reference = activity
+                MainActivity::class.java.getDeclaredMethod("loginScreen").apply { isAccessible = true }.invoke(activity)
+                val root = activity.window.decorView
+                assertEquals(2, views(root).filterIsInstance<EditText>().size)
+                val labels = views(root).filterIsInstance<Button>().map { it.text.toString() }
+                assertEquals(listOf("Увійти"), labels)
+                button(root, "Увійти").performClick()
+                assertTrue(views(root).filterIsInstance<TextView>().any { it.text.toString() == "Введіть логін і пароль." })
+            }
+            screenshot(reference!!, "login-refined")
+        }
+    }
+    @Test fun sideMenuAndSplitSettingsRenderWithoutBottomNavigation() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            var reference: MainActivity? = null
+            scenario.onActivity { activity ->
+                reference = activity
+                for ((name, value) in listOf("token" to "synthetic-token", "role" to "psychologist", "userName" to "Тестовий психолог", "workspaceReady" to true))
+                    MainActivity::class.java.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+                MainActivity::class.java.getDeclaredMethod("settingsScreen").apply { isAccessible = true }.invoke(activity)
+                val root = activity.window.decorView
+                for(label in listOf("Оповіщення", "Оформлення", "Редагування", "Підключення")) assertNotNull(button(root, label))
+                assertFalse(views(root).filterIsInstance<Button>().any { it.text.toString() == "Розклад" })
+            }
+            screenshot(reference!!, "settings-yellow")
+            scenario.onActivity { activity ->
+                MainActivity::class.java.getDeclaredMethod("openMenu").apply { isAccessible = true }.invoke(activity)
+            }
+            screenshot(reference!!, "side-menu-yellow")
+            InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent 4").close()
+        }
+    }
+    @Test fun nativeMenuIsGroupedWithoutRemovedNavigation() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 for ((name, value) in listOf("token" to "synthetic-token", "role" to "psychologist", "userName" to "Психолог · тест", "workspaceReady" to true)) {
@@ -142,10 +186,11 @@ class NativeWorkflowTest {
                 }
                 MainActivity::class.java.getDeclaredMethod("moreScreen").apply { isAccessible = true }.invoke(activity)
                 val root = activity.window.decorView
-                assertNotNull(button(root, "Документи пацієнтів")); assertNotNull(button(root, "Мої чернетки")); assertNotNull(button(root, "Мої налаштування"))
-                assertNotNull(button(root, "Розклад")); assertNotNull(button(root, "Пацієнти"))
+                assertNotNull(button(root, "Повідомлення")); assertNotNull(button(root, "Налаштування")); assertNotNull(button(root, "Змінити пароль"))
                 val labels = views(root).filterIsInstance<Button>().map { it.text.toString() }
                 assertFalse(labels.any { it.contains("центру") || it.contains("Пристрої") || it.contains("очікування") })
+                assertFalse(labels.any { it in listOf("Розклад", "Чернетки", "Мої чернетки", "Завершити зміну", "Усі функції", "Активні", "Меню", "Пацієнти", "Документи пацієнтів") })
+                assertEquals(android.graphics.Color.rgb(246,194,44), MobileUi.accent)
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             var reference: MainActivity? = null

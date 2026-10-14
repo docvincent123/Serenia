@@ -12,3 +12,8 @@ assert.equal(filterVisits(rows,{query:'12345',psychologist:'3'}).length,2);
 assert.equal(filterVisits(rows,{psychologist:'4'}).length,0);
 assert.equal(new Set(rows.map(visitKey)).size,rows.length,'Repeated visits of one patient remain separate');
 console.log('Shift workspace classification checks passed');
+
+assert.equal(visitState({...group,started_at:'2026-10-13T09:00'}),'in_progress');
+assert.equal(filterVisits([{...group,started_at:'2026-10-13T09:00'}]).length,1);
+
+assert.equal(visitState({...group,status:'completed',visit_status:'no_show'}),'excluded');

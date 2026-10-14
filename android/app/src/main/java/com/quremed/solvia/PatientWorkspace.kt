@@ -35,7 +35,7 @@ class PatientWorkspace(
     private val preview: (NativeDocument, () -> Unit) -> Unit
 ) {
     private val teal = MobileUi.accent
-    private val ink = Color.rgb(25, 48, 62)
+    private val ink = MobileUi.ink
     private var patient = JSONObject()
     private var selected = "summary"
     private val clinical get() = role == "admin" || role == "psychologist"
@@ -43,7 +43,7 @@ class PatientWorkspace(
     private fun dp(n: Int) = (activity.resources.displayMetrics.density * n).toInt()
     private fun box(): LinearLayout = MobileUi.card(activity)
     private fun text(value: String, size: Float = 15f, bold: Boolean = false): TextView = TextView(activity).apply {
-        text = value; textSize = size; setTextColor(ink); setPadding(0, dp(6), 0, dp(8))
+        text = value; textSize = size * MobileUi.textScale(activity); setTextColor(ink); setPadding(0, dp(6), 0, dp(8))
         setTextIsSelectable(true); if (bold) setTypeface(typeface, Typeface.BOLD)
     }
     private fun button(label: String, action: () -> Unit): Button = MobileUi.button(activity, label, primary = label in listOf("Нова консультація", "Оформити документ", "Зберегти"), action = action)

@@ -18,3 +18,10 @@ frontend/dist/
 assets/solvia-icon.png
 assets/solvia.ico
 android/app/src/main/res/drawable/solvia_icon.png
+
+android/.gradle/
+android/local.properties
+
+android/.kotlin/
+
+android/app/src/main/res/raw/solvia_consultation.wav

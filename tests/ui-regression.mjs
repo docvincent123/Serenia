@@ -26,7 +26,7 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   let open = true, waiting = [], currentUser = { id:1,name:'Адміністратор · тест',role:'admin' };
   let draft = { version:0,payload:null }, draftOffline = false, loseConsultationResponse = true;
-  const consultations = [];
+  const consultations = [];const progress=[];
   const visit = {appointment_id:7,patient_id:10,patient:'Тестовий пацієнт',patient_no:'12345',phone:'+380000000000',category:'Інше',psychologist_id:3,psychologist:'Тестовий психолог',room:'Кабінет 1',kind:'individual',status:'scheduled',start:'2026-10-02T09:00',end:'2026-10-02T10:00',arrived_at:'',completed_at:''};
   let arrivalCalls = 0;
   await page.addInitScript(() => sessionStorage.setItem('solvia_token', 'synthetic-admin-token'));
@@ -36,9 +36,12 @@ try {
     let data = [];
     if (path === '/api/me') data = currentUser;
     else if (path === '/api/login') data = { token:'synthetic-psychologist-token',user:currentUser };
-    else if (path === '/api/health') data = { ok:true,version:'2.2.0',platform:'linux' };
+    else if (path === '/api/health') data = { ok:true,version:'2.3.0',platform:'linux' };
     else if (path === '/api/shift-day') data = { open,shift_date:'2026-10-02' };
     else if (path === '/api/stats') data = { total_patients: 24,active_patients:18,archived_patients:6,new_patients:4,consultations:42,avg_duration_minutes:60,active_courses:18,completed_courses:6,signed_documents:24,outgoing_referrals:3,supervisions_completed:2,load:[] };
+    else if(path === '/api/shift-readiness') data={ready:true,unfinished:[],devices:[],unknown_psychologists:[]};
+    else if (path === '/api/mobile-update') data = { available:false };
+    else if (path === '/api/mobile-config') data = { format:'quremed.solvia.mobile',version:1,api_url:'https://192.168.1.100:8443',https_url:'https://192.168.1.100:8443',preferred:'https' };
     else if (path === '/api/settings/center') data = { center_name:'SOLVIA · демонстрація', connection_mode:'local' };
     else if (path === '/api/settings/workflow') data = { opening_time:'09:00',closing_time:'18:00',working_days:'1234567',slot_step_minutes:60,default_duration_minutes:60,session_hours:8 };
     else if (path === '/api/admin/system') data = { database:{name:'solvia',size:'8 MB',version:'16'},counts:{patients:24,consultations:42},backups:[{id:1,action:'verify',status:'success',created:'2026-10-02T10:00',details:'isolated restore checked'}] };
@@ -47,6 +50,12 @@ try {
     else if (path === '/api/appointments/7/arrival' && method === 'POST') { ++arrivalCalls; visit.arrived_at='2026-10-02T08:55'; data={ok:true}; }
     else if (path === '/api/patients') data = [patient];
     else if (path === '/api/patients/10') data = { ...patient,courses:[],documents:[],referrals:[],discharges:[],assessments:[],consultations };
+    else if(path==='/api/patients/10/progress') {
+      if(method==='POST'){progress.unshift({...route.request().postDataJSON(),id:1,author:'Тестовий психолог',created:'2026-10-14T10:00'});data={id:1};}else data=progress;
+    }
+    else if(path==='/api/consultations/44/addenda'&&method==='POST') {const b=route.request().postDataJSON();consultations[0].addenda=[{...b,id:1,author:'Тестовий психолог',created:'2026-10-14T10:00'}];data={id:1};}
+    else if(path==='/api/admin/devices') data=[{user_id:3,device_id:'synthetic',device_name:'Тестовий телефон',name:'Тестовий психолог',version_code:34,version_name:'3.2.0',last_seen:'2026-10-14T10:00',last_sync:'2026-10-14T09:59',pending_count:2,blocked_count:0,fresh:false}];
+    else if(path==='/api/users') data=[{id:3,name:'Тестовий психолог',role:'psychologist',active:true}];
     else if (path === '/api/patients/10/draft') {
       if (method === 'PATCH') {
         if (draftOffline) { await route.abort('failed'); return; }
@@ -78,6 +87,23 @@ try {
   await page.screenshot({ path:'out/design/desktop-dashboard.png',fullPage:true });
   await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   await page.screenshot({ path:'out/design/desktop-settings.png',fullPage:true });
+  await page.locator('.settings-nav').getByRole('button',{name:/Оновлення Android/}).click();
+  await page.getByRole('heading',{name:'Оновлення Android',exact:true}).waitFor();
+  await page.getByLabel('Опис випуску — release.json',{exact:true}).setInputFiles({name:'release.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version_code:32,version_name:'3.0.0',package_name:'com.quremed.solvia',sha256:'a'.repeat(64)}))});
+  await page.getByLabel('Підписаний APK',{exact:true}).setInputFiles({name:'app.apk',mimeType:'application/vnd.android.package-archive',buffer:Buffer.from('PK synthetic')});
+  const publication=page.waitForRequest(r=>r.url().endsWith('/api/mobile-update')&&r.method()==='POST');
+  await page.getByRole('button',{name:'Опублікувати оновлення телефона',exact:true}).click();
+  const published=JSON.parse((await publication).postData());
+  assert.equal(published.version_code,32);assert.equal(Buffer.from(published.apk_base64,'base64').toString(),'PK synthetic');
+  await page.getByText('Оновлення опубліковано на сервері центру.',{exact:false}).waitFor();
+  await page.locator('.settings-nav').getByRole('button',{name:/Підключення/}).click();
+  const configDownload = page.waitForEvent('download');
+  await page.getByRole('button',{name:'Файл для телефону',exact:true}).click();
+  const downloaded = await configDownload;
+  assert.equal(downloaded.suggestedFilename(),'SOLVIA-Mobile.solvia');
+  const config = JSON.parse(await readFile(await downloaded.path(),'utf8'));
+  assert.equal(config.api_url,'https://192.168.1.100:8443');
+  assert.equal(config.format,'quremed.solvia.mobile');
   // Settings remain accessible even with the shift closed.
   open = false; await page.reload(); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   open = true; await page.reload();
@@ -151,6 +177,27 @@ try {
   await page.locator('.consultation-record summary').click();
   await page.getByText('Робота за синтетичним сценарієм',{exact:true}).waitFor();
   await page.screenshot({path:'out/design/desktop-full-consultation.png',fullPage:true});
+  const originalNote=consultations[0].note;
+  await page.getByRole('button',{name:'Додати уточнення',exact:true}).click();
+  await page.getByLabel('Причина',{exact:true}).fill('Уточнення синтетичного запису');
+  await page.getByLabel('Текст уточнення',{exact:true}).fill('Додаткове спостереження без зміни оригіналу');
+  await page.getByRole('button',{name:'Зберегти доповнення',exact:true}).click();
+  await page.locator('.record-addenda blockquote').getByText('Додаткове спостереження без зміни оригіналу',{exact:true}).waitFor();
+  assert.equal(consultations[0].note,originalNote);
+  await page.screenshot({path:'out/design/desktop-addendum.png',fullPage:true});
+  await page.getByRole('button',{name:'Супровід',exact:true}).click();
+  await page.getByLabel('Ціль або рекомендація',{exact:true}).fill('Синтетична ціль');
+  await page.getByLabel('Стан',{exact:true}).selectOption('achieved');
+  await page.getByLabel('Спостереження',{exact:true}).fill('Синтетична оцінка виконання');
+  await page.getByRole('button',{name:'Зберегти оцінку',exact:true}).click();
+  await page.locator('.progress-entry').getByText('Синтетична оцінка виконання',{exact:true}).waitFor();
+  await page.screenshot({path:'out/design/desktop-progress.png',fullPage:true});
+  currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
+  await page.getByRole('button',{name:'Адміністрування',exact:true}).click();
+  await page.getByRole('button',{name:'Пристрої',exact:true}).click();
+  await page.getByRole('heading',{name:'Стан телефонів',exact:true}).waitFor();
+  await page.getByText('○ Поточний стан невідомий',{exact:true}).waitFor();
+  await page.screenshot({path:'out/design/desktop-device-health.png',fullPage:true});
   for(const role of ['reception','director']) {
     currentUser = {id:role === 'reception' ? 2 : 4,name:'Тестова роль',role};
     await page.reload();

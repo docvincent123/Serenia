@@ -6,6 +6,8 @@ import android.app.job.JobScheduler
 import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
+import org.json.JSONArray
+import java.time.LocalDate
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.net.HttpURLConnection
@@ -28,24 +30,53 @@ class OfflineSyncJob : JobService() {
                 val store = OfflineStore(this, base, uid)
                 val session = store.session() ?: return@execute
                 val auth = session.getString("token")
-                val authorized = ConsultationSync(store) { payload ->
+                val drafts = DraftStore(this, base, uid)
+                val draftsAuthorized = DraftSync(drafts, store) { method, path, body ->
+                    if(cancelled.get() || store.session()?.optString("token") != auth) throw SyncFailure(401, "Потрібен повторний вхід")
+                    if(method == "GET") get(base, auth, path) as JSONObject else send(base, auth, body!!, path, method)
+                }.run()
+                val authorized = draftsAuthorized && ConsultationSync(store) { payload ->
                     if(cancelled.get() || store.session()?.optString("token") != auth) throw SyncFailure(401, "Потрібен повторний вхід")
                     send(base, auth, payload)
                 }.run()
-                if(!authorized) store.revokeSession()
+                if(!authorized) { store.revokeSession(); AppointmentReminders.restore(this) }
+                if(authorized && !cancelled.get()) {
+                    val shift = get(base, auth, "/api/shift-day") as JSONObject
+                    store.saveCache("/api/shift-day", shift)
+                    if(!shift.optBoolean("open")) { AppointmentReminders.cancelScope(this, base, uid); ShiftNotifications.refresh(this, base, uid) }
+                    else {
+                        for(day in 0..1) {
+                            val path = "/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())
+                            val rows = get(base, auth, path) as JSONArray
+                            store.saveCache(path, rows)
+                        }
+                        if(!cancelled.get() && store.session()?.optString("token") == auth) AppointmentReminders.refreshFromCache(this, base, uid)
+                    }
+                }
+                if(authorized && !cancelled.get()) {
+                    val report = DeviceStatus.payload(this, base, uid)
+                    val response = send(base, auth, report, "/api/mobile-status")
+                    DeviceStatus.acknowledge(this, base, uid, report, response)
+                }
                 val queue = store.queue()
-                retry = authorized && (0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" }
-            } catch(_: Exception) { retry = true }
+                retry = authorized && ((0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" } ||
+                    drafts.patients().any { drafts.read(it)?.let { value -> !DraftSync.transferred(value) && !value.optBoolean("sync_blocked") } ?: false })
+            } catch(e: Exception) {
+                if(e is SyncFailure && e.status == 401) {
+                    val base = params.extras.getString("server").orEmpty(); val uid = params.extras.getLong("user")
+                    OfflineStore(this, base, uid).revokeSession(); AppointmentReminders.restore(this); ShiftNotifications.restore(this)
+                } else retry = true
+            }
             finally { active.remove(params.jobId, cancelled); if(!cancelled.get()) jobFinished(params, retry) }
         }
         return true
     }
     override fun onStopJob(params: JobParameters): Boolean { active[params.jobId]?.set(true); return true }
     override fun onDestroy() { active.values.forEach { it.set(true) }; executor.shutdownNow(); super.onDestroy() }
-    private fun send(base: String, auth: String, payload: JSONObject): JSONObject {
-        val connection = URL(base + "/api/consultations").openConnection() as HttpURLConnection
+    private fun send(base: String, auth: String, payload: JSONObject, path: String = "/api/consultations", method: String = "POST"): JSONObject {
+        val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
-            connection.instanceFollowRedirects = false; connection.requestMethod = "POST"
+            connection.instanceFollowRedirects = false; connection.requestMethod = method
             connection.connectTimeout = 6000; connection.readTimeout = 12000; connection.doOutput = true
             connection.setRequestProperty("Authorization", "Bearer $auth")
             connection.setRequestProperty("Accept", "application/json")
@@ -59,6 +90,16 @@ class OfflineSyncJob : JobService() {
             return response
         } finally { connection.disconnect() }
     }
+    private fun get(base: String, auth: String, path: String): Any {
+        val c = URL(base + path).openConnection() as HttpURLConnection
+        try {
+            c.instanceFollowRedirects = false; c.connectTimeout = 6000; c.readTimeout = 12000
+            c.setRequestProperty("Authorization", "Bearer $auth"); c.setRequestProperty("Accept", "application/json")
+            val status = c.responseCode
+            if(status !in 200..299) throw SyncFailure(status, "Не вдалося оновити розклад")
+            return JSONTokener(c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }).nextValue()
+        } finally { c.disconnect() }
+    }
     companion object {
         fun schedule(context: Context, server: String, user: Long) {
             val extras = android.os.PersistableBundle().apply { putString("server", server); putLong("user", user) }
@@ -66,7 +107,12 @@ class OfflineSyncJob : JobService() {
             val info = JobInfo.Builder(id, ComponentName(context, OfflineSyncJob::class.java))
                 .setExtras(extras).setPersisted(true).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setMinimumLatency(1000)
                 .setBackoffCriteria(30000, JobInfo.BACKOFF_POLICY_EXPONENTIAL).build()
-            (context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler).schedule(info)
+            val scheduler = context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+            scheduler.schedule(info)
+            // One periodic job per installed app, replaced on account/server switch.
+            scheduler.schedule(JobInfo.Builder(42, ComponentName(context, OfflineSyncJob::class.java))
+                .setExtras(extras).setPersisted(true).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setPeriodic(15 * 60 * 1000L).build())
         }
     }
 }

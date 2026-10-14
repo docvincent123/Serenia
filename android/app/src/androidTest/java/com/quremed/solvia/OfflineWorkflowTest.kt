@@ -1,5 +1,7 @@
 package com.quremed.solvia
 
+import java.time.LocalDate
+
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -124,23 +126,44 @@ class OfflineWorkflowTest {
             var ready=false
             val deadline=System.currentTimeMillis()+5000
             while(!ready && System.currentTimeMillis()<deadline) {
-                scenario.onActivity { activity -> ready=views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Активні · 1" } }
+                scenario.onActivity { activity -> ready=views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Активні · 0" } }
                 if(!ready) Thread.sleep(50)
             }
             assertTrue("Cached shift tabs must render",ready)
             scenario.onActivity { activity ->
                 val root=activity.window.decorView
                 val labels=views(root).filterIsInstance<TextView>().map { it.text.toString() }
-                assertTrue(labels.contains("Учасник у черзі")); assertFalse(labels.contains("Завершений учасник"))
-                assertTrue(labels.contains("Збережено на телефоні · очікує передавання"))
+                assertFalse(labels.contains("Учасник у черзі")); assertFalse(labels.contains("Завершений учасник"))
+                assertFalse(labels.contains("Збережено на телефоні · очікує передавання"))
                 assertFalse(views(root).filterIsInstance<Button>().any { it.text.toString()=="Почати консультацію" })
                 assertTrue(views(root).filterIsInstance<Button>().any { it.contentDescription=="Відкрити меню психолога" })
             }
+            scenario.onActivity { activity ->
+                val content = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+                val callback = MainActivity::class.java.getDeclaredField("homeAppointmentsRefresh").apply { isAccessible=true }.get(activity) as (JSONArray) -> Unit
+                val updated = JSONArray().put(JSONObject().put("id",999).put("status","confirmed").put("start",LocalDate.now().toString()+"T00:01").put("end",LocalDate.now().toString()+"T01:01").put("patients",JSONArray().put(JSONObject().put("id",77).put("name","Незавершений прийом"))))
+                callback(updated)
+                assertSame(content,activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0))
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString()=="Незавершений прийом" })
+                assertTrue(views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString()=="Пацієнт прибув" })
+                val base=MainActivity::class.java.getDeclaredField("server").apply { isAccessible=true }.get(activity) as String
+                callback(OfflineStore(activity,base,42).cache("/api/appointments?date="+LocalDate.now()) as JSONArray)
+            }
             capture(scenario,"shift-active")
             scenario.onActivity { activity ->
-                views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Проконсультовані · 1" }.performClick()
+                views(activity.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="Архів · 2" }.performClick()
                 val labels=views(activity.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
-                assertTrue(labels.contains("Завершений учасник")); assertFalse(labels.contains("Учасник у черзі"))
+                assertTrue(labels.contains("Архів зміни"))
+                assertTrue(labels.contains("Завершений учасник")); assertTrue(labels.contains("Учасник у черзі"))
+                assertTrue(labels.contains("Збережено на телефоні · очікує передавання"))
+                val indicator = views(activity.window.decorView).first { it.tag == "unsent:8:12" }
+                assertEquals(View.VISIBLE, indicator.visibility)
+                val cache = OfflineStore(activity, MainActivity::class.java.getDeclaredField("server").apply { isAccessible=true }.get(activity) as String, 42)
+                MainActivity::class.java.getDeclaredMethod("updateTransferIndicators").apply { isAccessible=true }.invoke(activity)
+                assertEquals(View.VISIBLE, indicator.visibility)
+                cache.mark(cache.queue().getJSONObject(0).getJSONObject("payload").getString("client_key"), "sent", serverId=123)
+                MainActivity::class.java.getDeclaredMethod("updateTransferIndicators").apply { isAccessible=true }.invoke(activity)
+                assertEquals(View.GONE, indicator.visibility)
             }
             capture(scenario,"shift-completed")
         }
@@ -166,19 +189,37 @@ class OfflineWorkflowTest {
                 if(!opened) Thread.sleep(50)
             }
             assertTrue("Cached consultation form must open", opened)
+            var scrollReady = false
+            val layoutDeadline = System.currentTimeMillis() + 3000
+            while(!scrollReady && System.currentTimeMillis() < layoutDeadline) {
+                scenario.onActivity { activity ->
+                    val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
+                    scrollReady = views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first { it.tag == "consultation-scroll" }.canScrollVertically(1)
+                }
+                if(!scrollReady) Thread.sleep(30)
+            }
+            assertTrue("The actual consultation document must scroll", scrollReady)
+            scenario.onActivity { activity ->
+                val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
+                val form = views(dialog.window!!.decorView)
+                assertFalse(form.filterIsInstance<Button>().any { it.text.toString() == "Інструменти запису" })
+                assertFalse(form.filterIsInstance<EditText>().any { it.hint?.toString()?.contains("Тривалість") == true })
+                assertEquals(2, form.filterIsInstance<android.widget.Spinner>().size)
+            }
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
                 val note = views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }
-                assertFalse("Clinical fields must not clutter admission step", note.isShown)
-                views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "3" }.performClick()
-                assertTrue("Clinical note must be reachable in work step", note.isShown)
+                assertTrue("All clinical sections must belong to one scroll form", note.isShown)
+                assertFalse(views(dialog.window!!.decorView).filterIsInstance<Button>().any { it.text.toString() in listOf("1","2","3","4","5","Далі","Чернетка") })
+                val scroll = views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first { it.tag == "consultation-scroll" }
+                assertTrue(scroll.canScrollVertically(1))
+                scroll.scrollTo(0, note.top + (note.parent as View).top)
                 note.setText("Консультація завершена без Wi-Fi")
             }
             capture(scenario, "consultation-work")
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
-                views(dialog.window!!.decorView).filterIsInstance<Button>().first { it.text.toString() == "1" }.performClick()
-                repeat(4) { dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick() }
+                views(dialog.window!!.decorView).filterIsInstance<android.widget.ScrollView>().first { it.tag == "consultation-scroll" }.fullScroll(View.FOCUS_DOWN)
                 assertEquals("Завершити", dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).text.toString())
                 assertEquals("Консультація завершена без Wi-Fi", views(dialog.window!!.decorView).filterIsInstance<EditText>().first { it.hint.toString().contains("Приватна нотатка") }.text.toString())
             }
@@ -186,11 +227,27 @@ class OfflineWorkflowTest {
             scenario.onActivity { activity ->
                 val dialog = MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) as android.app.AlertDialog
                 dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+            }
+            var finished = false
+            val finishDeadline = System.currentTimeMillis() + 15000
+            while(!finished && System.currentTimeMillis() < finishDeadline) {
+                scenario.onActivity { activity ->
+                    val server = MainActivity::class.java.getDeclaredField("server").apply { isAccessible = true }.get(activity) as String
+                    finished = OfflineStore(activity, server, 42).queue().length() > 0 && MainActivity::class.java.getDeclaredField("consultationWindow").apply { isAccessible = true }.get(activity) == null
+                }
+                if(!finished) Thread.sleep(50)
+            }
+            assertTrue("Finalization must enqueue off the UI thread", finished)
+            scenario.onActivity { activity ->
                 val server = MainActivity::class.java.getDeclaredField("server").apply { isAccessible = true }.get(activity) as String
                 val row = OfflineStore(activity, server, 42).queue().getJSONObject(0)
                 assertEquals("Консультація завершена без Wi-Fi", row.getJSONObject("payload").getString("note"))
-                assertEquals("pending", row.getString("state")); assertFalse(dialog.isShowing)
+                assertEquals("pending", row.getString("state"))
                 assertNull(DraftStore(activity, server, 42).read(7))
+                MainActivity::class.java.getDeclaredMethod("visitDetailsScreen", Long::class.javaPrimitiveType, Long::class.javaPrimitiveType, String::class.java)
+                    .apply { isAccessible = true }.invoke(activity,7L,12L,"completed")
+                assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == "Консультація завершена без Wi-Fi" })
+                assertFalse(views(activity.window.decorView).filterIsInstance<Button>().any { it.text.toString() in listOf("Оформити документ", "Нова консультація", "Підписати") })
             }
         }
     }

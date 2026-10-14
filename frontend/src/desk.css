@@ -1,22 +1,6 @@
-/* Administrative desktop: calm blue navigation and a legible reception desk. */
-.app-shell:is([data-role=admin],[data-role=reception]) { --forest:#086bb4; --forest-dark:#07568e; --forest-soft:#e9f3fb; --ink:#17364a; --line:#dbe5ee; background:#f2f5f9; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar { background:#122c44; border-right:0; color:#fff; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar-brand strong { color:#fff; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar-brand span,.app-shell:is([data-role=admin],[data-role=reception]) .user-copy span { color:#a8c4d8; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar .nav-item { color:#d4e5f1; border-radius:9px; min-height:44px; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar .nav-item.active { background:#0877bf; color:white; border-left-color:#6cd6e8; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar .nav-item:hover { background:#24445f; color:#fff; }
-.app-shell:is([data-role=admin],[data-role=reception]) .nav-group-toggle { color:#96b5ca; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar-support { background:#1c3b53; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar-support :is(strong,a) { color:#d3e7f6; }
-.app-shell:is([data-role=admin],[data-role=reception]) .sidebar-support small { color:#9db6ca; }
-.app-shell:is([data-role=admin],[data-role=reception]) .user-copy strong { color:#fff; }
-.app-shell:is([data-role=admin],[data-role=reception]) .shift-bar { background:#e5f2fc; border-bottom:1px solid #d1e4f3; color:#204f71; }
-.app-shell:is([data-role=admin],[data-role=reception]) .workspace-topbar { padding-bottom:20px; border-bottom:1px solid var(--line); background:#fff; }
-.app-shell:is([data-role=admin],[data-role=reception]) .surface { box-shadow:none; border-radius:14px; }
 .shift-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:20px; }
 .shift-summary article { padding:20px 22px; background:#fff; border:1px solid var(--line); border-radius:14px; display:flex; flex-direction:column; gap:10px; }
-.shift-summary article:first-child { border-top:3px solid #0877bf; }
+.shift-summary article:first-child { border-top:3px solid #F6C22C; }
 .shift-summary article:nth-child(2) { border-top:3px solid #d59436; }
 .shift-summary article:nth-child(3) { border-top:3px solid #3b9478; }
 .shift-summary span { font-size:12px; color:#5e7387; }
@@ -24,9 +8,9 @@
 .shift-controls { padding:16px 20px; margin-bottom:18px; }
 .shift-tabs { display:flex; gap:8px; border-bottom:1px solid var(--line); padding-bottom:16px; margin-bottom:16px; flex-wrap:wrap; }
 .shift-tabs button { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:9px; background:white; color:#415d73; padding:11px 16px; min-height:44px; cursor:pointer; font-weight:600; }
-.shift-tabs button.active { color:#fff; background:#0877bf; border-color:#0877bf; }
+.shift-tabs button.active { color:#181613; background:#F6C22C; border-color:#F6C22C; }
 .shift-tabs button span { background:#edf3f8; border-radius:6px; padding:2px 7px; font-size:11px; color:#466079; }
-.shift-tabs button.active span { color:white; background:#ffffff26; }
+.shift-tabs button.active span { color:#181613; background:#ffffff70; }
 .shift-filters { display:flex; gap:16px; flex-wrap:wrap; }
 .shift-filters label { display:grid; gap:6px; font-size:11px; font-weight:600; color:#567085; flex:1; min-width:160px; }
 .shift-filters .shift-search { flex:2; }
@@ -37,7 +21,7 @@
 .shift-explanation { color:#6c8093; font-size:12px; line-height:1.65; margin:6px 0 18px; }
 .shift-visit-list { display:grid; gap:8px; }
 .shift-visit { width:100%; text-align:left; display:flex; align-items:center; gap:14px; padding:16px 12px; background:#f9fbfd; border:1px solid #e3ebf2; border-radius:10px; cursor:pointer; color:#17364a; }
-.shift-visit:hover,.shift-visit.selected { background:#edf6fc; border-color:#72afd7; }
+.shift-visit:hover,.shift-visit.selected { background:#fff7db; border-color:#d8aa24; }
 .shift-time { min-width:45px; display:grid; gap:6px; font-variant-numeric:tabular-nums; }
 .shift-time strong { font-size:16px; }
 .shift-time small { color:#7a8fa3; }

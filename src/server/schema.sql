@@ -502,3 +502,45 @@ SET center_name_snapshot = cs.center_name,
 FROM center_settings cs
 WHERE cs.id = 1
   AND d.center_name_snapshot = '';
+
+-- Additive upgrade: original clinical records remain immutable.
+ALTER TABLE attendees ADD COLUMN IF NOT EXISTS started_at TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS consultation_addenda(
+ id BIGSERIAL PRIMARY KEY,
+ consultation_id BIGINT NOT NULL REFERENCES consultations(id),
+ author_id BIGINT NOT NULL REFERENCES users(id),
+ reason TEXT NOT NULL,
+ content TEXT NOT NULL,
+ client_key TEXT NOT NULL,
+ created TEXT NOT NULL,
+ UNIQUE(author_id,client_key)
+);
+CREATE INDEX IF NOT EXISTS idx_addenda_consultation ON consultation_addenda(consultation_id,id);
+CREATE TABLE IF NOT EXISTS patient_progress(
+ id BIGSERIAL PRIMARY KEY,
+ patient_id BIGINT NOT NULL REFERENCES patients(id),
+ author_id BIGINT NOT NULL REFERENCES users(id),
+ goal TEXT NOT NULL,
+ status TEXT NOT NULL CHECK(status IN ('planned','in_progress','achieved','paused')),
+ observation TEXT NOT NULL DEFAULT '',
+ created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_progress_patient ON patient_progress(patient_id,id);
+CREATE TABLE IF NOT EXISTS mobile_devices(
+ user_id BIGINT NOT NULL REFERENCES users(id),
+ device_id TEXT NOT NULL,
+ device_name TEXT NOT NULL,
+ version_code INTEGER NOT NULL,
+ version_name TEXT NOT NULL,
+ last_seen TEXT NOT NULL,
+ last_sync TEXT NOT NULL DEFAULT '',
+ pending_count INTEGER NOT NULL,
+ blocked_count INTEGER NOT NULL,
+ error_code TEXT NOT NULL DEFAULT '',
+ PRIMARY KEY(user_id,device_id)
+);
+
+ALTER TABLE attendees ADD COLUMN IF NOT EXISTS visit_status TEXT NOT NULL DEFAULT '';
+ALTER TABLE attendees ADD COLUMN IF NOT EXISTS exclusion_reason TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE mobile_devices ADD COLUMN IF NOT EXISTS last_seen_epoch BIGINT NOT NULL DEFAULT 0;

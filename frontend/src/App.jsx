@@ -1,3 +1,5 @@
+import {backupNeedsAttention} from './backup-status.mjs';
+import {DeviceHealth,ShiftReadiness,Addenda,PatientProgress} from './Operations.jsx';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
@@ -557,13 +559,7 @@ function Login({ initialBase, onLogin }) {
           <h1>Час для допомоги. Простір для роботи.</h1>
           <p>Пацієнти, прийоми та документація — в одному зручному робочому просторі.</p>
         </div>
-        <div className="privacy-note">
-          <span>●</span>
-          <div>
-            <strong>Персональний кабінет</strong>
-            <small>Увійдіть своїм обліковим записом. Доступ до розділів залежить від ролі в центрі.</small>
-          </div>
-        </div>
+
       </section>
 
       <section className="login-panel">
@@ -1604,6 +1600,8 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
   }
 
   function printDocument() {
+    const d=documentPreview;
+    if(!d?.title?.trim()||!d?.patient_name?.trim()||!d?.content?.trim()||!d?.signed_at||(d.status==='signed'&&(!d.signed_by_name?.trim()||!d.signature_data))){setError('Документ не готовий до друку: перевірте назву, текст, пацієнта, дату та підпис.');return;}
     const node = document.querySelector('.consent-print');
     printStandaloneNode(
       node,
@@ -1741,6 +1739,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
         </section>
       </div>
 
+      {canReadConsultations && cardSection === 'followup' && <PatientProgress api={api} patientId={patientId} canWrite={isPsychologist} history={card.consultations||[]} />}
       <section className="surface" hidden={cardSection !== 'followup'}>
         <div className="section-head">
           <div><div className="eyebrow">КУРСИ СУПРОВОДУ</div><h2>Історія курсів</h2></div>
@@ -1840,6 +1839,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
                         <div><dt>Оцінені ризики</dt><dd>{riskFlagsText(c.risk_flags)}</dd></div>
                       </dl>
                     </details>
+                    <Addenda api={api} record={c} canWrite={isPsychologist} onSaved={load} />
                   </article>
                 ))}
               </div>
@@ -2617,6 +2617,7 @@ function Devices({ api }) {
         actions={<Button variant="secondary" onClick={load}>Оновити</Button>}
       />
       {error && <div className="alert error">{error}</div>}
+      <DeviceHealth api={api} />
       <div className="stat-grid">
         <article className="stat-card"><strong>{sessions.length}</strong><h3>Активних сесій</h3><p>До завершення входу або 8 годин</p></article>
         <article className="stat-card"><strong>{online}</strong><h3>Онлайн зараз</h3><p>Активність протягом останніх 2 хвилин</p></article>
@@ -2683,9 +2684,7 @@ function ServerMaintenance({ api, apiBase }) {
       const health = await api('GET', '/api/health');
       setPlatform(health.platform || 'unknown');
       setServerVersion(health.version || '');
-      if (health.platform === 'linux') {
-        setSystem(await api('GET', '/api/admin/system'));
-      }
+      setSystem(await api('GET', '/api/admin/system'));
       setSystemError('');
     } catch (e) {
       setPlatform('offline');
@@ -2704,6 +2703,7 @@ function ServerMaintenance({ api, apiBase }) {
       <p>{system?.lan_url || apiBase}</p>
       <p>{platform === 'linux' ? 'systemd + PostgreSQL + HTTPS. Критичні root-операції виконуються локально на сервері.' : 'Обслуговування виконує адміністратор на сервері.'}</p>
       <Button variant="secondary" onClick={loadSystem}>Оновити діагностику</Button>
+      {system && backupNeedsAttention(system.backups) && <div className="alert error" role="alert">Резервна копія потребує перевірки: немає свіжої успішної копії або остання операція завершилася помилкою.</div>}
       {systemError && <p className="danger-text">{systemError}</p>}
     </article>
 
@@ -2797,7 +2797,7 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
       {error && <div className="alert error">{error}</div>}
       {showSettings && <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />}
       <div className="server-status-grid">
-        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.2</p></article>
+        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.3</p></article>
         <article className="stat-card"><strong>{shift?.open ? 'OPEN' : 'CLOSED'}</strong><h3>Робоча зміна</h3><p>{shift?.shift_date || localDate()}</p></article>
         <article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Онлайн пристроїв</h3><p>{sessions.length} активних сесій</p></article>
         <article className="stat-card"><strong>{reminders.length}</strong><h3>Найближчих записів</h3><p>Нагадування психологам і адміну</p></article>
@@ -2894,6 +2894,32 @@ function AccountSettings({ api, apiBase, onLogout }) {
   </>;
 }
 
+function MobileReleaseSettings({ api }) {
+  const [release,setRelease] = useState(null), [apk,setApk] = useState(null), [busy,setBusy] = useState(false), [message,setMessage] = useState(''), [current,setCurrent] = useState(null);
+  const [pilot,setPilot]=useState([]),[people,setPeople]=useState([]);
+  useEffect(()=>{api('GET','/api/mobile-update').then(x=>{setCurrent(x);setPilot(x.rollout_user_ids||[]);}).catch(e=>setMessage(e.message));api('GET','/api/users').then(x=>setPeople(x.filter(p=>p.role==='psychologist'&&p.active))).catch(e=>setMessage(e.message));},[]);
+  async function publish(e) {
+    e.preventDefault(); if(busy) return; setBusy(true); setMessage('');
+    try {
+      if(!release || !apk) throw new Error('Оберіть release.json і підписаний APK.');
+      const info=JSON.parse(await release.text()); if(apk.size>8*1024*1024) throw new Error('APK: максимум 8 МБ.');
+      const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.readAsDataURL(apk);});
+      await api('POST','/api/mobile-update',{...info,apk_base64:encoded,rollout_user_ids:pilot});
+      setCurrent(await api('GET','/api/mobile-update')); setMessage('Оновлення опубліковано на сервері центру. Телефони побачать його після входу або наступної перевірки.');
+    } catch(e) {setMessage(e.message);} finally {setBusy(false);}
+  }
+  return <section className="surface settings-panel"><h2>Оновлення Android</h2><p>{current?.available ? `На сервері: SOLVIA ${current.version_name}` : 'Підписаний APK ще не завантажено.'}</p>
+    <p>Встановлення поза Play Market. Наступні APK мають використовувати той самий постійний підпис.</p>
+    <form className="form-grid" onSubmit={publish}>
+      <Field label="Опис випуску — release.json"><input type="file" accept=".json" disabled={busy} onChange={e=>setRelease(e.target.files[0]||null)} /></Field>
+      <Field label="Підписаний APK"><input type="file" accept=".apk" disabled={busy} onChange={e=>setApk(e.target.files[0]||null)} /></Field>
+      <Field label="Пробне встановлення — оберіть психологів" hint="Порожній список — оновлення доступне всім. Після перевірки повторно опублікуйте ті самі файли без обмеження групи."><select multiple value={pilot.map(String)} disabled={busy} onChange={e=>setPilot([...e.target.selectedOptions].map(x=>Number(x.value)))}>{people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
+      <button type="button" className="button secondary" disabled={busy} onClick={()=>setPilot([])}>Зробити доступним усім</button>
+      <div className="form-actions full-span"><Button disabled={busy}>{busy?'Завантажуємо…':'Опублікувати оновлення телефона'}</Button></div>
+    </form>{message && <p role="status">{message}</p>}
+  </section>;
+}
+
 function Settings({ api, apiBase, onSwitchApi }) {
   const empty = {
     center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
@@ -2937,37 +2963,18 @@ function Settings({ api, apiBase, onSwitchApi }) {
     } catch (e) { setError(e.message); }
   }
 
-  function downloadMobileConfig() {
+  async function downloadMobileConfig() {
     try {
-      const preferred = form.connection_mode === 'vps' ? 'vps' : 'local';
-      const apiUrl = preferred === 'vps'
-        ? cleanBase(form.vps_api_url)
-        : cleanBase(form.local_api_url || apiBase);
-      if (!apiUrl.startsWith('https://')) throw new Error('Для телефону потрібне HTTPS-підключення.');
-      if (/127\.0\.0\.1|localhost/i.test(apiUrl)) {
-        throw new Error('Для телефона потрібна LAN-адреса серверного ПК, а не 127.0.0.1. Вкажіть Local API URL, наприклад https://192.168.1.100:8443.');
-      }
-      const config = {
-        format: 'quremed.solvia.mobile',
-        version: 1,
-        center: form.center_name || 'SOLVIA',
-        preferred,
-        api_url: apiUrl,
-        https_url: apiUrl.startsWith('https://') ? apiUrl : '',
-        generated: new Date().toISOString()
-      };
-      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json;charset=utf-8' });
+      const config = await api('GET', '/api/mobile-config');
+      if (config.format !== 'quremed.solvia.mobile' || !config.api_url) throw new Error('Сервер не створив файл підключення.');
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/vnd.solvia.connection+json' });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = href;
-      link.download = 'SOLVIA-Mobile.solvia';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      link.href = href; link.download = 'SOLVIA-Mobile.solvia';
+      document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(href), 1000);
-    } catch (e) {
-      setConnectionTest({ state: 'error', message: e.message });
-    }
+      setConnectionTest({ state: 'ok', message: 'Файл створено сервером зі збережених налаштувань. Відкрийте його на телефоні у SOLVIA.' });
+    } catch (e) { setConnectionTest({ state: 'error', message: e.message }); }
   }
 
   function selectedEndpoint() {
@@ -3013,6 +3020,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
             ['center','Центр','Реквізити та бренд'],
             ['documents','Документи','Виписки та підписи'],
             ['connection','Підключення','Local / VPS'],
+            ['mobile','Оновлення Android','APK для телефонів'],
             ['workflow','Правила роботи','Розклад і безпека'],
             ['maintenance','Backup','Резервні копії']
           ].map(([key,title,text]) => (
@@ -3031,7 +3039,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
                   <div className="eyebrow">{activeSection === 'center' ? 'ПРОФІЛЬ ЦЕНТРУ' : 'ДОКУМЕНТИ'}</div>
                   <h2>{activeSection === 'center' ? 'Реквізити та оформлення' : 'Виписки та підписи'}</h2>
                 </div>
-                <Badge tone="forest">SOLVIA 2.2</Badge>
+                <Badge tone="forest">SOLVIA 2.3</Badge>
               </div>
 
               <form className="form-grid" onSubmit={save}>
@@ -3128,7 +3136,8 @@ function Settings({ api, apiBase, onSwitchApi }) {
           )}
 
           {activeSection === 'workflow' && <WorkflowSettings api={api} />}
-          {activeSection === 'maintenance' && (
+          {activeSection === 'mobile' && <MobileReleaseSettings api={api} />}
+            {activeSection === 'maintenance' && (
             <section className="surface settings-panel">
               <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Backup / Restore</h2></div><Badge tone="sand">Admin only</Badge></div>
               <ServerMaintenance api={api} apiBase={apiBase} />
@@ -3661,7 +3670,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
-  const [health, setHealth] = useState({ online: true, version: '2.2.0' });
+  const [readiness,setReadiness]=useState(null);
+  const [health, setHealth] = useState({ online: true, version: '2.4.0' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
@@ -3689,11 +3699,15 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }
 
   async function changeShift(action) {
-    if (action === 'close' && !window.confirm('Закрити робочу зміну SOLVIA на сьогодні?')) return;
+    if(action==='close') {
+      try {const check=await api('GET','/api/shift-readiness');setReadiness(check);if(!check.ready){setShiftError('Спочатку завершіть або позначте неявку прийомів і підключіть телефони для передавання записів.');return;}}
+      catch(e){setShiftError(e.message);return;}
+      if(!window.confirm('Усі прийоми та передавання перевірено. Закрити зміну?'))return;
+    }
     setShiftBusy(true);
     try {
       await api('POST', '/api/shift-day', { action });
-      await loadShift();
+      setReadiness(null);await loadShift();
     } catch (e) { setShiftError(e.message); }
     finally { setShiftBusy(false); }
   }
@@ -3704,7 +3718,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.2.0' });
+        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.4.0' });
       } catch {
         if (alive) setHealth({ online: false, version: '' });
       }
@@ -3797,7 +3811,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           </div>
         </>}
         <div className="workspace-inner">
-          {shiftError && <div className="alert error">{shiftError}</div>}
+          {readiness && <ShiftReadiness data={readiness} />}{shiftError && <div className="alert error">{shiftError}</div>}
           {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
