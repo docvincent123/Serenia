@@ -544,6 +544,19 @@ class Scenario(unittest.TestCase):
         self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
         self.assertEqual(len(self.api('draft_psy','GET',f'/api/patients/{patient}')['consultations']),1)
 
+    def test_x2_shift_binding_survives_midnight_until_explicit_close(self):
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        yesterday=(dt.date.today()-dt.timedelta(days=1)).isoformat()
+        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',f"DELETE FROM shift_days WHERE shift_date='{yesterday}'; UPDATE shift_days SET shift_date='{yesterday}' WHERE shift_date=current_date::text;"])
+        self.api('admin','POST','/api/users',{'name':'Нічний Психолог','login':'нічний_психолог','password':'3','role':'psychologist'})
+        code,auth=self.call('POST','/api/login',{'login':'нічний_психолог','password':'3','platform':'Android','device_id':'night-shift-phone'})
+        self.assertEqual(code,200,auth);self.assertTrue(auth['user']['shift_bound']);self.assertEqual(auth['user']['shift_date'],yesterday)
+        code,shift=self.call('GET','/api/shift-day',token=auth['token']);self.assertEqual(code,200);self.assertEqual(shift['shift_date'],yesterday)
+        subprocess.check_call(['psql',self.database,'-v','ON_ERROR_STOP=1','-c',f"UPDATE appointments SET status='no_show' WHERE substr(start,1,10)='{yesterday}' AND status IN ('scheduled','confirmed'); UPDATE mobile_devices SET pending_count=0,blocked_count=0,last_seen_epoch=extract(epoch from now())::bigint;"])
+        self.api('admin','POST','/api/shift-day',{'action':'close'})
+        self.assertEqual(self.call('GET','/api/me',token=auth['token'])[0],401)
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+
     def test_x_shift_device_binding_short_ukrainian_login_and_profile(self):
         self.api('admin','POST','/api/shift-day',{'action':'open'})
         first=self.api('admin','POST','/api/users',{'name':'Психолог Перший По батькові','login':'психолог_перший','password':'1','role':'psychologist'})['id']

@@ -526,7 +526,7 @@ class MainActivity : Activity() {
         account.addView(number); val status = caption(if(cached.optBoolean("shift_bound")) "● На зміні" else "○ Поза зміною"); status.setTextColor(forest); account.addView(status)
         account.addView(secondary("Змінити пароль") { passwordScreen() }); body.addView(account)
         val connection = card(); connection.addView(title("Підключення",20f)); val serverLabel = title(cached.optString("server_name","Сервер центру"),18f); connection.addView(serverLabel)
-        connection.addView(caption(server)); connection.addView(caption(if(offlineMode) "○ Офлайн" else "● Онлайн"))
+        connection.addView(caption(server)); val connectionState=caption(if(offlineMode) "○ Офлайн" else "Перевіряємо підключення…");connection.addView(connectionState)
         val counters = PhoneNetworkStats.snapshot(this,server)
         connection.addView(caption("RX: ${counters.first} відповідей  ·  TX: ${counters.second} запитів"))
         connection.addView(caption("Помилки підключення та запитів: ${counters.third}")); connection.addView(secondary("Перевірити підключення") { informationScreen() }); body.addView(connection)
@@ -534,8 +534,8 @@ class MainActivity : Activity() {
         device.addView(caption((Build.MANUFACTURER + " " + Build.MODEL).trim()))
         device.addView(caption("ID: " + (Settings.Secure.getString(contentResolver,Settings.Secure.ANDROID_ID) ?: "Не визначено"))); body.addView(device)
         mount(scroll(body))
-        apiAsync("GET","/api/me",onError={ connection.addView(caption("Сервер поки не підтвердив підключення.")) }) { result ->
-            val profile = result as JSONObject; prefs.edit().putString("profile:$server:$userId",profile.toString()).apply()
+        apiAsync("GET","/api/me",onError={ connectionState.text="○ Сервер недоступний" }) { result ->
+            val profile = result as JSONObject; connectionState.text="● Онлайн"; prefs.edit().putString("profile:$server:$userId",profile.toString()).apply()
             name.text=profile.optString("name",userName);number.text="Працівник № " + profile.optString("staff_number",String.format(java.util.Locale.ROOT,"%04d",userId))
             status.text=if(profile.optBoolean("shift_bound")) "● На зміні" else "○ Поза зміною";serverLabel.text=profile.optString("server_name","Сервер центру")
         }
@@ -889,7 +889,7 @@ class MainActivity : Activity() {
             if(resultCode == RESULT_OK) {
                 @Suppress("DEPRECATION") val uri = data?.getParcelableExtra<android.net.Uri>(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
                 prefs.edit().putString("consultation_ringtone",uri?.toString() ?: "").apply();AppointmentReminders.channel(this)
-                Toast.makeText(this,"Мелодію збережено",Toast.LENGTH_SHORT).show()
+                Toast.makeText(this,"Мелодію збережено",Toast.LENGTH_SHORT).show(); settingsDetailsScreen("Оповіщення")
             }
             return
         }
@@ -994,7 +994,7 @@ class MainActivity : Activity() {
             } catch(e: Exception) {
                 runOnUiThread {
                     if(isDestroyed || server != base) return@runOnUiThread
-                    if(unavailable(e) && cachedUser.optString("shift_date") == LocalDate.now().toString()) {
+                    if(unavailable(e) && cachedUser.optString("shift_date") in listOf(LocalDate.now().toString(),LocalDate.now().minusDays(1).toString())) {
                         token = savedToken; role = "psychologist"; userId = uid; userName = cachedUser.optString("name"); offlineMode = true
                         renderHomeScreen()
                     } else { if(e is ApiError && e.status == 401) store.revokeSession(); loginScreen() }
@@ -1902,6 +1902,9 @@ class MainActivity : Activity() {
         when(section) {
             "Оповіщення" -> {
         body.addView(title("Оповіщення", 20f))
+        val tone=prefs.getString("consultation_ringtone",null)
+        val toneName=if(tone==null) "Мелодія SOLVIA" else if(tone.isBlank()) "Без звуку" else runCatching { android.media.RingtoneManager.getRingtone(this,android.net.Uri.parse(tone))?.getTitle(this) }.getOrNull() ?: "Обрана мелодія"
+        body.addView(caption("Поточна мелодія: $toneName"))
         body.addView(secondary("Вибрати мелодію консультації") {
             val picker = Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER)
                 .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION or android.media.RingtoneManager.TYPE_ALARM)
