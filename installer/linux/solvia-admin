@@ -61,8 +61,28 @@ case ${1:-help} in
     journalctl -u solvia -n 40 --no-pager; exit 1 ;;
   network) /opt/solvia/sync-network.sh; cat /etc/solvia/address ;;
   status) systemctl status solvia --no-pager ;;
-  logs) journalctl -u solvia -n 100 --no-pager ;;
-  restart) systemctl restart solvia; "$0" health ;;
+  logs)
+    case ${2:-} in
+      '') journalctl -u solvia -u solvia-http -n 100 --no-pager ;;
+      --follow) journalctl -u solvia -u solvia-http -n 50 --follow ;;
+      *) echo 'sudo solvia-admin logs [--follow]' >&2; exit 1 ;;
+    esac ;;
+  start|restart)
+    # Starting the HTTPS service first also runs network/TLS preparation.
+    # Restore the maintenance timers after an explicit operator stop.
+    systemctl "${1}" solvia.service solvia-http.service
+    "$0" health
+    systemctl start solvia-network.timer solvia-certificate.timer
+    printf 'Сервер працює: https://%s:8443\n' "$(cat /etc/solvia/address)"
+    echo 'Термінал можна закрити. Журнал: sudo solvia-admin logs --follow' ;;
+  stop)
+    # The DHCP monitor can restart an enabled server, so stop it first.
+    # Backup scheduling and PostgreSQL remain available.
+    systemctl stop solvia-network.timer solvia-certificate.timer
+    systemctl stop solvia-network-refresh.service solvia-network.service solvia-certificate.service
+    systemctl stop solvia-http.service solvia.service
+    echo 'Сервер зупинено. Запуск: sudo solvia-admin start'
+    echo 'Після перезавантаження ПК штатний автозапуск увімкне сервер.' ;;
   version) cat /opt/solvia/VERSION 2>/dev/null || echo "unknown" ;;
   check-update) /usr/local/sbin/solvia-updater check ;;
   update) /usr/local/sbin/solvia-updater apply ;;
@@ -125,5 +145,5 @@ SQL
     echo '== DATABASE =='; "$0" db-status
     echo '== BACKUPS =='; "$0" backups | head -5
     ;;
-  *) echo 'sudo solvia-admin {health|network|status|logs|restart|version|check-update|update|backup|backups|verify-backup FILE|db-status|doctor|restore FILE}' ;;
+  *) echo 'sudo solvia-admin {start|stop|restart|health|network|status|logs [--follow]|version|check-update|update|backup|backups|verify-backup FILE|db-status|doctor|restore FILE}' ;;
 esac

@@ -8,6 +8,15 @@ printf 'admin\nАдміністратор CI\nCI-password-long-2026\nCI-password
 sudo systemctl is-enabled solvia solvia-http solvia-backup.timer solvia-certificate.timer solvia-network.timer
 sudo systemctl is-active solvia solvia-http
 sudo solvia-admin health
+# Terminal controls must stop both listeners and the monitor that could restart them.
+sudo solvia-admin stop
+for unit in solvia solvia-http solvia-network.timer solvia-network-refresh.service solvia-certificate.timer; do
+  if sudo systemctl is-active --quiet "$unit"; then echo "Still active after stop: $unit"; exit 1; fi
+done
+sudo systemctl is-active postgresql@16-solvia solvia-backup.timer
+sudo solvia-admin start
+sudo systemctl is-active solvia solvia-http solvia-network.timer solvia-certificate.timer
+sudo solvia-admin health
 sudo bash tests/linux-updater.sh
 sudo test -x /usr/local/bin/solvia-admin-app
 sudo test -x /usr/local/sbin/solvia-updater
