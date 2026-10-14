@@ -190,7 +190,7 @@ try {
   await page.getByLabel('Стан',{exact:true}).selectOption('achieved');
   await page.getByLabel('Спостереження',{exact:true}).fill('Синтетична оцінка виконання');
   await page.getByRole('button',{name:'Зберегти оцінку',exact:true}).click();
-  await page.getByText('Синтетична оцінка виконання',{exact:true}).waitFor();
+  await page.locator('.progress-entry').getByText('Синтетична оцінка виконання',{exact:true}).waitFor();
   await page.screenshot({path:'out/design/desktop-progress.png',fullPage:true});
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
   await page.getByRole('button',{name:'Адміністрування',exact:true}).click();

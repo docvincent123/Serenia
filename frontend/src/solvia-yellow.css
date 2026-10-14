@@ -52,3 +52,9 @@ input:focus,select:focus,textarea:focus { border-color:#c7970c; box-shadow:0 0 0
 .progress-entry {border-bottom:1px solid #ddd;padding:16px 0;}
 .progress-entry .badge {margin-left:12px;}
 button:focus-visible,a:focus-visible {outline:3px solid #987500;outline-offset:3px;}
+
+.device-card.device-health-card {grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px 20px;}
+.device-health-card>.device-main {min-width:0;}
+.device-health-card>span:last-child {grid-column:1/-1;color:#59616d;font-size:14px;}
+.stat-card:first-child {background:#fff8df;border-color:#edda95;}
+@media(max-width:1050px){.device-card.device-health-card {grid-template-columns:minmax(0,1fr);} .device-health-card>.visit-status {justify-self:start;}}
