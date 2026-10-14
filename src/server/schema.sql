@@ -544,3 +544,17 @@ ALTER TABLE attendees ADD COLUMN IF NOT EXISTS visit_status TEXT NOT NULL DEFAUL
 ALTER TABLE attendees ADD COLUMN IF NOT EXISTS exclusion_reason TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE mobile_devices ADD COLUMN IF NOT EXISTS last_seen_epoch BIGINT NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS staff_messages(
+ id BIGSERIAL PRIMARY KEY,
+ sender_id BIGINT NOT NULL REFERENCES users(id),
+ recipient_id BIGINT NOT NULL REFERENCES users(id),
+ device_id TEXT NOT NULL DEFAULT '',
+ body TEXT NOT NULL,
+ client_key TEXT NOT NULL,
+ created TEXT NOT NULL,
+ delivered_at TEXT,
+ read_at TEXT,
+ UNIQUE(sender_id,client_key)
+);
+CREATE INDEX IF NOT EXISTS idx_staff_messages_recipient ON staff_messages(recipient_id,id);

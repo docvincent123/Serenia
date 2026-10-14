@@ -544,6 +544,45 @@ class Scenario(unittest.TestCase):
         self.assertIsNone(self.api('draft_psy','GET',path)['payload'])
         self.assertEqual(len(self.api('draft_psy','GET',f'/api/patients/{patient}')['consultations']),1)
 
+    def test_y_staff_message_device_scope_and_receipts(self):
+        def login(role, device):
+            code, auth = self.call('POST','/api/login',{'login':role,'password':self.passwords[role],'platform':'Android','device_id':device,'device_name':device})
+            self.assertEqual(code,200,auth)
+            return auth['token'], auth['user']['id']
+        admin,_=login('admin','staff-desktop')
+        psy,uid=login('psychologist','staff-phone')
+        second,_=login('psychologist','staff-other-phone')
+        rec,_=login('reception','staff-reception')
+        def call(token,method,path,body=None,status=200):
+            code,result=self.call(method,path,body,token)
+            self.assertEqual(code,status,result)
+            return result
+        call(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'test','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''})
+        people=call(rec,'GET','/api/staff/recipients')
+        self.assertTrue(any(p['id']==uid and any(d['device_id']=='staff-phone' for d in p['devices']) for p in people))
+        call(psy,'GET','/api/staff/recipients',status=403)
+        payload={'recipient_id':uid,'device_id':'staff-phone','body':'Службове тестове повідомлення','client_key':'staff-test-message'}
+        call(psy,'POST','/api/staff/messages',payload,status=403)
+        call(admin,'POST','/api/staff/messages',{**payload,'device_id':'unknown-phone'},status=400)
+        message=call(admin,'POST','/api/staff/messages',payload)
+        again=call(admin,'POST','/api/staff/messages',payload)
+        self.assertEqual(message['id'],again['id'])
+        call(admin,'POST','/api/staff/messages',{**payload,'body':'Змінений текст'},status=409)
+        self.assertTrue(any(m['id']==message['id'] for m in call(psy,'GET','/api/staff/messages')))
+        self.assertFalse(any(m['id']==message['id'] for m in call(second,'GET','/api/staff/messages')))
+        path=f"/api/staff/messages/{message['id']}"
+        call(second,'POST',path+'/read',{},status=404)
+        call(rec,'POST',path+'/read',{},status=403)
+        call(psy,'POST',path+'/delivered',{})
+        sent=next(m for m in call(admin,'GET','/api/staff/messages') if m['id']==message['id'])
+        self.assertIsNotNone(sent['delivered_at']); self.assertIsNone(sent['read_at'])
+        call(psy,'POST',path+'/read',{})
+        read=next(m for m in call(admin,'GET','/api/staff/messages') if m['id']==message['id'])
+        self.assertIsNotNone(read['read_at'])
+        call(psy,'POST',path+'/read',{})
+        call(admin,'POST','/api/staff/messages',{**payload,'device_id':'','client_key':'staff-all-phones'})
+        self.assertTrue(any(m['client_key']=='staff-all-phones' for m in call(second,'GET','/api/staff/messages')))
+
     def test_z_security_inputs_and_rate_limit(self):
         # Authentication checks work even if a browser or forged caller bypasses UI.
         for login in ("' OR '1'='1",'admin\x00extra'):

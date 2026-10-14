@@ -57,6 +57,17 @@ class OfflineSyncJob : JobService() {
                     val report = DeviceStatus.payload(this, base, uid)
                     val response = send(base, auth, report, "/api/mobile-status")
                     DeviceStatus.acknowledge(this, base, uid, report, response)
+                    val messages = get(base, auth, "/api/staff/messages") as JSONArray
+                    if(!cancelled.get() && store.session()?.optString("token") == auth) {
+                        val unread = (0 until messages.length()).map { messages.getJSONObject(it) }.filter { it.isNull("read_at") }
+                        for(message in unread.filter { it.isNull("delivered_at") }) {
+                            if(cancelled.get() || store.session()?.optString("token") != auth) break
+                            send(base, auth, JSONObject(), "/api/staff/messages/${message.optLong("id")}/delivered")
+                        }
+                        if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size())
+                        else StaffMessageNotifications.clear(this)
+                    }
+
                 }
                 val queue = store.queue()
                 retry = authorized && ((0 until queue.length()).any { queue.getJSONObject(it).optString("state") == "pending" } ||

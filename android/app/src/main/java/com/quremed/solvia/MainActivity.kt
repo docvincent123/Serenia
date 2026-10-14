@@ -92,7 +92,7 @@ class MainActivity : Activity() {
     private var homeAppointmentsRefresh: ((JSONArray) -> Unit)? = null
     private var appointmentRefreshRunning = false
     private val syncTick = object : Runnable {
-        override fun run() { syncNow(); refreshAppointments(); if(token.isNotBlank()) updates.check(); syncHandler.postDelayed(this, 60000) }
+        override fun run() { syncNow(); refreshAppointments(); if(token.isNotBlank()) { updates.check(); refreshStaffMessages() }; syncHandler.postDelayed(this, 60000) }
     }
     private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
     private fun offlineStore() = OfflineStore(this, server, userId)
@@ -437,9 +437,23 @@ class MainActivity : Activity() {
         mount(scroll(body))
     }
 
+    private fun refreshStaffMessages() {
+        if(token.isBlank() || offlineMode) return
+        apiAsync("GET", "/api/staff/messages", onError = {}) { value ->
+            val rows = value as JSONArray
+            val unread = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { it.isNull("read_at") }
+            unread.filter { it.isNull("delivered_at") }.forEach { message ->
+                apiAsync("POST", "/api/staff/messages/${message.optLong("id")}/delivered", JSONObject(), onError = {}) {}
+            }
+            if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size())
+        }
+    }
+
     private fun messagesScreen() {
         selectedNavigation = "messages"; backAction = { homeScreen() }
         val body = root(); body.addView(topBar("Повідомлення", ::homeScreen))
+        body.addView(title("Від команди центру", 18f))
+        val staff = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(staff)
         body.addView(title("Передавання записів", 18f))
         val queue = offlineStore().queue()
         val pending = (0 until queue.length()).map { queue.getJSONObject(it) }.filter { it.optString("state") in listOf("pending", "blocked") }
@@ -456,6 +470,28 @@ class MainActivity : Activity() {
         val notices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(notices)
         body.addView(secondary("Оновити повідомлення") { syncNow(); messagesScreen() })
         mount(scroll(body))
+        apiAsync("GET", "/api/staff/messages", onError = { staff.addView(caption("Повідомлення недоступні без зв’язку із сервером.")) }) { value ->
+            val rows = value as JSONArray
+            if(rows.length() == 0) staff.addView(caption("Службових повідомлень поки немає."))
+            for(i in 0 until rows.length()) {
+                val message = rows.getJSONObject(i)
+                val row = card(); row.addView(title(message.optString("sender"), 18f))
+                row.addView(caption(message.optString("created").replace('T', ' ')))
+                row.addView(caption(message.optString("body")))
+                if(message.isNull("delivered_at")) apiAsync("POST", "/api/staff/messages/${message.optLong("id")}/delivered", JSONObject(), onError = {}) {}
+                if(message.isNull("read_at")) {
+                    val read = secondary("Підтвердити прочитання") {}
+                    read.setOnClickListener {
+                        read.isEnabled = false
+                        apiAsync("POST", "/api/staff/messages/${message.optLong("id")}/read", JSONObject(), onError = { read.isEnabled = true; showError(it) }) {
+                            read.text = "Прочитано"; StaffMessageNotifications.clear(this)
+                        }
+                    }
+                    row.addView(read)
+                } else row.addView(caption("✓ Прочитано"))
+                staff.addView(row)
+            }
+        }
         apiAsync("GET", "/api/appointments?date=" + LocalDate.now(), onError = { notices.addView(caption("Нагадування поки недоступні. Перевірте підключення.")) }) { result ->
             val rows = result as JSONArray; var count = 0
             for(i in 0 until rows.length()) {
@@ -741,6 +777,7 @@ class MainActivity : Activity() {
 
     override fun onNewIntent(next: Intent) {
         super.onNewIntent(next); setIntent(next)
+        if(next.getBooleanExtra("staff_messages", false) && token.isNotBlank()) { messagesScreen(); return }
         next.data?.let { uri ->
             if(token.isNotBlank()) Toast.makeText(this, "Для зміни сервера спочатку вийдіть із профілю.", Toast.LENGTH_LONG).show()
             else importServerConfig(uri)
@@ -986,7 +1023,8 @@ class MainActivity : Activity() {
         offlineStore().saveSession(user, token)
         prefs.edit().putLong("offline_user:$server", userId).apply()
         OfflineSyncJob.schedule(this, server, userId)
-        homeScreen(); updates.check()
+        if(intent.getBooleanExtra("staff_messages", false)) { intent.removeExtra("staff_messages"); messagesScreen() } else homeScreen()
+        updates.check()
         AppointmentReminders.channel(this)
         if(Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 4200)
@@ -1756,6 +1794,7 @@ class MainActivity : Activity() {
 
     private fun logout() {
         ShiftNotifications.clear(this)
+        StaffMessageNotifications.clear(this)
         consultationWindow?.dismiss(); consultationWindow = null
         AppointmentReminders.cancel(this)
         val oldToken = token

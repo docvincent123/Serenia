@@ -1,3 +1,4 @@
+import StaffMessages from './StaffMessages.jsx';
 import {backupNeedsAttention} from './backup-status.mjs';
 import {DeviceHealth,ShiftReadiness,Addenda,PatientProgress} from './Operations.jsx';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -104,6 +105,7 @@ function AppIcon({ name, size = 18 }) {
     team: <><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/><circle cx="12" cy="7" r="4"/></>,
     rooms: <><path d="M4 21V4a1 1 0 0 1 1-1h11v18"/><path d="M16 8h4v13M8 7h4M8 11h4M8 15h4"/><path d="M3 21h18"/></>,
     reports: <><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
+    'staff-messages': <><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M7 18v3l4-3M7 9h10M7 13h6"/></>,
     devices: <><rect x="3" y="4" width="13" height="10" rx="2"/><path d="M8 20h3M9.5 14v6"/><rect x="17" y="8" width="4" height="9" rx="1"/></>,
     workload: <><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/><path d="M2 21h22"/></>,
     supervisions: <><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 21a6 6 0 0 1 12 0M13 21a5 5 0 0 1 9 0"/><path d="M14 4l2 2 4-4"/></>,
@@ -357,6 +359,7 @@ function navFor(role) {
       ['patients', 'Пацієнти'],
       ['families', 'Сім’ї'],
       ['team', 'Команда'],
+      ['staff-messages', 'Повідомлення'],
       ['rooms', 'Кабінети'],
       ['reports', 'Звіти психологів'],
       ['workload', 'Навантаження'],
@@ -367,9 +370,9 @@ function navFor(role) {
       ['audit', 'Журнал дій']
     ];
   }
-  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
+  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['staff-messages', 'Повідомлення'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
   if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
-  return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
+  return [['staff-messages', 'Повідомлення'], ['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
 }
 
 
@@ -377,7 +380,7 @@ const navigationGroups = [
   ['overview', 'Огляд', ['dashboard']],
   ['appointments', 'Прийоми', ['shift-workspace', 'calendar', 'waiting-list']],
   ['patients', 'Пацієнти та супровід', ['patients', 'families', 'archive']],
-  ['team', 'Команда', ['team', 'rooms', 'supervisions']],
+  ['team', 'Команда', ['team', 'rooms', 'supervisions', 'staff-messages']],
   ['reports', 'Звіти та аналітика', ['reports', 'workload']],
   ['administration', 'Адміністрування', ['devices', 'audit']]
 ];
@@ -387,7 +390,7 @@ function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
   const [expanded, setExpanded] = useState(() => new Set([groupFor(active)]));
   useEffect(() => { setExpanded(current => new Set([...current, groupFor(active)])); }, [active]);
   function item(key, label) {
-    return <button key={key} disabled={locked} aria-current={active === key ? 'page' : undefined}
+    return <button key={key} disabled={locked && key !== 'staff-messages'} aria-current={active === key ? 'page' : undefined}
       className={`nav-item ${active === key ? 'active' : ''}`} onClick={() => onNavigate(key)}>
       <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
     </button>;
@@ -2585,7 +2588,7 @@ function Rooms({ api }) {
   );
 }
 
-function Devices({ api }) {
+function Devices({ api, onMessage }) {
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState('');
 
@@ -2617,7 +2620,7 @@ function Devices({ api }) {
         actions={<Button variant="secondary" onClick={load}>Оновити</Button>}
       />
       {error && <div className="alert error">{error}</div>}
-      <DeviceHealth api={api} />
+      <DeviceHealth api={api} onMessage={onMessage} />
       <div className="stat-grid">
         <article className="stat-card"><strong>{sessions.length}</strong><h3>Активних сесій</h3><p>До завершення входу або 8 годин</p></article>
         <article className="stat-card"><strong>{online}</strong><h3>Онлайн зараз</h3><p>Активність протягом останніх 2 хвилин</p></article>
@@ -3671,6 +3674,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
   const [readiness,setReadiness]=useState(null);
+  const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '2.4.0' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
@@ -3689,7 +3693,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
   function openPatient(id) { if(page !== 'patient-card') setPatientOrigin(page); setPatientId(id); setPage('patient-card'); setMenuOpen(false); }
-  function navigate(target) { setPatientId(null); setPage(target); setMenuOpen(false); }
+  function navigate(target) { if(target !== 'staff-messages') setMessageTarget(null); setPatientId(null); setPage(target); setMenuOpen(false); }
 
   async function loadShift() {
     try {
@@ -3742,7 +3746,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'workload') return <Workload api={api} />;
     if (page === 'supervisions') return <Supervisions api={api} role={user.role} user={user} />;
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
-    if (page === 'devices') return <Devices api={api} />;
+    if (page === 'staff-messages') return <StaffMessages api={api} initialRecipient={messageTarget?.user_id} initialDevice={messageTarget?.device_id} />;
+    if (page === 'devices') return <Devices api={api} onMessage={target=>{setMessageTarget(target);navigate('staff-messages');}} />;
     if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
     if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />;
     if (page === 'audit') return <Audit api={api} />;
@@ -3807,12 +3812,13 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
                 <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
               </div>
             </div>
+            {['admin','reception','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           </div>
         </>}
         <div className="workspace-inner">
           {readiness && <ShiftReadiness data={readiness} />}{shiftError && <div className="alert error">{shiftError}</div>}
-          {!shift && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && !(user.role === 'admin' && page === 'settings') ? (
+          {!shift && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
               <div className="eyebrow">ЩОДЕННЕ ВІДКРИТТЯ ЦЕНТРУ</div>

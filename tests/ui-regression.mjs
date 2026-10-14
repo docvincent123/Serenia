@@ -18,12 +18,13 @@ const server = createServer(async (req,res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, ...(process.env.SOLVIA_CHROMIUM_EXECUTABLE ? {executablePath:process.env.SOLVIA_CHROMIUM_EXECUTABLE,args:['--no-sandbox','--disable-dev-shm-usage']} : {}) });
 await mkdir('out/design', { recursive: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 600 } });
   await page.emulateMedia({reducedMotion:'reduce'});
   const errors = []; page.on('pageerror', error => errors.push(error.message));
+  let staffMessages = [], staffCalls = 0;
   let open = true, waiting = [], currentUser = { id:1,name:'Адміністратор · тест',role:'admin' };
   let draft = { version:0,payload:null }, draftOffline = false, loseConsultationResponse = true;
   const consultations = [];const progress=[];
@@ -54,6 +55,10 @@ try {
       if(method==='POST'){progress.unshift({...route.request().postDataJSON(),id:1,author:'Тестовий психолог',created:'2026-10-14T10:00'});data={id:1};}else data=progress;
     }
     else if(path==='/api/consultations/44/addenda'&&method==='POST') {const b=route.request().postDataJSON();consultations[0].addenda=[{...b,id:1,author:'Тестовий психолог',created:'2026-10-14T10:00'}];data={id:1};}
+    else if(path==='/api/staff/recipients') data=[{id:3,name:'Тестовий психолог',phone:'+380501234567',devices:[{device_id:'synthetic',device_name:'Тестовий телефон',online:true}]}];
+    else if(path==='/api/staff/messages') {
+      if(method==='POST'){staffCalls++;const b=route.request().postDataJSON();staffMessages.unshift({...b,id:staffCalls,created:'2026-10-14T10:00',delivered_at:null,read_at:null});data={id:staffCalls};} else data=staffMessages;
+    }
     else if(path==='/api/admin/devices') data=[{user_id:3,device_id:'synthetic',device_name:'Тестовий телефон',name:'Тестовий психолог',version_code:34,version_name:'3.2.0',last_seen:'2026-10-14T10:00',last_sync:'2026-10-14T09:59',pending_count:2,blocked_count:0,fresh:false}];
     else if(path==='/api/users') data=[{id:3,name:'Тестовий психолог',role:'psychologist',active:true}];
     else if (path === '/api/patients/10/draft') {
@@ -85,7 +90,21 @@ try {
     const box = await target.boundingBox(); assert(box && box.y >= 0 && box.y+box.height <= 600, 'Account actions must be in the visible viewport');
   }
   await page.screenshot({ path:'out/design/desktop-dashboard.png',fullPage:true });
-  await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Написати психологу',exact:true}).click();
+  await page.getByRole('heading',{name:'Повідомлення психологам',exact:true}).waitFor();
+  await page.getByRole('button',{name:/Тестовий психолог/}).click();
+  await page.getByLabel('Куди надіслати',{exact:true}).selectOption('synthetic');
+  await page.getByLabel('Повідомлення',{exact:true}).fill('Пацієнт прибув. Зверніться до реєстратури.');
+  await page.getByRole('button',{name:'Надіслати повідомлення',exact:true}).click();
+  await page.getByText('Очікує отримання',{exact:true}).waitFor();
+  assert.equal(staffCalls,1);assert.equal(staffMessages[0].recipient_id,3);assert.equal(staffMessages[0].device_id,'synthetic');
+  staffMessages[0].delivered_at='2026-10-14T10:01';staffMessages[0].read_at='2026-10-14T10:02';
+  await page.getByText('✓✓ Прочитано',{exact:true}).waitFor();
+  await page.setViewportSize({width:1366,height:900});
+  await page.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.workspace')?.scrollTo(0,0);});
+  await page.screenshot({path:'out/design/desktop-messages.png',fullPage:true});
+  await page.setViewportSize({width:1280,height:600});
+    await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   await page.screenshot({ path:'out/design/desktop-settings.png',fullPage:true });
   await page.locator('.settings-nav').getByRole('button',{name:/Оновлення Android/}).click();
   await page.getByRole('heading',{name:'Оновлення Android',exact:true}).waitFor();

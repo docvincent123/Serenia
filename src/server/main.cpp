@@ -207,6 +207,7 @@ for(auto&pid:ids)d.query("INSERT INTO attendees VALUES(?,?)",{id,pid});audit(d,u
 
 #include "care_features.h"
 #include "operations.h"
+#include "staff_messages.h"
 
 struct App{DB db;std::mutex mutex;std::map<std::string,std::vector<long long>> attempts;explicit App(const std::string&file):db(file){}
 void checkAttempts(const std::string&key){
@@ -256,6 +257,7 @@ if(path=="/api/settings/workflow"){
     db.query("UPDATE sessions SET expires=LEAST(expires,?)",{epoch()+hours*3600});
     audit(db,u,"update","workflow_settings",1);return policy;
 }
+if(path=="/api/staff/recipients"||path=="/api/staff/messages"||std::regex_match(path,std::regex("/api/staff/messages/[0-9]+/(delivered|read)")))return staffMessages(db,u,r,b,token);
 if(u["role"]!="admin"&&path!="/api/shift-day"&&path!="/api/mobile-update"&&path!="/api/mobile-update/apk"&&path!="/api/mobile-status"){auto day=now().substr(0,10);auto openShift=db.query("SELECT shift_date FROM shift_days WHERE shift_date=? AND closed_at IS NULL",{day});check(!openShift.empty(),"Робоча зміна ще не відкрита або вже завершена адміністратором",423);}
 if(path=="/api/mobile-status"||path=="/api/admin/devices"||path=="/api/shift-readiness"||std::regex_match(path,std::regex("/api/appointments/[0-9]+/(start|attendance)"))||std::regex_match(path,std::regex("/api/consultations/[0-9]+/addenda"))||std::regex_match(path,std::regex("/api/patients/[0-9]+/progress")))return operations(db,u,r,b,token);
 if(path=="/api/admin/sessions"&&method=="GET"){allow(u,{"admin"});db.query("DELETE FROM sessions WHERE expires<?",{epoch()});return db.query("SELECT s.token session_id,s.user_id,u.name,u.role,s.platform,s.device_id,s.device_name,s.ip_address,s.created,s.last_seen,s.expires,(s.last_seen::timestamp >= now()-interval '2 minutes') online FROM sessions s JOIN users u ON u.id=s.user_id ORDER BY online DESC,s.last_seen DESC");}
