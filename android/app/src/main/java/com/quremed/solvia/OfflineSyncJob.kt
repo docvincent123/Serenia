@@ -64,7 +64,7 @@ class OfflineSyncJob : JobService() {
                             if(cancelled.get() || store.session()?.optString("token") != auth) break
                             send(base, auth, JSONObject(), "/api/staff/messages/${message.optLong("id")}/delivered")
                         }
-                        if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size())
+                        if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size)
                         else StaffMessageNotifications.clear(this)
                     }
 
