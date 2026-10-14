@@ -438,6 +438,7 @@ class Scenario(unittest.TestCase):
         updated=next(c for c in self.api(admin,'GET',f'/api/patients/{pid}')['consultations'] if c['id']==own['id'])
         self.assertEqual(updated['note'],own['note'])
         self.assertEqual(len(updated['addenda']),1)
+        self.api(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':1,'blocked_count':0,'error_code':'pending'})
         readiness=self.api(admin,'GET','/api/shift-readiness')
         self.assertFalse(readiness['ready'])
         self.api(admin,'POST','/api/shift-day',{'action':'close'},status=409)
