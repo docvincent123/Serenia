@@ -650,7 +650,7 @@ class Scenario(unittest.TestCase):
             uid=self.api('admin','POST','/api/users',{'name':f'Synthetic load {i}','login':login,'password':'synthetic-load-password','role':'psychologist'})['id']
             room=self.api('admin','POST','/api/rooms',{'name':f'Synthetic load room {i}','code':f'LOAD{i}','type':'individual','capacity':1,'description':'CI only'})['id']
             pid=self.api('admin','POST','/api/patients',{'name':f'Synthetic load patient {i}','phone':f'+38000888{i:04d}','dob':'1990-01-01','category':'Інше','psychologist_id':uid})['id']
-            code,account=self.call('POST','/api/login',{'login':login,'password':'synthetic-load-password','device_id':f'load-device-{i}','device_name':'Synthetic load','platform':'Android','device_id':'other-test-phone'})
+            code,account=self.call('POST','/api/login',{'login':login,'password':'synthetic-load-password','device_id':f'load-device-{i}','device_name':'Synthetic load','platform':'Android'})
             self.assertEqual(code,200,account)
             staff.append((i,uid,room,pid,account['token']))
         durations=[]
