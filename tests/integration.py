@@ -95,6 +95,10 @@ class Scenario(unittest.TestCase):
         self.api(admin,'POST','/api/mobile-update',{**release,'version_code':99},status=409)
         self.api(admin,'POST','/api/mobile-update',{**release,'package_name':'com.other.app'},status=400)
         self.api(psy,'GET','/api/mobile-update/apk?sha=../secret',status=400)
+        self.api(admin,'POST','/api/mobile-update',{**release,'rollout_user_ids':[3]})
+        self.assertTrue(self.api(psy,'GET','/api/mobile-update')['available'])
+        self.assertFalse(self.api(rec,'GET','/api/mobile-update')['available'])
+        self.api(admin,'POST','/api/mobile-update',{**release,'rollout_user_ids':[]})
         shift=self.api(admin,'GET','/api/shift-day')
         self.assertFalse(shift['open'])
         shift=self.api(admin,'POST','/api/shift-day',{'action':'open'})
@@ -165,6 +169,12 @@ class Scenario(unittest.TestCase):
         self.assertEqual(first['started_at'],self.api(psy,'POST',f'/api/appointments/{arrival_id}/start',{'patient_id':pid})['started_at'])
         self.assertEqual(first['started_at'],next(x for x in self.api(rec,'GET','/api/shift-workspace') if x['appointment_id']==arrival_id)['started_at'])
         self.api(rec,'GET','/api/admin/devices',status=403)
+        self.api(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':1,'blocked_count':0,'error_code':'pending'})
+        self.assertFalse(self.api(admin,'GET','/api/shift-readiness')['ready'])
+        report=next(d for d in self.api(admin,'GET','/api/admin/devices') if d['user_id']==3)
+        self.assertEqual(report['pending_count'],1)
+        self.assertTrue(report['fresh'])
+        self.api(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'error_code':''})
         self.api(director,'GET','/api/shift-readiness',status=403)
         self.api(rec,'POST',f'/api/patients/{pid}/progress',{},status=403)
         self.api(psy,'POST',f'/api/patients/{pid}/progress',{'goal':'Synthetic goal','status':'in_progress','observation':'Synthetic progress'})
@@ -423,8 +433,8 @@ class Scenario(unittest.TestCase):
         readiness=self.api(admin,'GET','/api/shift-readiness')
         self.assertFalse(readiness['ready'])
         self.api(admin,'POST','/api/shift-day',{'action':'close'},status=409)
-        for aid in {x['appointment_id'] for x in readiness['unfinished']}:
-            self.api(admin,'PATCH',f'/api/appointments/{aid}',{'status':'no_show','cancellation_reason':'Synthetic shift cleanup'})
+        for row in readiness['unfinished']:
+            self.api(admin,'PATCH',f"/api/appointments/{row['appointment_id']}/attendance",{'patient_id':row['patient_id'],'status':'no_show','reason':'Synthetic shift cleanup'})
         for who in readiness['unknown_psychologists']:
             login='psychologist' if who['id']==3 else 'other'
             password=self.passwords['psychologist'] if who['id']==3 else 'long-test-password'

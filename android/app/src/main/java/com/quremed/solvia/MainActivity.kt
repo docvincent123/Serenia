@@ -1052,7 +1052,7 @@ class MainActivity : Activity() {
                 payload.optLong("appointment_id") == item.optLong("id") && payload.optLong("patient_id") == patient.optLong("id") && it.optString("state") in listOf("pending", "blocked", "sent")
             }?.optString("state") ?: ""
             fun completed(item: JSONObject, patient: JSONObject) = VisitState.completed(patient.optString("completed_at"), item.optString("status"), localState(item, patient))
-            fun active(item: JSONObject, patient: JSONObject) = !completed(item,patient) && item.optString("status") in listOf("scheduled", "confirmed")
+            fun active(item: JSONObject, patient: JSONObject) = patient.optString("visit_status").isBlank() && !completed(item,patient) && item.optString("status") in listOf("scheduled", "confirmed")
             fun render(tab: String) {
                 selectedNavigation = if(tab == "completed") "archive" else "home"
                 pageTitle.text = if(tab == "completed") "Архів зміни" else "Активні консультації"
@@ -1408,7 +1408,7 @@ class MainActivity : Activity() {
                 if(appointment.optLong("id") in queuedAppointments) continue
                 val patients = appointment.optJSONArray("patients") ?: JSONArray()
                 for (j in 0 until patients.length()) {
-                    if (patients.getJSONObject(j).optLong("id") == patientId && patients.getJSONObject(j).optString("completed_at").isBlank()) {
+                    if (patients.getJSONObject(j).optLong("id") == patientId && patients.getJSONObject(j).optString("completed_at").isBlank() && patients.getJSONObject(j).optString("visit_status").isBlank()) {
                         eligible.add(appointment)
                         break
                     }

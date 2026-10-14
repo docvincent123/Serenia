@@ -55,7 +55,7 @@ object ShiftNotifications {
                     row.optString("state") in listOf("pending", "blocked", "sent") &&
                         payload.optLong("appointment_id") == id && payload.optLong("patient_id") == patient.optLong("id")
                 }
-                if(patient.optString("completed_at").isBlank() && !finished) remaining++
+                if(patient.optString("visit_status").isBlank() && patient.optString("completed_at").isBlank() && !finished) remaining++
             }
             count += remaining
             val start = a.optString("start")

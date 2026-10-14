@@ -1,6 +1,6 @@
 export function visitState(row) {
   if (row.completed_at) return 'completed';
-  if (['cancelled', 'no_show', 'rescheduled'].includes(row.status)) return 'excluded';
+  if (['cancelled','no_show'].includes(row.visit_status)||['cancelled', 'no_show', 'rescheduled'].includes(row.status)) return 'excluded';
   if (row.status === 'draft') return 'draft';
   if(row.started_at) return 'in_progress';
   return row.arrived_at ? 'arrived' : 'expected';

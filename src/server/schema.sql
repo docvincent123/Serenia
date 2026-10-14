@@ -539,3 +539,8 @@ CREATE TABLE IF NOT EXISTS mobile_devices(
  error_code TEXT NOT NULL DEFAULT '',
  PRIMARY KEY(user_id,device_id)
 );
+
+ALTER TABLE attendees ADD COLUMN IF NOT EXISTS visit_status TEXT NOT NULL DEFAULT '';
+ALTER TABLE attendees ADD COLUMN IF NOT EXISTS exclusion_reason TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE mobile_devices ADD COLUMN IF NOT EXISTS last_seen_epoch BIGINT NOT NULL DEFAULT 0;

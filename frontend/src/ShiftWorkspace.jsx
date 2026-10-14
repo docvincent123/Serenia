@@ -53,9 +53,9 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }
   }
   async function exclude(row,status) {
     const reason=window.prompt(status==='no_show'?'Причина неявки / коментар':'Причина скасування');
-    if(reason===null || actionLock.current) return;
+    if(!reason?.trim() || actionLock.current) return;
     actionLock.current=true;setBusy(true);setError('');
-    try {await api('PATCH',`/api/appointments/${row.appointment_id}`,{status,cancellation_reason:reason});await loadRef.current();}
+    try {await api('PATCH',`/api/appointments/${row.appointment_id}/attendance`,{patient_id:row.patient_id,status,reason});await loadRef.current();}
     catch(e){setError(e.message);}finally{actionLock.current=false;setBusy(false);}
   }
   return <div className="shift-workspace">

@@ -66,7 +66,7 @@ object AppointmentReminders {
             val patients = a.optJSONArray("patients") ?: JSONArray()
             val unfinished = (0 until patients.length()).any { n ->
                 val patient = patients.getJSONObject(n)
-                patient.optString("completed_at").isBlank() && !(0 until queue.length()).any { j ->
+                patient.optString("visit_status").isBlank() && patient.optString("completed_at").isBlank() && !(0 until queue.length()).any { j ->
                     val row = queue.getJSONObject(j); val payload = row.getJSONObject("payload")
                     payload.optLong("appointment_id") == id && payload.optLong("patient_id") == patient.optLong("id") &&
                         row.optString("state") in listOf("pending", "blocked", "sent")
