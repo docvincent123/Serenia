@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {backupNeedsAttention} from '../frontend/src/backup-status.mjs';
+const now=Date.parse('2026-10-14T16:00:00Z');
+const copy={action:'backup',status:'success',created:'2026-10-14T15:00:00+00'};
+assert.equal(backupNeedsAttention([copy],now),false,'Actual PostgreSQL short UTC offset must be accepted');
+assert.equal(backupNeedsAttention([{...copy,created:'2026-10-14T15:00:00+00:00'}],now),false);
+assert.equal(backupNeedsAttention([{action:'verify',status:'failed'},copy],now),true);
+assert.equal(backupNeedsAttention([{...copy,created:'2026-10-12T15:00:00+00'}],now),true);
+assert.equal(backupNeedsAttention([{...copy,created:'invalid'}],now),true);
+assert.equal(backupNeedsAttention([],now),true);
+console.log('PASS: actual PostgreSQL backup timestamps, failed restore checks and stale copies');

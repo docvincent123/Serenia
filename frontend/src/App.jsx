@@ -1,3 +1,4 @@
+import {backupNeedsAttention} from './backup-status.mjs';
 import {DeviceHealth,ShiftReadiness,Addenda,PatientProgress} from './Operations.jsx';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
@@ -2702,7 +2703,7 @@ function ServerMaintenance({ api, apiBase }) {
       <p>{system?.lan_url || apiBase}</p>
       <p>{platform === 'linux' ? 'systemd + PostgreSQL + HTTPS. Критичні root-операції виконуються локально на сервері.' : 'Обслуговування виконує адміністратор на сервері.'}</p>
       <Button variant="secondary" onClick={loadSystem}>Оновити діагностику</Button>
-      {system && (!system.backups?.some(x=>x.action==='backup'&&x.status==='success'&&new Date()-new Date(x.created)<36*3600000) || system.backups?.[0]?.status==='failed') && <div className="alert error" role="alert">Резервна копія потребує перевірки: немає свіжої успішної копії або остання операція завершилася помилкою.</div>}
+      {system && backupNeedsAttention(system.backups) && <div className="alert error" role="alert">Резервна копія потребує перевірки: немає свіжої успішної копії або остання операція завершилася помилкою.</div>}
       {systemError && <p className="danger-text">{systemError}</p>}
     </article>
 

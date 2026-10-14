@@ -55,6 +55,7 @@ jobs:
           node tests/auth-session.mjs
           node tests/drafts.mjs
           node tests/shift-workspace.mjs
+          node tests/backup-status.mjs
 
       - name: Build React interface
         shell: pwsh
@@ -198,6 +199,7 @@ jobs:
           python3 tests/network-address.py
           node tests/auth-session.mjs
           node tests/drafts.mjs
+          node tests/backup-status.mjs
 
       - name: Stage Linux server installer
         run: |
