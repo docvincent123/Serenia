@@ -151,6 +151,7 @@ class NativeWorkflowTest {
                 val root = activity.window.decorView
                 assertEquals(2, views(root).filterIsInstance<EditText>().size)
                 val labels = views(root).filterIsInstance<Button>().map { it.text.toString() }
+                assertFalse(labels.contains("Архів зміни"))
                 assertEquals(listOf("Увійти"), labels)
                 button(root, "Увійти").performClick()
                 assertTrue(views(root).filterIsInstance<TextView>().any { it.text.toString() == "Введіть логін і пароль." })
@@ -186,8 +187,9 @@ class NativeWorkflowTest {
                 }
                 MainActivity::class.java.getDeclaredMethod("moreScreen").apply { isAccessible = true }.invoke(activity)
                 val root = activity.window.decorView
-                assertNotNull(button(root, "Повідомлення")); assertNotNull(button(root, "Налаштування")); assertNotNull(button(root, "Мій профіль")); assertNull(button(root, "Архів зміни"))
+                assertNotNull(button(root, "Повідомлення")); assertNotNull(button(root, "Налаштування")); assertNotNull(button(root, "Мій профіль"))
                 val labels = views(root).filterIsInstance<Button>().map { it.text.toString() }
+                assertFalse(labels.contains("Архів зміни"))
                 assertFalse(labels.any { it.contains("центру") || it.contains("Пристрої") || it.contains("очікування") })
                 assertFalse(labels.any { it in listOf("Розклад", "Чернетки", "Мої чернетки", "Завершити зміну", "Усі функції", "Активні", "Меню", "Пацієнти", "Документи пацієнтів") })
                 assertEquals(android.graphics.Color.rgb(246,194,44), MobileUi.accent)

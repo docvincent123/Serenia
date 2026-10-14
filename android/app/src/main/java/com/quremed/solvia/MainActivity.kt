@@ -1020,7 +1020,7 @@ class MainActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT; threshold = 0
             val history = runCatching { JSONArray(prefs.getString("login_history:$server", "[]")) }.getOrDefault(JSONArray())
             setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, (0 until history.length()).map { history.getString(it) }))
-            setText(prefs.getString("last_login:$server", "")); setOnClickListener { showDropDown() }
+            setText(prefs.getString("last_login:$server", ""),false); setOnClickListener { (adapter as android.widget.ArrayAdapter<*>).filter.filter(null) { showDropDown() } }
             isSingleLine = true; imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_NEXT
             setAutofillHints(View.AUTOFILL_HINT_USERNAME)
         }
