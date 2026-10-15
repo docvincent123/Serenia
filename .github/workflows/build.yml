@@ -259,6 +259,7 @@ jobs:
         run: |
           node tests/ui-regression.mjs
           node tests/reception-booking.mjs
+          node tests/desktop-system.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:

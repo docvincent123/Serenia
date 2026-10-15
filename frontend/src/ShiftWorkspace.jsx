@@ -66,10 +66,9 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
   }
   return <div className="shift-workspace">
     <header className="page-head"><div><div className="eyebrow">РОБОЧИЙ СПИСОК ЦЕНТРУ</div><h1>Прийоми за зміну</h1>
-      <p>Прибуття, психолог і результат прийому — в одному робочому списку.</p></div>
+      <p>Запис, прибуття та перебіг прийомів.</p></div>
       <div className="page-actions">
-        <button className="button secondary" onClick={()=>onCreatePatient(day)}>+ Новий пацієнт</button><button className="button primary" onClick={()=>onBook({date:day})}>+ Записати на прийом</button></div></header>
-    <div className="reception-day-actions"><strong>Реєстратура</strong><span>Пацієнт → запис → прибуття</span><button type="button" className="booking-text-action" onClick={openCalendar}>Відкрити календар</button></div>
+        <button className="button secondary" onClick={openCalendar}>Відкрити календар</button><button className="button secondary" onClick={()=>onCreatePatient(day)}>+ Новий пацієнт</button><button className="button primary" onClick={()=>onBook({date:day})}>+ Записати на прийом</button></div></header>
     <div className="shift-summary" aria-label="Підсумок зміни">
       <article><span>Активні прийоми</span><strong>{counts.active}</strong></article>
       <article><span>У центрі</span><strong>{counts.arrived}</strong></article>

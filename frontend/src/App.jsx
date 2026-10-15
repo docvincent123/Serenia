@@ -7,6 +7,8 @@ import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from '
 import WaitingList from './WaitingList.jsx';
 import ShiftWorkspace from './ShiftWorkspace.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
+import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
+import {navFor,navigationGroups} from './workspace-model.mjs';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -105,6 +107,7 @@ function AppIcon({ name, size = 18 }) {
     families: <><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M13.5 20a5 5 0 0 1 7.5-4.3"/></>,
     team: <><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/><circle cx="12" cy="7" r="4"/></>,
     rooms: <><path d="M4 21V4a1 1 0 0 1 1-1h11v18"/><path d="M16 8h4v13M8 7h4M8 11h4M8 15h4"/><path d="M3 21h18"/></>,
+    discharges: <><path d="M6 3h9l5 5v13H4V3zM14 3v6h6M8 13h8M8 17h5"/></>,
     reports: <><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
     'staff-messages': <><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M7 18v3l4-3M7 9h10M7 13h6"/></>,
     devices: <><rect x="3" y="4" width="13" height="10" rx="2"/><path d="M8 20h3M9.5 14v6"/><rect x="17" y="8" width="4" height="9" rx="1"/></>,
@@ -350,42 +353,6 @@ async function request(base, token, method, path, body) {
   return data;
 }
 
-function navFor(role) {
-  if (role === 'admin') {
-    return [
-      ['dashboard', 'Огляд центру'],
-      ['shift-workspace', 'Прийоми за зміну'],
-      ['calendar', 'Календар'],
-      ['waiting-list', 'Лист очікування'],
-      ['patients', 'Пацієнти'],
-      ['families', 'Сім’ї'],
-      ['team', 'Команда'],
-      ['staff-messages', 'Повідомлення'],
-      ['rooms', 'Кабінети'],
-      ['reports', 'Звіти психологів'],
-      ['discharges', 'Виписки'],
-      ['workload', 'Навантаження'],
-      ['supervisions', 'Супервізії'],
-      ['archive', 'Архів'],
-      ['devices', 'Пристрої'],
-      ['settings', 'Налаштування'],
-      ['audit', 'Журнал дій']
-    ];
-  }
-  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['staff-messages', 'Повідомлення'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
-  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
-  return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії'], ['discharges', 'Виписки'], ['staff-messages', 'Повідомлення']];
-}
-
-
-const navigationGroups = [
-  ['overview', 'Огляд', ['dashboard']],
-  ['appointments', 'Прийоми', ['shift-workspace', 'calendar', 'waiting-list']],
-  ['patients', 'Пацієнти та супровід', ['patients', 'families', 'archive']],
-  ['team', 'Команда', ['team', 'rooms', 'supervisions', 'staff-messages']],
-  ['reports', 'Звіти та аналітика', ['reports', 'workload', 'discharges']],
-  ['administration', 'Адміністрування', ['devices', 'audit']]
-];
 function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
   const active = page === 'patient-card' ? 'patients' : page;
   const groupFor = key => navigationGroups.find(([, , keys]) => keys.includes(key))?.[0];
@@ -457,7 +424,7 @@ function Spinner() {
   return <div className="spinner" aria-label="Завантаження" />;
 }
 
-function Dialog({ title, subtitle, onClose, children, wide = false }) {
+function Dialog({ title, subtitle, onClose, children, wide = false, error = '' }) {
   const panel = useRef(null), dirty = useRef(false), closeRef = useRef(onClose);
   closeRef.current = onClose;
   function close() {
@@ -485,7 +452,7 @@ function Dialog({ title, subtitle, onClose, children, wide = false }) {
         onKeyDown={keyDown} onChangeCapture={() => { dirty.current = true; }} onMouseDown={e => e.stopPropagation()}>
         <div className="dialog-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
           <IconButton onClick={close} aria-label="Закрити"><AppIcon name="close" /></IconButton></div>
-        <div className="dialog-body">{children}</div>
+        <div className="dialog-body">{error && <div className="alert error" role="alert">{error}</div>}{children}</div>
       </div>
     </div>
   );
@@ -626,7 +593,8 @@ function RoleActions({ role, onNavigate }) {
     <button key={page} onClick={() => onNavigate(page)}><span className="role-action-icon"><AppIcon name={page} /></span><span><strong>{title}</strong><small>{description}</small></span><span aria-hidden="true">↗</span></button>)}</section>;
 }
 
-function Dashboard({ api }) {
+function Dashboard({ api, role, onNavigate, access }) {
+  const [system,setSystem]=useState(null);
   const [stats, setStats] = useState(null);
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(localDate());
@@ -635,7 +603,8 @@ function Dashboard({ api }) {
   async function load() {
     setError('');
     try {
-      setStats(await api('GET', `/api/stats?from=${from}&to=${to}`));
+      const [data,status]=await Promise.all([api('GET', `/api/stats?from=${from}&to=${to}`),role==='admin'?api('GET','/api/admin/system').catch(()=>null):Promise.resolve(null)]);
+      setStats(data);setSystem(status);
     } catch (e) {
       setError(e.message);
     }
@@ -661,14 +630,14 @@ function Dashboard({ api }) {
   return (
     <>
       <PageHead
-        eyebrow="КЕРІВНИЦТВО"
+        eyebrow={role==='admin'?'АДМІНІСТРАТОР':'КЕРІВНИК ЦЕНТРУ'}
         title="Огляд центру"
-        subtitle="Операційна статистика без доступу до приватних нотаток психологів."
+        subtitle={role==='admin'?'Пацієнти, команда та щоденна робота центру.':'Результати роботи центру та завантаження спеціалістів.'}
         actions={
           <div className="date-range">
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <input aria-label="Початок періоду" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             <span>—</span>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <input aria-label="Кінець періоду" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             <Button variant="secondary" onClick={load}>Оновити</Button>
           </div>
         }
@@ -677,16 +646,16 @@ function Dashboard({ api }) {
       {error && <div className="alert error">{error}</div>}
       {!stats ? <Spinner /> : (
         <>
-          <div className="stat-grid">
-            {cards.map(([label, value, hint], index) => (
-              <article className="stat-card" key={label}>
-                <div className="stat-index">0{index + 1}</div>
-                <strong>{value}</strong>
-                <h3>{label}</h3>
-                <p>{hint}</p>
-              </article>
-            ))}
+          <div className="overview-primary" aria-label="Основні показники">
+            {[cards[1],cards[4],cards[6],cards[3]].map(([label,value,hint],i)=><article className="overview-kpi" key={label}><span className="overview-kpi-icon"><AppIcon name={['patients','calendar','reports','families'][i]} /></span><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></article>)}
           </div>
+          <div className="overview-workbench">
+            <section className="surface overview-actions"><div className="section-head"><div><h2>Робочі дії</h2><p>Перейдіть до потрібного розділу.</p></div></div><RoleActions role={role} onNavigate={onNavigate} /></section>
+            <section className="surface overview-status"><div className="section-head"><h2>{role==='admin'?'Стан центру':'Документи та команда'}</h2></div>
+              {role==='admin'?<><div className="overview-status-row"><span>Реєстратура</span><strong className={access?.allowed?'status-positive':'status-pending'}>{access?.allowed?'Доступ надано':'Очікує дозволу'}</strong></div><div className="overview-status-row"><span>База даних</span><strong>{system?.database?.name || 'Стан не завантажено'}</strong></div><div className="overview-status-row"><span>Резервна копія</span><strong>{!system?.backups?.length?'Немає даних':system.backups[0].status==='success'?system.backups[0].created?.slice(0,16).replace('T',' '):'Потребує перевірки'}</strong></div><button className="button secondary" onClick={()=>onNavigate('devices')}>Стан пристроїв</button></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
+            </section>
+          </div>
+          <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
           <section className="surface">
             <div className="section-head">
@@ -701,7 +670,7 @@ function Dashboard({ api }) {
               <div className="load-list">
                 {stats.load.map((item) => {
                   const hours = Number(item.hours || 0);
-                  const width = Math.min(100, hours * 5);
+                  const width = Math.max(0,Math.min(100,hours / Math.max(1,...stats.load.map(x=>Number(x.hours || 0))) * 100));
                   return (
                     <div className="load-row" key={item.name}>
                       <div className="avatar">{String(item.name || '?').slice(0, 1).toUpperCase()}</div>
@@ -744,21 +713,22 @@ function Dashboard({ api }) {
 function Calendar({ api, role, openPatient, onBook, initialDate }) {
   const [date, setDate] = useState(initialDate || localDate());
   const [appointments, setAppointments] = useState([]);
+  const [loading,setLoading]=useState(true);
+  const generation=useRef(0);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const canSchedule = role === 'admin' || role === 'reception';
 
   async function load(targetDate = date) {
-    setError('');
+    const request=++generation.current;setLoading(true);setError('');
     try {
-      setAppointments(await api('GET', `/api/appointments?date=${targetDate}`));
-      setSelected(null);
-    } catch (e) {
-      setError(e.message);
-    }
+      const result=await api('GET', `/api/appointments?date=${targetDate}`);
+      if(request===generation.current){setAppointments(result);setSelected(null);}
+    } catch(e){if(request===generation.current)setError(e.message);}
+    finally{if(request===generation.current)setLoading(false);}
   }
 
-  useEffect(() => { load(date); }, [date]);
+  useEffect(() => { load(date);return()=>{++generation.current;}; }, [date]);
 
   function openNew() { onBook({date}); }
   function openEdit() { if(selected) onBook({date:selected.start.slice(0,10),appointmentId:selected.id}); }
@@ -813,7 +783,7 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
             <Badge tone="stone">{appointments.length} подій</Badge>
           </div>
 
-          {!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
+          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
             <div className="appointment-list">
               {appointments.map((item) => (
                 <button
@@ -899,6 +869,7 @@ function Patients({ api, role, openPatient, onBook, createRequest, onCreateReque
   const [patients, setPatients] = useState([]);
   const [families, setFamilies] = useState([]);
   const [meta, setMeta] = useState({ psychologists: [], categories: [] });
+  const [view,setView]=useState(role==='psychologist'?'cards':'table');
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState(false);
   const [error, setError] = useState('');
@@ -1016,35 +987,11 @@ function Patients({ api, role, openPatient, onBook, createRequest, onCreateReque
             <span><AppIcon name="search" /></span>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук за №, ПІБ, телефоном, категорією…" />
           </div>
-          <Badge tone="stone">{filtered.length} записів</Badge>
+          <span className="directory-total">Знайдено: {filtered.length}</span><ViewSwitch value={view} onChange={setView} />
         </div>
 
         {!filtered.length ? <Empty title="Нічого не знайдено" text="Спробуйте змінити запит або створіть нового пацієнта." /> : (
-          <div className="patient-card-list">
-            {filtered.map((p) => (
-              <div className="patient-entry" key={p.id}><button className="patient-list-card" onClick={() => openPatient(p.id)}>
-                <span className="patient-card-accent" />
-                <span className="patient-card-head">
-                  <span className="avatar patient-avatar">{p.name.slice(0, 1).toUpperCase()}</span>
-                  <span className="patient-card-name">
-                    <small>ПАЦІЄНТ · №{p.patient_no || '—'}</small>
-                    <strong>{p.name}</strong>
-                    <span>{p.phone}</span>
-                  </span>
-                  <span className="patient-card-arrow">↗</span>
-                </span>
-                <span className="patient-card-tags">
-                  <Badge tone={categoryTone[p.category] || 'stone'}>{p.category}</Badge>
-                </span>
-                <span className="patient-card-meta">
-                  <span><small>ПСИХОЛОГ</small><strong>{p.psychologist || 'Не призначено'}</strong></span>
-                  <span><small>СІМ’Я</small><strong>{p.family || 'Без сімейного зв’язку'}</strong></span>
-                </span>
-              </button>
-              {canCreate && <div className="patient-entry-actions"><Button variant="secondary" onClick={()=>onBook({patientId:p.id,date:localDate()})}><AppIcon name="calendar" /> Записати на консультацію</Button></div>}
-              </div>
-            ))}
-          </div>
+          <PatientDirectory rows={filtered} view={view} onOpen={openPatient} onBook={canCreate?onBook:null} />
         )}
       </section>
 
@@ -2112,7 +2059,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
   );
 }
 
-function Families({ api }) {
+function Families({ api, openPatient }) {
   const [families, setFamilies] = useState([]);
   const [patients, setPatients] = useState([]);
   const [name, setName] = useState('');
@@ -2156,7 +2103,7 @@ function Families({ api }) {
               <h3>{f.name}</h3>
               <p>{members.length} учасників</p>
               <div className="family-members">
-                {members.length ? members.map((m) => <span key={m.id}>{m.name}<small>{m.family_role || m.category}</small></span>) : <small>Ще немає учасників</small>}
+                {members.length ? members.map((m) => <button className="family-member-link" key={m.id} onClick={()=>openPatient(m.id)}>{m.name}<small>{m.family_role || m.category}</small></button>) : <small>Ще немає учасників</small>}
               </div>
             </article>
           );
@@ -2165,7 +2112,7 @@ function Families({ api }) {
       {!families.length && <section className="surface"><Empty title="Сімей ще немає" text="Створіть сім’ю, а потім оберіть її в картці нового пацієнта." /></section>}
 
       {dialog && (
-        <Dialog title="Нова сім’я" onClose={() => setDialog(false)}>
+        <Dialog error={error} title="Нова сім’я" onClose={() => setDialog(false)}>
           <form onSubmit={createFamily}>
             <Field label="Назва сім’ї" full><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Напр. Родина Коваленків" required /></Field>
             <div className="form-actions"><Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button><Button type="submit">Створити</Button></div>
@@ -2181,6 +2128,8 @@ function Team({ api, currentUser }) {
   const [dialog, setDialog] = useState('');
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
+  const [query,setQuery]=useState(''),[roleFilter,setRoleFilter]=useState('');
+  const visible=users.filter(u=>(!roleFilter||u.role===roleFilter)&&[u.name,u.login,u.phone].some(v=>String(v||'').toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk'))));
   const emptyForm = { name: '', login: '', phone: '', password: '', role: 'psychologist', active: true };
   const [form, setForm] = useState(emptyForm);
 
@@ -2190,12 +2139,14 @@ function Team({ api, currentUser }) {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
+    setError('');
     setForm(emptyForm);
     setEditing(null);
     setDialog('create');
   }
 
   function openEdit(user) {
+    setError('');
     setEditing(user);
     setForm({
       name: user.name || '',
@@ -2249,8 +2200,9 @@ function Team({ api, currentUser }) {
       />
       {error && <div className="alert error">{error}</div>}
       <section className="surface">
+        <div className="toolbar"><div className="search-box"><AppIcon name="search"/><input aria-label="Пошук працівника" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Ім’я, логін або телефон" /></div><select className="toolbar-select" aria-label="Роль працівника" value={roleFilter} onChange={e=>setRoleFilter(e.target.value)}><option value="">Усі ролі</option>{Object.entries(roleLabels).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select><span className="directory-total">Знайдено: {visible.length}</span></div>
         <div className="team-grid">
-          {users.map((u) => (
+          {visible.map((u) => (
             <article className="team-card" key={u.id}>
               <button className="team-card-main" onClick={() => openEdit(u)}>
                 <div className="avatar">{u.name.slice(0, 1).toUpperCase()}</div>
@@ -2260,8 +2212,8 @@ function Team({ api, currentUser }) {
                   <small>{u.phone || 'Телефон не вказано'}</small>
                 </div>
               </button>
-              <div className="team-state">
-                <Badge tone={u.active ? 'forest' : 'stone'}>{roleLabels[u.role] || u.role}</Badge>
+              <div className="team-state"><Button variant="secondary" onClick={()=>openEdit(u)}>Редагувати</Button>
+                <Badge tone="stone">{roleLabels[u.role] || u.role}</Badge><Badge tone={u.active?'forest':'stone'}>{u.active?'Активний':'Вимкнений'}</Badge>
                 <small>{Number(u.active_sessions || 0) ? `${u.active_sessions} активн. сес. · ${u.platforms || 'Unknown'}` : 'Немає активної сесії'}</small>
                 {Number(u.active_sessions || 0) > 0 && Number(u.id) !== Number(currentUser?.id) && (
                   <Button variant="danger" onClick={() => terminateSessions(u)}>Завершити сесію</Button>
@@ -2270,10 +2222,11 @@ function Team({ api, currentUser }) {
             </article>
           ))}
         </div>
+        {!visible.length && <Empty title="Працівників не знайдено" text="Змініть пошук або додайте працівника." />}
       </section>
 
       {dialog && (
-        <Dialog title={dialog === 'create' ? 'Новий працівник' : 'Керування працівником'} subtitle={dialog === 'edit' ? `@${editing?.login}` : 'Створення облікового запису'} onClose={() => setDialog('')}>
+        <Dialog error={error} title={dialog === 'create' ? 'Новий працівник' : 'Керування працівником'} subtitle={dialog === 'edit' ? `@${editing?.login}` : 'Створення облікового запису'} onClose={() => setDialog('')}>
           <form className="form-grid" onSubmit={saveUser}>
             <Field label="ПІБ" full>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -2321,6 +2274,8 @@ function Rooms({ api }) {
   const [dialog, setDialog] = useState('');
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
+  const [query,setQuery]=useState(''),[statusFilter,setStatusFilter]=useState('');
+  const visible=rooms.filter(r=>(!statusFilter||(statusFilter==='active'?r.active:!r.active))&&[r.name,r.code,r.description].some(v=>String(v||'').toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk'))));
   const emptyForm = { name: '', code: '', type: 'individual', capacity: 1, description: '', active: true };
   const [form, setForm] = useState(emptyForm);
 
@@ -2331,11 +2286,13 @@ function Rooms({ api }) {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
+    setError('');
     setEditing(null);
     setForm(emptyForm);
     setDialog('create');
   }
   function openEdit(room) {
+    setError('');
     setEditing(room);
     setForm({
       name: room.name || '',
@@ -2382,8 +2339,9 @@ function Rooms({ api }) {
         actions={<Button onClick={openCreate}>+ Додати приміщення</Button>}
       />
       {error && <div className="alert error">{error}</div>}
+      <section className="surface directory-toolbar-surface"><div className="toolbar"><div className="search-box"><AppIcon name="search"/><input aria-label="Пошук кабінету" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Назва, номер або опис кабінету"/></div><select className="toolbar-select" aria-label="Статус кабінету" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">Усі кабінети</option><option value="active">Активні</option><option value="inactive">Неактивні</option></select><span className="directory-total">Знайдено: {visible.length}</span></div></section>
       <div className="room-grid">
-        {rooms.map((r, i) => (
+        {visible.map((r, i) => (
           <article className={`room-card ${r.active ? '' : 'room-inactive'}`} key={r.id}>
             <span>{String(i + 1).padStart(2, '0')}</span>
             <div className="room-card-main">
@@ -2393,16 +2351,16 @@ function Rooms({ api }) {
             </div>
             <div className="room-actions">
               <Badge tone={r.active ? 'forest' : 'stone'}>{r.active ? 'Активний' : 'Неактивний'}</Badge>
-              <IconButton onClick={() => openEdit(r)} title="Редагувати"><AppIcon name="edit" /></IconButton>
-              <IconButton onClick={() => removeRoom(r)} title="Видалити"><AppIcon name="delete" /></IconButton>
+              <IconButton onClick={() => openEdit(r)} title="Редагувати" aria-label={`Редагувати ${r.name}`}><AppIcon name="edit" /></IconButton>
+              <IconButton onClick={() => removeRoom(r)} title="Видалити" aria-label={`Видалити ${r.name}`}><AppIcon name="delete" /></IconButton>
             </div>
           </article>
         ))}
       </div>
-      {!rooms.length && <section className="surface"><Empty title="Приміщень немає" text="Додайте перший кабінет або зал." /></section>}
+      {!visible.length && <section className="surface"><Empty title={rooms.length?'Кабінетів не знайдено':'Приміщень немає'} text={rooms.length?'Змініть пошук або фільтр.':'Додайте перший кабінет або зал.'} /></section>}
 
       {dialog && (
-        <Dialog title={dialog === 'create' ? 'Нове приміщення' : 'Редагування приміщення'} onClose={() => setDialog('')} wide>
+        <Dialog error={error} title={dialog === 'create' ? 'Нове приміщення' : 'Редагування приміщення'} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveRoom}>
             <Field label="Назва" full><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
             <Field label="Код / номер"><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="101 / A-3" /></Field>
@@ -3418,7 +3376,7 @@ function Supervisions({ api, role, user }) {
       </section>
 
       {dialog === 'create' && leader && (
-        <Dialog title="Нова супервізія" subtitle="Планування зустрічі" onClose={() => setDialog('')}>
+        <Dialog error={error} title="Нова супервізія" subtitle="Планування зустрічі" onClose={() => setDialog('')}>
           <form className="form-grid" onSubmit={create}>
             <Field label="Психолог" full>
               <select value={form.psychologist_id} onChange={(e) => setForm({ ...form, psychologist_id: e.target.value })} required>
@@ -3434,7 +3392,7 @@ function Supervisions({ api, role, user }) {
       )}
 
       {dialog === 'edit' && selected && (
-        <Dialog title="Супервізія" subtitle={selected.psychologist + ' · ' + (selected.scheduled_at || '').replace('T',' ')} onClose={() => setDialog('')} wide>
+        <Dialog error={error} title="Супервізія" subtitle={selected.psychologist + ' · ' + (selected.scheduled_at || '').replace('T',' ')} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveEdit}>
             <Field label="Деідентифікований опис випадку" hint="Не вказуйте ПІБ, телефон, адресу, номер картки або інші прямі ідентифікатори." full>
               <textarea rows="7" value={edit.case_summary} onChange={(e) => setEdit({ ...edit, case_summary: e.target.value })} />
@@ -3459,6 +3417,8 @@ function Supervisions({ api, role, user }) {
 
 function Archive({ api, openPatient }) {
   const [rows, setRows] = useState([]);
+  const [query,setQuery]=useState(''),[view,setView]=useState('table');
+  const visible=rows.filter(p=>[p.name,p.patient_no,p.phone,p.category,p.psychologist].some(v=>String(v || '').toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk'))));
   const [error, setError] = useState('');
   async function load() {
     try { setRows(await api('GET', '/api/patients?status=archived')); setError(''); }
@@ -3471,24 +3431,9 @@ function Archive({ api, openPatient }) {
       <PageHead eyebrow="ІСТОРІЯ ЦЕНТРУ" title="Архів пацієнтів" subtitle="Завершені курси не видаляються. При повторному зверненні відкривається новий курс у тій самій картці." actions={<Button variant="secondary" onClick={load}>Оновити</Button>} />
       {error && <div className="alert error">{error}</div>}
       <section className="surface">
-        {!rows.length ? <Empty title="Архів порожній" text="Після завершення курсу картка пацієнта з’явиться тут." /> : (
-          <div className="patient-card-list">
-            {rows.map((p) => (
-              <button className="patient-list-card" key={p.id} onClick={() => openPatient(p.id)}>
-                <span className="patient-card-accent" />
-                <span className="patient-card-head">
-                  <span className="avatar patient-avatar">{p.name.slice(0,1).toUpperCase()}</span>
-                  <span className="patient-card-name"><small>АРХІВ · №{p.patient_no}</small><strong>{p.name}</strong><span>{p.phone}</span></span>
-                  <span className="patient-card-arrow">↗</span>
-                </span>
-                <span className="patient-card-meta">
-                  <span><small>КАТЕГОРІЯ</small><strong>{p.category}</strong></span>
-                  <span><small>ПСИХОЛОГ</small><strong>{p.psychologist}</strong></span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="toolbar"><div className="search-box"><AppIcon name="search"/><input aria-label="Пошук в архіві" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="ПІБ, номер картки або телефон" /></div><span className="directory-total">Знайдено: {visible.length}</span><ViewSwitch value={view} onChange={setView}/></div>
+        {!visible.length?<Empty title={rows.length?'Нічого не знайдено':'Архів порожній'} text={rows.length?'Змініть пошук.':'Після завершення курсу картка пацієнта з’явиться тут.'}/>:<PatientDirectory rows={visible} view={view} onOpen={openPatient} archived />}
+
       </section>
     </>
   );
@@ -3631,10 +3576,10 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
-    if (page === 'dashboard') return <><RoleActions role={user.role} onNavigate={navigate} /><Dashboard api={api} /></>;
+    if (page === 'dashboard') return <Dashboard api={api} role={user.role} onNavigate={navigate} access={receptionAccess} />;
     if (page === 'calendar') return <Calendar key={bookingVersion} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={bookingResult?.date} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} onBook={startBooking} createRequest={createRequest} onCreateRequestConsumed={()=>setCreateRequest(null)} />;
-    if (page === 'families') return <Families api={api} />;
+    if (page === 'families') return <Families api={api} openPatient={openPatient} />;
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports key={shift?.shift_date} api={api} role={user.role} shiftDate={shift?.shift_date} />;
@@ -3690,7 +3635,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         </div>
       </aside>
 
-      <main className="workspace">
+      <main className="workspace" data-page={page}>
         <header className="mobile-app-header"><button className="mobile-menu-button" aria-label="Відкрити меню" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}><AppIcon name="menu" /><span>Меню</span></button><strong>{activePageLabel}</strong></header>
         {shift?.open && (
           <div className="shift-bar">
@@ -3704,7 +3649,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           <ReminderBar api={api} role={user.role} />
           <div className="workspace-topbar">
             <div className="topbar-context">
-              <div><small>{roleLabels[user.role]}</small><strong>{activePageLabel}</strong></div>
+              <div className="workspace-breadcrumb"><small>{roleLabels[user.role]}</small><strong>{activePageLabel}</strong></div>
               <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase}>
                 <span className="connection-led" />
                 <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
@@ -3712,6 +3657,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
             </div>
             {['admin','reception','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
+            <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
           </div>
         </>}
         {bookingIntent && !locked && <AppointmentBooking api={api} initial={bookingIntent} Modal={Dialog} onClose={()=>setBookingIntent(null)} onSaved={booked} onCreatePatient={date=>registerPatient(date,true)} />}
