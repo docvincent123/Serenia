@@ -167,7 +167,7 @@ class MainActivity : Activity() {
     private fun refreshAppointments() {
         if(token.isBlank() || role != "psychologist" || appointmentRefreshRunning) return
         appointmentRefreshRunning = true
-        val base = server; val auth = token; val uid = userId
+        val base = server; val auth = token; val uid = userId; val shiftDay = currentShiftDate()
         cacheIo.execute {
             try {
                 val store = OfflineStore(this, base, uid)
@@ -176,15 +176,15 @@ class MainActivity : Activity() {
                 if(!shift.optBoolean("open")) {
                     if(token == auth && server == base) { AppointmentReminders.cancelScope(this, base, uid); ShiftNotifications.refresh(this, base, uid) }
                 } else {
-                    for(day in 0..1) {
-                        val path = "/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())
+                    for(day in listOf(shiftDay, LocalDate.now().toString(), LocalDate.now().plusDays(1).toString()).distinct()) {
+                        val path = "/api/appointments?date=" + day
                         store.saveCache(path, requestAt(base, "GET", path, authToken = auth))
                     }
                     if(token == auth && server == base) {
                         AppointmentReminders.refreshFromCache(this, base, uid)
                         runOnUiThread {
                             if(token == auth && server == base && workspaceReady && consultationWindow == null && selectedNavigation in listOf("home", "archive"))
-                                homeAppointmentsRefresh?.invoke(store.cache("/api/appointments?date=" + LocalDate.now()) as? JSONArray ?: JSONArray())
+                                homeAppointmentsRefresh?.invoke(store.cache("/api/appointments?date=" + currentShiftDate()) as? JSONArray ?: JSONArray())
                         }
                     }
                 }
@@ -211,8 +211,9 @@ class MainActivity : Activity() {
     }
     private fun warmCache(base: String, auth: String, store: OfflineStore) {
         val ids = mutableSetOf<Long>(); val directory = JSONArray()
-        for(day in 0..7) {
-            val path = "/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())
+        val days = (listOf(currentShiftDate()) + (0..7).map { LocalDate.now().plusDays(it.toLong()).toString() }).distinct()
+        for(day in days) {
+            val path = "/api/appointments?date=" + day
             val rows = requestAt(base, "GET", path, authToken = auth) as JSONArray
             store.saveCache(path, rows)
             for(i in 0 until rows.length()) {
@@ -1133,6 +1134,12 @@ class MainActivity : Activity() {
         mount(scroll(body))
     }
 
+    private fun currentShiftDate(): String {
+        val profile = runCatching { JSONObject(prefs.getString("profile:$server:$userId", "{}")) }.getOrDefault(JSONObject())
+        val day = profile.optString("shift_date")
+        return ShiftDate.resolve(day)
+    }
+
     private fun renderHomeScreen(initialTab: String = "active") {
         homeAppointmentsRefresh = null
         workspaceReady = true; selectedNavigation = if(initialTab == "completed") "archive" else "home"; backAction = null
@@ -1154,7 +1161,7 @@ class MainActivity : Activity() {
             }
         })
         mount(homeScroll)
-        if(role != "director") apiAsync("GET", "/api/appointments?date=" + LocalDate.now()) { value ->
+        if(role != "director") apiAsync("GET", "/api/appointments?date=" + LocalDate.parse(currentShiftDate())) { value ->
             var entries = value as JSONArray
             val visits = mutableListOf<Pair<JSONObject, JSONObject>>()
             for(i in 0 until entries.length()) {
@@ -1172,16 +1179,17 @@ class MainActivity : Activity() {
             fun render(tab: String) {
                 selectedNavigation = if(tab == "completed") "archive" else "home"
                 pageTitle.text = if(tab == "completed") "Архів зміни" else "Активні консультації"
-                workspaceTitle?.text = "SOLVIA · " + LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"))
+                workspaceTitle?.text = "SOLVIA · " + LocalDate.parse(currentShiftDate()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"))
                 pendingIndicators.clear()
                 val scrollPosition = homeScroll.scrollY
                 tabs.removeAllViews(); today.removeAllViews()
                 val completedCount = visits.count { completed(it.first,it.second) }
                 listOf("active" to "Активні", "completed" to "Архів").forEach { (key,label) ->
                     tabs.addView(MobileUi.button(this,label,selected=tab==key) { render(key) }.apply {
-                        background = rounded(if(tab == key) forestSoft else MobileUi.panel, 0)
-                        setTextColor(if(tab == key) forest else ink)
-                    }, LinearLayout.LayoutParams(0,dp(48),1f).apply { rightMargin=dp(2) })
+                        background = rounded(if(tab == key) forest else MobileUi.panel, 12)
+                        setTextColor(if(tab == key) MobileUi.onAccent else ink)
+                        isSelected = tab == key
+                    }, LinearLayout.LayoutParams(0,dp(50),1f).apply { rightMargin=dp(6); bottomMargin=dp(12) })
                 }
                 if(tab=="completed") today.addView(caption("Проконсультовані за цю зміну. Значок збоку означає, що запис ще не передано."))
                 val visible = visits.filter { if(tab=="completed") completed(it.first,it.second) else active(it.first,it.second) }
@@ -1200,7 +1208,7 @@ class MainActivity : Activity() {
                     heading.addView(title(item.optString("start").takeLast(5),18f).apply {
                         gravity = Gravity.CENTER; background = rounded(forestSoft,12); setTextColor(forest)
                     }, LinearLayout.LayoutParams(dp(68),dp(58)).apply { rightMargin = dp(10) })
-                    heading.addView(title(patient.optString("name"),22f), LinearLayout.LayoutParams(0, -2, 1f))
+                    heading.addView(title(patient.optString("name"),20f), LinearLayout.LayoutParams(0, -2, 1f))
                     val indicator = unsentIcon().apply {
                         visibility = if(pending) View.VISIBLE else View.GONE
                         tag = "unsent:${patient.optLong("id")}:${item.optLong("id")}"
@@ -1232,7 +1240,7 @@ class MainActivity : Activity() {
                             arrived.isEnabled = false
                             apiAsync("POST", "/api/appointments/${item.optLong("id")}/arrival", JSONObject().put("patient_id", patient.optLong("id")), onError = { message -> arrived.isEnabled = true; showError(message) }) { value ->
                                 patient.put("arrived_at", (value as JSONObject).optString("arrived_at", java.time.LocalDateTime.now().toString()))
-                                offlineStore().saveCache("/api/appointments?date=" + LocalDate.now(), entries)
+                                offlineStore().saveCache("/api/appointments?date=" + LocalDate.parse(currentShiftDate()), entries)
                                 render(tab); refreshAppointments()
                             }
                         }
@@ -2056,7 +2064,7 @@ class MainActivity : Activity() {
 
     private fun reportScreen() {
         backAction = { homeScreen() }
-        val day = LocalDate.now().toString()
+        val day = currentShiftDate()
         val body = root()
         body.addView(topBar("Звіт за зміну", ::homeScreen))
         body.addView(caption(day + " · консультації та звіт доступні адміністрації центру після передавання"))

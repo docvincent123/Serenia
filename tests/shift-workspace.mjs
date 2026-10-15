@@ -17,3 +17,11 @@ assert.equal(visitState({...group,started_at:'2026-10-13T09:00'}),'in_progress')
 assert.equal(filterVisits([{...group,started_at:'2026-10-13T09:00'}]).length,1);
 
 assert.equal(visitState({...group,status:'completed',visit_status:'no_show'}),'excluded');
+
+const unordered = [
+  {...group,appointment_id:22,patient_id:2,start:'2026-10-15T14:00'},
+  {...group,appointment_id:21,patient_id:1,start:'2026-10-15T09:00'},
+];
+assert.deepEqual(filterVisits(unordered).map(x=>x.appointment_id),[21,22], 'Visits must follow chronological order');
+assert.equal(filterVisits(unordered,{psychologist:3}).length,2,'Numeric and select-string filters must agree');
+assert.equal(unordered[0].appointment_id,22,'Filtering must not reorder source data');

@@ -1,0 +1,60 @@
+/* Shared clinic workspace: charcoal navigation, warm surfaces, restrained yellow actions. */
+:root { --bg:#f4f5f7; --ink:#202833; --ink-2:#465260; --muted:#667384; --line:#e0e5eb; }
+.app-shell .sidebar { background:#171d26; padding-top:26px; }
+.sidebar-brand { margin-bottom:10px; border-bottom:1px solid #ffffff13; }
+.sidebar .nav-group-toggle { letter-spacing:.08em; font-size:10px; text-transform:uppercase; }
+.sidebar .nav-item { border-radius:10px; transition:background .15s ease; }
+.sidebar .nav-item.active { background:#f6c22c; box-shadow:0 4px 12px #0002; }
+.sidebar .sidebar-support { background:#ffffff06; border:1px solid #ffffff12; border-radius:12px; }
+.sidebar .user-card { border-top:1px solid #ffffff16; }
+.workspace-inner { margin-inline:auto; width:100%; box-sizing:border-box; }
+.workspace-topbar { padding-bottom:20px; border-bottom:1px solid var(--line); background:#ffffffb3; }
+.connection-pill.online { background:#edf7f1; border-color:#cfe7d9; }
+.connection-pill.online strong { color:#246347; }
+.connection-pill.offline strong { color:#9f2920; }
+.shift-bar { background:#fff8e5; border-bottom:1px solid #eadcb3; font-variant-numeric:tabular-nums; }
+.page-head h1 { letter-spacing:-.035em; font-weight:750; }
+.page-head p { color:var(--muted); }
+.eyebrow { color:#7b691f; letter-spacing:.12em; font-size:10px; }
+.surface { border-radius:16px; box-shadow:0 3px 12px #1e293b04; }
+.stat-grid { gap:14px; }
+.stat-card { position:relative; overflow:hidden; border-radius:16px; padding:22px; box-shadow:none; }
+.stat-index { color:#798391; font-size:10px; letter-spacing:.08em; }
+.stat-card>strong { font-variant-numeric:tabular-nums; letter-spacing:-.045em; }
+.stat-card h3 { font-size:13px; }
+.stat-card p { color:var(--muted); font-size:12px; }
+.role-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:28px; }
+.role-actions button { display:flex; align-items:center; gap:12px; min-height:94px; padding:18px; color:var(--ink); text-align:left; background:#fff; border:1px solid var(--line); border-radius:14px; cursor:pointer; }
+.role-actions button:hover { border-color:#bc9630; background:#fffbed; }
+.role-actions button>span:nth-child(2) { flex:1; min-width:0; }
+.role-actions strong,.role-actions small { display:block; }
+.role-actions strong { font-size:13px; line-height:1.5; }
+.role-actions small { margin-top:5px; font-size:11px; line-height:1.5; color:var(--muted); }
+.role-action-icon { display:grid; place-items:center; flex:0 0 38px; height:38px; background:#fff4ce; color:#806110; border-radius:11px; }
+.role-action-icon svg { width:20px; height:20px; }
+.shift-summary article { border-radius:14px; padding:18px 20px; gap:8px; }
+.shift-summary strong { font-size:32px; letter-spacing:-.04em; font-variant-numeric:tabular-nums; }
+.shift-controls { background:#ffffff; }
+.shift-tabs { gap:6px; }
+.shift-tabs button { border-radius:8px; font-size:12px; }
+.shift-visit { background:#fff; border-color:var(--line); padding:16px; border-radius:12px; }
+.shift-time { padding-right:14px; border-right:1px solid var(--line); }
+.shift-time strong { color:var(--ink); }
+.shift-person span,.shift-person small,.shift-detail dt { color:var(--muted); }
+.shift-visit.selected { box-shadow:inset 3px 0 #f6c22c; }
+.shift-detail { border-top:3px solid #f6c22c; }
+.shift-detail .page-actions { gap:4px; }
+.shift-detail dl { gap:12px; }
+.shift-detail dd { color:var(--ink); }
+.shift-empty { background:#f8fafc; border:1px dashed #d9e0e8; border-radius:12px; margin-block:16px; }
+.visit-status { white-space:normal; line-height:1.45; }
+.shift-readiness { max-height:44vh; border-radius:12px; }
+.dialog { border-radius:20px; }
+.dialog-head { border-bottom:1px solid var(--line); }
+input,textarea,select { border-radius:10px; }
+input[type=date] { min-width:0; }
+.button:disabled { opacity:.55; cursor:not-allowed; }
+@media(max-width:1100px) { .role-actions { gap:10px; }.role-actions button { padding:14px; }.role-action-icon { display:none; } }
+@media(max-width:760px) { .role-actions { grid-template-columns:1fr; margin-bottom:22px; }.role-actions button { min-height:70px; }.role-action-icon { display:grid; }.workspace-topbar { padding-bottom:14px; }.shift-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.shift-visit { flex-wrap:wrap; }.shift-visit .visit-status { margin-left:74px; }.date-range { flex-wrap:wrap; } }
+@media(prefers-reduced-motion:reduce) { .sidebar .nav-item { transition:none; } }
+@media print { .role-actions { display:none; }.surface,.stat-card { box-shadow:none; } }

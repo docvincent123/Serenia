@@ -14,18 +14,18 @@ import android.widget.TextView
 
 /** One native visual language for the psychologist's phone workspace. */
 object MobileUi {
-    val background = Color.rgb(12, 15, 19)
+    val background = Color.rgb(16, 20, 27)
     val ink = Color.rgb(242, 245, 248)
     val muted = Color.rgb(172, 182, 193)
     val accent = Color.rgb(246, 194, 44)
     val onAccent = Color.rgb(24, 22, 16)
     val soft = Color.rgb(65, 55, 25)
-    val border = Color.rgb(67, 76, 87)
-    val panel = Color.rgb(31, 37, 45)
+    val border = Color.rgb(52, 64, 79)
+    val panel = Color.rgb(27, 34, 44)
     val buttonInk = Color.rgb(233, 238, 244)
     fun textScale(context: Context) = when(context.getSharedPreferences("solvia_settings", 0).getInt("text_size", 0)) { 1 -> 1.12f; 2 -> 1.25f; else -> 1f }
     fun dp(context: Context, n: Int) = (n * context.resources.displayMetrics.density).toInt()
-    fun surface(context: Context, color: Int = panel, radius: Int = 20, outlined: Boolean = false) = GradientDrawable().apply {
+    fun surface(context: Context, color: Int = panel, radius: Int = 16, outlined: Boolean = false) = GradientDrawable().apply {
         setColor(color); cornerRadius = dp(context, radius).toFloat()
         if(outlined) setStroke(dp(context, 1), border)
     }
@@ -42,7 +42,7 @@ object MobileUi {
         setOnClickListener { action() }
     }
     fun card(context: Context): LinearLayout = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14))
+        orientation = LinearLayout.VERTICAL; setPadding(dp(context, 18), dp(context, 16), dp(context, 18), dp(context, 16))
         background = surface(context, outlined = true)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(context, 12) }
     }

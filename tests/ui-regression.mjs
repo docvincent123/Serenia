@@ -29,7 +29,8 @@ try {
   let draft = { version:0,payload:null }, draftOffline = false, loseConsultationResponse = true;
   const consultations = [];const progress=[];
   const visit = {appointment_id:7,patient_id:10,patient:'Тестовий пацієнт',patient_no:'12345',phone:'+380000000000',category:'Інше',psychologist_id:3,psychologist:'Тестовий психолог',room:'Кабінет 1',kind:'individual',status:'scheduled',start:'2026-10-02T09:00',end:'2026-10-02T10:00',arrived_at:'',completed_at:''};
-  let arrivalCalls = 0;
+  let arrivalCalls = 0, closeCalls = 0, reportCalls = 0;
+  let readiness = {ready:false,unfinished:[visit],devices:[],unknown_psychologists:[]};
   await page.addInitScript(() => sessionStorage.setItem('solvia_token', 'synthetic-admin-token'));
   const patient = { id: 10, name: 'Тестовий пацієнт', patient_no: '12345', phone: '+380000000000', dob: '1995-01-01', category: 'Інше', status: 'active', psychologist_id: 3 };
   await page.route('**/api/**', async route => {
@@ -38,9 +39,10 @@ try {
     if (path === '/api/me') data = currentUser;
     else if (path === '/api/login') data = { token:'synthetic-psychologist-token',user:currentUser };
     else if (path === '/api/health') data = { ok:true,version:'2.3.0',platform:'linux' };
-    else if (path === '/api/shift-day') data = { open,shift_date:'2026-10-02' };
+    else if (path === '/api/shift-day') { if(method === 'POST' && route.request().postDataJSON().action === 'close') { closeCalls++; open = false; } data = { open,shift_date:'2026-10-02' }; }
     else if (path === '/api/stats') data = { total_patients: 24,active_patients:18,archived_patients:6,new_patients:4,consultations:42,avg_duration_minutes:60,active_courses:18,completed_courses:6,signed_documents:24,outgoing_referrals:3,supervisions_completed:2,load:[] };
-    else if(path === '/api/shift-readiness') data={ready:true,unfinished:[],devices:[],unknown_psychologists:[]};
+    else if(path === '/api/shift-readiness') data=readiness;
+    else if(path === '/api/shift-reports') { if(method === 'POST') { reportCalls++; const body=route.request().postDataJSON(); assert.equal(body.shift_date,'2026-10-02','Report must use active shift date, not device calendar date'); data={id:1,consultations_count:3}; } }
     else if (path === '/api/mobile-update') data = { available:false };
     else if (path === '/api/mobile-config') data = { format:'quremed.solvia.mobile',version:1,api_url:'https://192.168.1.100:8443',https_url:'https://192.168.1.100:8443',preferred:'https' };
     else if (path === '/api/settings/center') data = { center_name:'SOLVIA · демонстрація', connection_mode:'local' };
@@ -90,6 +92,23 @@ try {
     const box = await target.boundingBox(); assert(box && box.y >= 0 && box.y+box.height <= 600, 'Account actions must be in the visible viewport');
   }
   await page.screenshot({ path:'out/design/desktop-dashboard.png',fullPage:true });
+  assert.equal(await page.locator('.sidebar').getByRole('button',{name:'Налаштування профілю',exact:true}).count(),1);
+  await page.getByRole('button',{name:'Завершити зміну',exact:true}).click();
+  const closing = page.getByRole('dialog',{name:'Завершення робочої зміни',exact:true});
+  await closing.waitFor();
+  assert.equal(await closing.getByRole('button',{name:'Підтвердити завершення зміни',exact:true}).isDisabled(),true);
+  assert.equal(closeCalls,0,'Unfinished shift cannot be closed');
+  readiness={ready:true,unfinished:[],devices:[],unknown_psychologists:[]};
+  await closing.getByRole('button',{name:'Перевірити готовність',exact:true}).click();
+  await closing.getByRole('button',{name:'Підтвердити завершення зміни',exact:true}).waitFor();
+  await page.screenshot({path:'out/design/desktop-shift-review.png',fullPage:true});
+  // State may change between review and confirmation: the final click must recheck.
+  readiness={ready:false,unfinished:[visit],devices:[],unknown_psychologists:[]};
+  await closing.getByRole('button',{name:'Підтвердити завершення зміни',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.shift-readiness h3')?.textContent.includes('Потрібно'));
+  assert.equal(closeCalls,0,'Changed readiness must prevent close');
+  await closing.getByRole('button',{name:'Повернутися до роботи',exact:true}).click();
+
   await page.getByRole('button',{name:'Написати психологу',exact:true}).click();
   await page.getByRole('heading',{name:'Повідомлення психологам',exact:true}).waitFor();
   await page.getByRole('button',{name:/Тестовий психолог/}).click();
@@ -135,10 +154,10 @@ try {
   await page.getByRole('button',{name:'Пацієнт прибув',exact:true}).click();
   await page.locator('.shift-detail .visit-status.arrived').waitFor();
   assert.equal(arrivalCalls,1);
-  await page.getByRole('button',{name:'Проконсультовані 1',exact:true}).click();
+  await page.getByRole('button',{name:'Проконсультовані',exact:true}).click();
   assert.equal(await page.locator('.shift-visit').count(),1);
   await page.screenshot({path:'out/design/desktop-shift-completed.png',fullPage:true});
-  await page.getByRole('button',{name:'Активні 2',exact:true}).click();
+  await page.getByRole('button',{name:'Активні',exact:true}).click();
   await page.getByLabel('Знайти пацієнта',{exact:true}).fill('12345');
   assert.equal(await page.locator('.shift-visit').count(),2);
   await page.getByLabel('Психолог',{exact:true}).selectOption('3');
@@ -211,6 +230,11 @@ try {
   await page.getByRole('button',{name:'Зберегти оцінку',exact:true}).click();
   await page.locator('.progress-entry').getByText('Синтетична оцінка виконання',{exact:true}).waitFor();
   await page.screenshot({path:'out/design/desktop-progress.png',fullPage:true});
+  await page.getByRole('button',{name:'Звіт за зміну',exact:true}).click();
+  await page.getByLabel('Підсумок роботи за зміну',{exact:true}).fill('Підсумок зміни, що тривала після опівночі');
+  await page.getByRole('button',{name:'Зберегти звіт за зміну',exact:true}).click();
+  await page.getByText('Звіт за зміну збережено.',{exact:false}).waitFor();
+  assert.equal(reportCalls,1);
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
   await page.getByRole('button',{name:'Адміністрування',exact:true}).click();
   await page.getByRole('button',{name:'Пристрої',exact:true}).click();
@@ -229,7 +253,16 @@ try {
     }
     await page.screenshot({path:`out/design/desktop-${role}.png`,fullPage:true});
   }
+  currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};
+  await page.reload();
+  readiness={ready:true,unfinished:[],devices:[],unknown_psychologists:[]};
+  await page.getByRole('button',{name:'Завершити зміну',exact:true}).click();
+  await page.getByRole('dialog',{name:'Завершення робочої зміни',exact:true}).getByRole('button',{name:'Підтвердити завершення зміни',exact:true}).click();
+  await page.getByRole('heading',{name:'Зміна 2026-10-02 ще не відкрита',exact:true}).waitFor();
+  assert.equal(closeCalls,1,'Ready shift must close exactly once');
+  await systemSettings.click();
+  await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
-  console.log('PASS: short-screen actions, settings with closed shift, waiting list create, mobile layout, offline logout, encrypted draft recovery and consultation retry');
+  console.log('PASS: four role workspaces, shift readiness recheck and close, shift-bound report date, short-screen actions, settings with closed shift, waiting list, mobile layout, offline logout, encrypted drafts and consultation retry');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 
