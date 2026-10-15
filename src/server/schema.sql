@@ -570,3 +570,23 @@ CREATE TABLE IF NOT EXISTS shift_device_bindings(
  created TEXT NOT NULL,
  PRIMARY KEY(shift_date,device_id)
 );
+
+-- Daily reception authorization is separate from the persistent clinical shift.
+CREATE TABLE IF NOT EXISTS reception_access(
+  access_date TEXT PRIMARY KEY,
+  starts_at TEXT NOT NULL,
+  granted_by BIGINT NOT NULL REFERENCES users(id),
+  granted_at TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE
+);
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS updated TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS discharge_revisions(
+  discharge_id BIGINT NOT NULL REFERENCES discharge_summaries(id),
+  revision INTEGER NOT NULL,
+  snapshot TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  author_id BIGINT NOT NULL REFERENCES users(id),
+  created TEXT NOT NULL,
+  PRIMARY KEY(discharge_id,revision)
+);

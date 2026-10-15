@@ -102,6 +102,21 @@ class Scenario(unittest.TestCase):
         shift=self.api(admin,'GET','/api/shift-day')
         self.assertFalse(shift['open'])
         shift=self.api(admin,'POST','/api/shift-day',{'action':'open'})
+        today=dt.date.today().isoformat()
+        grant={'access_date':today,'start_time':'00:00'}
+        self.api(rec,'POST','/api/reception-access',grant,status=403)
+        self.api(director,'POST','/api/reception-access',grant,status=403)
+        self.api(admin,'POST','/api/reception-access',{**grant,'start_time':'25:00'},status=400)
+        self.api(admin,'POST','/api/reception-access',{**grant,'enabled':False})
+        self.assertFalse(self.api(rec,'GET','/api/reception-access')['allowed'])
+        self.assertTrue(self.api(admin,'GET','/api/shift-day')['open'])
+        self.api(rec,'POST','/api/patients',{},status=423)
+        # A future day's grant must not unlock today's work.
+        self.api(admin,'POST','/api/reception-access',{**grant,'access_date':(dt.date.today()+dt.timedelta(days=1)).isoformat()})
+        self.assertFalse(self.api(rec,'GET','/api/reception-access')['allowed'])
+        self.api(admin,'POST','/api/reception-access',grant)
+        self.assertTrue(self.api(rec,'GET','/api/reception-access')['allowed'])
+
         self.assertTrue(shift['open'])
         other=self.api(admin,'POST','/api/users',{'name':'Інший психолог','login':'other','phone':'+380501112233','password':'long-test-password','role':'psychologist'})['id']
         _,auth=self.call('POST','/api/login',{'login':'other','password':'long-test-password','platform':'Android','device_id':'other-test-phone'})
@@ -262,6 +277,23 @@ class Scenario(unittest.TestCase):
         self.assertIn('Результат',discharge['dynamics'])
         discharge_detail=self.api(admin,'GET',f'/api/patients/{pid}')['discharges'][0]
         self.assertEqual(discharge_detail['psychologist'],'Psychologist')
+        update={'revision':1,'summary':'Уточнений підсумок','dynamics':'Оновлена динаміка','recommendations':'Уточнені рекомендації','followup':'Подальший супровід','reason':'Уточнення документа'}
+        discharge_path=f"/api/discharges/{discharge['id']}"
+        self.api(rec,'PATCH',discharge_path,update,status=403)
+        self.api('other','PATCH',discharge_path,update,status=403)
+        self.api(director,'PATCH',discharge_path,{**update,'reason':''},status=400)
+        revised=self.api(director,'PATCH',discharge_path,update)
+        self.assertEqual(revised['revision'],2)
+        self.assertEqual(revised['recommendations'],update['recommendations'])
+        self.assertEqual(revised['document_no'],discharge['document_no'])
+        self.api(admin,'PATCH',discharge_path,update,status=409)
+        history=self.api(director,'GET',discharge_path+'/history')
+        self.assertEqual(len(history),1)
+        self.assertEqual(json.loads(history[0]['snapshot'])['summary'],discharge['summary'])
+        self.api(rec,'GET',discharge_path+'/history',status=403)
+        listed=self.api(director,'GET','/api/discharges')
+        self.assertTrue(any(d['id']==discharge['id'] and d['revision']==2 for d in listed))
+
 
         admin_records=self.api(admin,'GET',f'/api/psychology-records?from={day}&to={day}')
         self.assertEqual(admin_records[0]['note'],note['note'])

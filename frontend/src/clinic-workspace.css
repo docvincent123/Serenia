@@ -58,3 +58,45 @@ input[type=date] { min-width:0; }
 @media(max-width:760px) { .role-actions { grid-template-columns:1fr; margin-bottom:22px; }.role-actions button { min-height:70px; }.role-action-icon { display:grid; }.workspace-topbar { padding-bottom:14px; }.shift-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.shift-visit { flex-wrap:wrap; }.shift-visit .visit-status { margin-left:74px; }.date-range { flex-wrap:wrap; } }
 @media(prefers-reduced-motion:reduce) { .sidebar .nav-item { transition:none; } }
 @media print { .role-actions { display:none; }.surface,.stat-card { box-shadow:none; } }
+
+/* Desktop density follows the approved yellow/charcoal concept. */
+@media(min-width:761px) {
+  .app-shell { grid-template-columns:224px minmax(0,1fr); }
+  .app-shell .sidebar { padding:18px 10px 10px; }
+  .sidebar-brand { padding:0 10px 16px; }
+  .sidebar .nav-item { min-height:34px; padding:7px 10px; font-size:12px; border-radius:7px; }
+  .sidebar .nav-group-toggle { padding:8px 10px 4px; font-size:9px; }
+  .sidebar-actions .nav-item { min-height:32px; font-size:11px; }
+  .sidebar .sidebar-support { margin-top:6px; padding:7px 9px; border-radius:8px; }
+  .sidebar .user-card { margin-top:6px; padding:9px 8px 0; }
+  .workspace-topbar { display:flex; align-items:center; gap:16px; padding:14px 24px; background:#fff; }
+  .workspace-topbar .topbar-context { display:contents; }
+  .workspace-topbar .topbar-context>div:first-child { display:none; }
+  .workspace-topbar .global-search-wrap { order:-1; flex:1; min-width:180px; max-width:none; }
+  .workspace-topbar .global-search { width:100%; min-width:0; box-sizing:border-box; }
+  .workspace-topbar .connection-pill { margin-left:auto; flex:none; min-width:94px; }
+  .workspace-topbar .connection-pill strong { white-space:nowrap; overflow:visible; }
+  .workspace-topbar>.button { flex:none; white-space:nowrap; }
+  .workspace-inner { padding:22px 24px 36px; }
+  .page-head { margin-bottom:20px; }
+  .page-head h1 { font-size:27px; }
+  .page-head p { font-size:12px; margin-top:6px; }
+  .surface { border-radius:12px; padding:20px; }
+  .stat-grid { gap:12px; margin-bottom:20px; }
+  .stat-card { border-radius:12px; padding:16px 18px; }
+  .stat-card>strong { font-size:30px; }
+  .stat-card h3 { margin-top:6px; }
+  .role-actions { gap:12px; margin-bottom:18px; }
+  .role-actions button { min-height:70px; padding:12px 16px; border-radius:10px; }
+  .role-actions small { margin-top:2px; }
+  .shift-summary { gap:12px; margin-bottom:20px; }
+  .shift-summary article { padding:14px 18px; border-radius:12px; }
+  .shift-summary strong { font-size:28px; }
+  .shift-columns { gap:16px; }
+  .shift-roster,.shift-detail { padding:18px; }
+  .shift-visit { padding:12px; }
+  .table-wrap td,.table-wrap th { padding-top:11px; padding-bottom:11px; }
+  .shift-bar { min-height:46px; padding:7px 24px; gap:12px; flex-wrap:wrap; font-size:11px; }
+  .shift-bar .button { min-height:30px; padding:6px 12px; font-size:11px; }
+  .reception-access-status { margin-left:auto; color:#655727; }
+}

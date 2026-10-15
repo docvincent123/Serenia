@@ -362,6 +362,7 @@ function navFor(role) {
       ['staff-messages', 'Повідомлення'],
       ['rooms', 'Кабінети'],
       ['reports', 'Звіти психологів'],
+      ['discharges', 'Виписки'],
       ['workload', 'Навантаження'],
       ['supervisions', 'Супервізії'],
       ['archive', 'Архів'],
@@ -372,7 +373,7 @@ function navFor(role) {
   }
   if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['staff-messages', 'Повідомлення'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
   if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
-  return [['staff-messages', 'Повідомлення'], ['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
+  return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії'], ['discharges', 'Виписки'], ['staff-messages', 'Повідомлення']];
 }
 
 
@@ -381,13 +382,13 @@ const navigationGroups = [
   ['appointments', 'Прийоми', ['shift-workspace', 'calendar', 'waiting-list']],
   ['patients', 'Пацієнти та супровід', ['patients', 'families', 'archive']],
   ['team', 'Команда', ['team', 'rooms', 'supervisions', 'staff-messages']],
-  ['reports', 'Звіти та аналітика', ['reports', 'workload']],
+  ['reports', 'Звіти та аналітика', ['reports', 'workload', 'discharges']],
   ['administration', 'Адміністрування', ['devices', 'audit']]
 ];
 function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
   const active = page === 'patient-card' ? 'patients' : page;
   const groupFor = key => navigationGroups.find(([, , keys]) => keys.includes(key))?.[0];
-  const [expanded, setExpanded] = useState(() => new Set([groupFor(active)]));
+  const [expanded, setExpanded] = useState(() => new Set(navigationGroups.map(([id]) => id)));
   useEffect(() => { setExpanded(current => new Set([...current, groupFor(active)])); }, [active]);
   function item(key, label) {
     return <button key={key} disabled={locked && key !== 'staff-messages'} aria-current={active === key ? 'page' : undefined}
@@ -618,8 +619,8 @@ function Login({ initialBase, onLogin }) {
 
 function RoleActions({ role, onNavigate }) {
   const actions = role === 'admin'
-    ? [['shift-workspace','Прийняти пацієнта','Прибуття та перебіг прийомів'], ['team','Керувати командою','Працівники та доступ'], ['devices','Перевірити телефони','Зв’язок і передавання записів']]
-    : [['workload','Переглянути навантаження','Зайнятість спеціалістів'], ['supervisions','Планувати супервізії','Професійна підтримка команди'], ['staff-messages','Зв’язатися з психологом','Робочі повідомлення']];
+    ? [['shift-workspace','Прийняти пацієнта','Прибуття та перебіг прийомів'], ['team','Керувати командою','Працівники та доступ'], ['rooms','Кабінети центру','Приміщення та розклад']]
+    : [['workload','Переглянути навантаження','Зайнятість спеціалістів'], ['supervisions','Планувати супервізії','Професійна підтримка команди'], ['discharges','Переглянути виписки','Підсумки та рекомендації']];
   return <section className="role-actions" aria-label="Швидкі дії">{actions.map(([page,title,description]) =>
     <button key={page} onClick={() => onNavigate(page)}><span className="role-action-icon"><AppIcon name={page} /></span><span><strong>{title}</strong><small>{description}</small></span><span aria-hidden="true">↗</span></button>)}</section>;
 }
@@ -989,11 +990,11 @@ function Calendar({ api, role, openPatient }) {
                 {meta.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </Field>
-            <Field label="Початок">
-              <input type="time" min="08:00" max="19:00" value={booking.start} onChange={(e) => setBooking({ ...booking, start: e.target.value })} required />
+            <Field label="Початок" hint="Будь-яка хвилина в межах годин роботи, зокрема для тесту.">
+              <input type="time" step="60" min={meta.workflow?.opening_time} max={meta.workflow?.closing_time} value={booking.start} onChange={(e) => setBooking({ ...booking, start: e.target.value })} required />
             </Field>
             <Field label="Завершення">
-              <input type="time" min="09:00" max="20:00" value={booking.end} onChange={(e) => setBooking({ ...booking, end: e.target.value })} required />
+              <input type="time" step="60" min={meta.workflow?.opening_time} max={meta.workflow?.closing_time} value={booking.end} onChange={(e) => setBooking({ ...booking, end: e.target.value })} required />
             </Field>
             <Field label="Тип зустрічі" full>
               <select value={booking.kind} onChange={(e) => setBooking({ ...booking, kind: e.target.value })}>
@@ -1304,6 +1305,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
   });
   const [assessmentLink, setAssessmentLink] = useState('');
   const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
+  const [editingDischarge, setEditingDischarge] = useState(null);
   const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate() });
   const [printDoc, setPrintDoc] = useState(null);
   const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', referral_source: '', referral_source_details: '', admin_note: '' });
@@ -1923,7 +1925,8 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
               {card.discharges.map((d) => (
                 <div className="assessment-row" key={d.id}>
                   <div><strong>{d.date_from} — {d.date_to}</strong><span>{d.consultation_count} консультацій · {d.author}</span></div>
-                  <Button variant="secondary" onClick={() => openDischargePrint(d)}>Перегляд / PDF</Button>
+                  <div className="page-actions"><Button variant="secondary" onClick={() => openDischargePrint(d)}>Перегляд / PDF</Button>
+                  {(isAdmin || isPsychologist) && <Button variant="secondary" onClick={() => setEditingDischarge(d)}>Редагувати</Button>}</div>
                 </div>
               ))}
             </div>
@@ -2206,6 +2209,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
         </Dialog>
       )}
 
+      {editingDischarge && <DischargeEditor api={api} item={editingDischarge} onClose={() => setEditingDischarge(null)} onSaved={async () => { setEditingDischarge(null); await load(); }} />}
       {dialog === 'print-discharge' && printDoc && (
         <Dialog title="Виписка пацієнта" subtitle="Попередній перегляд документа" onClose={() => { setDialog(''); setPrintDoc(null); }} wide>
           <article className="discharge-print">
@@ -3679,6 +3683,55 @@ function Audit({ api }) {
   );
 }
 
+function DischargeEditor({ api, item, onClose, onSaved }) {
+  const [form, setForm] = useState({ summary:item.summary || '', dynamics:item.dynamics || '', recommendations:item.recommendations || '', followup:item.followup || '', reason:'' });
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [history, setHistory] = useState(null);
+  const fields = [['summary','Підсумок психологічного супроводу'],['dynamics','Динаміка'],['recommendations','Рекомендації'],['followup','Подальший супровід']];
+  async function save(e) {
+    e.preventDefault(); if(busy) return; setBusy(true); setError('');
+    try { await api('PATCH', `/api/discharges/${item.id}`, {...form,revision:item.revision || 1}); await onSaved(); }
+    catch(e) { setError(e.message); } finally { setBusy(false); }
+  }
+  async function loadHistory() {
+    try { setHistory(await api('GET', `/api/discharges/${item.id}/history`)); } catch(e) { setError(e.message); }
+  }
+  return <Dialog title="Редагування виписки" subtitle={`${item.patient_name || 'Пацієнт'} · № ${item.document_no || item.id} · версія ${item.revision || 1}`} onClose={() => { if(!busy) onClose(); }} wide>
+    <form className="form-grid" onSubmit={save}>
+      {error && <div className="alert error full-span" role="alert">{error}</div>}
+      {fields.map(([key,label]) => <Field key={key} label={label} full><textarea rows={4} maxLength={7000} required={key==='summary'} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} /></Field>)}
+      <Field label="Причина редагування" hint="Попередній текст залишається в історії документа." full><input required maxLength={500} value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} /></Field>
+      <div className="form-actions full-span"><Button type="button" variant="ghost" disabled={busy} onClick={onClose}>Скасувати</Button><Button type="button" variant="secondary" onClick={loadHistory}>Історія змін</Button><Button disabled={busy}>{busy?'Зберігаємо…':'Зберегти зміни'}</Button></div>
+    </form>
+    {history && <section aria-label="Історія виписки"><h3>Історія змін</h3>{!history.length && <p>Виписку ще не редагували.</p>}{history.map(row=>{let old;try{old=JSON.parse(row.snapshot);}catch{old={};}return <details key={row.revision}><summary>Версія {row.revision} · {row.author} · {row.created} · {row.reason}</summary>{fields.map(([key,label])=><div key={key}><strong>{label}</strong><p style={{whiteSpace:'pre-wrap'}}>{old[key] || '—'}</p></div>)}</details>;})}</section>}
+  </Dialog>;
+}
+
+function Discharges({ api }) {
+  const [items,setItems]=useState(null),[error,setError]=useState(''),[editing,setEditing]=useState(null),[query,setQuery]=useState('');
+  async function load(){try{setItems(await api('GET','/api/discharges'));setError('');}catch(e){setError(e.message);}}
+  useEffect(()=>{load();},[]);
+  const visible=(items || []).filter(x=>`${x.patient_name} ${x.document_no}`.toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk')));
+  return <><PageHead eyebrow="ДОКУМЕНТИ" title="Виписки" subtitle="Підсумки супроводу, динаміка, рекомендації та історія редагувань." />
+    {error && <div className="alert error" role="alert">{error}</div>}
+    <section className="surface"><Field label="Пошук виписки"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Пацієнт або номер документа" /></Field>
+    {items===null ? <Spinner /> : !visible.length ? <Empty title="Виписок немає" text="Створені в картках пацієнтів виписки з’являться тут." /> : <div className="assessment-list">{visible.map(item=><div className="assessment-row" key={item.id}><div><strong>{item.patient_name} · № {item.document_no || item.id}</strong><span>{item.date_from} — {item.date_to} · {item.author} · версія {item.revision || 1}</span></div><Button variant="secondary" onClick={()=>setEditing(item)}>Редагувати</Button></div>)}</div>}</section>
+    {editing && <DischargeEditor key={editing.id} api={api} item={editing} onClose={()=>setEditing(null)} onSaved={async()=>{setEditing(null);await load();}} />}</>;
+}
+
+function ReceptionAccess({ api, onChanged, onClose, access }) {
+  const [date,setDate]=useState(access?.access_date || localDate()),[time,setTime]=useState(access?.starts_at?.slice(11,16) || '08:00'),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  async function save(e,enabled=true){e.preventDefault();if(busy)return;setBusy(true);setError('');try{await api('POST','/api/reception-access',{access_date:date,start_time:time,enabled});await onChanged();onClose();}catch(e){setError(e.message);}finally{setBusy(false);}}
+  return <Dialog title="Доступ реєстратури" subtitle="Зміна залишається відкритою. Дозвіл діє для реєстратури в обраний день за часом сервера." onClose={()=>{if(!busy)onClose();}}>
+    <form className="form-grid" onSubmit={save}>
+      {error && <div className="alert error full-span" role="alert">{error}</div>}
+      <Field label="Дата доступу"><input type="date" required value={date} onChange={e=>setDate(e.target.value)} /></Field>
+      <Field label="Доступ з"><input type="time" step="60" required value={time} onChange={e=>setTime(e.target.value)} /></Field>
+      <p className="full-span">Дозволяє реєструвати пацієнтів, створювати й переносити записи та відмічати прибуття. Час консультації обирається окремо в календарі.</p>
+      <div className="form-actions full-span"><Button type="button" variant="ghost" disabled={busy} onClick={e=>save(e,false)}>Відкликати доступ</Button><Button disabled={busy}>{busy?'Зберігаємо…':'Надати доступ'}</Button></div>
+    </form>
+  </Dialog>;
+}
+
 function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
   useEffect(() => { document.querySelector('.workspace')?.scrollTo(0, 0); window.scrollTo(0, 0); }, [page]);
@@ -3686,10 +3739,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [patientOrigin, setPatientOrigin] = useState('patients');
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
-  const [shiftBusy, setShiftBusy] = useState(false);
-  const [readiness,setReadiness]=useState(null);
-  const [closeReview, setCloseReview] = useState(false);
-  const shiftActionLock = useRef(false);
+  const [receptionAccess,setReceptionAccess]=useState(null);
+  const [accessDialog,setAccessDialog]=useState(false);
   const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '2.5.0' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
@@ -3713,32 +3764,10 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
   async function loadShift() {
     try {
-      setShift(await api('GET', '/api/shift-day'));
+      const [currentShift,access] = await Promise.all([api('GET','/api/shift-day'), ['admin','reception','director'].includes(user.role)?api('GET','/api/reception-access'):Promise.resolve(null)]);
+      setShift(currentShift); setReceptionAccess(access);
       setShiftError('');
     } catch (e) { setShiftError(e.message); }
-  }
-
-  async function reviewShift() {
-    if (shiftActionLock.current) return;
-    shiftActionLock.current = true; setShiftBusy(true); setShiftError('');
-    try { setReadiness(await api('GET', '/api/shift-readiness')); setCloseReview(true); }
-    catch (e) { setShiftError(e.message); }
-    finally { shiftActionLock.current = false; setShiftBusy(false); }
-  }
-
-  async function changeShift(action) {
-    if (shiftActionLock.current) return;
-    shiftActionLock.current = true; setShiftBusy(true); setShiftError('');
-    try {
-      if(action === 'close') {
-        const check = await api('GET', '/api/shift-readiness');
-        setReadiness(check);
-        if(!check.ready) return;
-      }
-      await api('POST', '/api/shift-day', { action });
-      setReadiness(null); setCloseReview(false); await loadShift();
-    } catch (e) { setShiftError(e.message); }
-    finally { shiftActionLock.current = false; setShiftBusy(false); }
   }
 
   useEffect(() => { loadShift(); const timer = setInterval(loadShift, 30000); return () => clearInterval(timer); }, []);
@@ -3759,7 +3788,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
-    if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={shift} openPatient={openPatient} openCalendar={() => navigate('calendar')} />;
+    if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} />;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
     if (page === 'dashboard') return <><RoleActions role={user.role} onNavigate={navigate} /><Dashboard api={api} /></>;
     if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
@@ -3768,6 +3797,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports key={shift?.shift_date} api={api} role={user.role} shiftDate={shift?.shift_date} />;
+    if (page === 'discharges') return <Discharges api={api} />;
     if (page === 'workload') return <Workload api={api} />;
     if (page === 'supervisions') return <Supervisions api={api} role={user.role} user={user} />;
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
@@ -3779,7 +3809,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     return null;
   })();
 
-  const locked = shift && !shift.open;
+  const locked = user.role === 'admin' ? false : shift && (!shift.open || (user.role === 'reception' && !receptionAccess?.allowed));
 
   return (
     <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`} data-role={user.role}>
@@ -3824,9 +3854,11 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         {shift?.open && (
           <div className="shift-bar">
             <div><span className="shift-dot" /> Зміна відкрита · {shift.shift_date} · {shift.opened_by_name || 'Адміністратор'}</div>
-            {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={reviewShift}>Завершити зміну</Button>}
+            <span className="reception-access-status">{receptionAccess?.allowed ? `Реєстратура: доступ з ${receptionAccess.starts_at?.slice(11,16) || '08:00'}` : 'Реєстратура: очікує дозволу'}</span>
+            {user.role === 'admin' && <Button variant="secondary" onClick={()=>setAccessDialog(true)}>Керувати доступом</Button>}
           </div>
         )}
+        {!shift?.open && user.role==='admin' && <div className="shift-bar"><span>Надайте доступ для початку роботи центру</span><Button onClick={()=>setAccessDialog(true)}>Надати доступ</Button></div>}
         {!locked && <>
           <ReminderBar api={api} role={user.role} />
           <div className="workspace-topbar">
@@ -3841,32 +3873,15 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           </div>
         </>}
-        {closeReview && <Dialog title="Завершення робочої зміни" subtitle={`Зміна ${shift?.shift_date}`} onClose={() => { if(!shiftBusy) setCloseReview(false); }}>
-          <ShiftReadiness data={readiness} />
-          <p>Після закриття зміни робочі сесії команди завершаться. Наступну зміну відкриває адміністратор.</p>
-          {shiftError && <div className="alert error" role="alert">{shiftError}</div>}
-          <div className="form-actions">
-            <Button variant="secondary" disabled={shiftBusy} onClick={() => setCloseReview(false)}>Повернутися до роботи</Button>
-            <Button variant="secondary" disabled={shiftBusy} onClick={reviewShift}>Перевірити готовність</Button>
-            <Button disabled={shiftBusy || !readiness?.ready} onClick={() => changeShift('close')}>{shiftBusy ? 'Перевіряємо…' : 'Підтвердити завершення зміни'}</Button>
-          </div>
-        </Dialog>}
+        {accessDialog && <ReceptionAccess api={api} access={receptionAccess} onChanged={loadShift} onClose={()=>setAccessDialog(false)} />}
         <div className="workspace-inner">
           {shiftError && <div className="alert error">{shiftError}</div>}
           {!shift && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
-              <div className="eyebrow">ЩОДЕННЕ ВІДКРИТТЯ ЦЕНТРУ</div>
-              <h1>Зміна {shift.shift_date} ще не відкрита</h1>
-              {user.role === 'admin' ? (
-                <>
-                  <p>Підтвердіть відкриття робочої зміни. Після підтвердження календар, пацієнти та робочі модулі стануть доступними для команди.</p>
-                  <Button disabled={shiftBusy} onClick={() => changeShift('open')}>{shiftBusy ? 'Відкриваємо…' : 'Підтвердити відкриття зміни'}</Button>
-                </>
-              ) : (
-                <p>Адміністратор має підтвердити відкриття зміни на сьогодні. Після цього робочий простір відкриється.</p>
-              )}
-              {shift.closed_at && <small>Попереднє закриття: {shift.closed_at.replace('T',' ')}</small>}
+              <div className="eyebrow">ДОСТУП ДО РОБОТИ</div>
+              <h1>Очікуємо дозволу адміністратора</h1>
+              <p>{receptionAccess?.starts_at && receptionAccess.enabled ? `Доступ заплановано з ${receptionAccess.starts_at.replace('T',' ')} за часом сервера.` : 'Адміністратор має надати доступ на сьогодні. Зміна залишається відкритою.'}</p>
               <Button variant="ghost" onClick={loadShift}>Перевірити ще раз</Button>
             </section>
           ) : content}
