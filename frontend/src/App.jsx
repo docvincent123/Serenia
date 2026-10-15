@@ -616,6 +616,14 @@ function Login({ initialBase, onLogin }) {
   );
 }
 
+function RoleActions({ role, onNavigate }) {
+  const actions = role === 'admin'
+    ? [['shift-workspace','Прийняти пацієнта','Прибуття та перебіг прийомів'], ['team','Керувати командою','Працівники та доступ'], ['devices','Перевірити телефони','Зв’язок і передавання записів']]
+    : [['workload','Переглянути навантаження','Зайнятість спеціалістів'], ['supervisions','Планувати супервізії','Професійна підтримка команди'], ['staff-messages','Зв’язатися з психологом','Робочі повідомлення']];
+  return <section className="role-actions" aria-label="Швидкі дії">{actions.map(([page,title,description]) =>
+    <button key={page} onClick={() => onNavigate(page)}><span className="role-action-icon"><AppIcon name={page} /></span><span><strong>{title}</strong><small>{description}</small></span><span aria-hidden="true">↗</span></button>)}</section>;
+}
+
 function Dashboard({ api }) {
   const [stats, setStats] = useState(null);
   const [from, setFrom] = useState(monthStart());
@@ -3191,9 +3199,12 @@ function GlobalSearch({ api, onPatient, onNavigate }) {
   );
 }
 
-function Reports({ api, role }) {
-  const [from, setFrom] = useState(monthStart());
-  const [to, setTo] = useState(localDate());
+function Reports({ api, role, shiftDate }) {
+  const reportDay = shiftDate || localDate();
+  const reportLock = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [from, setFrom] = useState(reportDay.slice(0, 7) + '-01');
+  const [to, setTo] = useState(reportDay);
   const [reports, setReports] = useState([]);
   const [records, setRecords] = useState([]);
   const [error, setError] = useState('');
@@ -3212,7 +3223,7 @@ function Reports({ api, role }) {
       } else {
         const r = await reportTask;
         setReports(r);
-        const todayReport = r.find((x) => x.shift_date === localDate());
+        const todayReport = r.find((x) => x.shift_date === reportDay);
         if (todayReport) setForm({
           summary: todayReport.summary || '',
           incidents: todayReport.incidents || '',
@@ -3231,10 +3242,12 @@ function Reports({ api, role }) {
 
   async function submitReport(e) {
     e.preventDefault();
-    setSaved('');
+    if (reportLock.current) return;
+    reportLock.current = true; setSubmitting(true);
+    setError(''); setSaved('');
     try {
       const result = await api('POST', '/api/shift-reports', {
-        shift_date: localDate(),
+        shift_date: reportDay,
         summary: form.summary,
         incidents: form.incidents,
         handover: form.handover,
@@ -3242,11 +3255,11 @@ function Reports({ api, role }) {
         notify_admin: form.notify_admin,
         notify_director: form.notify_director
       });
-      setSaved(`Звіт за зміну збережено. Консультацій за сьогодні: ${result.consultations_count}.`);
+      setSaved(`Звіт за зміну збережено. Консультацій за зміну: ${result.consultations_count}.`);
       await load();
     } catch (e) {
       setError(e.message);
-    }
+    } finally { reportLock.current = false; setSubmitting(false); }
   }
 
   return (
@@ -3263,8 +3276,8 @@ function Reports({ api, role }) {
       {!isAdmin && (
         <section className="surface">
           <div className="section-head">
-            <div><div className="eyebrow">СЬОГОДНІ · {localDate()}</div><h2>Підсумок зміни</h2></div>
-            <Badge tone={reports.some((r) => r.shift_date === localDate()) ? 'forest' : 'sand'}>{reports.some((r) => r.shift_date === localDate()) ? 'Звіт подано' : 'Очікує звіту'}</Badge>
+            <div><div className="eyebrow">ЗМІНА · {reportDay}</div><h2>Підсумок зміни</h2></div>
+            <Badge tone={reports.some((r) => r.shift_date === reportDay) ? 'forest' : 'sand'}>{reports.some((r) => r.shift_date === reportDay) ? 'Звіт подано' : 'Очікує звіту'}</Badge>
           </div>
           <form className="form-grid" onSubmit={submitReport}>
             <Field label="Підсумок роботи за зміну" full><textarea rows="6" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} placeholder="Що було виконано за зміну, загальна динаміка роботи…" required /></Field>
@@ -3278,7 +3291,7 @@ function Reports({ api, role }) {
                 <label className="check-chip"><input type="checkbox" checked={form.notify_director} onChange={(e) => setForm({ ...form, notify_director: e.target.checked })} /><span>Потрібно повідомити керівника</span></label>
               </div>
             </div>
-            <div className="form-actions full-span"><Button type="submit">Зберегти звіт за зміну</Button></div>
+            <div className="form-actions full-span"><Button type="submit" disabled={submitting}>{submitting ? 'Зберігаємо…' : 'Зберегти звіт за зміну'}</Button></div>
           </form>
         </section>
       )}
@@ -3675,6 +3688,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [shiftError, setShiftError] = useState('');
   const [shiftBusy, setShiftBusy] = useState(false);
   const [readiness,setReadiness]=useState(null);
+  const [closeReview, setCloseReview] = useState(false);
+  const shiftActionLock = useRef(false);
   const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '2.5.0' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
@@ -3703,18 +3718,27 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     } catch (e) { setShiftError(e.message); }
   }
 
+  async function reviewShift() {
+    if (shiftActionLock.current) return;
+    shiftActionLock.current = true; setShiftBusy(true); setShiftError('');
+    try { setReadiness(await api('GET', '/api/shift-readiness')); setCloseReview(true); }
+    catch (e) { setShiftError(e.message); }
+    finally { shiftActionLock.current = false; setShiftBusy(false); }
+  }
+
   async function changeShift(action) {
-    if(action==='close') {
-      try {const check=await api('GET','/api/shift-readiness');setReadiness(check);if(!check.ready){setShiftError('Спочатку завершіть або позначте неявку прийомів і підключіть телефони для передавання записів.');return;}}
-      catch(e){setShiftError(e.message);return;}
-      if(!window.confirm('Усі прийоми та передавання перевірено. Закрити зміну?'))return;
-    }
-    setShiftBusy(true);
+    if (shiftActionLock.current) return;
+    shiftActionLock.current = true; setShiftBusy(true); setShiftError('');
     try {
+      if(action === 'close') {
+        const check = await api('GET', '/api/shift-readiness');
+        setReadiness(check);
+        if(!check.ready) return;
+      }
       await api('POST', '/api/shift-day', { action });
-      setReadiness(null);await loadShift();
+      setReadiness(null); setCloseReview(false); await loadShift();
     } catch (e) { setShiftError(e.message); }
-    finally { setShiftBusy(false); }
+    finally { shiftActionLock.current = false; setShiftBusy(false); }
   }
 
   useEffect(() => { loadShift(); const timer = setInterval(loadShift, 30000); return () => clearInterval(timer); }, []);
@@ -3737,13 +3761,13 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={shift} openPatient={openPatient} openCalendar={() => navigate('calendar')} />;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
-    if (page === 'dashboard') return <Dashboard api={api} />;
+    if (page === 'dashboard') return <><RoleActions role={user.role} onNavigate={navigate} /><Dashboard api={api} /></>;
     if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} />;
     if (page === 'families') return <Families api={api} />;
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
-    if (page === 'reports') return <Reports api={api} role={user.role} />;
+    if (page === 'reports') return <Reports key={shift?.shift_date} api={api} role={user.role} shiftDate={shift?.shift_date} />;
     if (page === 'workload') return <Workload api={api} />;
     if (page === 'supervisions') return <Supervisions api={api} role={user.role} user={user} />;
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
@@ -3774,7 +3798,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           <div><strong>SOLVIA</strong><span>by QureMed</span></div>
         </div>
 
-        <WorkspaceNavigation navigation={navigation} page={page} locked={locked} onNavigate={navigate} />
+        <WorkspaceNavigation navigation={navigation.filter(([key]) => !['settings', 'preferences'].includes(key))} page={page} locked={locked} onNavigate={navigate} />
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
@@ -3785,7 +3809,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         <div className="sidebar-support">
           <div className="sidebar-support-head">
             <span className="support-dot" />
-            <div><strong>QureMed Support</strong><small>Підтримка центру</small></div>
+            <div><strong>QureMed Industries</strong><small>Підтримка центру</small></div>
           </div>
           <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
         </div>
@@ -3800,7 +3824,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         {shift?.open && (
           <div className="shift-bar">
             <div><span className="shift-dot" /> Зміна відкрита · {shift.shift_date} · {shift.opened_by_name || 'Адміністратор'}</div>
-            {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={() => changeShift('close')}>Завершити зміну</Button>}
+            {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={reviewShift}>Завершити зміну</Button>}
           </div>
         )}
         {!locked && <>
@@ -3817,8 +3841,18 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           </div>
         </>}
+        {closeReview && <Dialog title="Завершення робочої зміни" subtitle={`Зміна ${shift?.shift_date}`} onClose={() => { if(!shiftBusy) setCloseReview(false); }}>
+          <ShiftReadiness data={readiness} />
+          <p>Після закриття зміни робочі сесії команди завершаться. Наступну зміну відкриває адміністратор.</p>
+          {shiftError && <div className="alert error" role="alert">{shiftError}</div>}
+          <div className="form-actions">
+            <Button variant="secondary" disabled={shiftBusy} onClick={() => setCloseReview(false)}>Повернутися до роботи</Button>
+            <Button variant="secondary" disabled={shiftBusy} onClick={reviewShift}>Перевірити готовність</Button>
+            <Button disabled={shiftBusy || !readiness?.ready} onClick={() => changeShift('close')}>{shiftBusy ? 'Перевіряємо…' : 'Підтвердити завершення зміни'}</Button>
+          </div>
+        </Dialog>}
         <div className="workspace-inner">
-          {readiness && <ShiftReadiness data={readiness} />}{shiftError && <div className="alert error">{shiftError}</div>}
+          {shiftError && <div className="alert error">{shiftError}</div>}
           {!shift && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />

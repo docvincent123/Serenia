@@ -11,7 +11,7 @@ export function filterVisits(rows, { tab = 'active', psychologist = '', query = 
   return rows.filter(row => {
     const state = visitState(row);
     const matchesTab = tab === 'completed' ? state === 'completed' : tab === 'excluded' ? state === 'excluded' : ['in_progress','arrived','expected'].includes(state);
-    return matchesTab && (!psychologist || String(row.psychologist_id) === psychologist) &&
+    return matchesTab && (!psychologist || String(row.psychologist_id) === String(psychologist)) &&
       (!text || [row.patient,row.patient_no,row.phone,row.psychologist].some(value => String(value || '').toLocaleLowerCase('uk').includes(text)));
-  });
+  }).sort((a,b) => String(a.start || '').localeCompare(String(b.start || '')) || Number(a.appointment_id) - Number(b.appointment_id) || String(a.patient || '').localeCompare(String(b.patient || ''), 'uk'));
 }

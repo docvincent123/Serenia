@@ -18,6 +18,11 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }
   const [busy, setBusy] = useState(false);
   const [updated, setUpdated] = useState('');
   const generation = useRef(0);
+  const previousShiftDate = useRef(date);
+  useEffect(() => {
+    if (day === previousShiftDate.current) setDay(date);
+    previousShiftDate.current = date;
+  }, [date, day]);
   const loadRef = useRef();
   const actionLock = useRef(false);
   async function load() {
@@ -72,8 +77,8 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }
     {error && <div className="alert error" role="alert">{error} <button className="button ghost" onClick={load}>Повторити</button></div>}
     <section className="surface shift-controls">
       <div className="shift-tabs" role="group" aria-label="Статус прийомів">{[['active','Активні'],['completed','Проконсультовані'],['excluded','Не проведені']].map(([key,label])=>
-        <button key={key} aria-pressed={tab===key} className={tab===key?'active':''} onClick={()=>{setTab(key);setSelected('');}}>{label} <span>{counts[key]}</span></button>)}</div>
-      <div className="shift-filters"><label>Дата зміни<input type="date" value={day} disabled={busy} onChange={e=>{if(e.target.value)setDay(e.target.value);}} /></label>
+        <button key={key} aria-pressed={tab===key} className={tab===key?'active':''} onClick={()=>{setTab(key);setSelected('');}}>{label}</button>)}</div>
+      <div className="shift-filters">{(query || psychologist) && <button className="button ghost" onClick={() => {setQuery('');setPsychologist('');setSelected('');}}>Скинути фільтри</button>}<label>Дата зміни<input type="date" value={day} disabled={busy} onChange={e=>{if(e.target.value)setDay(e.target.value);}} /></label>
         <label>Психолог<select aria-label="Психолог" value={psychologist} onChange={e=>setPsychologist(e.target.value)}><option value="">Усі психологи</option>
           {psychologists.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>
         <label className="shift-search">Знайти пацієнта<input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="ПІБ, номер картки або телефон" /></label></div>
@@ -81,7 +86,7 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }
     <div className="shift-columns">
       <section className="surface shift-roster"><div className="section-head"><h2>{tab==='completed'?'Завершені консультації':tab==='excluded'?'Не проведені прийоми':'Активні пацієнти'}</h2><small>{updated ? `Оновлено о ${updated}` : 'Завантаження…'}</small></div>
         <p className="shift-explanation">{tab==='completed'?'Це завершені прийоми за обрану дату. Пацієнти залишаються на супроводі; завершення курсу оформлюється окремо.':'Один рядок — один пацієнт у прийомі. Учасники групи обліковуються окремо.'}</p>
-        {!loaded && !error ? <p role="status">Завантажуємо прийоми…</p> : visible.length===0 ? <div className="shift-empty"><strong>{query||psychologist?'Немає збігів':(tab==='active'&&counts.completed>0?'Усі консультації завершено':'На сьогодні консультацій немає')}</strong><p>{tab==='active'?'Нові прийоми створюються у календарі.':'Список оновиться після зміни статусу прийомів.'}</p></div> :
+        {!loaded && !error ? <p role="status">Завантажуємо прийоми…</p> : visible.length===0 ? <div className="shift-empty"><strong>{query||psychologist?'Немає збігів':tab==='completed'?'Завершених консультацій ще немає':tab==='excluded'?'Непроведених прийомів немає':counts.completed>0?'Усі консультації завершено':'На обрану дату консультацій немає'}</strong><p>{query||psychologist?'Змініть пошук або скиньте фільтри.':tab==='active'?'Нові прийоми створюються у календарі.':'Список оновиться після зміни статусу прийомів.'}</p></div> :
           <div className="shift-visit-list">{visible.map(row=><button key={visitKey(row)} className={`shift-visit ${selected===visitKey(row)?'selected':''}`} aria-pressed={selected===visitKey(row)} onClick={()=>setSelected(visitKey(row))}>
             <span className="shift-time"><strong>{time(row.start)}</strong><small>{time(row.end)}</small></span>
             <span className="shift-person"><strong>{row.patient}</strong><span>№ {row.patient_no || '—'} · {row.psychologist}</span><small>{row.room} · {kindLabels[row.kind] || row.kind}</small></span>
