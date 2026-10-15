@@ -8,6 +8,7 @@ import './desk.css';
 import './solvia-yellow.css';
 import './staff-workspace.css';
 import './clinic-workspace.css';
+import './reception.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

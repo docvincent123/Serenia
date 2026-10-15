@@ -6,6 +6,7 @@ import { cleanBase } from './connection.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
 import WaitingList from './WaitingList.jsx';
 import ShiftWorkspace from './ShiftWorkspace.jsx';
+import AppointmentBooking from './AppointmentBooking.jsx';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -740,38 +741,17 @@ function Dashboard({ api }) {
   );
 }
 
-function Calendar({ api, role, openPatient }) {
-  const [date, setDate] = useState(localDate());
+function Calendar({ api, role, openPatient, onBook, initialDate }) {
+  const [date, setDate] = useState(initialDate || localDate());
   const [appointments, setAppointments] = useState([]);
-  const [meta, setMeta] = useState({ psychologists: [], rooms: [] });
-  const [patients, setPatients] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [dialog, setDialog] = useState('');
   const [error, setError] = useState('');
-  const [slots, setSlots] = useState([]);
-  const [booking, setBooking] = useState({
-    psychologist_id: '',
-    room_id: '',
-    start: '09:00',
-    end: '10:00',
-    kind: 'individual',
-    status: 'scheduled',
-    note: '',
-    patient_ids: []
-  });
-  const [slotForm, setSlotForm] = useState({ psychologist_id: '', room_id: '' });
-
   const canSchedule = role === 'admin' || role === 'reception';
 
   async function load(targetDate = date) {
     setError('');
     try {
-      const tasks = [api('GET', '/api/meta'), api('GET', `/api/appointments?date=${targetDate}`)];
-      if (canSchedule) tasks.push(api('GET', '/api/patients'));
-      const [m, a, p = []] = await Promise.all(tasks);
-      setMeta(m);
-      setAppointments(a);
-      setPatients(p);
+      setAppointments(await api('GET', `/api/appointments?date=${targetDate}`));
       setSelected(null);
     } catch (e) {
       setError(e.message);
@@ -780,61 +760,8 @@ function Calendar({ api, role, openPatient }) {
 
   useEffect(() => { load(date); }, [date]);
 
-  function openNew() {
-    setBooking({
-      psychologist_id: meta.psychologists?.[0]?.id || '',
-      room_id: meta.rooms?.[0]?.id || '',
-      start: meta.workflow?.opening_time || '08:00',
-      end: (() => { const [h,m]=(meta.workflow?.opening_time || '08:00').split(':').map(Number);const n=h*60+m+(meta.workflow?.default_duration_minutes || 60);return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); })(),
-      kind: 'individual',
-      status: 'scheduled',
-      note: '',
-      patient_ids: []
-    });
-    setDialog('booking');
-  }
-
-  function openEdit() {
-    if (!selected) return;
-    setBooking({
-      psychologist_id: selected.psychologist_id,
-      room_id: selected.room_id,
-      start: selected.start.slice(11, 16),
-      end: selected.end.slice(11, 16),
-      kind: selected.kind,
-      status: selected.status,
-      note: selected.note || '',
-      patient_ids: selected.patients.map((p) => p.id)
-    });
-    setDialog('edit');
-  }
-
-  async function saveBooking(e) {
-    e.preventDefault();
-    try {
-      const edit = dialog === 'edit';
-      let ids = booking.patient_ids.map(Number).filter(Boolean);
-      if (['individual','child','crisis'].includes(booking.kind)) ids = ids.slice(0, 1);
-      if (!ids.length) throw new Error('Оберіть хоча б одного пацієнта.');
-
-      const body = {
-        psychologist_id: Number(booking.psychologist_id),
-        room_id: Number(booking.room_id),
-        start: `${date}T${booking.start}`,
-        end: `${date}T${booking.end}`,
-        kind: booking.kind,
-        status: booking.status,
-        note: booking.note,
-        patient_ids: ids
-      };
-
-      await api(edit ? 'PATCH' : 'POST', edit ? `/api/appointments/${selected.id}` : '/api/appointments', body);
-      setDialog('');
-      await load();
-    } catch (e) {
-      setError(e.message);
-    }
-  }
+  function openNew() { onBook({date}); }
+  function openEdit() { if(selected) onBook({date:selected.start.slice(0,10),appointmentId:selected.id}); }
 
   async function cancelAppointment() {
     if (!selected) return;
@@ -854,19 +781,6 @@ function Calendar({ api, role, openPatient }) {
     } catch (e) { setError(e.message); }
   }
 
-  async function findSlots(e) {
-    e.preventDefault();
-    try {
-      const result = await api(
-        'GET',
-        `/api/slots?date=${date}&psychologist_id=${slotForm.psychologist_id}&room_id=${slotForm.room_id}`
-      );
-      setSlots(result);
-    } catch (e) {
-      setError(e.message);
-    }
-  }
-
   const statusLabel = (status) => ({
     draft: 'Чернетка', scheduled: 'Заплановано', confirmed: 'Підтверджено',
     completed: 'Проведено', cancelled: 'Скасовано', no_show: 'Не з’явився', rescheduled: 'Перенесено'
@@ -882,8 +796,7 @@ function Calendar({ api, role, openPatient }) {
         actions={
           <>
             <input className="date-control" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            {canSchedule && <Button variant="secondary" onClick={() => { setSlots([]); setSlotForm({ psychologist_id: meta.psychologists?.[0]?.id || '', room_id: meta.rooms?.[0]?.id || '' }); setDialog('slots'); }}>Вільні години</Button>}
-            {canSchedule && <Button onClick={openNew}>+ Новий запис</Button>}
+            {canSchedule && <Button onClick={openNew}><AppIcon name="plus" /> Записати пацієнта</Button>}
           </>
         }
       />
@@ -977,110 +890,12 @@ function Calendar({ api, role, openPatient }) {
         </aside>
       </div>
 
-      {(dialog === 'booking' || dialog === 'edit') && (
-        <Dialog title={dialog === 'edit' ? 'Змінити запис' : 'Новий запис'} subtitle={date} onClose={() => setDialog('')}>
-          <form className="form-grid" onSubmit={saveBooking}>
-            <Field label="Психолог">
-              <select value={booking.psychologist_id} onChange={(e) => setBooking({ ...booking, psychologist_id: e.target.value })} required>
-                {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Кабінет">
-              <select value={booking.room_id} onChange={(e) => setBooking({ ...booking, room_id: e.target.value })} required>
-                {meta.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Початок" hint="Будь-яка хвилина в межах годин роботи, зокрема для тесту.">
-              <input type="time" step="60" min={meta.workflow?.opening_time} max={meta.workflow?.closing_time} value={booking.start} onChange={(e) => setBooking({ ...booking, start: e.target.value })} required />
-            </Field>
-            <Field label="Завершення">
-              <input type="time" step="60" min={meta.workflow?.opening_time} max={meta.workflow?.closing_time} value={booking.end} onChange={(e) => setBooking({ ...booking, end: e.target.value })} required />
-            </Field>
-            <Field label="Тип зустрічі" full>
-              <select value={booking.kind} onChange={(e) => setBooking({ ...booking, kind: e.target.value })}>
-                <option value="individual">Індивідуальна консультація</option>
-                <option value="family">Сімейна консультація</option>
-                <option value="child">Дитяча консультація</option>
-                <option value="crisis">Кризова консультація</option>
-                <option value="group">Групове заняття</option>
-              </select>
-            </Field>
-            <Field label="Статус запису">
-              <select value={booking.status} onChange={(e) => setBooking({ ...booking, status: e.target.value })}>
-                <option value="draft">Чернетка</option>
-                <option value="scheduled">Заплановано</option>
-                <option value="confirmed">Підтверджено</option>
-              </select>
-            </Field>
-            <Field label="Примітка до запису">
-              <input value={booking.note} onChange={(e) => setBooking({ ...booking, note: e.target.value })} placeholder="Напр. підтвердити телефоном" />
-            </Field>
-            <Field label={booking.kind === 'group' ? 'Учасники' : 'Пацієнт'} hint={booking.kind === 'group' ? 'Ctrl + клік для вибору кількох учасників.' : ''} full>
-              <select
-                multiple={booking.kind === 'group'}
-                size={booking.kind === 'group' ? 6 : 1}
-                value={booking.kind === 'group' ? booking.patient_ids.map(String) : String(booking.patient_ids[0] || '')}
-                onChange={(e) => {
-                  const values = booking.kind === 'group'
-                    ? [...e.target.selectedOptions].map((o) => Number(o.value))
-                    : [Number(e.target.value)];
-                  setBooking({ ...booking, patient_ids: values.filter(Boolean) });
-                }}
-                disabled={dialog === 'edit'}
-                required
-              >
-                {booking.kind !== 'group' && <option value="">Оберіть пацієнта</option>}
-                {patients.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.psychologist}</option>)}
-              </select>
-            </Field>
-            {dialog === 'edit' && <div className="alert info full-span">Учасники при перенесенні зберігаються без змін.</div>}
-            <div className="form-actions full-span">
-              <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
-              <Button type="submit">Зберегти запис</Button>
-            </div>
-          </form>
-        </Dialog>
-      )}
 
-      {dialog === 'slots' && (
-        <Dialog title="Вільні години" subtitle={date} onClose={() => setDialog('')}>
-          <form className="form-grid" onSubmit={findSlots}>
-            <Field label="Психолог">
-              <select value={slotForm.psychologist_id} onChange={(e) => setSlotForm({ ...slotForm, psychologist_id: e.target.value })} required>
-                {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Кабінет">
-              <select value={slotForm.room_id} onChange={(e) => setSlotForm({ ...slotForm, room_id: e.target.value })} required>
-                {meta.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </Field>
-            <div className="form-actions full-span"><Button type="submit">Показати слоти</Button></div>
-          </form>
-          {slots.length > 0 && (
-            <div className="slot-grid">
-              {slots.map((slot) => <button key={slot} className="slot" onClick={() => {
-                setBooking({
-                  psychologist_id: Number(slotForm.psychologist_id),
-                  room_id: Number(slotForm.room_id),
-                  start: slot,
-                  end: (() => { const [h,m]=slot.split(':').map(Number); const n=h*60+m+(meta.workflow?.default_duration_minutes || 60); return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); })(),
-                  status: 'scheduled', note: '',
-                  kind: 'individual',
-                  patient_ids: []
-                });
-                setDialog('booking');
-              }}>{slot}</button>)}
-            </div>
-          )}
-          {slots.length === 0 && <p className="muted centered">Оберіть параметри та натисніть «Показати слоти».</p>}
-        </Dialog>
-      )}
     </>
   );
 }
 
-function Patients({ api, role, openPatient }) {
+function Patients({ api, role, openPatient, onBook, createRequest, onCreateRequestConsumed }) {
   const [patients, setPatients] = useState([]);
   const [families, setFamilies] = useState([]);
   const [meta, setMeta] = useState({ psychologists: [], categories: [] });
@@ -1103,6 +918,9 @@ function Patients({ api, role, openPatient }) {
     admin_note: ''
   });
 
+  const [creating,setCreating]=useState(false);
+  const [registrationDate,setRegistrationDate]=useState(localDate());
+  const createLock=useRef(false), consumedCreate=useRef(null);
   const canCreate = role === 'admin' || role === 'reception';
 
   async function load() {
@@ -1146,10 +964,19 @@ function Patients({ api, role, openPatient }) {
     setDialog(true);
   }
 
+  useEffect(()=>{
+    if(createRequest && meta.psychologists?.length && consumedCreate.current!==createRequest.key){
+      consumedCreate.current=createRequest.key;setRegistrationDate(createRequest.date || localDate());openCreate();onCreateRequestConsumed();
+    }
+  },[createRequest,meta]);
+
   async function createPatient(e) {
     e.preventDefault();
+    if(createLock.current)return;
+    createLock.current=true;setCreating(true);setError('');
+    const bookAfter=e.nativeEvent.submitter?.value==='book';
     try {
-      await api('POST', '/api/patients', {
+      const created=await api('POST', '/api/patients', {
         name: form.name,
         phone: form.phone,
         dob: form.dob,
@@ -1166,9 +993,10 @@ function Patients({ api, role, openPatient }) {
       });
       setDialog(false);
       await load();
+      if(bookAfter)onBook({patientId:created.id,date:registrationDate});
     } catch (e) {
       setError(e.message);
-    }
+    } finally {createLock.current=false;setCreating(false);}
   }
 
   return (
@@ -1194,7 +1022,7 @@ function Patients({ api, role, openPatient }) {
         {!filtered.length ? <Empty title="Нічого не знайдено" text="Спробуйте змінити запит або створіть нового пацієнта." /> : (
           <div className="patient-card-list">
             {filtered.map((p) => (
-              <button className="patient-list-card" key={p.id} onClick={() => openPatient(p.id)}>
+              <div className="patient-entry" key={p.id}><button className="patient-list-card" onClick={() => openPatient(p.id)}>
                 <span className="patient-card-accent" />
                 <span className="patient-card-head">
                   <span className="avatar patient-avatar">{p.name.slice(0, 1).toUpperCase()}</span>
@@ -1213,14 +1041,17 @@ function Patients({ api, role, openPatient }) {
                   <span><small>СІМ’Я</small><strong>{p.family || 'Без сімейного зв’язку'}</strong></span>
                 </span>
               </button>
+              {canCreate && <div className="patient-entry-actions"><Button variant="secondary" onClick={()=>onBook({patientId:p.id,date:localDate()})}><AppIcon name="calendar" /> Записати на консультацію</Button></div>}
+              </div>
             ))}
           </div>
         )}
       </section>
 
       {dialog && (
-        <Dialog title="Новий пацієнт" subtitle="Реєстраційна картка" onClose={() => setDialog(false)} wide>
+        <Dialog title="Новий пацієнт" subtitle="Реєстраційна картка" onClose={() => {if(!createLock.current)setDialog(false);}} wide>
           <form className="form-grid" onSubmit={createPatient}>
+            {error && <div className="alert error full-span" role="alert">{error}</div>}
             <Field label="ПІБ" full>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={150} />
             </Field>
@@ -1240,6 +1071,7 @@ function Patients({ api, role, openPatient }) {
                 {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </Field>
+            <details className="registration-extra full-span"><summary>Додаткові відомості про пацієнта</summary><div className="form-grid">
             <Field label="Сім’я">
               <select value={form.family_id} onChange={(e) => setForm({ ...form, family_id: e.target.value })}>
                 <option value="">Без сімейного зв’язку</option>
@@ -1277,9 +1109,11 @@ function Patients({ api, role, openPatient }) {
                 <textarea rows="3" value={form.admin_note} onChange={(e) => setForm({ ...form, admin_note: e.target.value })} />
               </Field>
             )}
+            </div></details>
             <div className="form-actions full-span">
               <Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button>
-              <Button type="submit">Створити пацієнта</Button>
+              <Button type="submit" variant="secondary" disabled={creating} value="save">Зареєструвати</Button>
+              <Button type="submit" disabled={creating} value="book">{creating?'Зберігаємо…':'Зареєструвати й записати'}</Button>
             </div>
           </form>
         </Dialog>
@@ -3735,6 +3569,13 @@ function ReceptionAccess({ api, onChanged, onClose, access }) {
 function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
   useEffect(() => { document.querySelector('.workspace')?.scrollTo(0, 0); window.scrollTo(0, 0); }, [page]);
+  const [bookingIntent,setBookingIntent]=useState(null);
+  const [bookingResult,setBookingResult]=useState(null);
+  const [bookingVersion,setBookingVersion]=useState(0);
+  const [createRequest,setCreateRequest]=useState(null);
+  function startBooking(options){setBookingIntent({...options,date:options.date || receptionAccess?.access_date || localDate()});}
+  function registerPatient(date,bookAfter=false){setBookingIntent(null);setCreateRequest({key:Date.now(),date:date || receptionAccess?.access_date || localDate(),bookAfter});navigate('patients');}
+  function booked(result){setBookingIntent(null);setBookingResult(result);setBookingVersion(v=>v+1);}
   const [patientId, setPatientId] = useState(null);
   const [patientOrigin, setPatientOrigin] = useState('patients');
   const [shift, setShift] = useState(null);
@@ -3788,11 +3629,11 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
-    if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} />;
+    if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
     if (page === 'dashboard') return <><RoleActions role={user.role} onNavigate={navigate} /><Dashboard api={api} /></>;
-    if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
-    if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} />;
+    if (page === 'calendar') return <Calendar key={bookingVersion} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={bookingResult?.date} />;
+    if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} onBook={startBooking} createRequest={createRequest} onCreateRequestConsumed={()=>setCreateRequest(null)} />;
     if (page === 'families') return <Families api={api} />;
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
@@ -3873,8 +3714,10 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           </div>
         </>}
+        {bookingIntent && !locked && <AppointmentBooking api={api} initial={bookingIntent} Modal={Dialog} onClose={()=>setBookingIntent(null)} onSaved={booked} onCreatePatient={date=>registerPatient(date,true)} />}
         {accessDialog && <ReceptionAccess api={api} access={receptionAccess} onChanged={loadShift} onClose={()=>setAccessDialog(false)} />}
         <div className="workspace-inner">
+          {bookingResult && <div className="booking-success" role="status"><span>✓ {bookingResult.editing?'Прийом перенесено':'Пацієнта записано'} · {bookingResult.patient} · {bookingResult.date} о {bookingResult.start}</span><button type="button" aria-label="Приховати повідомлення про запис" onClick={()=>setBookingResult(null)}>×</button></div>}
           {shiftError && <div className="alert error">{shiftError}</div>}
           {!shift && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">

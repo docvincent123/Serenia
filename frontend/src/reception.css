@@ -1,0 +1,109 @@
+/* Reception workflows: clear rectangular actions, one booking surface. */
+@media(min-width:761px){
+  .app-shell .button {min-height:40px;border-radius:7px;padding:10px 16px;font-size:13px;font-weight:600;box-shadow:none;gap:8px;line-height:1.3;}
+  .app-shell .button.primary {background:#f3c633;border-color:#dfb323;color:#20242b;box-shadow:none;}
+  .app-shell .button.primary:hover {background:#f9d25a;}
+  .app-shell .button.secondary {border-color:#d8dfe7;background:#fff;color:#354151;}
+  .app-shell .button.danger {background:#fff;color:#a43b37;border:1px solid #e9c5c2;}
+  .app-shell .button svg {width:17px;height:17px;flex-shrink:0;}
+  .app-shell .dialog {border-radius:14px;}
+  .app-shell .dialog-head {padding:20px 24px;}
+  .app-shell .dialog-head h2 {font-size:23px;font-weight:650;letter-spacing:-.025em;}
+  .app-shell .dialog-body {padding:20px 24px;}
+  .app-shell input,.app-shell select,.app-shell textarea {border-radius:7px;font-size:13px;min-height:42px;}
+  [data-role=reception] .shift-summary {gap:0;border:1px solid #e1e5eb;border-radius:9px;background:#fff;margin-bottom:16px;overflow:hidden;}
+  [data-role=reception] .shift-summary article {border:0;border-right:1px solid #e1e5eb;background:transparent;border-radius:0;display:flex;align-items:center;justify-content:space-between;padding:13px 18px;}
+  [data-role=reception] .shift-summary article:last-child {border-right:0;}
+  [data-role=reception] .shift-summary strong {font-size:24px;font-weight:650;}
+  [data-role=reception] .shift-summary span {font-size:12px;}
+  [data-role=reception] .shift-controls {padding:14px 18px;}
+  [data-role=reception] .shift-tabs {border-bottom:1px solid #e4e8ed;padding-bottom:12px;margin-bottom:12px;}
+  [data-role=reception] .shift-tabs button {border:1px solid transparent;background:#f1f3f6;min-height:36px;padding:8px 14px;border-radius:6px;}
+  [data-role=reception] .shift-tabs button.active {background:#fff6d7;border-color:#e4c668;color:#554410;}
+  [data-role=reception] .shift-columns {grid-template-columns:minmax(0,1fr) 310px;}
+  [data-role=reception] .shift-visit-list {gap:0;}
+  [data-role=reception] .shift-visit {border:0;border-bottom:1px solid #e8ebef;border-radius:0;background:#fff;padding:14px 8px;gap:12px;}
+  [data-role=reception] .shift-visit:hover,[data-role=reception] .shift-visit.selected {background:#fffae9;box-shadow:inset 3px 0 #f0c232;}
+  [data-role=reception] .shift-person strong {font-weight:600;font-size:13px;}
+  [data-role=reception] .shift-explanation {font-size:11px;margin-bottom:12px;}
+  [data-role=reception] .shift-detail {border-top:0;box-shadow:none;}
+  [data-role=reception] .shift-detail h2 {font-size:20px;font-weight:650;}
+  .reception-list-columns {display:grid;grid-template-columns:62px 1fr 140px;gap:12px;padding:10px 8px;background:#f5f6f8;border-radius:5px;font-size:10px;font-weight:600;color:#6c7684;}
+  .reception-day-actions {display:flex;align-items:center;gap:12px;margin:-8px 0 18px;color:#718092;font-size:12px;}
+  .reception-day-actions strong {color:#364253;font-weight:600;}
+  .reception-day-actions>button {margin-left:auto;}
+  .reception-detail-actions {display:grid;gap:8px;margin:16px 0;}
+  .shift-detail .reception-detail-actions .button {margin:0;}
+  .reception-exceptions {border-top:1px solid #e5e9ee;border-bottom:1px solid #e5e9ee;padding:12px 0;}
+  .reception-exceptions summary {font-size:12px;color:#697585;cursor:pointer;}
+  .reception-exceptions .page-actions {margin-top:12px;}
+  .patient-entry {min-width:0;display:flex;flex-direction:column;}
+  .patient-entry>.patient-list-card {width:100%;box-sizing:border-box;flex:1;margin-bottom:0;}
+  .patient-entry-actions {padding:10px 12px;border:1px solid #e1e5eb;border-top:0;border-radius:0 0 9px 9px;background:#fff;}
+  .patient-entry-actions>.button {width:100%;font-size:12px;}
+}
+.booking-form {margin:0;color:#273344;}
+.booking-layout {display:grid;grid-template-columns:minmax(0,1fr) 244px;gap:22px;align-items:start;}
+.booking-main {min-width:0;}
+.booking-section {padding:0 0 22px;margin:0 0 20px;border-bottom:1px solid #e6e9ee;}
+.booking-section>header {display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.booking-section h3 {font-size:15px;margin:0;font-weight:650;}
+.booking-step {display:grid;place-items:center;width:26px;height:26px;flex-shrink:0;border-radius:7px;background:#fff3c9;color:#695315;font-size:12px;font-weight:650;}
+.booking-text-action {border:0;background:transparent;color:#755e1b;cursor:pointer;font-size:12px;padding:7px 0;font-weight:600;}
+.booking-section>header .booking-text-action {margin-left:auto;}
+.booking-kind,.booking-duration {display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.booking-kind>button,.booking-duration>button,.booking-slots>button {border:1px solid #dde2e8;background:#fff;color:#485466;border-radius:6px;padding:8px 10px;cursor:pointer;font-size:11px;min-height:34px;}
+.booking-kind>button[aria-pressed=true],.booking-duration>button[aria-pressed=true],.booking-slots>button[aria-pressed=true] {background:#fff4cf;color:#5a4717;border-color:#ddbc57;font-weight:650;}
+.booking-field {display:grid;gap:7px;font-size:12px;font-weight:550;color:#566275;margin:12px 0;}
+.booking-field input,.booking-field select,.booking-field textarea {width:100%;min-width:0;box-sizing:border-box;font-size:13px;color:#273344;border:1px solid #dce2e9;background:#fff;padding:11px 12px;border-radius:7px;}
+.booking-field select:disabled {color:#485466;background:#f5f6f8;opacity:1;}
+.booking-fields {display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.booking-patient-results {border:1px solid #e1e5eb;border-radius:8px;max-height:190px;overflow:auto;}
+.booking-patient-results>button {display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 12px;border:0;border-bottom:1px solid #edf0f3;background:white;cursor:pointer;}
+.booking-patient-results>button:last-child {border-bottom:0;}
+.booking-patient-results>button:hover {background:#fffbef;}
+.booking-patient-results>button:disabled {cursor:not-allowed;opacity:.45;}
+.booking-patient-results strong,.booking-selected strong {font-size:12px;color:#2f3a48;display:block;font-weight:600;}
+.booking-patient-results small,.booking-selected small {display:block;font-size:10px;color:#798390;margin-top:4px;}
+.booking-check {display:grid;place-items:center;width:22px;height:22px;border:1px solid #dce1e8;flex-shrink:0;border-radius:5px;color:#7b8694;}
+.booking-check.checked {background:#f7ce50;color:#483b17;border-color:#ddbc57;}
+.booking-selected {display:grid;gap:6px;margin-bottom:12px;}
+.booking-selected>div {display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #dfc778;background:#fffaf0;padding:12px;border-radius:8px;}
+.booking-selected button {border:0;background:transparent;color:#6c6554;font-size:20px;cursor:pointer;min-width:28px;min-height:28px;}
+.booking-hint,.booking-free-times>p {font-size:11px;color:#7a8593;line-height:1.6;margin:8px 0;}
+.booking-free-times {padding:14px;background:#f7f8fa;border:1px solid #e7ebef;border-radius:8px;margin-top:12px;}
+.booking-free-times>strong {font-size:12px;font-weight:600;}
+.booking-free-times>small {display:block;font-size:10px;color:#7a8593;line-height:1.7;margin-top:10px;}
+.booking-slots {display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;max-height:120px;overflow:auto;}
+.booking-slots>button {min-width:60px;background:#fff;font-variant-numeric:tabular-nums;font-size:12px;}
+.booking-summary {border:1px solid #e4e7ec;border-radius:10px;padding:18px;background:#f8f9fb;position:sticky;top:0;}
+.booking-summary h3 {font-size:17px;line-height:1.5;margin:12px 0 4px;overflow-wrap:anywhere;font-weight:650;}
+.booking-summary>p {font-size:11px;color:#7a8593;margin:0 0 18px;}
+.booking-summary dl {margin:0;display:grid;gap:14px;}
+.booking-summary dl>div {display:grid;gap:5px;}
+.booking-summary dt {font-size:10px;color:#7d8794;}
+.booking-summary dd {margin:0;font-size:12px;color:#344152;font-weight:550;overflow-wrap:anywhere;}
+.booking-summary>small {display:block;font-size:10px;color:#7d8794;border-top:1px solid #e3e7ed;padding-top:14px;margin-top:20px;}
+.booking-extra summary,.registration-extra summary {font-size:12px;color:#657184;cursor:pointer;padding:8px 0;}
+.registration-extra>.form-grid {margin-top:12px;}
+.booking-footer {display:flex;align-items:center;gap:10px;position:sticky;bottom:-20px;background:#fff;border-top:1px solid #e5e9ef;margin:20px -24px -20px;padding:16px 24px;z-index:3;}
+.booking-footer>span {margin-right:auto;color:#778291;font-size:12px;}
+.booking-success {display:flex;align-items:center;justify-content:space-between;gap:12px;background:#eff8f2;border:1px solid #cfe3d6;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#306149;font-size:12px;}
+.booking-success button {border:0;background:transparent;color:inherit;font-size:20px;cursor:pointer;}
+.booking-form button:disabled {cursor:not-allowed;}
+@media(max-width:1100px){[data-role=reception] .shift-columns {grid-template-columns:1fr;} .booking-layout {grid-template-columns:minmax(0,1fr) 210px;gap:16px;}}
+@media(max-width:760px){.booking-layout {grid-template-columns:1fr;} .booking-summary {position:static;} .booking-fields {grid-template-columns:1fr;} .booking-footer {bottom:-22px;flex-wrap:wrap;} .booking-footer>span {width:100%;} .reception-list-columns {display:none;} .reception-day-actions {display:none;} .patient-entry-actions {padding:10px;} }
+
+/* Once a patient is selected, keep the routine booking within one compact view. */
+.booking-type-select {min-height:32px!important;font-size:11px!important;padding:5px 9px!important;max-width:170px;margin-left:auto;}
+.booking-section>header .booking-type-select+.booking-text-action {margin-left:0;}
+.booking-assignment {display:flex;align-items:center;gap:12px;}
+.booking-assignment>span {flex:0 0 76px;}
+.booking-assignment>select {flex:1;min-width:0;}
+.booking-form .booking-section {padding-bottom:16px;margin-bottom:16px;}
+.booking-form .booking-section>header {margin-bottom:10px;}
+.booking-form .booking-fields .booking-field {margin:8px 0;}
+.booking-form .booking-free-times {padding:12px;}
+.booking-form .booking-duration {margin-bottom:8px;}
+.booking-form .booking-slots {max-height:74px;margin-top:8px;}
+@media(max-width:760px){.booking-section>header {flex-wrap:wrap;}.booking-type-select {max-width:160px;}}
