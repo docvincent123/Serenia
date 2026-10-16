@@ -2428,7 +2428,7 @@ function Devices({ api, onMessage }) {
         actions={<Button variant="secondary" onClick={load}>Оновити</Button>}
       />
       {error && <div className="alert error">{error}</div>}
-      <DeviceHealth api={api} onMessage={onMessage} />
+      <DeviceHealth api={api} onMessage={onMessage} Modal={Dialog} />
       <div className="stat-grid">
         <article className="stat-card"><strong>{sessions.length}</strong><h3>Активних сесій</h3><p>До завершення входу або 8 годин</p></article>
         <article className="stat-card"><strong>{online}</strong><h3>Онлайн зараз</h3><p>Активність протягом останніх 2 хвилин</p></article>

@@ -31,14 +31,20 @@ class OfflineSyncJob : JobService() {
                 val session = store.session() ?: return@execute
                 val auth = session.getString("token")
                 val drafts = DraftStore(this, base, uid)
-                val draftsAuthorized = DraftSync(drafts, store) { method, path, body ->
+                val recovery=RecoverySync(drafts,store) { data ->
+                    if(cancelled.get() || store.session()?.optString("token")!=auth) throw SyncFailure(401,"Потрібен повторний вхід")
+                    send(base,auth,data,"/api/mobile-recovery")
+                }
+                val recovered=recovery.run()
+                val draftsAuthorized = recovered && DraftSync(drafts, store) { method, path, body ->
                     if(cancelled.get() || store.session()?.optString("token") != auth) throw SyncFailure(401, "Потрібен повторний вхід")
                     if(method == "GET") get(base, auth, path) as JSONObject else send(base, auth, body!!, path, method)
                 }.run()
-                val authorized = draftsAuthorized && ConsultationSync(store) { payload ->
+                val consultationsAuthorized = draftsAuthorized && ConsultationSync(store) { payload ->
                     if(cancelled.get() || store.session()?.optString("token") != auth) throw SyncFailure(401, "Потрібен повторний вхід")
                     send(base, auth, payload)
                 }.run()
+                val authorized=consultationsAuthorized && recovery.run()
                 if(!authorized) { store.revokeSession(); AppointmentReminders.restore(this) }
                 if(authorized && !cancelled.get()) {
                     val shift = get(base, auth, "/api/shift-day") as JSONObject

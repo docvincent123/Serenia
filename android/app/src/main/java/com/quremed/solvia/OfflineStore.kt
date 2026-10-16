@@ -86,6 +86,19 @@ class OfflineStore(context: Context, server: String, userId: Long) {
         }
         write("queue", JSONObject().put("items", rows))
     }
+    fun acknowledgeRecovery(source: JSONObject, name: String, serverId: Long): Boolean = synchronized(lock) {
+        val key=source.getString("client_key");val rows=queue()
+        val existing=(0 until rows.length()).map {rows.getJSONObject(it)}.firstOrNull {it.getJSONObject("payload").optString("client_key")==key}
+        if(existing!=null) {
+            val local=existing.getJSONObject("payload")
+            if(local.optLong("patient_id")!=source.optLong("patient_id") || local.optLong("appointment_id")!=source.optLong("appointment_id") ||
+                DraftSync.fingerprint(local)!=DraftSync.fingerprint(source)) {
+                mark(key,"blocked","Консультацію вже проведено на сервері з іншим текстом. Локальний запис збережений для звірки.")
+                return@synchronized false
+            }
+        } else enqueue(source,name)
+        mark(key,"sent",serverId=serverId); true
+    }
     fun pendingFor(patientId: Long): JSONObject? = synchronized(lock) {
         val rows = queue()
         (0 until rows.length()).map { rows.getJSONObject(it) }.firstOrNull {

@@ -69,6 +69,17 @@ class DraftStore(context: Context, server: String, userId: Long) {
         if(current != null && current.optString("client_key") == clientKey)
             save(patient, current.put("sync_error", message).put("sync_blocked", blocked))
     }
+    fun removeRecovered(patient: Long, source: JSONObject): Boolean = synchronized(lock) {
+        val current = read(patient) ?: return@synchronized false
+        if(current.optString("client_key") != source.optString("client_key") ||
+            current.optLong("appointment_id") != source.optLong("appointment_id")) return@synchronized false
+        if(DraftSync.fingerprint(current) != DraftSync.fingerprint(source)) {
+            save(patient,current.put("sync_blocked",true).put("sync_error",
+                "Цю консультацію вже проведено на сервері. Нові локальні правки збережені: звірте їх з історією й додайте уточнення."))
+            return@synchronized false
+        }
+        remove(patient); true
+    }
     companion object { private val lock = Any() }
 
 }

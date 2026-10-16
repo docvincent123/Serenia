@@ -590,3 +590,28 @@ CREATE TABLE IF NOT EXISTS discharge_revisions(
   created TEXT NOT NULL,
   PRIMARY KEY(discharge_id,revision)
 );
+
+
+-- Immutable source snapshots for mobile recovery; resolution is attributed separately.
+CREATE TABLE IF NOT EXISTS mobile_recovery(
+ id BIGSERIAL PRIMARY KEY,
+ user_id BIGINT NOT NULL REFERENCES users(id),
+ device_id TEXT NOT NULL,
+ client_key TEXT NOT NULL,
+ patient_id BIGINT NOT NULL REFERENCES patients(id),
+ appointment_id BIGINT NOT NULL REFERENCES appointments(id),
+ kind TEXT NOT NULL CHECK(kind IN ('draft','consultation')),
+ payload TEXT NOT NULL,
+ error TEXT NOT NULL,
+ revision INTEGER NOT NULL DEFAULT 1,
+ state TEXT NOT NULL DEFAULT 'open' CHECK(state IN ('open','completed','linked')),
+ consultation_id BIGINT REFERENCES consultations(id),
+ resolved_by BIGINT REFERENCES users(id),
+ resolution_reason TEXT NOT NULL DEFAULT '',
+ resolved_payload TEXT NOT NULL DEFAULT '',
+ server_snapshot TEXT NOT NULL DEFAULT '',
+ created TEXT NOT NULL,
+ updated TEXT NOT NULL,
+ UNIQUE(user_id,device_id,client_key)
+);
+CREATE INDEX IF NOT EXISTS idx_mobile_recovery_state ON mobile_recovery(state,updated);

@@ -16,7 +16,13 @@ object DeviceStatus {
         val drafts = DraftStore(context, base, uid)
         for(pid in drafts.patients()) {
             val draft = drafts.read(pid) ?: continue
-            if(!DraftSync.transferred(draft)) {
+            val represented=(0 until queue.length()).map {queue.getJSONObject(it)}.any { row ->
+                val payload=row.getJSONObject("payload")
+                row.optString("state") in listOf("pending","blocked","sent") && payload.optString("client_key")==draft.optString("client_key") &&
+                    payload.optLong("patient_id")==pid && payload.optLong("appointment_id")==draft.optLong("appointment_id") &&
+                    DraftSync.fingerprint(payload)==DraftSync.fingerprint(draft)
+            }
+            if(!DraftSync.transferred(draft) && !represented) {
                 if(draft.optBoolean("sync_blocked")) blocked++ else pending++
             }
         }

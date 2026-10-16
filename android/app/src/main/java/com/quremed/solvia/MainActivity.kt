@@ -136,15 +136,22 @@ class MainActivity : Activity() {
             try {
                 val shift = requestAt(base, "GET", "/api/shift-day", authToken = sessionToken)
                 connected = true; store.saveCache("/api/shift-day", shift)
-                val draftsAuthorized = DraftSync(DraftStore(this, base, uid), store) { method, path, data ->
+                val recovery = RecoverySync(DraftStore(this,base,uid),store) { data ->
+                    if(store.session()?.optString("token")!=sessionToken) throw SyncFailure(401,"Потрібен повторний вхід")
+                    try {requestAt(base,"POST","/api/mobile-recovery",data,sessionToken) as JSONObject}
+                    catch(e:ApiError){throw SyncFailure(e.status,e.message ?: "Помилка відновлення")}
+                }
+                val recovered = recovery.run()
+                val draftsAuthorized = recovered && DraftSync(DraftStore(this, base, uid), store) { method, path, data ->
                     if(store.session()?.optString("token") != sessionToken) throw SyncFailure(401, "Потрібен повторний вхід")
                     try { requestAt(base, method, path, data, sessionToken) as JSONObject }
                     catch(e: ApiError) { throw SyncFailure(e.status, e.message ?: "Помилка сервера") }
                 }.run()
-                val authorized = draftsAuthorized && ConsultationSync(store) { payload ->
+                val consultationsAuthorized = draftsAuthorized && ConsultationSync(store) { payload ->
                     try { requestAt(base, "POST", "/api/consultations", payload, sessionToken) as JSONObject }
                     catch(e: ApiError) { throw SyncFailure(e.status, e.message ?: "Помилка сервера") }
                 }.run()
+                val authorized = consultationsAuthorized && recovery.run()
                 if(authorized) {
                     val report = DeviceStatus.payload(this, base, uid)
                     val response = requestAt(base, "POST", "/api/mobile-status", report, sessionToken) as JSONObject
