@@ -166,7 +166,7 @@ try {
   await page.getByRole('button',{name:'← До списку',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
   await page.getByRole('button',{name:'Лист очікування',exact:true}).click();
-  await page.getByRole('button',{name:'Додати пацієнта',exact:true}).click();
+  await page.getByRole('button',{name:'+ Додати в очікування',exact:true}).click();
   const dialog = page.getByRole('dialog',{name:'Нове очікування'});
   await dialog.locator('select').first().selectOption('10');
   await dialog.getByRole('button',{name:'Додати в очікування',exact:true}).click();

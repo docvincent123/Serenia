@@ -642,11 +642,16 @@ class Scenario(unittest.TestCase):
             self.assertEqual(code,status,result)
             return result
         call(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'test','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''})
-        people=call(rec,'GET','/api/staff/recipients')
+        people=call(admin,'GET','/api/staff/recipients')
+        call(rec,'GET','/api/staff/recipients',status=403)
+        call(rec,'GET','/api/staff/messages',status=403)
         self.assertTrue(any(p['id']==uid and any(d['device_id']=='staff-phone' for d in p['devices']) for p in people))
         call(psy,'GET','/api/staff/recipients',status=403)
         payload={'recipient_id':uid,'device_id':'staff-phone','body':'Службове тестове повідомлення','client_key':'staff-test-message'}
         call(psy,'POST','/api/staff/messages',payload,status=403)
+        call(rec,'POST','/api/staff/messages',payload,status=403)
+        director,_=login('director','staff-director')
+        call(director,'POST','/api/staff/messages',{**payload,'client_key':'director-message'})
         call(admin,'POST','/api/staff/messages',{**payload,'device_id':'unknown-phone'},status=400)
         message=call(admin,'POST','/api/staff/messages',payload)
         again=call(admin,'POST','/api/staff/messages',payload)

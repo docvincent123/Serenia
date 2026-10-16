@@ -260,6 +260,7 @@ jobs:
           node tests/ui-regression.mjs
           node tests/reception-booking.mjs
           node tests/desktop-system.mjs
+          node tests/account-waiting.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:

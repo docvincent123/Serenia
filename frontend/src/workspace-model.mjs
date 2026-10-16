@@ -20,7 +20,7 @@ export function navFor(role) {
       ['audit', 'Журнал дій']
     ];
   }
-  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['staff-messages', 'Повідомлення'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
+  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
   if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
   if (role === 'director') return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії'], ['discharges', 'Виписки'], ['staff-messages', 'Повідомлення']];
   return [];

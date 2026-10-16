@@ -424,7 +424,7 @@ function Spinner() {
   return <div className="spinner" aria-label="Завантаження" />;
 }
 
-function Dialog({ title, subtitle, onClose, children, wide = false, error = '' }) {
+function Dialog({ title, subtitle, onClose, children, wide = false, error = '', className = '' }) {
   const panel = useRef(null), dirty = useRef(false), closeRef = useRef(onClose);
   closeRef.current = onClose;
   function close() {
@@ -448,7 +448,7 @@ function Dialog({ title, subtitle, onClose, children, wide = false, error = '' }
   }
   return (
     <div className="dialog-backdrop" onMouseDown={close}>
-      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''}`}
+      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''} ${className}`}
         onKeyDown={keyDown} onChangeCapture={() => { dirty.current = true; }} onMouseDown={e => e.stopPropagation()}>
         <div className="dialog-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
           <IconButton onClick={close} aria-label="Закрити"><AppIcon name="close" /></IconButton></div>
@@ -490,6 +490,7 @@ function Login({ initialBase, onLogin }) {
   const [showServer, setShowServer] = useState(!initialBase);
   const [connection, setConnection] = useState('');
   const [checking, setChecking] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function checkConnection() {
     setChecking(true); setConnection(''); setError('');
@@ -507,6 +508,7 @@ function Login({ initialBase, onLogin }) {
 
   async function submit(e) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
@@ -521,15 +523,15 @@ function Login({ initialBase, onLogin }) {
   }
 
   return (
-    <div className="login-screen">
+    <div className="login-screen login-refined">
       <section className="login-brand">
         <div className="brand-orbit">
           <img className="brand-logo" src="/solvia-icon.png" alt="SOLVIA" />
         </div>
         <div className="login-brand-copy">
           <div className="eyebrow light">ПРОСТІР ЦЕНТРУ</div>
-          <h1>Час для допомоги. Простір для роботи.</h1>
-          <p>Пацієнти, прийоми та документація — в одному зручному робочому просторі.</p>
+          <h1>Поруч із людьми.<br />У ритмі центру.</h1>
+          <p>Спокійний робочий простір для команди, яка допомагає іншим.</p><div className="login-capabilities"><span>01 · Прийоми та пацієнти</span><span>02 · Кабінети й команда</span><span>03 · Документи та рекомендації</span></div>
         </div>
 
       </section>
@@ -549,15 +551,15 @@ function Login({ initialBase, onLogin }) {
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
-          {error && <div className="alert error">{error}</div>}
+          {error && <div className="alert error" role="alert">{error}</div>}
 
           <Field label="Логін" full>
             <input value={login} onChange={(e) => setLogin(e.target.value)} autoFocus autoComplete="username" placeholder="Ваш логін" required />
           </Field>
 
-          <Field label="Пароль" full>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••••••" required />
-          </Field>
+          <div className="field full"><label htmlFor="login-password">Пароль</label>
+            <div className="password-control"><input id="login-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="Введіть пароль" required /><button type="button" aria-pressed={showPassword} onClick={()=>setShowPassword(v=>!v)}>{showPassword ? "Сховати" : "Показати"}</button></div>
+          </div>
 
           <Button type="submit" className="login-submit" disabled={busy || !server.trim()}>
             {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
@@ -2614,7 +2616,7 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
         <ServerMaintenance api={api} apiBase={apiBase} />
       </section>
       <WorkflowSettings api={api} />
-      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />
+      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />
       <section className="surface">
         <div className="section-head"><div><div className="eyebrow">ПІДКЛЮЧЕННЯ</div><h2>Телефони, планшети та ПК</h2></div><Badge tone="stone">{sessions.length}</Badge></div>
         <div className="device-list">
@@ -2660,13 +2662,15 @@ function openProductUpdates() {
   else window.open('https://github.com/docvincent123/Serenia/releases', '_blank', 'noopener,noreferrer');
 }
 
-function AccountSettings({ api, apiBase, onLogout }) {
+function AccountSettings({ api, apiBase, onLogout, user }) {
   const [prefs, setPrefs] = useState(() => { try { return JSON.parse(localStorage.getItem('solvia_preferences') || '{}'); } catch { return {}; } });
   const [password, setPassword] = useState({current_password:'',new_password:'',confirm:''});
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [health, setHealth] = useState(null);
-  useEffect(() => { api('GET','/api/health').then(setHealth).catch(e=>setMessage(e.message)); }, []);
+  const [healthError,setHealthError] = useState('');
+  const passwordSaving = useRef(false);
+  useEffect(() => { api('GET','/api/health').then(setHealth).catch(e=>setHealthError(e.message)); }, []);
   function change(key,value) {
     const next={...prefs,[key]:value}; setPrefs(next);
     localStorage.setItem('solvia_preferences',JSON.stringify(next));
@@ -2674,30 +2678,31 @@ function AccountSettings({ api, apiBase, onLogout }) {
     document.documentElement.dataset.compact=next.compact ? 'true':'false';
   }
   async function changePassword(e) {
-    e.preventDefault(); setMessage('');
+    e.preventDefault(); if(passwordSaving.current)return; setMessage('');
     if(password.new_password!==password.confirm){setMessage('Нові паролі не збігаються.');return;}
-    setBusy(true);
+    passwordSaving.current=true;setBusy(true);
     try { await api('POST','/api/account/password',{current_password:password.current_password,new_password:password.new_password}); await onLogout(); }
-    catch(e){setMessage(e.message);}finally{setBusy(false);}
+    catch(e){setMessage(e.message);}finally{passwordSaving.current=false;setBusy(false);}
   }
   return <>
     <PageHead eyebrow="ОСОБИСТИЙ ПРОСТІР" title="Налаштування профілю" subtitle="Налаштування цього пристрою та захист облікового запису." />
-    {message && <div className="alert error" role="alert">{message}</div>}
-    <section className="surface settings-panel"><h2>Інтерфейс</h2><div className="weekday-options">
-      <label><input type="checkbox" checked={!!prefs.reducedMotion} onChange={e=>change('reducedMotion',e.target.checked)} /> Зменшити анімації</label>
-      <label><input type="checkbox" checked={!!prefs.compact} onChange={e=>change('compact',e.target.checked)} /> Компактні списки</label>
-    </div></section>
-    <section className="surface settings-panel"><h2>Змінити пароль</h2><p>Після зміни потрібно увійти з новим паролем на всіх пристроях.</p><form className="form-grid" onSubmit={changePassword}>
-      <Field label="Поточний пароль"><input type="password" autoComplete="current-password" value={password.current_password} onChange={e=>setPassword({...password,current_password:e.target.value})} required /></Field>
-      <Field label="Новий пароль"><input type="password" minLength="1" autoComplete="new-password" value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
-      <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field>
-      <div className="form-actions full-span"><Button disabled={busy}>Змінити пароль</Button></div>
-    </form></section>
-    <section className="surface settings-panel"><h2>Версія та оновлення</h2><p>Сервер: SOLVIA {health?.version || '…'} · {health?.platform || ''}</p><p>{apiBase}</p>
-      <Button variant="secondary" onClick={openProductUpdates}>Відкрити офіційні випуски</Button>
-      <p>Оновлення встановлює адміністратор центру. Перед оновленням переконайтеся, що всі записи передано на сервер.</p>
-      <a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a>
-    </section>
+    <div className="account-layout">
+      <aside className="surface account-identity"><span className="account-avatar">{user?.name?.slice(0,1).toUpperCase() || 'S'}</span><h2>{user?.name || 'Працівник центру'}</h2><span className="badge sand">{roleLabels[user?.role] || 'Обліковий запис'}</span><dl><div><dt>Логін</dt><dd>{user?.login || 'Визначений адміністратором'}</dd></div><div><dt>Доступ</dt><dd>Відповідно до вашої ролі</dd></div></dl><p>Ім’я, роль і доступ змінює адміністратор центру.</p></aside>
+      <div className="account-sections">
+        <section className="surface account-section"><header><h2>Вигляд робочого простору</h2><p>Зміни зберігаються автоматично на цьому ПК.</p></header>
+          <label className="account-preference"><span><strong>Зменшити анімації</strong><small>Спокійні переходи без зайвого руху</small></span><input type="checkbox" checked={!!prefs.reducedMotion} onChange={e=>change('reducedMotion',e.target.checked)} /></label>
+          <label className="account-preference"><span><strong>Компактні списки</strong><small>Більше рядків у робочих таблицях</small></span><input type="checkbox" checked={!!prefs.compact} onChange={e=>change('compact',e.target.checked)} /></label>
+        </section>
+        <section className="surface account-section"><header><h2>Безпека облікового запису</h2><p>Після зміни пароля потрібно повторно увійти на всіх пристроях.</p></header><form className="account-password" onSubmit={changePassword}>
+          {message && <div className="alert error" role="alert">{message}</div>}
+          <Field label="Поточний пароль"><input type="password" autoComplete="current-password" disabled={busy} value={password.current_password} onChange={e=>setPassword({...password,current_password:e.target.value})} required /></Field>
+          <div className="form-grid"><Field label="Новий пароль"><input type="password" minLength="1" autoComplete="new-password" disabled={busy} value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
+          <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" disabled={busy} value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field></div>
+          <Button type="submit" disabled={busy}>{busy ? 'Змінюємо пароль…' : 'Змінити пароль'}</Button>
+        </form></section>
+        <section className="surface account-section account-version"><header><h2>Про SOLVIA</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a></div><small>Оновлення встановлює адміністратор центру.</small></section>
+      </div>
+    </div>
   </>;
 }
 
@@ -3575,7 +3580,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
-    if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
+    if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
     if (page === 'dashboard') return <Dashboard api={api} role={user.role} onNavigate={navigate} access={receptionAccess} />;
     if (page === 'calendar') return <Calendar key={bookingVersion} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={bookingResult?.date} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} onBook={startBooking} createRequest={createRequest} onCreateRequestConsumed={()=>setCreateRequest(null)} />;
@@ -3587,10 +3592,10 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'workload') return <Workload api={api} />;
     if (page === 'supervisions') return <Supervisions api={api} role={user.role} user={user} />;
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
-    if (page === 'staff-messages') return <StaffMessages api={api} initialRecipient={messageTarget?.user_id} initialDevice={messageTarget?.device_id} />;
+    if (page === 'staff-messages' && ['admin','director'].includes(user.role)) return <StaffMessages api={api} initialRecipient={messageTarget?.user_id} initialDevice={messageTarget?.device_id} />;
     if (page === 'devices') return <Devices api={api} onMessage={target=>{setMessageTarget(target);navigate('staff-messages');}} />;
     if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
-    if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />;
+    if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
   })();
@@ -3655,7 +3660,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
                 <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
               </div>
             </div>
-            {['admin','reception','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
+            {['admin','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
             <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
           </div>
