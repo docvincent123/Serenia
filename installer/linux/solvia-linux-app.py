@@ -11,14 +11,17 @@ def server_url(value):
     if any(c.isspace() or ord(c) < 32 for c in value) or '\\' in value:
         raise ValueError('Адреса сервера не може містити пробіли або службові символи.')
     url = urlsplit(value)
-    if (url.scheme != 'https' or not url.hostname or url.username or url.password
+    if (url.scheme != 'https' or not url.hostname or url.username is not None or url.password is not None
             or url.path not in ('', '/') or url.query or url.fragment):
         raise ValueError('Вкажіть HTTPS-адресу сервера, наприклад https://192.168.1.10:8443')
     try:
         url.port
     except ValueError:
         raise ValueError('Некоректний порт сервера.') from None
-    return url.geturl().rstrip('/')
+    host = url.hostname.lower()
+    host = f'[{host}]' if ':' in host else host.encode('idna').decode('ascii')
+    authority = host + (f':{url.port}' if url.port not in (None, 443) else '')
+    return url._replace(netloc=authority).geturl().rstrip('/')
 
 
 def run(on_ready=None):
@@ -79,6 +82,8 @@ def run(on_ready=None):
             self.view.connect('load-changed', self.changed)
             self.view.connect('load-failed', self.failed)
             self.view.connect('load-failed-with-tls-errors', self.tls_failed)
+            self.view.connect('web-process-terminated', lambda *_: self.show_error(
+                'Робоче вікно SOLVIA перервало роботу. Натисніть «Повторити підключення».'))
             self.view.connect('decide-policy', self.policy)
             self.view.connect('permission-request', lambda _, request: (request.deny(), True)[1])
             self.view.connect('close', lambda *_: self.window.destroy())

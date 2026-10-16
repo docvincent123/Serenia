@@ -6,12 +6,14 @@ from pathlib import Path
 spec = importlib.util.spec_from_file_location('solvia_linux', 'installer/linux/solvia-linux-app.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-for value, expected in [('https://localhost:8443/', 'https://localhost:8443'),
+for value, expected in [('HTTPS://SOLVIA.CENTER:8443/', 'https://solvia.center:8443'),
+                        ('https://SOLVIA.CENTER:443/', 'https://solvia.center'),
+                        ('https://localhost:8443/', 'https://localhost:8443'),
                         (' https://192.168.1.10:8443 ', 'https://192.168.1.10:8443'),
                         ('https://[::1]:8443', 'https://[::1]:8443')]:
     assert module.server_url(value) == expected
 for value in ['http://localhost:8765', 'file:///etc/passwd', 'javascript:alert(1)',
-              'https://user:secret@localhost', 'https://host/path', 'https://host?q=x',
+              'https://user:secret@localhost', 'https://@localhost', 'https://host/path', 'https://host?q=x',
               'https://host/#token', 'https://', 'https://host:bad', 'https://ho st',
               'https://host\\evil', 'https://host\nname']:
     try:

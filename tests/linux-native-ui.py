@@ -6,6 +6,7 @@ import importlib.util
 import os
 from pathlib import Path
 import ssl
+import socket
 import subprocess
 import tempfile
 import threading
@@ -42,6 +43,8 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
     spec = importlib.util.spec_from_file_location('solvia_native', 'installer/linux/solvia-linux-app.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    offline_socket = socket.socket()
+    offline_socket.bind(('127.0.0.1', 0))  # Reserved but not listening: real connection refusal.
     phase = 'login'
     busy = False
     printed = False
@@ -60,7 +63,9 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
         assert app.view.get_website_data_manager().get_tls_errors_policy() == WebKit2.TLSErrorsPolicy.FAIL
         app.view.connect('print', printing)
         GLib.timeout_add(250, poll)
-        GLib.timeout_add_seconds(45, lambda: failed('Native client smoke test timed out'))
+        GLib.timeout_add_seconds(45, lambda: failed(
+            f'Native client timed out: phase={phase}, uri={app.view.get_uri()}, '
+            f'loading={app.view.is_loading()}, screen={app.stack.get_visible_child_name()}'))
         return False
 
     def printing(view, operation):
@@ -89,7 +94,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
                     failed(str(error))
             app.view.evaluate_javascript('document.body.innerText', -1, None, None, None, rendered, None)
         elif phase == 'print' and printed:
-            app.origin = 'https://127.0.0.1:1'
+            app.origin = f'https://127.0.0.1:{offline_socket.getsockname()[1]}'
             phase = 'offline'
             app.load()
         elif phase == 'offline' and app.stack.get_visible_child_name() == 'error':
@@ -109,6 +114,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
     try:
         module.run(ready)
     finally:
+        offline_socket.close()
         server.shutdown()
     assert phase == 'done', (phase, failures)
     assert not failures, failures
