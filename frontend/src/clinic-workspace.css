@@ -1,52 +1,52 @@
 /* Shared clinic workspace: charcoal navigation, warm surfaces, restrained yellow actions. */
-:root { --bg:#f4f5f7; --ink:#202833; --ink-2:#465260; --muted:#667384; --line:#e0e5eb; }
-.app-shell .sidebar { background:#171d26; padding-top:26px; }
+:root { --bg:#f5f5f5; --ink:#272727; --ink-2:#505050; --muted:#717171; --line:#e4e4e4; }
+.app-shell .sidebar { background:#1c1c1c; padding-top:26px; }
 .sidebar-brand { margin-bottom:10px; border-bottom:1px solid #ffffff13; }
 .sidebar .nav-group-toggle { letter-spacing:.08em; font-size:10px; text-transform:uppercase; }
 .sidebar .nav-item { border-radius:10px; transition:background .15s ease; }
-.sidebar .nav-item.active { background:#f6c22c; box-shadow:0 4px 12px #0002; }
+.sidebar .nav-item.active { background:#c2c2c2; box-shadow:0 4px 12px #00000022; }
 .sidebar .sidebar-support { background:#ffffff06; border:1px solid #ffffff12; border-radius:12px; }
 .sidebar .user-card { border-top:1px solid #ffffff16; }
 .workspace-inner { margin-inline:auto; width:100%; box-sizing:border-box; }
 .workspace-topbar { padding-bottom:20px; border-bottom:1px solid var(--line); background:#ffffffb3; }
-.connection-pill.online { background:#edf7f1; border-color:#cfe7d9; }
-.connection-pill.online strong { color:#246347; }
-.connection-pill.offline strong { color:#9f2920; }
-.shift-bar { background:#fff8e5; border-bottom:1px solid #eadcb3; font-variant-numeric:tabular-nums; }
+.connection-pill.online { background:#f4f4f4; border-color:#e1e1e1; }
+.connection-pill.online strong { color:#545454; }
+.connection-pill.offline strong { color:#414141; }
+.shift-bar { background:#f8f8f8; border-bottom:1px solid #dcdcdc; font-variant-numeric:tabular-nums; }
 .page-head h1 { letter-spacing:-.035em; font-weight:750; }
 .page-head p { color:var(--muted); }
-.eyebrow { color:#7b691f; letter-spacing:.12em; font-size:10px; }
-.surface { border-radius:16px; box-shadow:0 3px 12px #1e293b04; }
+.eyebrow { color:#676767; letter-spacing:.12em; font-size:10px; }
+.surface { border-radius:16px; box-shadow:0 3px 12px #28282804; }
 .stat-grid { gap:14px; }
 .stat-card { position:relative; overflow:hidden; border-radius:16px; padding:22px; box-shadow:none; }
-.stat-index { color:#798391; font-size:10px; letter-spacing:.08em; }
+.stat-index { color:#828282; font-size:10px; letter-spacing:.08em; }
 .stat-card>strong { font-variant-numeric:tabular-nums; letter-spacing:-.045em; }
 .stat-card h3 { font-size:13px; }
 .stat-card p { color:var(--muted); font-size:12px; }
 .role-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:28px; }
-.role-actions button { display:flex; align-items:center; gap:12px; min-height:94px; padding:18px; color:var(--ink); text-align:left; background:#fff; border:1px solid var(--line); border-radius:14px; cursor:pointer; }
-.role-actions button:hover { border-color:#bc9630; background:#fffbed; }
+.role-actions button { display:flex; align-items:center; gap:12px; min-height:94px; padding:18px; color:var(--ink); text-align:left; background:#ffffff; border:1px solid var(--line); border-radius:14px; cursor:pointer; }
+.role-actions button:hover { border-color:#979797; background:#fbfbfb; }
 .role-actions button>span:nth-child(2) { flex:1; min-width:0; }
 .role-actions strong,.role-actions small { display:block; }
 .role-actions strong { font-size:13px; line-height:1.5; }
 .role-actions small { margin-top:5px; font-size:11px; line-height:1.5; color:var(--muted); }
-.role-action-icon { display:grid; place-items:center; flex:0 0 38px; height:38px; background:#fff4ce; color:#806110; border-radius:11px; }
+.role-action-icon { display:grid; place-items:center; flex:0 0 38px; height:38px; background:#f4f4f4; color:#626262; border-radius:11px; }
 .role-action-icon svg { width:20px; height:20px; }
 .shift-summary article { border-radius:14px; padding:18px 20px; gap:8px; }
 .shift-summary strong { font-size:32px; letter-spacing:-.04em; font-variant-numeric:tabular-nums; }
 .shift-controls { background:#ffffff; }
 .shift-tabs { gap:6px; }
 .shift-tabs button { border-radius:8px; font-size:12px; }
-.shift-visit { background:#fff; border-color:var(--line); padding:16px; border-radius:12px; }
+.shift-visit { background:#ffffff; border-color:var(--line); padding:16px; border-radius:12px; }
 .shift-time { padding-right:14px; border-right:1px solid var(--line); }
 .shift-time strong { color:var(--ink); }
 .shift-person span,.shift-person small,.shift-detail dt { color:var(--muted); }
-.shift-visit.selected { box-shadow:inset 3px 0 #f6c22c; }
-.shift-detail { border-top:3px solid #f6c22c; }
+.shift-visit.selected { box-shadow:inset 3px 0 #c2c2c2; }
+.shift-detail { border-top:3px solid #c2c2c2; }
 .shift-detail .page-actions { gap:4px; }
 .shift-detail dl { gap:12px; }
 .shift-detail dd { color:var(--ink); }
-.shift-empty { background:#f8fafc; border:1px dashed #d9e0e8; border-radius:12px; margin-block:16px; }
+.shift-empty { background:#fafafa; border:1px dashed #dfdfdf; border-radius:12px; margin-block:16px; }
 .visit-status { white-space:normal; line-height:1.45; }
 .shift-readiness { max-height:44vh; border-radius:12px; }
 .dialog { border-radius:20px; }
@@ -69,7 +69,7 @@ input[type=date] { min-width:0; }
   .sidebar-actions .nav-item { min-height:32px; font-size:11px; }
   .sidebar .sidebar-support { margin-top:6px; padding:7px 9px; border-radius:8px; }
   .sidebar .user-card { margin-top:6px; padding:9px 8px 0; }
-  .workspace-topbar { display:flex; align-items:center; gap:16px; padding:14px 24px; background:#fff; }
+  .workspace-topbar { display:flex; align-items:center; gap:16px; padding:14px 24px; background:#ffffff; }
   .workspace-topbar .topbar-context { display:contents; }
   .workspace-topbar .topbar-context>div:first-child { display:none; }
   .workspace-topbar .global-search-wrap { order:-1; flex:1; min-width:180px; max-width:none; }
@@ -98,5 +98,5 @@ input[type=date] { min-width:0; }
   .table-wrap td,.table-wrap th { padding-top:11px; padding-bottom:11px; }
   .shift-bar { min-height:46px; padding:7px 24px; gap:12px; flex-wrap:wrap; font-size:11px; }
   .shift-bar .button { min-height:30px; padding:6px 12px; font-size:11px; }
-  .reception-access-status { margin-left:auto; color:#655727; }
+  .reception-access-status { margin-left:auto; color:#575757; }
 }
