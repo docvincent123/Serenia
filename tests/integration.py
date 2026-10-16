@@ -740,7 +740,7 @@ class Scenario(unittest.TestCase):
             self.api('admin','PATCH',f'/api/appointments/{aid}',{'status':'cancelled','cancellation_reason':'Synthetic load completed'})
             self.api('admin','PATCH',f'/api/users/{uid}',{'active':False})
 
-    def test_zz_mobile_recovery_preserves_text_versions_authorship_and_duplicates(self):
+    def test_recovery_mobile_preserves_text_versions_authorship_and_duplicates(self):
         self.api('admin','POST','/api/shift-day',{'action':'open'})
         self.api('admin','PATCH','/api/settings/workflow',{'opening_time':'08:00','closing_time':'20:00','working_days':'1234567'})
         suffix=str(time.time_ns());password='Recovery-password-2026'
