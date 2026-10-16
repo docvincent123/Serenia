@@ -56,6 +56,7 @@ jobs:
           node tests/drafts.mjs
           node tests/shift-workspace.mjs
           node tests/backup-status.mjs
+          node tests/booking.mjs
 
       - name: Build React interface
         shell: pwsh
@@ -200,6 +201,7 @@ jobs:
           node tests/auth-session.mjs
           node tests/drafts.mjs
           node tests/backup-status.mjs
+          node tests/booking.mjs
 
       - name: Stage Linux server installer
         run: |
@@ -254,7 +256,12 @@ jobs:
       - name: Test rendered UI and capture synthetic-data previews
         env:
           SOLVIA_PLAYWRIGHT_MODULE: /tmp/solvia-browser-tests/node_modules/playwright
-        run: node tests/ui-regression.mjs
+        run: |
+          node tests/ui-regression.mjs
+          node tests/reception-booking.mjs
+          node tests/desktop-system.mjs
+          node tests/account-waiting.mjs
+          node tests/performance.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:

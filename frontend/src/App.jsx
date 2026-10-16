@@ -3,9 +3,13 @@ import {backupNeedsAttention} from './backup-status.mjs';
 import {DeviceHealth,ShiftReadiness,Addenda,PatientProgress} from './Operations.jsx';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
+import { lightweightMode } from './performance.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
 import WaitingList from './WaitingList.jsx';
 import ShiftWorkspace from './ShiftWorkspace.jsx';
+import AppointmentBooking from './AppointmentBooking.jsx';
+import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
+import {navFor,navigationGroups} from './workspace-model.mjs';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -104,6 +108,7 @@ function AppIcon({ name, size = 18 }) {
     families: <><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M13.5 20a5 5 0 0 1 7.5-4.3"/></>,
     team: <><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/><circle cx="12" cy="7" r="4"/></>,
     rooms: <><path d="M4 21V4a1 1 0 0 1 1-1h11v18"/><path d="M16 8h4v13M8 7h4M8 11h4M8 15h4"/><path d="M3 21h18"/></>,
+    discharges: <><path d="M6 3h9l5 5v13H4V3zM14 3v6h6M8 13h8M8 17h5"/></>,
     reports: <><path d="M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
     'staff-messages': <><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M7 18v3l4-3M7 9h10M7 13h6"/></>,
     devices: <><rect x="3" y="4" width="13" height="10" rx="2"/><path d="M8 20h3M9.5 14v6"/><rect x="17" y="8" width="4" height="9" rx="1"/></>,
@@ -349,45 +354,10 @@ async function request(base, token, method, path, body) {
   return data;
 }
 
-function navFor(role) {
-  if (role === 'admin') {
-    return [
-      ['dashboard', 'Огляд центру'],
-      ['shift-workspace', 'Прийоми за зміну'],
-      ['calendar', 'Календар'],
-      ['waiting-list', 'Лист очікування'],
-      ['patients', 'Пацієнти'],
-      ['families', 'Сім’ї'],
-      ['team', 'Команда'],
-      ['staff-messages', 'Повідомлення'],
-      ['rooms', 'Кабінети'],
-      ['reports', 'Звіти психологів'],
-      ['workload', 'Навантаження'],
-      ['supervisions', 'Супервізії'],
-      ['archive', 'Архів'],
-      ['devices', 'Пристрої'],
-      ['settings', 'Налаштування'],
-      ['audit', 'Журнал дій']
-    ];
-  }
-  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['staff-messages', 'Повідомлення'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
-  if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
-  return [['staff-messages', 'Повідомлення'], ['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії']];
-}
-
-
-const navigationGroups = [
-  ['overview', 'Огляд', ['dashboard']],
-  ['appointments', 'Прийоми', ['shift-workspace', 'calendar', 'waiting-list']],
-  ['patients', 'Пацієнти та супровід', ['patients', 'families', 'archive']],
-  ['team', 'Команда', ['team', 'rooms', 'supervisions', 'staff-messages']],
-  ['reports', 'Звіти та аналітика', ['reports', 'workload']],
-  ['administration', 'Адміністрування', ['devices', 'audit']]
-];
 function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
   const active = page === 'patient-card' ? 'patients' : page;
   const groupFor = key => navigationGroups.find(([, , keys]) => keys.includes(key))?.[0];
-  const [expanded, setExpanded] = useState(() => new Set([groupFor(active)]));
+  const [expanded, setExpanded] = useState(() => new Set(navigationGroups.map(([id]) => id)));
   useEffect(() => { setExpanded(current => new Set([...current, groupFor(active)])); }, [active]);
   function item(key, label) {
     return <button key={key} disabled={locked && key !== 'staff-messages'} aria-current={active === key ? 'page' : undefined}
@@ -455,7 +425,7 @@ function Spinner() {
   return <div className="spinner" aria-label="Завантаження" />;
 }
 
-function Dialog({ title, subtitle, onClose, children, wide = false }) {
+function Dialog({ title, subtitle, onClose, children, wide = false, error = '', className = '' }) {
   const panel = useRef(null), dirty = useRef(false), closeRef = useRef(onClose);
   closeRef.current = onClose;
   function close() {
@@ -479,11 +449,11 @@ function Dialog({ title, subtitle, onClose, children, wide = false }) {
   }
   return (
     <div className="dialog-backdrop" onMouseDown={close}>
-      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''}`}
+      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`dialog ${wide ? 'wide' : ''} ${className}`}
         onKeyDown={keyDown} onChangeCapture={() => { dirty.current = true; }} onMouseDown={e => e.stopPropagation()}>
         <div className="dialog-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
           <IconButton onClick={close} aria-label="Закрити"><AppIcon name="close" /></IconButton></div>
-        <div className="dialog-body">{children}</div>
+        <div className="dialog-body">{error && <div className="alert error" role="alert">{error}</div>}{children}</div>
       </div>
     </div>
   );
@@ -521,6 +491,7 @@ function Login({ initialBase, onLogin }) {
   const [showServer, setShowServer] = useState(!initialBase);
   const [connection, setConnection] = useState('');
   const [checking, setChecking] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function checkConnection() {
     setChecking(true); setConnection(''); setError('');
@@ -538,6 +509,7 @@ function Login({ initialBase, onLogin }) {
 
   async function submit(e) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
@@ -552,15 +524,15 @@ function Login({ initialBase, onLogin }) {
   }
 
   return (
-    <div className="login-screen">
+    <div className="login-screen login-refined">
       <section className="login-brand">
         <div className="brand-orbit">
           <img className="brand-logo" src="/solvia-icon.png" alt="SOLVIA" />
         </div>
         <div className="login-brand-copy">
           <div className="eyebrow light">ПРОСТІР ЦЕНТРУ</div>
-          <h1>Час для допомоги. Простір для роботи.</h1>
-          <p>Пацієнти, прийоми та документація — в одному зручному робочому просторі.</p>
+          <h1>Поруч із людьми.<br />У ритмі центру.</h1>
+          <p>Спокійний робочий простір для команди, яка допомагає іншим.</p><div className="login-capabilities"><span>01 · Прийоми та пацієнти</span><span>02 · Кабінети й команда</span><span>03 · Документи та рекомендації</span></div>
         </div>
 
       </section>
@@ -580,15 +552,15 @@ function Login({ initialBase, onLogin }) {
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
-          {error && <div className="alert error">{error}</div>}
+          {error && <div className="alert error" role="alert">{error}</div>}
 
           <Field label="Логін" full>
             <input value={login} onChange={(e) => setLogin(e.target.value)} autoFocus autoComplete="username" placeholder="Ваш логін" required />
           </Field>
 
-          <Field label="Пароль" full>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••••••" required />
-          </Field>
+          <div className="field full"><label htmlFor="login-password">Пароль</label>
+            <div className="password-control"><input id="login-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="Введіть пароль" required /><button type="button" aria-pressed={showPassword} onClick={()=>setShowPassword(v=>!v)}>{showPassword ? "Сховати" : "Показати"}</button></div>
+          </div>
 
           <Button type="submit" className="login-submit" disabled={busy || !server.trim()}>
             {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
@@ -618,13 +590,14 @@ function Login({ initialBase, onLogin }) {
 
 function RoleActions({ role, onNavigate }) {
   const actions = role === 'admin'
-    ? [['shift-workspace','Прийняти пацієнта','Прибуття та перебіг прийомів'], ['team','Керувати командою','Працівники та доступ'], ['devices','Перевірити телефони','Зв’язок і передавання записів']]
-    : [['workload','Переглянути навантаження','Зайнятість спеціалістів'], ['supervisions','Планувати супервізії','Професійна підтримка команди'], ['staff-messages','Зв’язатися з психологом','Робочі повідомлення']];
+    ? [['shift-workspace','Прийняти пацієнта','Прибуття та перебіг прийомів'], ['team','Керувати командою','Працівники та доступ'], ['rooms','Кабінети центру','Приміщення та розклад']]
+    : [['workload','Переглянути навантаження','Зайнятість спеціалістів'], ['supervisions','Планувати супервізії','Професійна підтримка команди'], ['discharges','Переглянути виписки','Підсумки та рекомендації']];
   return <section className="role-actions" aria-label="Швидкі дії">{actions.map(([page,title,description]) =>
     <button key={page} onClick={() => onNavigate(page)}><span className="role-action-icon"><AppIcon name={page} /></span><span><strong>{title}</strong><small>{description}</small></span><span aria-hidden="true">↗</span></button>)}</section>;
 }
 
-function Dashboard({ api }) {
+function Dashboard({ api, role, onNavigate, access }) {
+  const [system,setSystem]=useState(null);
   const [stats, setStats] = useState(null);
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(localDate());
@@ -633,7 +606,8 @@ function Dashboard({ api }) {
   async function load() {
     setError('');
     try {
-      setStats(await api('GET', `/api/stats?from=${from}&to=${to}`));
+      const [data,status]=await Promise.all([api('GET', `/api/stats?from=${from}&to=${to}`),role==='admin'?api('GET','/api/admin/system').catch(()=>null):Promise.resolve(null)]);
+      setStats(data);setSystem(status);
     } catch (e) {
       setError(e.message);
     }
@@ -659,14 +633,14 @@ function Dashboard({ api }) {
   return (
     <>
       <PageHead
-        eyebrow="КЕРІВНИЦТВО"
+        eyebrow={role==='admin'?'АДМІНІСТРАТОР':'КЕРІВНИК ЦЕНТРУ'}
         title="Огляд центру"
-        subtitle="Операційна статистика без доступу до приватних нотаток психологів."
+        subtitle={role==='admin'?'Пацієнти, команда та щоденна робота центру.':'Результати роботи центру та завантаження спеціалістів.'}
         actions={
           <div className="date-range">
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <input aria-label="Початок періоду" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             <span>—</span>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <input aria-label="Кінець періоду" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             <Button variant="secondary" onClick={load}>Оновити</Button>
           </div>
         }
@@ -675,16 +649,16 @@ function Dashboard({ api }) {
       {error && <div className="alert error">{error}</div>}
       {!stats ? <Spinner /> : (
         <>
-          <div className="stat-grid">
-            {cards.map(([label, value, hint], index) => (
-              <article className="stat-card" key={label}>
-                <div className="stat-index">0{index + 1}</div>
-                <strong>{value}</strong>
-                <h3>{label}</h3>
-                <p>{hint}</p>
-              </article>
-            ))}
+          <div className="overview-primary" aria-label="Основні показники">
+            {[cards[1],cards[4],cards[6],cards[3]].map(([label,value,hint],i)=><article className="overview-kpi" key={label}><span className="overview-kpi-icon"><AppIcon name={['patients','calendar','reports','families'][i]} /></span><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></article>)}
           </div>
+          <div className="overview-workbench">
+            <section className="surface overview-actions"><div className="section-head"><div><h2>Робочі дії</h2><p>Перейдіть до потрібного розділу.</p></div></div><RoleActions role={role} onNavigate={onNavigate} /></section>
+            <section className="surface overview-status"><div className="section-head"><h2>{role==='admin'?'Стан центру':'Документи та команда'}</h2></div>
+              {role==='admin'?<><div className="overview-status-row"><span>Реєстратура</span><strong className={access?.allowed?'status-positive':'status-pending'}>{access?.allowed?'Доступ надано':'Очікує дозволу'}</strong></div><div className="overview-status-row"><span>База даних</span><strong>{system?.database?.name || 'Стан не завантажено'}</strong></div><div className="overview-status-row"><span>Резервна копія</span><strong>{!system?.backups?.length?'Немає даних':system.backups[0].status==='success'?system.backups[0].created?.slice(0,16).replace('T',' '):'Потребує перевірки'}</strong></div><button className="button secondary" onClick={()=>onNavigate('devices')}>Стан пристроїв</button></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
+            </section>
+          </div>
+          <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
           <section className="surface">
             <div className="section-head">
@@ -699,7 +673,7 @@ function Dashboard({ api }) {
               <div className="load-list">
                 {stats.load.map((item) => {
                   const hours = Number(item.hours || 0);
-                  const width = Math.min(100, hours * 5);
+                  const width = Math.max(0,Math.min(100,hours / Math.max(1,...stats.load.map(x=>Number(x.hours || 0))) * 100));
                   return (
                     <div className="load-row" key={item.name}>
                       <div className="avatar">{String(item.name || '?').slice(0, 1).toUpperCase()}</div>
@@ -739,101 +713,28 @@ function Dashboard({ api }) {
   );
 }
 
-function Calendar({ api, role, openPatient }) {
-  const [date, setDate] = useState(localDate());
+function Calendar({ api, role, openPatient, onBook, initialDate }) {
+  const [date, setDate] = useState(initialDate || localDate());
   const [appointments, setAppointments] = useState([]);
-  const [meta, setMeta] = useState({ psychologists: [], rooms: [] });
-  const [patients, setPatients] = useState([]);
+  const [loading,setLoading]=useState(true);
+  const generation=useRef(0);
   const [selected, setSelected] = useState(null);
-  const [dialog, setDialog] = useState('');
   const [error, setError] = useState('');
-  const [slots, setSlots] = useState([]);
-  const [booking, setBooking] = useState({
-    psychologist_id: '',
-    room_id: '',
-    start: '09:00',
-    end: '10:00',
-    kind: 'individual',
-    status: 'scheduled',
-    note: '',
-    patient_ids: []
-  });
-  const [slotForm, setSlotForm] = useState({ psychologist_id: '', room_id: '' });
-
   const canSchedule = role === 'admin' || role === 'reception';
 
   async function load(targetDate = date) {
-    setError('');
+    const request=++generation.current;setLoading(true);setError('');
     try {
-      const tasks = [api('GET', '/api/meta'), api('GET', `/api/appointments?date=${targetDate}`)];
-      if (canSchedule) tasks.push(api('GET', '/api/patients'));
-      const [m, a, p = []] = await Promise.all(tasks);
-      setMeta(m);
-      setAppointments(a);
-      setPatients(p);
-      setSelected(null);
-    } catch (e) {
-      setError(e.message);
-    }
+      const result=await api('GET', `/api/appointments?date=${targetDate}`);
+      if(request===generation.current){setAppointments(result);setSelected(null);}
+    } catch(e){if(request===generation.current)setError(e.message);}
+    finally{if(request===generation.current)setLoading(false);}
   }
 
-  useEffect(() => { load(date); }, [date]);
+  useEffect(() => { load(date);return()=>{++generation.current;}; }, [date]);
 
-  function openNew() {
-    setBooking({
-      psychologist_id: meta.psychologists?.[0]?.id || '',
-      room_id: meta.rooms?.[0]?.id || '',
-      start: meta.workflow?.opening_time || '08:00',
-      end: (() => { const [h,m]=(meta.workflow?.opening_time || '08:00').split(':').map(Number);const n=h*60+m+(meta.workflow?.default_duration_minutes || 60);return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); })(),
-      kind: 'individual',
-      status: 'scheduled',
-      note: '',
-      patient_ids: []
-    });
-    setDialog('booking');
-  }
-
-  function openEdit() {
-    if (!selected) return;
-    setBooking({
-      psychologist_id: selected.psychologist_id,
-      room_id: selected.room_id,
-      start: selected.start.slice(11, 16),
-      end: selected.end.slice(11, 16),
-      kind: selected.kind,
-      status: selected.status,
-      note: selected.note || '',
-      patient_ids: selected.patients.map((p) => p.id)
-    });
-    setDialog('edit');
-  }
-
-  async function saveBooking(e) {
-    e.preventDefault();
-    try {
-      const edit = dialog === 'edit';
-      let ids = booking.patient_ids.map(Number).filter(Boolean);
-      if (['individual','child','crisis'].includes(booking.kind)) ids = ids.slice(0, 1);
-      if (!ids.length) throw new Error('Оберіть хоча б одного пацієнта.');
-
-      const body = {
-        psychologist_id: Number(booking.psychologist_id),
-        room_id: Number(booking.room_id),
-        start: `${date}T${booking.start}`,
-        end: `${date}T${booking.end}`,
-        kind: booking.kind,
-        status: booking.status,
-        note: booking.note,
-        patient_ids: ids
-      };
-
-      await api(edit ? 'PATCH' : 'POST', edit ? `/api/appointments/${selected.id}` : '/api/appointments', body);
-      setDialog('');
-      await load();
-    } catch (e) {
-      setError(e.message);
-    }
-  }
+  function openNew() { onBook({date}); }
+  function openEdit() { if(selected) onBook({date:selected.start.slice(0,10),appointmentId:selected.id}); }
 
   async function cancelAppointment() {
     if (!selected) return;
@@ -853,19 +754,6 @@ function Calendar({ api, role, openPatient }) {
     } catch (e) { setError(e.message); }
   }
 
-  async function findSlots(e) {
-    e.preventDefault();
-    try {
-      const result = await api(
-        'GET',
-        `/api/slots?date=${date}&psychologist_id=${slotForm.psychologist_id}&room_id=${slotForm.room_id}`
-      );
-      setSlots(result);
-    } catch (e) {
-      setError(e.message);
-    }
-  }
-
   const statusLabel = (status) => ({
     draft: 'Чернетка', scheduled: 'Заплановано', confirmed: 'Підтверджено',
     completed: 'Проведено', cancelled: 'Скасовано', no_show: 'Не з’явився', rescheduled: 'Перенесено'
@@ -881,8 +769,7 @@ function Calendar({ api, role, openPatient }) {
         actions={
           <>
             <input className="date-control" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            {canSchedule && <Button variant="secondary" onClick={() => { setSlots([]); setSlotForm({ psychologist_id: meta.psychologists?.[0]?.id || '', room_id: meta.rooms?.[0]?.id || '' }); setDialog('slots'); }}>Вільні години</Button>}
-            {canSchedule && <Button onClick={openNew}>+ Новий запис</Button>}
+            {canSchedule && <Button onClick={openNew}><AppIcon name="plus" /> Записати пацієнта</Button>}
           </>
         }
       />
@@ -899,7 +786,7 @@ function Calendar({ api, role, openPatient }) {
             <Badge tone="stone">{appointments.length} подій</Badge>
           </div>
 
-          {!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
+          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
             <div className="appointment-list">
               {appointments.map((item) => (
                 <button
@@ -976,113 +863,16 @@ function Calendar({ api, role, openPatient }) {
         </aside>
       </div>
 
-      {(dialog === 'booking' || dialog === 'edit') && (
-        <Dialog title={dialog === 'edit' ? 'Змінити запис' : 'Новий запис'} subtitle={date} onClose={() => setDialog('')}>
-          <form className="form-grid" onSubmit={saveBooking}>
-            <Field label="Психолог">
-              <select value={booking.psychologist_id} onChange={(e) => setBooking({ ...booking, psychologist_id: e.target.value })} required>
-                {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Кабінет">
-              <select value={booking.room_id} onChange={(e) => setBooking({ ...booking, room_id: e.target.value })} required>
-                {meta.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Початок">
-              <input type="time" min="08:00" max="19:00" value={booking.start} onChange={(e) => setBooking({ ...booking, start: e.target.value })} required />
-            </Field>
-            <Field label="Завершення">
-              <input type="time" min="09:00" max="20:00" value={booking.end} onChange={(e) => setBooking({ ...booking, end: e.target.value })} required />
-            </Field>
-            <Field label="Тип зустрічі" full>
-              <select value={booking.kind} onChange={(e) => setBooking({ ...booking, kind: e.target.value })}>
-                <option value="individual">Індивідуальна консультація</option>
-                <option value="family">Сімейна консультація</option>
-                <option value="child">Дитяча консультація</option>
-                <option value="crisis">Кризова консультація</option>
-                <option value="group">Групове заняття</option>
-              </select>
-            </Field>
-            <Field label="Статус запису">
-              <select value={booking.status} onChange={(e) => setBooking({ ...booking, status: e.target.value })}>
-                <option value="draft">Чернетка</option>
-                <option value="scheduled">Заплановано</option>
-                <option value="confirmed">Підтверджено</option>
-              </select>
-            </Field>
-            <Field label="Примітка до запису">
-              <input value={booking.note} onChange={(e) => setBooking({ ...booking, note: e.target.value })} placeholder="Напр. підтвердити телефоном" />
-            </Field>
-            <Field label={booking.kind === 'group' ? 'Учасники' : 'Пацієнт'} hint={booking.kind === 'group' ? 'Ctrl + клік для вибору кількох учасників.' : ''} full>
-              <select
-                multiple={booking.kind === 'group'}
-                size={booking.kind === 'group' ? 6 : 1}
-                value={booking.kind === 'group' ? booking.patient_ids.map(String) : String(booking.patient_ids[0] || '')}
-                onChange={(e) => {
-                  const values = booking.kind === 'group'
-                    ? [...e.target.selectedOptions].map((o) => Number(o.value))
-                    : [Number(e.target.value)];
-                  setBooking({ ...booking, patient_ids: values.filter(Boolean) });
-                }}
-                disabled={dialog === 'edit'}
-                required
-              >
-                {booking.kind !== 'group' && <option value="">Оберіть пацієнта</option>}
-                {patients.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.psychologist}</option>)}
-              </select>
-            </Field>
-            {dialog === 'edit' && <div className="alert info full-span">Учасники при перенесенні зберігаються без змін.</div>}
-            <div className="form-actions full-span">
-              <Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button>
-              <Button type="submit">Зберегти запис</Button>
-            </div>
-          </form>
-        </Dialog>
-      )}
 
-      {dialog === 'slots' && (
-        <Dialog title="Вільні години" subtitle={date} onClose={() => setDialog('')}>
-          <form className="form-grid" onSubmit={findSlots}>
-            <Field label="Психолог">
-              <select value={slotForm.psychologist_id} onChange={(e) => setSlotForm({ ...slotForm, psychologist_id: e.target.value })} required>
-                {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Кабінет">
-              <select value={slotForm.room_id} onChange={(e) => setSlotForm({ ...slotForm, room_id: e.target.value })} required>
-                {meta.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </Field>
-            <div className="form-actions full-span"><Button type="submit">Показати слоти</Button></div>
-          </form>
-          {slots.length > 0 && (
-            <div className="slot-grid">
-              {slots.map((slot) => <button key={slot} className="slot" onClick={() => {
-                setBooking({
-                  psychologist_id: Number(slotForm.psychologist_id),
-                  room_id: Number(slotForm.room_id),
-                  start: slot,
-                  end: (() => { const [h,m]=slot.split(':').map(Number); const n=h*60+m+(meta.workflow?.default_duration_minutes || 60); return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); })(),
-                  status: 'scheduled', note: '',
-                  kind: 'individual',
-                  patient_ids: []
-                });
-                setDialog('booking');
-              }}>{slot}</button>)}
-            </div>
-          )}
-          {slots.length === 0 && <p className="muted centered">Оберіть параметри та натисніть «Показати слоти».</p>}
-        </Dialog>
-      )}
     </>
   );
 }
 
-function Patients({ api, role, openPatient }) {
+function Patients({ api, role, openPatient, onBook, createRequest, onCreateRequestConsumed }) {
   const [patients, setPatients] = useState([]);
   const [families, setFamilies] = useState([]);
   const [meta, setMeta] = useState({ psychologists: [], categories: [] });
+  const [view,setView]=useState(role==='psychologist'?'cards':'table');
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState(false);
   const [error, setError] = useState('');
@@ -1102,6 +892,9 @@ function Patients({ api, role, openPatient }) {
     admin_note: ''
   });
 
+  const [creating,setCreating]=useState(false);
+  const [registrationDate,setRegistrationDate]=useState(localDate());
+  const createLock=useRef(false), consumedCreate=useRef(null);
   const canCreate = role === 'admin' || role === 'reception';
 
   async function load() {
@@ -1145,10 +938,19 @@ function Patients({ api, role, openPatient }) {
     setDialog(true);
   }
 
+  useEffect(()=>{
+    if(createRequest && meta.psychologists?.length && consumedCreate.current!==createRequest.key){
+      consumedCreate.current=createRequest.key;setRegistrationDate(createRequest.date || localDate());openCreate();onCreateRequestConsumed();
+    }
+  },[createRequest,meta]);
+
   async function createPatient(e) {
     e.preventDefault();
+    if(createLock.current)return;
+    createLock.current=true;setCreating(true);setError('');
+    const bookAfter=e.nativeEvent.submitter?.value==='book';
     try {
-      await api('POST', '/api/patients', {
+      const created=await api('POST', '/api/patients', {
         name: form.name,
         phone: form.phone,
         dob: form.dob,
@@ -1165,9 +967,10 @@ function Patients({ api, role, openPatient }) {
       });
       setDialog(false);
       await load();
+      if(bookAfter)onBook({patientId:created.id,date:registrationDate});
     } catch (e) {
       setError(e.message);
-    }
+    } finally {createLock.current=false;setCreating(false);}
   }
 
   return (
@@ -1187,39 +990,18 @@ function Patients({ api, role, openPatient }) {
             <span><AppIcon name="search" /></span>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук за №, ПІБ, телефоном, категорією…" />
           </div>
-          <Badge tone="stone">{filtered.length} записів</Badge>
+          <span className="directory-total">Знайдено: {filtered.length}</span><ViewSwitch value={view} onChange={setView} />
         </div>
 
         {!filtered.length ? <Empty title="Нічого не знайдено" text="Спробуйте змінити запит або створіть нового пацієнта." /> : (
-          <div className="patient-card-list">
-            {filtered.map((p) => (
-              <button className="patient-list-card" key={p.id} onClick={() => openPatient(p.id)}>
-                <span className="patient-card-accent" />
-                <span className="patient-card-head">
-                  <span className="avatar patient-avatar">{p.name.slice(0, 1).toUpperCase()}</span>
-                  <span className="patient-card-name">
-                    <small>ПАЦІЄНТ · №{p.patient_no || '—'}</small>
-                    <strong>{p.name}</strong>
-                    <span>{p.phone}</span>
-                  </span>
-                  <span className="patient-card-arrow">↗</span>
-                </span>
-                <span className="patient-card-tags">
-                  <Badge tone={categoryTone[p.category] || 'stone'}>{p.category}</Badge>
-                </span>
-                <span className="patient-card-meta">
-                  <span><small>ПСИХОЛОГ</small><strong>{p.psychologist || 'Не призначено'}</strong></span>
-                  <span><small>СІМ’Я</small><strong>{p.family || 'Без сімейного зв’язку'}</strong></span>
-                </span>
-              </button>
-            ))}
-          </div>
+          <PatientDirectory rows={filtered} view={view} onOpen={openPatient} onBook={canCreate?onBook:null} />
         )}
       </section>
 
       {dialog && (
-        <Dialog title="Новий пацієнт" subtitle="Реєстраційна картка" onClose={() => setDialog(false)} wide>
+        <Dialog title="Новий пацієнт" subtitle="Реєстраційна картка" onClose={() => {if(!createLock.current)setDialog(false);}} wide>
           <form className="form-grid" onSubmit={createPatient}>
+            {error && <div className="alert error full-span" role="alert">{error}</div>}
             <Field label="ПІБ" full>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={150} />
             </Field>
@@ -1239,6 +1021,7 @@ function Patients({ api, role, openPatient }) {
                 {meta.psychologists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </Field>
+            <details className="registration-extra full-span"><summary>Додаткові відомості про пацієнта</summary><div className="form-grid">
             <Field label="Сім’я">
               <select value={form.family_id} onChange={(e) => setForm({ ...form, family_id: e.target.value })}>
                 <option value="">Без сімейного зв’язку</option>
@@ -1276,9 +1059,11 @@ function Patients({ api, role, openPatient }) {
                 <textarea rows="3" value={form.admin_note} onChange={(e) => setForm({ ...form, admin_note: e.target.value })} />
               </Field>
             )}
+            </div></details>
             <div className="form-actions full-span">
               <Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button>
-              <Button type="submit">Створити пацієнта</Button>
+              <Button type="submit" variant="secondary" disabled={creating} value="save">Зареєструвати</Button>
+              <Button type="submit" disabled={creating} value="book">{creating?'Зберігаємо…':'Зареєструвати й записати'}</Button>
             </div>
           </form>
         </Dialog>
@@ -1304,6 +1089,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
   });
   const [assessmentLink, setAssessmentLink] = useState('');
   const [adminNote, setAdminNote] = useState({ note: '', priority: 'normal' });
+  const [editingDischarge, setEditingDischarge] = useState(null);
   const [discharge, setDischarge] = useState({ date_from: monthStart(), date_to: localDate() });
   const [printDoc, setPrintDoc] = useState(null);
   const [patientEdit, setPatientEdit] = useState({ name: '', phone: '', dob: '', category: '', psychologist_id: '', family_id: '', family_role: '', sex: '', address: '', status: 'active', referral_source: '', referral_source_details: '', admin_note: '' });
@@ -1923,7 +1709,8 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
               {card.discharges.map((d) => (
                 <div className="assessment-row" key={d.id}>
                   <div><strong>{d.date_from} — {d.date_to}</strong><span>{d.consultation_count} консультацій · {d.author}</span></div>
-                  <Button variant="secondary" onClick={() => openDischargePrint(d)}>Перегляд / PDF</Button>
+                  <div className="page-actions"><Button variant="secondary" onClick={() => openDischargePrint(d)}>Перегляд / PDF</Button>
+                  {(isAdmin || isPsychologist) && <Button variant="secondary" onClick={() => setEditingDischarge(d)}>Редагувати</Button>}</div>
                 </div>
               ))}
             </div>
@@ -2206,6 +1993,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
         </Dialog>
       )}
 
+      {editingDischarge && <DischargeEditor api={api} item={editingDischarge} onClose={() => setEditingDischarge(null)} onSaved={async () => { setEditingDischarge(null); await load(); }} />}
       {dialog === 'print-discharge' && printDoc && (
         <Dialog title="Виписка пацієнта" subtitle="Попередній перегляд документа" onClose={() => { setDialog(''); setPrintDoc(null); }} wide>
           <article className="discharge-print">
@@ -2274,7 +2062,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
   );
 }
 
-function Families({ api }) {
+function Families({ api, openPatient }) {
   const [families, setFamilies] = useState([]);
   const [patients, setPatients] = useState([]);
   const [name, setName] = useState('');
@@ -2318,7 +2106,7 @@ function Families({ api }) {
               <h3>{f.name}</h3>
               <p>{members.length} учасників</p>
               <div className="family-members">
-                {members.length ? members.map((m) => <span key={m.id}>{m.name}<small>{m.family_role || m.category}</small></span>) : <small>Ще немає учасників</small>}
+                {members.length ? members.map((m) => <button className="family-member-link" key={m.id} onClick={()=>openPatient(m.id)}>{m.name}<small>{m.family_role || m.category}</small></button>) : <small>Ще немає учасників</small>}
               </div>
             </article>
           );
@@ -2327,7 +2115,7 @@ function Families({ api }) {
       {!families.length && <section className="surface"><Empty title="Сімей ще немає" text="Створіть сім’ю, а потім оберіть її в картці нового пацієнта." /></section>}
 
       {dialog && (
-        <Dialog title="Нова сім’я" onClose={() => setDialog(false)}>
+        <Dialog error={error} title="Нова сім’я" onClose={() => setDialog(false)}>
           <form onSubmit={createFamily}>
             <Field label="Назва сім’ї" full><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Напр. Родина Коваленків" required /></Field>
             <div className="form-actions"><Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button><Button type="submit">Створити</Button></div>
@@ -2343,6 +2131,8 @@ function Team({ api, currentUser }) {
   const [dialog, setDialog] = useState('');
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
+  const [query,setQuery]=useState(''),[roleFilter,setRoleFilter]=useState('');
+  const visible=users.filter(u=>(!roleFilter||u.role===roleFilter)&&[u.name,u.login,u.phone].some(v=>String(v||'').toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk'))));
   const emptyForm = { name: '', login: '', phone: '', password: '', role: 'psychologist', active: true };
   const [form, setForm] = useState(emptyForm);
 
@@ -2352,12 +2142,14 @@ function Team({ api, currentUser }) {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
+    setError('');
     setForm(emptyForm);
     setEditing(null);
     setDialog('create');
   }
 
   function openEdit(user) {
+    setError('');
     setEditing(user);
     setForm({
       name: user.name || '',
@@ -2411,8 +2203,9 @@ function Team({ api, currentUser }) {
       />
       {error && <div className="alert error">{error}</div>}
       <section className="surface">
+        <div className="toolbar"><div className="search-box"><AppIcon name="search"/><input aria-label="Пошук працівника" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Ім’я, логін або телефон" /></div><select className="toolbar-select" aria-label="Роль працівника" value={roleFilter} onChange={e=>setRoleFilter(e.target.value)}><option value="">Усі ролі</option>{Object.entries(roleLabels).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select><span className="directory-total">Знайдено: {visible.length}</span></div>
         <div className="team-grid">
-          {users.map((u) => (
+          {visible.map((u) => (
             <article className="team-card" key={u.id}>
               <button className="team-card-main" onClick={() => openEdit(u)}>
                 <div className="avatar">{u.name.slice(0, 1).toUpperCase()}</div>
@@ -2422,8 +2215,8 @@ function Team({ api, currentUser }) {
                   <small>{u.phone || 'Телефон не вказано'}</small>
                 </div>
               </button>
-              <div className="team-state">
-                <Badge tone={u.active ? 'forest' : 'stone'}>{roleLabels[u.role] || u.role}</Badge>
+              <div className="team-state"><Button variant="secondary" onClick={()=>openEdit(u)}>Редагувати</Button>
+                <Badge tone="stone">{roleLabels[u.role] || u.role}</Badge><Badge tone={u.active?'forest':'stone'}>{u.active?'Активний':'Вимкнений'}</Badge>
                 <small>{Number(u.active_sessions || 0) ? `${u.active_sessions} активн. сес. · ${u.platforms || 'Unknown'}` : 'Немає активної сесії'}</small>
                 {Number(u.active_sessions || 0) > 0 && Number(u.id) !== Number(currentUser?.id) && (
                   <Button variant="danger" onClick={() => terminateSessions(u)}>Завершити сесію</Button>
@@ -2432,10 +2225,11 @@ function Team({ api, currentUser }) {
             </article>
           ))}
         </div>
+        {!visible.length && <Empty title="Працівників не знайдено" text="Змініть пошук або додайте працівника." />}
       </section>
 
       {dialog && (
-        <Dialog title={dialog === 'create' ? 'Новий працівник' : 'Керування працівником'} subtitle={dialog === 'edit' ? `@${editing?.login}` : 'Створення облікового запису'} onClose={() => setDialog('')}>
+        <Dialog error={error} title={dialog === 'create' ? 'Новий працівник' : 'Керування працівником'} subtitle={dialog === 'edit' ? `@${editing?.login}` : 'Створення облікового запису'} onClose={() => setDialog('')}>
           <form className="form-grid" onSubmit={saveUser}>
             <Field label="ПІБ" full>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -2483,6 +2277,8 @@ function Rooms({ api }) {
   const [dialog, setDialog] = useState('');
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
+  const [query,setQuery]=useState(''),[statusFilter,setStatusFilter]=useState('');
+  const visible=rooms.filter(r=>(!statusFilter||(statusFilter==='active'?r.active:!r.active))&&[r.name,r.code,r.description].some(v=>String(v||'').toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk'))));
   const emptyForm = { name: '', code: '', type: 'individual', capacity: 1, description: '', active: true };
   const [form, setForm] = useState(emptyForm);
 
@@ -2493,11 +2289,13 @@ function Rooms({ api }) {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
+    setError('');
     setEditing(null);
     setForm(emptyForm);
     setDialog('create');
   }
   function openEdit(room) {
+    setError('');
     setEditing(room);
     setForm({
       name: room.name || '',
@@ -2544,8 +2342,9 @@ function Rooms({ api }) {
         actions={<Button onClick={openCreate}>+ Додати приміщення</Button>}
       />
       {error && <div className="alert error">{error}</div>}
+      <section className="surface directory-toolbar-surface"><div className="toolbar"><div className="search-box"><AppIcon name="search"/><input aria-label="Пошук кабінету" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Назва, номер або опис кабінету"/></div><select className="toolbar-select" aria-label="Статус кабінету" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">Усі кабінети</option><option value="active">Активні</option><option value="inactive">Неактивні</option></select><span className="directory-total">Знайдено: {visible.length}</span></div></section>
       <div className="room-grid">
-        {rooms.map((r, i) => (
+        {visible.map((r, i) => (
           <article className={`room-card ${r.active ? '' : 'room-inactive'}`} key={r.id}>
             <span>{String(i + 1).padStart(2, '0')}</span>
             <div className="room-card-main">
@@ -2555,16 +2354,16 @@ function Rooms({ api }) {
             </div>
             <div className="room-actions">
               <Badge tone={r.active ? 'forest' : 'stone'}>{r.active ? 'Активний' : 'Неактивний'}</Badge>
-              <IconButton onClick={() => openEdit(r)} title="Редагувати"><AppIcon name="edit" /></IconButton>
-              <IconButton onClick={() => removeRoom(r)} title="Видалити"><AppIcon name="delete" /></IconButton>
+              <IconButton onClick={() => openEdit(r)} title="Редагувати" aria-label={`Редагувати ${r.name}`}><AppIcon name="edit" /></IconButton>
+              <IconButton onClick={() => removeRoom(r)} title="Видалити" aria-label={`Видалити ${r.name}`}><AppIcon name="delete" /></IconButton>
             </div>
           </article>
         ))}
       </div>
-      {!rooms.length && <section className="surface"><Empty title="Приміщень немає" text="Додайте перший кабінет або зал." /></section>}
+      {!visible.length && <section className="surface"><Empty title={rooms.length?'Кабінетів не знайдено':'Приміщень немає'} text={rooms.length?'Змініть пошук або фільтр.':'Додайте перший кабінет або зал.'} /></section>}
 
       {dialog && (
-        <Dialog title={dialog === 'create' ? 'Нове приміщення' : 'Редагування приміщення'} onClose={() => setDialog('')} wide>
+        <Dialog error={error} title={dialog === 'create' ? 'Нове приміщення' : 'Редагування приміщення'} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveRoom}>
             <Field label="Назва" full><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
             <Field label="Код / номер"><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="101 / A-3" /></Field>
@@ -2818,7 +2617,7 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
         <ServerMaintenance api={api} apiBase={apiBase} />
       </section>
       <WorkflowSettings api={api} />
-      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />
+      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />
       <section className="surface">
         <div className="section-head"><div><div className="eyebrow">ПІДКЛЮЧЕННЯ</div><h2>Телефони, планшети та ПК</h2></div><Badge tone="stone">{sessions.length}</Badge></div>
         <div className="device-list">
@@ -2864,44 +2663,49 @@ function openProductUpdates() {
   else window.open('https://github.com/docvincent123/Serenia/releases', '_blank', 'noopener,noreferrer');
 }
 
-function AccountSettings({ api, apiBase, onLogout }) {
+function AccountSettings({ api, apiBase, onLogout, user }) {
   const [prefs, setPrefs] = useState(() => { try { return JSON.parse(localStorage.getItem('solvia_preferences') || '{}'); } catch { return {}; } });
   const [password, setPassword] = useState({current_password:'',new_password:'',confirm:''});
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [health, setHealth] = useState(null);
-  useEffect(() => { api('GET','/api/health').then(setHealth).catch(e=>setMessage(e.message)); }, []);
+  const [healthError,setHealthError] = useState('');
+  const passwordSaving = useRef(false);
+  useEffect(() => { api('GET','/api/health').then(setHealth).catch(e=>setHealthError(e.message)); }, []);
   function change(key,value) {
     const next={...prefs,[key]:value}; setPrefs(next);
     localStorage.setItem('solvia_preferences',JSON.stringify(next));
     document.documentElement.dataset.reducedMotion=next.reducedMotion ? 'true':'false';
     document.documentElement.dataset.compact=next.compact ? 'true':'false';
+    document.documentElement.dataset.lightweight=lightweightMode(next,navigator.platform,navigator.userAgent)?'true':'false';
   }
   async function changePassword(e) {
-    e.preventDefault(); setMessage('');
+    e.preventDefault(); if(passwordSaving.current)return; setMessage('');
     if(password.new_password!==password.confirm){setMessage('Нові паролі не збігаються.');return;}
-    setBusy(true);
+    passwordSaving.current=true;setBusy(true);
     try { await api('POST','/api/account/password',{current_password:password.current_password,new_password:password.new_password}); await onLogout(); }
-    catch(e){setMessage(e.message);}finally{setBusy(false);}
+    catch(e){setMessage(e.message);}finally{passwordSaving.current=false;setBusy(false);}
   }
   return <>
     <PageHead eyebrow="ОСОБИСТИЙ ПРОСТІР" title="Налаштування профілю" subtitle="Налаштування цього пристрою та захист облікового запису." />
-    {message && <div className="alert error" role="alert">{message}</div>}
-    <section className="surface settings-panel"><h2>Інтерфейс</h2><div className="weekday-options">
-      <label><input type="checkbox" checked={!!prefs.reducedMotion} onChange={e=>change('reducedMotion',e.target.checked)} /> Зменшити анімації</label>
-      <label><input type="checkbox" checked={!!prefs.compact} onChange={e=>change('compact',e.target.checked)} /> Компактні списки</label>
-    </div></section>
-    <section className="surface settings-panel"><h2>Змінити пароль</h2><p>Після зміни потрібно увійти з новим паролем на всіх пристроях.</p><form className="form-grid" onSubmit={changePassword}>
-      <Field label="Поточний пароль"><input type="password" autoComplete="current-password" value={password.current_password} onChange={e=>setPassword({...password,current_password:e.target.value})} required /></Field>
-      <Field label="Новий пароль"><input type="password" minLength="1" autoComplete="new-password" value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
-      <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field>
-      <div className="form-actions full-span"><Button disabled={busy}>Змінити пароль</Button></div>
-    </form></section>
-    <section className="surface settings-panel"><h2>Версія та оновлення</h2><p>Сервер: SOLVIA {health?.version || '…'} · {health?.platform || ''}</p><p>{apiBase}</p>
-      <Button variant="secondary" onClick={openProductUpdates}>Відкрити офіційні випуски</Button>
-      <p>Оновлення встановлює адміністратор центру. Перед оновленням переконайтеся, що всі записи передано на сервер.</p>
-      <a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a>
-    </section>
+    <div className="account-layout">
+      <aside className="surface account-identity"><span className="account-avatar">{user?.name?.slice(0,1).toUpperCase() || 'S'}</span><h2>{user?.name || 'Працівник центру'}</h2><span className="badge sand">{roleLabels[user?.role] || 'Обліковий запис'}</span><dl><div><dt>Логін</dt><dd>{user?.login || 'Визначений адміністратором'}</dd></div><div><dt>Доступ</dt><dd>Відповідно до вашої ролі</dd></div></dl><p>Ім’я, роль і доступ змінює адміністратор центру.</p></aside>
+      <div className="account-sections">
+        <section className="surface account-section"><header><h2>Вигляд робочого простору</h2><p>Зміни зберігаються автоматично на цьому ПК.</p></header>
+          <label className="account-preference"><span><strong>Полегшений режим</strong><small>Без розмиття та важких тіней. Рекомендовано для слабких ПК.</small></span><input type="checkbox" checked={lightweightMode(prefs,navigator.platform,navigator.userAgent)} onChange={e=>change('lightweight',e.target.checked)} /></label>
+          <label className="account-preference"><span><strong>Зменшити анімації</strong><small>Спокійні переходи без зайвого руху</small></span><input type="checkbox" checked={!!prefs.reducedMotion} onChange={e=>change('reducedMotion',e.target.checked)} /></label>
+          <label className="account-preference"><span><strong>Компактні списки</strong><small>Більше рядків у робочих таблицях</small></span><input type="checkbox" checked={!!prefs.compact} onChange={e=>change('compact',e.target.checked)} /></label>
+        </section>
+        <section className="surface account-section"><header><h2>Безпека облікового запису</h2><p>Після зміни пароля потрібно повторно увійти на всіх пристроях.</p></header><form className="account-password" onSubmit={changePassword}>
+          {message && <div className="alert error" role="alert">{message}</div>}
+          <Field label="Поточний пароль"><input type="password" autoComplete="current-password" disabled={busy} value={password.current_password} onChange={e=>setPassword({...password,current_password:e.target.value})} required /></Field>
+          <div className="form-grid"><Field label="Новий пароль"><input type="password" minLength="1" autoComplete="new-password" disabled={busy} value={password.new_password} onChange={e=>setPassword({...password,new_password:e.target.value})} required /></Field>
+          <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" disabled={busy} value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field></div>
+          <Button type="submit" disabled={busy}>{busy ? 'Змінюємо пароль…' : 'Змінити пароль'}</Button>
+        </form></section>
+        <section className="surface account-section account-version"><header><h2>Про SOLVIA</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a></div><small>Оновлення встановлює адміністратор центру.</small></section>
+      </div>
+    </div>
   </>;
 }
 
@@ -3580,7 +3384,7 @@ function Supervisions({ api, role, user }) {
       </section>
 
       {dialog === 'create' && leader && (
-        <Dialog title="Нова супервізія" subtitle="Планування зустрічі" onClose={() => setDialog('')}>
+        <Dialog error={error} title="Нова супервізія" subtitle="Планування зустрічі" onClose={() => setDialog('')}>
           <form className="form-grid" onSubmit={create}>
             <Field label="Психолог" full>
               <select value={form.psychologist_id} onChange={(e) => setForm({ ...form, psychologist_id: e.target.value })} required>
@@ -3596,7 +3400,7 @@ function Supervisions({ api, role, user }) {
       )}
 
       {dialog === 'edit' && selected && (
-        <Dialog title="Супервізія" subtitle={selected.psychologist + ' · ' + (selected.scheduled_at || '').replace('T',' ')} onClose={() => setDialog('')} wide>
+        <Dialog error={error} title="Супервізія" subtitle={selected.psychologist + ' · ' + (selected.scheduled_at || '').replace('T',' ')} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveEdit}>
             <Field label="Деідентифікований опис випадку" hint="Не вказуйте ПІБ, телефон, адресу, номер картки або інші прямі ідентифікатори." full>
               <textarea rows="7" value={edit.case_summary} onChange={(e) => setEdit({ ...edit, case_summary: e.target.value })} />
@@ -3621,6 +3425,8 @@ function Supervisions({ api, role, user }) {
 
 function Archive({ api, openPatient }) {
   const [rows, setRows] = useState([]);
+  const [query,setQuery]=useState(''),[view,setView]=useState('table');
+  const visible=rows.filter(p=>[p.name,p.patient_no,p.phone,p.category,p.psychologist].some(v=>String(v || '').toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk'))));
   const [error, setError] = useState('');
   async function load() {
     try { setRows(await api('GET', '/api/patients?status=archived')); setError(''); }
@@ -3633,24 +3439,9 @@ function Archive({ api, openPatient }) {
       <PageHead eyebrow="ІСТОРІЯ ЦЕНТРУ" title="Архів пацієнтів" subtitle="Завершені курси не видаляються. При повторному зверненні відкривається новий курс у тій самій картці." actions={<Button variant="secondary" onClick={load}>Оновити</Button>} />
       {error && <div className="alert error">{error}</div>}
       <section className="surface">
-        {!rows.length ? <Empty title="Архів порожній" text="Після завершення курсу картка пацієнта з’явиться тут." /> : (
-          <div className="patient-card-list">
-            {rows.map((p) => (
-              <button className="patient-list-card" key={p.id} onClick={() => openPatient(p.id)}>
-                <span className="patient-card-accent" />
-                <span className="patient-card-head">
-                  <span className="avatar patient-avatar">{p.name.slice(0,1).toUpperCase()}</span>
-                  <span className="patient-card-name"><small>АРХІВ · №{p.patient_no}</small><strong>{p.name}</strong><span>{p.phone}</span></span>
-                  <span className="patient-card-arrow">↗</span>
-                </span>
-                <span className="patient-card-meta">
-                  <span><small>КАТЕГОРІЯ</small><strong>{p.category}</strong></span>
-                  <span><small>ПСИХОЛОГ</small><strong>{p.psychologist}</strong></span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="toolbar"><div className="search-box"><AppIcon name="search"/><input aria-label="Пошук в архіві" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="ПІБ, номер картки або телефон" /></div><span className="directory-total">Знайдено: {visible.length}</span><ViewSwitch value={view} onChange={setView}/></div>
+        {!visible.length?<Empty title={rows.length?'Нічого не знайдено':'Архів порожній'} text={rows.length?'Змініть пошук.':'Після завершення курсу картка пацієнта з’явиться тут.'}/>:<PatientDirectory rows={visible} view={view} onOpen={openPatient} archived />}
+
       </section>
     </>
   );
@@ -3679,17 +3470,71 @@ function Audit({ api }) {
   );
 }
 
+function DischargeEditor({ api, item, onClose, onSaved }) {
+  const [form, setForm] = useState({ summary:item.summary || '', dynamics:item.dynamics || '', recommendations:item.recommendations || '', followup:item.followup || '', reason:'' });
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [history, setHistory] = useState(null);
+  const fields = [['summary','Підсумок психологічного супроводу'],['dynamics','Динаміка'],['recommendations','Рекомендації'],['followup','Подальший супровід']];
+  async function save(e) {
+    e.preventDefault(); if(busy) return; setBusy(true); setError('');
+    try { await api('PATCH', `/api/discharges/${item.id}`, {...form,revision:item.revision || 1}); await onSaved(); }
+    catch(e) { setError(e.message); } finally { setBusy(false); }
+  }
+  async function loadHistory() {
+    try { setHistory(await api('GET', `/api/discharges/${item.id}/history`)); } catch(e) { setError(e.message); }
+  }
+  return <Dialog title="Редагування виписки" subtitle={`${item.patient_name || 'Пацієнт'} · № ${item.document_no || item.id} · версія ${item.revision || 1}`} onClose={() => { if(!busy) onClose(); }} wide>
+    <form className="form-grid" onSubmit={save}>
+      {error && <div className="alert error full-span" role="alert">{error}</div>}
+      {fields.map(([key,label]) => <Field key={key} label={label} full><textarea rows={4} maxLength={7000} required={key==='summary'} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} /></Field>)}
+      <Field label="Причина редагування" hint="Попередній текст залишається в історії документа." full><input required maxLength={500} value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} /></Field>
+      <div className="form-actions full-span"><Button type="button" variant="ghost" disabled={busy} onClick={onClose}>Скасувати</Button><Button type="button" variant="secondary" onClick={loadHistory}>Історія змін</Button><Button disabled={busy}>{busy?'Зберігаємо…':'Зберегти зміни'}</Button></div>
+    </form>
+    {history && <section aria-label="Історія виписки"><h3>Історія змін</h3>{!history.length && <p>Виписку ще не редагували.</p>}{history.map(row=>{let old;try{old=JSON.parse(row.snapshot);}catch{old={};}return <details key={row.revision}><summary>Версія {row.revision} · {row.author} · {row.created} · {row.reason}</summary>{fields.map(([key,label])=><div key={key}><strong>{label}</strong><p style={{whiteSpace:'pre-wrap'}}>{old[key] || '—'}</p></div>)}</details>;})}</section>}
+  </Dialog>;
+}
+
+function Discharges({ api }) {
+  const [items,setItems]=useState(null),[error,setError]=useState(''),[editing,setEditing]=useState(null),[query,setQuery]=useState('');
+  async function load(){try{setItems(await api('GET','/api/discharges'));setError('');}catch(e){setError(e.message);}}
+  useEffect(()=>{load();},[]);
+  const visible=(items || []).filter(x=>`${x.patient_name} ${x.document_no}`.toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk')));
+  return <><PageHead eyebrow="ДОКУМЕНТИ" title="Виписки" subtitle="Підсумки супроводу, динаміка, рекомендації та історія редагувань." />
+    {error && <div className="alert error" role="alert">{error}</div>}
+    <section className="surface"><Field label="Пошук виписки"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Пацієнт або номер документа" /></Field>
+    {items===null ? <Spinner /> : !visible.length ? <Empty title="Виписок немає" text="Створені в картках пацієнтів виписки з’являться тут." /> : <div className="assessment-list">{visible.map(item=><div className="assessment-row" key={item.id}><div><strong>{item.patient_name} · № {item.document_no || item.id}</strong><span>{item.date_from} — {item.date_to} · {item.author} · версія {item.revision || 1}</span></div><Button variant="secondary" onClick={()=>setEditing(item)}>Редагувати</Button></div>)}</div>}</section>
+    {editing && <DischargeEditor key={editing.id} api={api} item={editing} onClose={()=>setEditing(null)} onSaved={async()=>{setEditing(null);await load();}} />}</>;
+}
+
+function ReceptionAccess({ api, onChanged, onClose, access }) {
+  const [date,setDate]=useState(access?.access_date || localDate()),[time,setTime]=useState(access?.starts_at?.slice(11,16) || '08:00'),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  async function save(e,enabled=true){e.preventDefault();if(busy)return;setBusy(true);setError('');try{await api('POST','/api/reception-access',{access_date:date,start_time:time,enabled});await onChanged();onClose();}catch(e){setError(e.message);}finally{setBusy(false);}}
+  return <Dialog title="Доступ реєстратури" subtitle="Зміна залишається відкритою. Дозвіл діє для реєстратури в обраний день за часом сервера." onClose={()=>{if(!busy)onClose();}}>
+    <form className="form-grid" onSubmit={save}>
+      {error && <div className="alert error full-span" role="alert">{error}</div>}
+      <Field label="Дата доступу"><input type="date" required value={date} onChange={e=>setDate(e.target.value)} /></Field>
+      <Field label="Доступ з"><input type="time" step="60" required value={time} onChange={e=>setTime(e.target.value)} /></Field>
+      <p className="full-span">Дозволяє реєструвати пацієнтів, створювати й переносити записи та відмічати прибуття. Час консультації обирається окремо в календарі.</p>
+      <div className="form-actions full-span"><Button type="button" variant="ghost" disabled={busy} onClick={e=>save(e,false)}>Відкликати доступ</Button><Button disabled={busy}>{busy?'Зберігаємо…':'Надати доступ'}</Button></div>
+    </form>
+  </Dialog>;
+}
+
 function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
   useEffect(() => { document.querySelector('.workspace')?.scrollTo(0, 0); window.scrollTo(0, 0); }, [page]);
+  const [bookingIntent,setBookingIntent]=useState(null);
+  const [bookingResult,setBookingResult]=useState(null);
+  const [bookingVersion,setBookingVersion]=useState(0);
+  const [createRequest,setCreateRequest]=useState(null);
+  function startBooking(options){setBookingIntent({...options,date:options.date || receptionAccess?.access_date || localDate()});}
+  function registerPatient(date,bookAfter=false){setBookingIntent(null);setCreateRequest({key:Date.now(),date:date || receptionAccess?.access_date || localDate(),bookAfter});navigate('patients');}
+  function booked(result){setBookingIntent(null);setBookingResult(result);setBookingVersion(v=>v+1);}
   const [patientId, setPatientId] = useState(null);
   const [patientOrigin, setPatientOrigin] = useState('patients');
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
-  const [shiftBusy, setShiftBusy] = useState(false);
-  const [readiness,setReadiness]=useState(null);
-  const [closeReview, setCloseReview] = useState(false);
-  const shiftActionLock = useRef(false);
+  const [receptionAccess,setReceptionAccess]=useState(null);
+  const [accessDialog,setAccessDialog]=useState(false);
   const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '2.5.0' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
@@ -3713,73 +3558,53 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
   async function loadShift() {
     try {
-      setShift(await api('GET', '/api/shift-day'));
+      const [currentShift,access] = await Promise.all([api('GET','/api/shift-day'), ['admin','reception','director'].includes(user.role)?api('GET','/api/reception-access'):Promise.resolve(null)]);
+      setShift(previous=>JSON.stringify(previous)===JSON.stringify(currentShift)?previous:currentShift);
+      setReceptionAccess(previous=>JSON.stringify(previous)===JSON.stringify(access)?previous:access);
       setShiftError('');
     } catch (e) { setShiftError(e.message); }
   }
 
-  async function reviewShift() {
-    if (shiftActionLock.current) return;
-    shiftActionLock.current = true; setShiftBusy(true); setShiftError('');
-    try { setReadiness(await api('GET', '/api/shift-readiness')); setCloseReview(true); }
-    catch (e) { setShiftError(e.message); }
-    finally { shiftActionLock.current = false; setShiftBusy(false); }
-  }
-
-  async function changeShift(action) {
-    if (shiftActionLock.current) return;
-    shiftActionLock.current = true; setShiftBusy(true); setShiftError('');
-    try {
-      if(action === 'close') {
-        const check = await api('GET', '/api/shift-readiness');
-        setReadiness(check);
-        if(!check.ready) return;
-      }
-      await api('POST', '/api/shift-day', { action });
-      setReadiness(null); setCloseReview(false); await loadShift();
-    } catch (e) { setShiftError(e.message); }
-    finally { shiftActionLock.current = false; setShiftBusy(false); }
-  }
-
-  useEffect(() => { loadShift(); const timer = setInterval(loadShift, 30000); return () => clearInterval(timer); }, []);
+  useEffect(() => { loadShift(); const timer = setInterval(()=>{if(!document.hidden)void loadShift();}, 30000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let alive = true;
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.5.0' });
+        if (alive) setHealth(previous=>{const next={online:Boolean(result.ok),version:result.version||'2.5.0'};return previous.online===next.online&&previous.version===next.version?previous:next;});
       } catch {
-        if (alive) setHealth({ online: false, version: '' });
+        if (alive) setHealth(previous=>previous.online===false&&previous.version===''?previous:{online:false,version:''});
       }
     }
     ping();
-    const timer = setInterval(ping, 30000);
+    const timer = setInterval(()=>{if(!document.hidden)void ping();}, 30000);
     return () => { alive = false; clearInterval(timer); };
   }, [apiBase]);
 
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
-    if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={shift} openPatient={openPatient} openCalendar={() => navigate('calendar')} />;
-    if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} />;
-    if (page === 'dashboard') return <><RoleActions role={user.role} onNavigate={navigate} /><Dashboard api={api} /></>;
-    if (page === 'calendar') return <Calendar api={api} role={user.role} openPatient={openPatient} />;
-    if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} />;
-    if (page === 'families') return <Families api={api} />;
+    if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
+    if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
+    if (page === 'dashboard') return <Dashboard api={api} role={user.role} onNavigate={navigate} access={receptionAccess} />;
+    if (page === 'calendar') return <Calendar key={bookingVersion} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={bookingResult?.date} />;
+    if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} onBook={startBooking} createRequest={createRequest} onCreateRequestConsumed={()=>setCreateRequest(null)} />;
+    if (page === 'families') return <Families api={api} openPatient={openPatient} />;
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports key={shift?.shift_date} api={api} role={user.role} shiftDate={shift?.shift_date} />;
+    if (page === 'discharges') return <Discharges api={api} />;
     if (page === 'workload') return <Workload api={api} />;
     if (page === 'supervisions') return <Supervisions api={api} role={user.role} user={user} />;
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
-    if (page === 'staff-messages') return <StaffMessages api={api} initialRecipient={messageTarget?.user_id} initialDevice={messageTarget?.device_id} />;
+    if (page === 'staff-messages' && ['admin','director'].includes(user.role)) return <StaffMessages api={api} initialRecipient={messageTarget?.user_id} initialDevice={messageTarget?.device_id} />;
     if (page === 'devices') return <Devices api={api} onMessage={target=>{setMessageTarget(target);navigate('staff-messages');}} />;
     if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
-    if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} />;
+    if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
   })();
 
-  const locked = shift && !shift.open;
+  const locked = user.role === 'admin' ? false : shift && (!shift.open || (user.role === 'reception' && !receptionAccess?.allowed));
 
   return (
     <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`} data-role={user.role}>
@@ -3819,54 +3644,42 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         </div>
       </aside>
 
-      <main className="workspace">
+      <main className="workspace" data-page={page}>
         <header className="mobile-app-header"><button className="mobile-menu-button" aria-label="Відкрити меню" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}><AppIcon name="menu" /><span>Меню</span></button><strong>{activePageLabel}</strong></header>
         {shift?.open && (
           <div className="shift-bar">
             <div><span className="shift-dot" /> Зміна відкрита · {shift.shift_date} · {shift.opened_by_name || 'Адміністратор'}</div>
-            {user.role === 'admin' && <Button variant="ghost" disabled={shiftBusy} onClick={reviewShift}>Завершити зміну</Button>}
+            <span className="reception-access-status">{receptionAccess?.allowed ? `Реєстратура: доступ з ${receptionAccess.starts_at?.slice(11,16) || '08:00'}` : 'Реєстратура: очікує дозволу'}</span>
+            {user.role === 'admin' && <Button variant="secondary" onClick={()=>setAccessDialog(true)}>Керувати доступом</Button>}
           </div>
         )}
+        {!shift?.open && user.role==='admin' && <div className="shift-bar"><span>Надайте доступ для початку роботи центру</span><Button onClick={()=>setAccessDialog(true)}>Надати доступ</Button></div>}
         {!locked && <>
           <ReminderBar api={api} role={user.role} />
           <div className="workspace-topbar">
             <div className="topbar-context">
-              <div><small>{roleLabels[user.role]}</small><strong>{activePageLabel}</strong></div>
+              <div className="workspace-breadcrumb"><small>{roleLabels[user.role]}</small><strong>{activePageLabel}</strong></div>
               <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase}>
                 <span className="connection-led" />
                 <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
               </div>
             </div>
-            {['admin','reception','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
+            {['admin','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
+            <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
           </div>
         </>}
-        {closeReview && <Dialog title="Завершення робочої зміни" subtitle={`Зміна ${shift?.shift_date}`} onClose={() => { if(!shiftBusy) setCloseReview(false); }}>
-          <ShiftReadiness data={readiness} />
-          <p>Після закриття зміни робочі сесії команди завершаться. Наступну зміну відкриває адміністратор.</p>
-          {shiftError && <div className="alert error" role="alert">{shiftError}</div>}
-          <div className="form-actions">
-            <Button variant="secondary" disabled={shiftBusy} onClick={() => setCloseReview(false)}>Повернутися до роботи</Button>
-            <Button variant="secondary" disabled={shiftBusy} onClick={reviewShift}>Перевірити готовність</Button>
-            <Button disabled={shiftBusy || !readiness?.ready} onClick={() => changeShift('close')}>{shiftBusy ? 'Перевіряємо…' : 'Підтвердити завершення зміни'}</Button>
-          </div>
-        </Dialog>}
+        {bookingIntent && !locked && <AppointmentBooking api={api} initial={bookingIntent} Modal={Dialog} onClose={()=>setBookingIntent(null)} onSaved={booked} onCreatePatient={date=>registerPatient(date,true)} />}
+        {accessDialog && <ReceptionAccess api={api} access={receptionAccess} onChanged={loadShift} onClose={()=>setAccessDialog(false)} />}
         <div className="workspace-inner">
+          {bookingResult && <div className="booking-success" role="status"><span>✓ {bookingResult.editing?'Прийом перенесено':'Пацієнта записано'} · {bookingResult.patient} · {bookingResult.date} о {bookingResult.start}</span><button type="button" aria-label="Приховати повідомлення про запис" onClick={()=>setBookingResult(null)}>×</button></div>}
           {shiftError && <div className="alert error">{shiftError}</div>}
           {!shift && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
               <img src="/solvia-icon.png" alt="SOLVIA" />
-              <div className="eyebrow">ЩОДЕННЕ ВІДКРИТТЯ ЦЕНТРУ</div>
-              <h1>Зміна {shift.shift_date} ще не відкрита</h1>
-              {user.role === 'admin' ? (
-                <>
-                  <p>Підтвердіть відкриття робочої зміни. Після підтвердження календар, пацієнти та робочі модулі стануть доступними для команди.</p>
-                  <Button disabled={shiftBusy} onClick={() => changeShift('open')}>{shiftBusy ? 'Відкриваємо…' : 'Підтвердити відкриття зміни'}</Button>
-                </>
-              ) : (
-                <p>Адміністратор має підтвердити відкриття зміни на сьогодні. Після цього робочий простір відкриється.</p>
-              )}
-              {shift.closed_at && <small>Попереднє закриття: {shift.closed_at.replace('T',' ')}</small>}
+              <div className="eyebrow">ДОСТУП ДО РОБОТИ</div>
+              <h1>Очікуємо дозволу адміністратора</h1>
+              <p>{receptionAccess?.starts_at && receptionAccess.enabled ? `Доступ заплановано з ${receptionAccess.starts_at.replace('T',' ')} за часом сервера.` : 'Адміністратор має надати доступ на сьогодні. Зміна залишається відкритою.'}</p>
               <Button variant="ghost" onClick={loadShift}>Перевірити ще раз</Button>
             </section>
           ) : content}
@@ -3878,7 +3691,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
 export default function App() {
   useEffect(() => {
-    try { const p=JSON.parse(localStorage.getItem('solvia_preferences') || '{}');document.documentElement.dataset.reducedMotion=p.reducedMotion?'true':'false';document.documentElement.dataset.compact=p.compact?'true':'false'; } catch {}
+    try { const p=JSON.parse(localStorage.getItem('solvia_preferences') || '{}');document.documentElement.dataset.reducedMotion=p.reducedMotion?'true':'false';document.documentElement.dataset.compact=p.compact?'true':'false';document.documentElement.dataset.lightweight=lightweightMode(p,navigator.platform,navigator.userAgent)?'true':'false'; } catch {}
   }, []);
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');

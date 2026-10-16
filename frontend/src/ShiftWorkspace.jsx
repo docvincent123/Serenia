@@ -5,9 +5,10 @@ const stateLabels = {expected:'Очікуємо прибуття',arrived:'Па�
 const kindLabels = {individual:'Індивідуальна',group:'Групова',family:'Сімейна',child:'Дитяча',crisis:'Кризова'};
 const time = value => value?.slice(11,16) || '—';
 
-export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }) {
+export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, onBook, onCreatePatient, refreshVersion, savedDate }) {
   const date = shift.shift_date;
   const [day, setDay] = useState(date);
+  useEffect(()=>{if(savedDate)setDay(savedDate);},[savedDate]);
   const [rows, setRows] = useState([]);
   const [tab, setTab] = useState('active');
   const [query, setQuery] = useState('');
@@ -40,7 +41,7 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }
     setRows([]); setSelected(''); setLoaded(false); setError(''); loadRef.current();
     const timer = setInterval(() => { if(!document.hidden && !actionLock.current) loadRef.current(); }, 30000);
     return () => { ++generation.current; clearInterval(timer); };
-  }, [day]);
+  }, [day,refreshVersion]);
   const counts = useMemo(() => ({active:rows.filter(r=>['expected','arrived','in_progress'].includes(visitState(r))).length,
     arrived:rows.filter(r=>visitState(r)==='arrived').length, completed:rows.filter(r=>visitState(r)==='completed').length,
     excluded:rows.filter(r=>visitState(r)==='excluded').length}), [rows]);
@@ -65,9 +66,9 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }
   }
   return <div className="shift-workspace">
     <header className="page-head"><div><div className="eyebrow">РОБОЧИЙ СПИСОК ЦЕНТРУ</div><h1>Прийоми за зміну</h1>
-      <p>Прибуття, психолог і результат прийому — в одному робочому списку.</p></div>
+      <p>Запис, прибуття та перебіг прийомів.</p></div>
       <div className="page-actions">
-        <button className="button primary" onClick={openCalendar}>Записати на прийом</button></div></header>
+        <button className="button secondary" onClick={openCalendar}>Відкрити календар</button><button className="button secondary" onClick={()=>onCreatePatient(day)}>+ Новий пацієнт</button><button className="button primary" onClick={()=>onBook({date:day})}>+ Записати на прийом</button></div></header>
     <div className="shift-summary" aria-label="Підсумок зміни">
       <article><span>Активні прийоми</span><strong>{counts.active}</strong></article>
       <article><span>У центрі</span><strong>{counts.arrived}</strong></article>
@@ -86,24 +87,25 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar }
     <div className="shift-columns">
       <section className="surface shift-roster"><div className="section-head"><h2>{tab==='completed'?'Завершені консультації':tab==='excluded'?'Не проведені прийоми':'Активні пацієнти'}</h2><small>{updated ? `Оновлено о ${updated}` : 'Завантаження…'}</small></div>
         <p className="shift-explanation">{tab==='completed'?'Це завершені прийоми за обрану дату. Пацієнти залишаються на супроводі; завершення курсу оформлюється окремо.':'Один рядок — один пацієнт у прийомі. Учасники групи обліковуються окремо.'}</p>
-        {!loaded && !error ? <p role="status">Завантажуємо прийоми…</p> : visible.length===0 ? <div className="shift-empty"><strong>{query||psychologist?'Немає збігів':tab==='completed'?'Завершених консультацій ще немає':tab==='excluded'?'Непроведених прийомів немає':counts.completed>0?'Усі консультації завершено':'На обрану дату консультацій немає'}</strong><p>{query||psychologist?'Змініть пошук або скиньте фільтри.':tab==='active'?'Нові прийоми створюються у календарі.':'Список оновиться після зміни статусу прийомів.'}</p></div> :
-          <div className="shift-visit-list">{visible.map(row=><button key={visitKey(row)} className={`shift-visit ${selected===visitKey(row)?'selected':''}`} aria-pressed={selected===visitKey(row)} onClick={()=>setSelected(visitKey(row))}>
+        {!loaded && !error ? <p role="status">Завантажуємо прийоми…</p> : visible.length===0 ? <div className="shift-empty"><strong>{query||psychologist?'Немає збігів':tab==='completed'?'Завершених консультацій ще немає':tab==='excluded'?'Непроведених прийомів немає':counts.completed>0?'Усі консультації завершено':'На обрану дату консультацій немає'}</strong><p>{query||psychologist?'Змініть пошук або скиньте фільтри.':tab==='active'?'Натисніть «Записати на прийом», щоб додати консультацію.':'Список оновиться після зміни статусу прийомів.'}</p></div> :
+          <><div className="reception-list-columns" aria-hidden="true"><span>Час</span><span>Пацієнт / психолог</span><span>Статус</span></div><div className="shift-visit-list">{visible.map(row=><button key={visitKey(row)} className={`shift-visit ${selected===visitKey(row)?'selected':''}`} aria-pressed={selected===visitKey(row)} onClick={()=>setSelected(visitKey(row))}>
             <span className="shift-time"><strong>{time(row.start)}</strong><small>{time(row.end)}</small></span>
             <span className="shift-person"><strong>{row.patient}</strong><span>№ {row.patient_no || '—'} · {row.psychologist}</span><small>{row.room} · {kindLabels[row.kind] || row.kind}</small></span>
             <span className={`visit-status ${visitState(row)}`}>{stateLabels[visitState(row)]}{visitState(row)==='expected'&&row.start<new Date().toLocaleString('sv-SE').replace(' ','T').slice(0,16)?' · запізнення':''}</span>
-          </button>)}</div>}
+          </button>)}</div></>}
       </section>
       <aside className="surface shift-detail"><div className="eyebrow">КАРТКА ПРИЙОМУ</div>{!detail ? <div className="shift-empty"><strong>Оберіть пацієнта</strong><p>Контактні дані, час і доступні дії з’являться тут.</p></div> : <>
         <h2>{detail.patient}</h2><span className={`visit-status ${visitState(detail)}`}>{stateLabels[visitState(detail)]}</span>
+        <div className="reception-detail-actions">        {visitState(detail)==='expected' && day===date && <button className="button primary" disabled={busy} onClick={()=>arrive(detail)}>{busy?'Зберігаємо…':'Пацієнт прибув'}</button>}
+        {['expected','arrived'].includes(visitState(detail)) && <button className="button secondary" disabled={busy} onClick={()=>onBook({date:detail.start.slice(0,10),appointmentId:detail.appointment_id})}>Перенести прийом</button>}
+        <button className="button secondary" onClick={()=>openPatient(detail.patient_id)}>Відкрити картку пацієнта</button>
+</div>
         <dl>{[['Номер картки',detail.patient_no],['Телефон',detail.phone],['Категорія',detail.category],['Психолог',detail.psychologist],['Кабінет',detail.room],['Прийом',`${time(detail.start)} — ${time(detail.end)}`],['Прибув / прибула',detail.arrived_at ? time(detail.arrived_at):'Ще не відмічено'],['Початок консультації',detail.started_at ? time(detail.started_at):'Ще не розпочато'],['Проконсультовано',detail.completed_at ? time(detail.completed_at):'Ще не завершено']].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}</dl>
-        {visitState(detail)==='expected' && day===date && <button className="button primary" disabled={busy} onClick={()=>arrive(detail)}>{busy?'Зберігаємо…':'Пацієнт прибув'}</button>}
-        {['expected','arrived'].includes(visitState(detail)) && <div className="page-actions">
-          <button className="button secondary" disabled={busy} onClick={openCalendar}>Перенести прийом</button>
+<details className="reception-exceptions"><summary>Неявка або скасування</summary>        {['expected','arrived'].includes(visitState(detail)) && <div className="page-actions">
           <button className="button secondary" disabled={busy} onClick={()=>exclude(detail,'no_show')}>Неявка</button>
           <button className="button danger" disabled={busy} onClick={()=>exclude(detail,'cancelled')}>Скасувати</button>
         </div>}
-        <button className="button secondary" onClick={()=>openPatient(detail.patient_id)}>Відкрити картку пацієнта</button>
-        <small>Консультацію завершує психолог у своєму застосунку. Зміст консультації в цьому списку не показується.</small>
+</details>        <small>Консультацію завершує психолог у своєму застосунку. Зміст консультації в цьому списку не показується.</small>
       </>}</aside>
     </div>
   </div>;
