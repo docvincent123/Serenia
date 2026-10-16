@@ -74,7 +74,7 @@ try{
   await dialog.getByLabel('Підсумок консультації',{exact:true}).fill('Перевірений текст адміністратора');
   await dialog.getByLabel('Причина обробки',{exact:true}).fill('Звірено з психологом');
   await dialog.getByRole('checkbox').nth(0).check();await dialog.getByRole('checkbox').nth(1).check();
-  await conduct.dblclick();await dialog.getByRole('alert').filter({hasText:'Телефон передав новішу версію'}).waitFor();
+  await conduct.dblclick();assert(await dialog.getByLabel('Підсумок консультації',{exact:true}).isDisabled(),'Protect text while saving');await dialog.getByRole('alert').filter({hasText:'Телефон передав новішу версію'}).waitFor();
   assert.equal(writes.length,1);assert.equal(await dialog.getByLabel('Підсумок консультації',{exact:true}).inputValue(),'Перевірений текст адміністратора');
   page.once('dialog',d=>d.accept());await dialog.getByRole('button',{name:'Завантажити актуальну версію',exact:true}).click();
   assert.equal(await dialog.getByLabel('Підсумок консультації',{exact:true}).inputValue(),'Новіший текст із телефона');

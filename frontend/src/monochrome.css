@@ -114,3 +114,6 @@
 .recovery-existing {margin:16px 0;padding:16px;background:#fafafa;border:1px solid #e4e4e7;border-radius:8px;}
 .recovery-existing article {border-top:1px solid #e4e4e7;padding-top:12px;}
 .recovery-empty {margin-top:18px;padding:18px;background:#fafafa;line-height:1.7;}
+
+.recovery-fields {border:0;padding:0;margin:0;min-width:0;grid-column:1/-1;}
+.recovery-list {max-height:220px;overflow:auto;}

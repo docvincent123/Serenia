@@ -37,7 +37,7 @@ export default function DeviceRecovery({api,device,Modal,onClose}) {
     {item.server_draft&&<details><summary>Актуальна чернетка на сервері · версія {item.draft_version}</summary><ClinicalMeta value={item.server_draft}/>{fields.map(([key,label])=>item.server_draft[key]&&<div key={key}><strong>{label}</strong><p className="preserve-lines">{item.server_draft[key]}</p></div>)}</details>}
     {item.state!=='open'?<p className="alert info">Запис оброблений · консультація № {item.consultation_id}. Причина: {item.resolution_reason}</p>:<>
      {item.existing.length>0&&<section className="recovery-existing"><h4>У базі вже є консультація цього прийому</h4>{item.existing.map(c=><article key={c.id}><strong>№ {c.id} · {c.psychologist}</strong><ClinicalMeta value={c}/>{fields.map(([key,label])=>c[key]&&<p key={key} className="preserve-lines"><b>{label}:</b> {c[key]}</p>)}</article>)}<p>Звірте тексти. Підтвердження наявного запису не змінює його й не створює дубль.</p></section>}
-     <form onSubmit={e=>{e.preventDefault();resolve('complete');}} className="form-grid">
+     <form onSubmit={e=>{e.preventDefault();resolve('complete');}} className="form-grid"><fieldset disabled={busy} className="form-grid recovery-fields">
       {!item.existing.length&&<>{fields.map(([key,label])=><label className="field full" key={key}><span>{label}</span><textarea aria-label={label} required={key==='note'} maxLength={10000} rows={key==='note'?5:3} value={payload[key]||''} onChange={e=>setPayload({...payload,[key]:e.target.value})}/></label>)}
        <label className="field"><span>Тривалість, хв</span><input aria-label="Тривалість, хв" type="number" min="10" max="480" required value={payload.duration_minutes??60} onChange={e=>setPayload({...payload,duration_minutes:Number(e.target.value)})}/></label>
        <label className="field"><span>Тип консультації</span><select value={payload.consultation_type||'repeat'} onChange={e=>setPayload({...payload,consultation_type:e.target.value})}>{[['primary','Первинна'],['repeat','Повторна'],['crisis','Кризова'],['individual','Індивідуальна'],['family','Сімейна'],['child','Дитяча'],['group','Групова']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
@@ -49,7 +49,7 @@ export default function DeviceRecovery({api,device,Modal,onClose}) {
       <div className="form-actions full-span"><button type="button" className="button secondary" disabled={busy} onClick={()=>{if(window.confirm('Завантажити актуальний запис? Введені тут правки буде скинуто.'))select(item.id);}}>Завантажити актуальну версію</button>
        {!item.existing.length?<button className="button primary" disabled={busy||!confirmed||!reason.trim()||(excluded&&!restore)||(conflict&&!serverConflict)}>{busy?'Зберігаємо…':'Провести консультацію'}</button>:item.existing.filter(c=>c.psychologist_id===item.user_id).map(c=><button key={c.id} type="button" className="button primary" disabled={busy||!confirmed||!reason.trim()} onClick={()=>resolve('link',c.id)}>{busy?'Зберігаємо…':`Підтвердити проведену № ${c.id}`}</button>)}
       </div>
-     </form>
+     </fieldset></form>
     </>}
    </section>}
   </div>
