@@ -740,4 +740,108 @@ class Scenario(unittest.TestCase):
             self.api('admin','PATCH',f'/api/appointments/{aid}',{'status':'cancelled','cancellation_reason':'Synthetic load completed'})
             self.api('admin','PATCH',f'/api/users/{uid}',{'active':False})
 
+    def test_zz_mobile_recovery_preserves_text_versions_authorship_and_duplicates(self):
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        self.api('admin','PATCH','/api/settings/workflow',{'opening_time':'08:00','closing_time':'20:00','working_days':'1234567'})
+        suffix=str(time.time_ns());password='Recovery-password-2026'
+        uid=self.api('admin','POST','/api/users',{'name':'Recovery psychologist','login':'recover_'+suffix,'password':password,'role':'psychologist'})['id']
+        code,login=self.call('POST','/api/login',{'login':'recover_'+suffix,'password':password,'platform':'CI-Recovery','device_id':'recovery-phone','device_name':'Recovery phone'})
+        self.assertEqual(code,200,login);self.tokens['recovery_psy']=login['token']
+        patient=self.api('admin','POST','/api/patients',{'name':'Recovery patient','phone':'+380000000099','dob':'1990-01-01','category':'Інше','psychologist_id':uid})['id']
+        room=self.api('admin','POST','/api/rooms',{'name':'Recovery room','capacity':2})['id']
+        day=(dt.date.today()-dt.timedelta(days=1)).isoformat()
+        def booking(hour,date=day):
+            return self.api('admin','POST','/api/appointments',{'psychologist_id':uid,'room_id':room,'start':f'{date}T{hour:02}:00','end':f'{date}T{hour+1:02}:00','kind':'individual','patient_ids':[patient]})['id']
+        aid=booking(10)
+        payload={'patient_id':patient,'appointment_id':aid,'client_key':'recovery-original-'+suffix,'note':'Original phone text','duration_minutes':60,'consultation_type':'repeat','risk_level':'low','risk_flags':[]}
+        upload={'items':[{'kind':'consultation','payload':payload,'error':'Draft conflict'}]}
+        for role in ['reception','director','psychologist']:
+            self.api(role,'GET','/api/admin/recovery',status=403)
+        self.api('admin','POST','/api/mobile-recovery',upload,status=403)
+        self.api('psychologist','POST','/api/mobile-recovery',upload,status=403)
+        self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[upload['items'][0]]*6},status=400)
+        self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'draft','payload':{**payload,'note':{}},'error':''}]},status=400)
+        self.api('recovery_psy','POST','/api/mobile-recovery',upload)
+        listing=self.api('admin','GET',f'/api/admin/recovery?user_id={uid}&device_id=recovery-phone')
+        self.assertEqual(len(listing),1);rid=listing[0]['id'];path=f'/api/admin/recovery/{rid}'
+        detail=self.api('admin','GET',path);self.assertEqual(detail['payload']['note'],'Original phone text')
+        edited={**payload,'note':'Newer phone snapshot'}
+        self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'consultation','payload':edited,'error':'Draft conflict'}]})
+        completion={'action':'complete','revision':1,'draft_version':0,'payload':edited,'reason':'Checked with psychologist','confirmed':True}
+        self.api('admin','POST',path,completion,status=409)
+        detail=self.api('admin','GET',path);self.assertEqual(detail['revision'],2)
+        self.api('recovery_psy','PATCH',f'/api/patients/{patient}/draft',{'version':0,'payload':{**edited,'note':'Different server text'}})
+        completion.update(revision=2)
+        self.api('admin','POST',path,completion,status=409)
+        completion['draft_version']=1
+        self.api('admin','POST',path,completion,status=409)
+        completion.update(confirm_server_conflict=True,payload={**edited,'note':'Approved after review'})
+        self.api('recovery_psy','POST',path,completion,status=403)
+        self.api('admin','POST',path,{**completion,'payload':{**completion['payload'],'patient_id':patient+99999}},status=400)
+        done=self.api('admin','POST',path,completion)['consultation_id']
+        self.api('admin','POST',path,completion,status=409)
+        record=next(c for c in self.api('admin','GET',f'/api/patients/{patient}')['consultations'] if c['id']==done)
+        self.assertEqual(record['psychologist_id'],uid);self.assertEqual(record['note'],'Approved after review')
+        detail=self.api('admin','GET',path)
+        self.assertEqual(detail['payload']['note'],'Newer phone snapshot')
+        self.assertEqual(json.loads(detail['server_snapshot'])['payload']['note'],'Different server text')
+        self.assertEqual(detail['state'],'completed');self.assertEqual(detail['resolved_by'],1)
+        ack=self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'consultation','payload':edited,'error':'Draft conflict'}]})['items'][0]
+        self.assertEqual(ack['consultation_id'],done);self.assertEqual(ack['source']['note'],'Newer phone snapshot')
+        self.assertEqual(len(self.api('recovery_psy','GET',f'/api/patients/{patient}')['consultations']),1)
+        self.assertIsNone(self.api('recovery_psy','GET',f'/api/patients/{patient}/draft')['payload'])
+        # A lost response is linked to the existing consultation without editing it.
+        second=booking(11);p2={**payload,'appointment_id':second,'client_key':'recovery-second-'+suffix,'note':'Already saved text'}
+        cid=self.api('recovery_psy','POST','/api/consultations',p2)['id']
+        self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'consultation','payload':{**p2,'note':'Different local text'},'error':'Already saved'}]})
+        r2=next(r for r in self.api('admin','GET',f'/api/admin/recovery?user_id={uid}') if r['appointment_id']==second)
+        d2=self.api('admin','GET',f'/api/admin/recovery/{r2["id"]}')
+        link={'action':'link','revision':r2['revision'],'draft_version':d2['draft_version'],'reason':'Compared both copies','confirmed':True,'consultation_id':done}
+        self.api('admin','POST',f'/api/admin/recovery/{r2["id"]}',link,status=409)
+        self.api('admin','POST',f'/api/admin/recovery/{r2["id"]}',{**link,'consultation_id':cid})
+        self.assertEqual(len(self.api('admin','GET',f'/api/patients/{patient}')['consultations']),2)
+        self.assertEqual(next(c for c in self.api('admin','GET',f'/api/patients/{patient}')['consultations'] if c['id']==cid)['note'],'Already saved text')
+        # A mistaken no-show is restored explicitly, and invalid text rolls restoration back.
+        third=booking(12);p3={**payload,'appointment_id':third,'client_key':'recovery-third-'+suffix}
+        self.api('admin','PATCH',f'/api/appointments/{third}/attendance',{'patient_id':patient,'status':'no_show','reason':'Synthetic mistake'})
+        self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'draft','payload':p3,'error':'No available appointment'}]})
+        r3=next(r for r in self.api('admin','GET',f'/api/admin/recovery?user_id={uid}') if r['appointment_id']==third)
+        d3=self.api('admin','GET',f'/api/admin/recovery/{r3["id"]}')
+        body={'action':'complete','revision':r3['revision'],'draft_version':d3['draft_version'],'payload':p3,'reason':'Corrected mistaken no-show','confirmed':True}
+        self.api('admin','POST',f'/api/admin/recovery/{r3["id"]}',body,status=409)
+        self.api('admin','POST',f'/api/admin/recovery/{r3["id"]}',{**body,'restore_attendance':True,'payload':{**p3,'note':''}},status=400)
+        appointment=next(a for a in self.api('admin','GET',f'/api/appointments?date={day}') if a['id']==third)
+        self.assertEqual(appointment['status'],'no_show')
+        self.api('admin','POST',f'/api/admin/recovery/{r3["id"]}',{**body,'restore_attendance':True})
+        # Completing an older blocked visit must not erase a newer, different appointment's draft.
+        fourth=booking(13);p4={**payload,'appointment_id':fourth,'client_key':'recovery-fourth-'+suffix}
+        different={**payload,'appointment_id':aid,'client_key':'unrelated-new-draft-'+suffix,'note':'Unrelated newer draft'}
+        draft_version=self.api('recovery_psy','GET',f'/api/patients/{patient}/draft')['version']
+        new_draft=self.api('recovery_psy','PATCH',f'/api/patients/{patient}/draft',{'version':draft_version,'payload':different})
+        self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'consultation','payload':p4,'error':'Offline'}]})
+        r4=next(r for r in self.api('admin','GET',f'/api/admin/recovery?user_id={uid}') if r['appointment_id']==fourth)
+        self.api('admin','POST',f'/api/admin/recovery/{r4["id"]}',{'action':'complete','revision':r4['revision'],'draft_version':new_draft['version'],'payload':p4,'reason':'Older visit verified','confirmed':True})
+        self.assertEqual(self.api('recovery_psy','GET',f'/api/patients/{patient}/draft')['payload']['note'],'Unrelated newer draft')
+        # Restore only the excluded participant of an already closed group.
+        participant=self.api('admin','POST','/api/patients',{'name':'Recovery group participant','phone':'+380000000098','dob':'1991-01-01','category':'Інше','psychologist_id':uid})['id']
+        group=self.api('admin','POST','/api/appointments',{'psychologist_id':uid,'room_id':room,'start':day+'T14:00','end':day+'T15:00','kind':'group','patient_ids':[patient,participant]})['id']
+        first_group={**payload,'appointment_id':group,'client_key':'recovery-group-first-'+suffix}
+        first_id=self.api('recovery_psy','POST','/api/consultations',first_group)['id']
+        self.api('admin','PATCH',f'/api/appointments/{group}/attendance',{'patient_id':participant,'status':'no_show','reason':'Mistaken group absence'})
+        group_source={**payload,'appointment_id':group,'patient_id':participant,'client_key':'recovery-group-second-'+suffix}
+        self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'consultation','payload':group_source,'error':'Group already closed'}]})
+        rg=next(r for r in self.api('admin','GET',f'/api/admin/recovery?user_id={uid}') if r['appointment_id']==group)
+        self.api('admin','POST',f'/api/admin/recovery/{rg["id"]}',{'action':'complete','revision':rg['revision'],'draft_version':0,'payload':group_source,'reason':'Group attendance verified','confirmed':True,'restore_attendance':True})
+        group_saved=next(a for a in self.api('admin','GET',f'/api/appointments?date={day}') if a['id']==group)
+        self.assertEqual(group_saved['status'],'completed')
+        self.assertEqual(next(c for c in self.api('admin','GET',f'/api/patients/{patient}')['consultations'] if c['id']==first_id)['note'],first_group['note'])
+        # Never conduct a future appointment through recovery.
+        future=booking(13,(dt.date.today()+dt.timedelta(days=1)).isoformat());pf={**payload,'appointment_id':future,'client_key':'recovery-future-'+suffix}
+        self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'consultation','payload':pf,'error':'Future'}]})
+        rf=next(r for r in self.api('admin','GET',f'/api/admin/recovery?user_id={uid}') if r['appointment_id']==future)
+        df=self.api('admin','GET',f'/api/admin/recovery/{rf["id"]}')
+        self.api('admin','POST',f'/api/admin/recovery/{rf["id"]}',{'action':'complete','revision':rf['revision'],'draft_version':df['draft_version'],'payload':pf,'reason':'Attempt','confirmed':True},status=409)
+        # Clean synthetic future fixture so it cannot influence later shift checks.
+        self.api('admin','PATCH',f'/api/appointments/{future}',{'status':'cancelled','cancellation_reason':'Recovery test complete'})
+
 if __name__=='__main__': unittest.main()

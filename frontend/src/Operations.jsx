@@ -1,13 +1,15 @@
 import React,{useEffect,useState} from 'react';
+import DeviceRecovery from './DeviceRecovery.jsx';
 const progressLabels={planned:'Заплановано',in_progress:'У роботі',achieved:'Досягнуто',paused:'Призупинено'};
-export function DeviceHealth({api,onMessage}) {
+export function DeviceHealth({api,onMessage,Modal}) {
+ const [recovery,setRecovery]=useState(null);
  const [rows,setRows]=useState([]),[error,setError]=useState('');
  useEffect(()=>{let alive=true;async function load(){try{const r=await api('GET','/api/admin/devices');if(alive){setRows(r);setError('');}}catch(e){if(alive)setError(e.message);}}load();const timer=setInterval(load,30000);return()=>{alive=false;clearInterval(timer);};},[api]);
  return <section className="surface"><div className="eyebrow">СИНХРОНІЗАЦІЯ</div><h2>Стан телефонів</h2><p>Останні відомості від додатка. Без свіжого з’єднання поточний стан черги невідомий.</p>{error&&<p role="alert">{error}</p>}
  {!rows.length?<p>Телефони з’являться після входу з нової версії додатка.</p>:rows.map(d=><article className="device-card device-health-card" key={`${d.user_id}:${d.device_id}`}>
  <div className="device-main"><strong>{d.name} · {d.device_name}</strong><span>SOLVIA {d.version_name} · код {d.version_code}</span><small>З’єднання: {d.last_seen?.replace('T',' ')} · синхронізація: {d.last_sync?.replace('T',' ')||'Ще не підтверджена'}</small></div>
  <span className={`visit-status ${!d.fresh?'expected':d.blocked_count?'excluded':d.pending_count?'arrived':'completed'}`}>{!d.fresh?'○ Поточний стан невідомий':d.blocked_count?'! Потрібна перевірка':d.pending_count?'↥ Очікує передавання':'✓ Передавання завершено'}</span>
- <span>Остання черга: {d.pending_count} · проблемні: {d.blocked_count}</span>{onMessage&&<button className="button secondary staff-device-action" onClick={()=>onMessage(d)}>Написати психологу</button>}</article>)}</section>;
+ <span>Остання черга: {d.pending_count} · проблемні: {d.blocked_count}</span>{Modal&&d.blocked_count>0&&<button className="button secondary" onClick={()=>setRecovery(d)}>Проблемні записи · {d.blocked_count}</button>}{onMessage&&<button className="button secondary staff-device-action" onClick={()=>onMessage(d)}>Написати психологу</button>}</article>)}{recovery&&<DeviceRecovery api={api} device={recovery} Modal={Modal} onClose={()=>setRecovery(null)}/>}</section>;
 }
 export function ShiftReadiness({data}) {
  if(!data)return null;

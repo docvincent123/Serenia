@@ -101,3 +101,16 @@
   body:has(.daily-report) .workspace-table {min-width:0;font-size:10pt;}
   body:has(.daily-report) tr {break-inside:avoid;}
 }
+
+.recovery-workspace>p {font-size:14px;line-height:1.7;color:#52525b;}
+.recovery-list {display:grid;gap:8px;margin:18px 0;}
+.recovery-entry {display:grid;gap:7px;text-align:left;padding:15px;background:#fafafa;border:1px solid #e4e4e7;border-radius:8px;cursor:pointer;color:#27272a;}
+.recovery-entry.selected {border-color:#27272a;box-shadow:inset 3px 0 #27272a;}
+.recovery-entry span,.recovery-entry small {color:#71717a;line-height:1.5;}
+.recovery-editor {margin-top:24px;border-top:1px solid #e4e4e7;padding-top:16px;}
+.recovery-editor details {padding:12px;border:1px solid #e4e4e7;border-radius:8px;margin:12px 0;}
+.recovery-editor summary {cursor:pointer;}
+.recovery-editor .form-grid {margin-top:20px;}
+.recovery-existing {margin:16px 0;padding:16px;background:#fafafa;border:1px solid #e4e4e7;border-radius:8px;}
+.recovery-existing article {border-top:1px solid #e4e4e7;padding-top:12px;}
+.recovery-empty {margin-top:18px;padding:18px;background:#fafafa;line-height:1.7;}
