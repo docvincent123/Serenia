@@ -43,7 +43,7 @@ J syncRecovery(DB&db,const J&u,const httplib::Request&r,const J&b,const std::str
    auto old=db.query("SELECT * FROM mobile_recovery WHERE user_id=? AND device_id=? AND client_key=?",{u["id"],device,key});
    auto error=str(item,"error",1000,false);int id;
    if(old.empty()){
-    db.query("INSERT INTO mobile_recovery(user_id,device_id,client_key,patient_id,appointment_id,kind,payload,error,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)",{u["id"],device,key,pid,aid,kind,payload.dump(),error,now(),now()});id=db.id();
+    auto inserted=db.query("INSERT INTO mobile_recovery(user_id,device_id,client_key,patient_id,appointment_id,kind,payload,error,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id",{u["id"],device,key,pid,aid,kind,payload.dump(),error,now(),now()});id=inserted[0]["id"].get<int>();
    }else{
     id=old[0]["id"];check(old[0]["patient_id"]==pid&&old[0]["appointment_id"]==aid,"Ключ належить іншому прийому",409);
     if(old[0]["state"]=="open"&&(old[0]["payload"]!=payload.dump()||old[0]["kind"]!=kind||old[0]["error"]!=error))
