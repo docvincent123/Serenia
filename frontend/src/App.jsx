@@ -7,6 +7,7 @@ import { lightweightMode } from './performance.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
 import WaitingList from './WaitingList.jsx';
 import ShiftWorkspace from './ShiftWorkspace.jsx';
+import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
@@ -429,7 +430,7 @@ function Dialog({ title, subtitle, onClose, children, wide = false, error = '', 
   const panel = useRef(null), dirty = useRef(false), closeRef = useRef(onClose);
   closeRef.current = onClose;
   function close() {
-    if(dirty.current && title !== 'Підсумок консультації' && !window.confirm('Залишити форму? Незбережені зміни буде втрачено.')) return;
+    if(dirty.current && title !== 'Підсумок консультації' && title !== 'Підсумок дня' && !window.confirm('Залишити форму? Незбережені зміни буде втрачено.')) return;
     closeRef.current();
   }
   useEffect(() => {
@@ -3534,6 +3535,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [receptionAccess,setReceptionAccess]=useState(null);
+  const [dailyReport,setDailyReport]=useState(false);
   const [accessDialog,setAccessDialog]=useState(false);
   const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '2.5.0' });
@@ -3650,6 +3652,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           <div className="shift-bar">
             <div><span className="shift-dot" /> Зміна відкрита · {shift.shift_date} · {shift.opened_by_name || 'Адміністратор'}</div>
             <span className="reception-access-status">{receptionAccess?.allowed ? `Реєстратура: доступ з ${receptionAccess.starts_at?.slice(11,16) || '08:00'}` : 'Реєстратура: очікує дозволу'}</span>
+            {['admin','reception'].includes(user.role) && !locked && <Button variant="secondary" onClick={()=>setDailyReport(true)}>Підсумок дня</Button>}
             {user.role === 'admin' && <Button variant="secondary" onClick={()=>setAccessDialog(true)}>Керувати доступом</Button>}
           </div>
         )}
@@ -3670,6 +3673,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           </div>
         </>}
         {bookingIntent && !locked && <AppointmentBooking api={api} initial={bookingIntent} Modal={Dialog} onClose={()=>setBookingIntent(null)} onSaved={booked} onCreatePatient={date=>registerPatient(date,true)} />}
+        {dailyReport && !locked && <DailyReport api={api} Modal={Dialog} initialDate={receptionAccess?.access_date || localDate()} onClose={()=>setDailyReport(false)} />}
         {accessDialog && <ReceptionAccess api={api} access={receptionAccess} onChanged={loadShift} onClose={()=>setAccessDialog(false)} />}
         <div className="workspace-inner">
           {bookingResult && <div className="booking-success" role="status"><span>✓ {bookingResult.editing?'Прийом перенесено':'Пацієнта записано'} · {bookingResult.patient} · {bookingResult.date} о {bookingResult.start}</span><button type="button" aria-label="Приховати повідомлення про запис" onClick={()=>setBookingResult(null)}>×</button></div>}

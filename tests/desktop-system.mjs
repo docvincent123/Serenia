@@ -73,6 +73,23 @@ try{
   await page.setViewportSize({width:1024,height:600});for(const label of ['Налаштування центру','Вийти']){const box=await page.getByRole('button',{name:label,exact:true}).boundingBox();assert(box&&box.y>=0&&box.y+box.height<=600,`Short-screen account action: ${label}`);}await capture('short-desktop');
   role='director';await page.setViewportSize({width:1440,height:1000});await page.reload();await page.locator('.overview-kpi').first().waitFor();assert.equal(await nav.getByRole('button',{name:'Пацієнти',exact:true}).count(),0);assert.equal(await nav.getByRole('button',{name:'Кабінети',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0);await capture('director-overview');
   role='reception';await page.reload();await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();await page.locator('.shift-visit').first().click();await capture('reception');
+  await page.getByRole('button',{name:'Підсумок дня',exact:true}).click();
+  const report=page.getByRole('dialog',{name:'Підсумок дня',exact:true});
+  await report.locator('.daily-report-metrics').waitFor();
+  assert.equal(await report.locator('.daily-report-metrics article').count(),4);
+  assert.deepEqual(await report.locator('.daily-report-metrics strong').allTextContents(),['1','0','1','0']);
+  await report.getByLabel('Дата звіту').fill('2026-10-14');
+  await report.locator('.daily-report-date').filter({hasText:'2026-10-14'}).waitFor();
+  await report.locator('.daily-report-metrics').waitFor();
+  await capture('daily-report');
+  await page.emulateMedia({media:'print'});
+  assert.equal(await page.locator('.sidebar').isVisible(),false);
+  assert.equal(await report.locator('.daily-report-date').isVisible(),true);
+  assert.equal(await report.locator('.daily-report-controls').isVisible(),false);
+  await page.pdf({path:'out/design/daily-report.pdf',format:'A4'});
+  await page.emulateMedia({media:'screen'});
+  await report.getByRole('button',{name:'Закрити',exact:true}).click();
+  assert.equal(await report.count(),0,'Read-only date selection never triggers discard confirmation');
   assert.deepEqual(errors,[]);assert.deepEqual(edits,[],'Visual navigation must not mutate user data');
   console.log('PASS: role menus preserved, overview hierarchy, table/card directories, archive restrictions, staff/room filters, exact room editor, calendar, analytics, documents, settings and short desktop layouts');
 }finally{await browser.close();await new Promise(r=>server.close(r));}
