@@ -755,10 +755,17 @@ class Scenario(unittest.TestCase):
         aid=booking(10)
         payload={'patient_id':patient,'appointment_id':aid,'client_key':'recovery-original-'+suffix,'note':'Original phone text','duration_minutes':60,'consultation_type':'repeat','risk_level':'low','risk_flags':[]}
         upload={'items':[{'kind':'consultation','payload':payload,'error':'Draft conflict'}]}
+        forbidden={}
         for role in ['reception','director','psychologist']:
-            self.api(role,'GET','/api/admin/recovery',status=403)
+            login_name='recover_'+role+'_'+suffix
+            self.api('admin','POST','/api/users',{'name':'Recovery forbidden '+role,'login':login_name,'password':password,'role':role})
+            code,auth=self.call('POST','/api/login',{'login':login_name,'password':password,'platform':'CI-Recovery','device_id':'recovery-forbidden-'+role})
+            self.assertEqual(code,200,auth)
+            account='recovery_forbidden_'+role;self.tokens[account]=auth['token'];forbidden[role]=account
+            self.api(account,'GET','/api/admin/recovery',status=403)
+        self.api('recovery_psy','GET','/api/admin/recovery',status=403)
         self.api('admin','POST','/api/mobile-recovery',upload,status=403)
-        self.api('psychologist','POST','/api/mobile-recovery',upload,status=403)
+        self.api(forbidden['psychologist'],'POST','/api/mobile-recovery',upload,status=403)
         self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[upload['items'][0]]*6},status=400)
         self.api('recovery_psy','POST','/api/mobile-recovery',{'items':[{'kind':'draft','payload':{**payload,'note':{}},'error':''}]},status=400)
         self.api('recovery_psy','POST','/api/mobile-recovery',upload)
