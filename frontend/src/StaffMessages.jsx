@@ -4,7 +4,7 @@ export default function StaffMessages({api,initialRecipient='',initialDevice=''}
   const [recipient,setRecipient]=useState(String(initialRecipient)),[device,setDevice]=useState(initialDevice);
   const [body,setBody]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   const key=useRef(crypto.randomUUID()),lock=useRef(false),editor=useRef(null);
-  useEffect(()=>{let alive=true;async function load(){try{const [p,m]=await Promise.all([api('GET','/api/staff/recipients'),api('GET','/api/staff/messages')]);if(alive){setPeople(p);setMessages(m);setError('');}}catch(e){if(alive)setError(e.message);}}load();const timer=setInterval(load,15000);return()=>{alive=false;clearInterval(timer);};},[api]);
+  useEffect(()=>{let alive=true;async function load(){try{const [p,m]=await Promise.all([api('GET','/api/staff/recipients'),api('GET','/api/staff/messages')]);if(alive){setPeople(p);setMessages(m);setError('');}}catch(e){if(alive)setError(e.message);}}load();const timer=setInterval(()=>{if(!document.hidden)void load();},15000);return()=>{alive=false;clearInterval(timer);};},[api]);
   const person=people.find(p=>String(p.id)===recipient),history=messages.filter(m=>String(m.recipient_id)===recipient);
   function choose(p){if(lock.current)return;setRecipient(String(p.id));setDevice('');key.current=crypto.randomUUID();setNotice('');editor.current?.focus();}
   async function send(e){e.preventDefault();if(lock.current||!person||!body.trim())return;lock.current=true;setBusy(true);setError('');setNotice('');try{

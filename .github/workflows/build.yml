@@ -261,6 +261,7 @@ jobs:
           node tests/reception-booking.mjs
           node tests/desktop-system.mjs
           node tests/account-waiting.mjs
+          node tests/performance.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:

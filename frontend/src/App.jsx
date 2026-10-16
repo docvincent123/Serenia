@@ -3,6 +3,7 @@ import {backupNeedsAttention} from './backup-status.mjs';
 import {DeviceHealth,ShiftReadiness,Addenda,PatientProgress} from './Operations.jsx';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanBase } from './connection.mjs';
+import { lightweightMode } from './performance.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
 import WaitingList from './WaitingList.jsx';
 import ShiftWorkspace from './ShiftWorkspace.jsx';
@@ -2676,6 +2677,7 @@ function AccountSettings({ api, apiBase, onLogout, user }) {
     localStorage.setItem('solvia_preferences',JSON.stringify(next));
     document.documentElement.dataset.reducedMotion=next.reducedMotion ? 'true':'false';
     document.documentElement.dataset.compact=next.compact ? 'true':'false';
+    document.documentElement.dataset.lightweight=lightweightMode(next,navigator.platform,navigator.userAgent)?'true':'false';
   }
   async function changePassword(e) {
     e.preventDefault(); if(passwordSaving.current)return; setMessage('');
@@ -2690,6 +2692,7 @@ function AccountSettings({ api, apiBase, onLogout, user }) {
       <aside className="surface account-identity"><span className="account-avatar">{user?.name?.slice(0,1).toUpperCase() || 'S'}</span><h2>{user?.name || 'Працівник центру'}</h2><span className="badge sand">{roleLabels[user?.role] || 'Обліковий запис'}</span><dl><div><dt>Логін</dt><dd>{user?.login || 'Визначений адміністратором'}</dd></div><div><dt>Доступ</dt><dd>Відповідно до вашої ролі</dd></div></dl><p>Ім’я, роль і доступ змінює адміністратор центру.</p></aside>
       <div className="account-sections">
         <section className="surface account-section"><header><h2>Вигляд робочого простору</h2><p>Зміни зберігаються автоматично на цьому ПК.</p></header>
+          <label className="account-preference"><span><strong>Полегшений режим</strong><small>Без розмиття та важких тіней. Рекомендовано для слабких ПК.</small></span><input type="checkbox" checked={lightweightMode(prefs,navigator.platform,navigator.userAgent)} onChange={e=>change('lightweight',e.target.checked)} /></label>
           <label className="account-preference"><span><strong>Зменшити анімації</strong><small>Спокійні переходи без зайвого руху</small></span><input type="checkbox" checked={!!prefs.reducedMotion} onChange={e=>change('reducedMotion',e.target.checked)} /></label>
           <label className="account-preference"><span><strong>Компактні списки</strong><small>Більше рядків у робочих таблицях</small></span><input type="checkbox" checked={!!prefs.compact} onChange={e=>change('compact',e.target.checked)} /></label>
         </section>
@@ -3556,24 +3559,25 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   async function loadShift() {
     try {
       const [currentShift,access] = await Promise.all([api('GET','/api/shift-day'), ['admin','reception','director'].includes(user.role)?api('GET','/api/reception-access'):Promise.resolve(null)]);
-      setShift(currentShift); setReceptionAccess(access);
+      setShift(previous=>JSON.stringify(previous)===JSON.stringify(currentShift)?previous:currentShift);
+      setReceptionAccess(previous=>JSON.stringify(previous)===JSON.stringify(access)?previous:access);
       setShiftError('');
     } catch (e) { setShiftError(e.message); }
   }
 
-  useEffect(() => { loadShift(); const timer = setInterval(loadShift, 30000); return () => clearInterval(timer); }, []);
+  useEffect(() => { loadShift(); const timer = setInterval(()=>{if(!document.hidden)void loadShift();}, 30000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let alive = true;
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth({ online: Boolean(result.ok), version: result.version || '2.5.0' });
+        if (alive) setHealth(previous=>{const next={online:Boolean(result.ok),version:result.version||'2.5.0'};return previous.online===next.online&&previous.version===next.version?previous:next;});
       } catch {
-        if (alive) setHealth({ online: false, version: '' });
+        if (alive) setHealth(previous=>previous.online===false&&previous.version===''?previous:{online:false,version:''});
       }
     }
     ping();
-    const timer = setInterval(ping, 30000);
+    const timer = setInterval(()=>{if(!document.hidden)void ping();}, 30000);
     return () => { alive = false; clearInterval(timer); };
   }, [apiBase]);
 
@@ -3687,7 +3691,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
 export default function App() {
   useEffect(() => {
-    try { const p=JSON.parse(localStorage.getItem('solvia_preferences') || '{}');document.documentElement.dataset.reducedMotion=p.reducedMotion?'true':'false';document.documentElement.dataset.compact=p.compact?'true':'false'; } catch {}
+    try { const p=JSON.parse(localStorage.getItem('solvia_preferences') || '{}');document.documentElement.dataset.reducedMotion=p.reducedMotion?'true':'false';document.documentElement.dataset.compact=p.compact?'true':'false';document.documentElement.dataset.lightweight=lightweightMode(p,navigator.platform,navigator.userAgent)?'true':'false'; } catch {}
   }, []);
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');

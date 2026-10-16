@@ -173,3 +173,10 @@
   html[data-compact="true"] .app-shell .waiting-card {padding-top:14px;padding-bottom:14px;}
   .app-shell .workspace-topbar .global-search input {border:0;background:transparent;box-shadow:none;}
 }
+
+/* Backdrop blur otherwise repaints much of the window while scrolling a dialog. */
+@media(min-width:761px){
+  html[data-lightweight="true"] *,html[data-lightweight="true"] *::before,html[data-lightweight="true"] *::after {-webkit-backdrop-filter:none!important;backdrop-filter:none!important;transition:none!important;}
+  html[data-lightweight="true"] :is(.surface,.dialog,.login-card,.login-brand,.brand-orbit,.search-popover,.context-panel,.patient-hero) {box-shadow:none!important;}
+  html[data-lightweight="true"] .dialog-backdrop {background:#17233299;}
+}
