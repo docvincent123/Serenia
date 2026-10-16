@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SOLVIA Server
+Comment=Запуск, перезапуск, зупинка й журнал сервера SOLVIA
+Exec=/usr/local/bin/solvia-server-control
+Icon=solvia-admin
+Terminal=true
+Categories=System;Utility;
+Keywords=SOLVIA;сервер;журнал;

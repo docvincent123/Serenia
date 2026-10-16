@@ -12,6 +12,8 @@ rm -f /etc/systemd/system/solvia-network.service /etc/systemd/system/solvia-netw
 systemctl daemon-reload
 
 rm -f /usr/local/sbin/solvia-admin /usr/local/sbin/solvia-updater /usr/local/bin/solvia-admin-app
+rm -f /usr/local/bin/solvia-server-control /usr/local/lib/solvia/solvia-linux-app.py
+rm -f /usr/share/applications/solvia-server.desktop
 rm -f /usr/share/applications/solvia-admin.desktop
 rm -f /usr/share/icons/hicolor/256x256/apps/solvia-admin.png
 rm -f /usr/local/share/ca-certificates/quremed-solvia-local-ca.crt

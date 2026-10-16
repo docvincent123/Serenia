@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Interactive terminal controller. Closing this menu never stops systemd services.
+set -uo pipefail
+if [[ ${1:-} == --terminal ]]; then
+  shift
+  case ${1:-menu} in menu|start|stop|restart|status|health|logs|update) ;; *) echo 'Невідома команда'; exit 2;; esac
+  # Fixed program and validated argument only; no shell interpolation of user text.
+  if command -v x-terminal-emulator >/dev/null 2>&1; then
+    exec x-terminal-emulator -e /usr/local/bin/solvia-server-control "${1:-menu}"
+  elif command -v gnome-terminal >/dev/null 2>&1; then
+    exec gnome-terminal -- /usr/local/bin/solvia-server-control "${1:-menu}"
+  elif command -v xfce4-terminal >/dev/null 2>&1; then
+    exec xfce4-terminal --execute /usr/local/bin/solvia-server-control "${1:-menu}"
+  fi
+  echo 'Відкрийте термінал і виконайте: solvia-server-control' >&2
+  exit 1
+fi
+admin=(/usr/local/sbin/solvia-admin)
+if (( EUID != 0 )); then admin=(sudo -- /usr/local/sbin/solvia-admin); fi
+run_action() {
+  local action=$1 rc=0
+  if [[ ! -x /usr/local/sbin/solvia-admin ]]; then
+    echo 'На цьому ПК не встановлено сервер SOLVIA.' >&2; return 1
+  fi
+  if [[ $action == logs ]]; then
+    echo 'Ctrl+C завершує перегляд журналу; сервер продовжує працювати.'
+    # Let the parent menu survive Ctrl+C; the child must retain the default signal.
+    trap ':' INT
+    (trap - INT; "${admin[@]}" logs --follow) || rc=$?
+    trap - INT
+    [[ $rc == 130 ]] && return 0
+  else
+    "${admin[@]}" "$action" || rc=$?
+  fi
+  if ((rc != 0)); then printf '\nКоманда не завершена успішно (код %s).\n' "$rc" >&2; fi
+  return "$rc"
+}
+case ${1:-menu} in
+  start|stop|restart|status|health|logs|update) run_action "$1"; exit $?;;
+  menu) ;;
+  *) echo 'Використання: solvia-server-control [start|stop|restart|status|health|logs|update]' >&2; exit 2;;
+esac
+while true; do
+  printf '\nSOLVIA SERVER\n\n1  Запустити сервер\n2  Перезапустити сервер\n3  Зупинити сервер\n4  Стан служб\n5  Перевірити API / HTTPS\n6  Журнал наживо (Ctrl+C — назад)\n0  Закрити меню\n\n'
+  read -r -p 'Оберіть дію: ' choice || exit 0
+  case $choice in
+    1) run_action start;;
+    2) run_action restart;;
+    3) read -r -p 'Зупинити доступ усіх клієнтів до сервера? [y/N]: ' confirm
+       [[ $confirm == y || $confirm == Y ]] && run_action stop;;
+    4) run_action status;;
+    5) run_action health;;
+    6) run_action logs;;
+    0) exit 0;;
+    *) echo 'Оберіть число зі списку.';;
+  esac
+ done
