@@ -13,12 +13,12 @@ source /etc/os-release
   echo 'Цей пакет підтримує Ubuntu 24.04 / elementary OS 8 (x86_64).'; exit 1;
 }
 package=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-[[ -f $package/SolviaServer && -f $package/ui/index.html && -f $package/solvia-admin-app && -f $package/solvia-admin.desktop && -f $package/solvia-updater && -f $package/VERSION ]] || { echo 'Розпакуйте весь Linux-пакет поруч з install.sh'; exit 1; }
+[[ -f $package/SolviaServer && -f $package/ui/index.html && -f $package/solvia-admin-app && -f $package/solvia-admin.desktop && -f $package/solvia-updater && -f $package/VERSION && -f $package/solvia-linux-app.py && -f $package/solvia-server-control && -f $package/solvia-server.desktop ]] || { echo 'Розпакуйте весь Linux-пакет поруч з install.sh'; exit 1; }
 cd "$package"
 sha256sum --check SHA256SUMS
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 iproute2 xdg-utils libnss3-tools desktop-file-utils
+apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 iproute2 xdg-utils libnss3-tools desktop-file-utils
 libraries=$(ldd ./SolviaServer)
 printf '%s\n' "$libraries"
 if grep -q 'not found' <<< "$libraries"; then echo 'Відсутні бібліотеки сервера'; exit 1; fi
@@ -90,6 +90,10 @@ chown root:solvia /etc/solvia/server.env
 chown root:root /etc/solvia/address
 install -m 0755 solvia-admin /usr/local/sbin/solvia-admin
 install -m 0755 solvia-updater /usr/local/sbin/solvia-updater
+install -d -m 0755 /usr/local/lib/solvia
+install -m 0644 solvia-linux-app.py /usr/local/lib/solvia/solvia-linux-app.py
+install -m 0755 solvia-server-control /usr/local/bin/solvia-server-control
+install -m 0644 solvia-server.desktop /usr/share/applications/solvia-server.desktop
 install -m 0755 solvia-admin-app /usr/local/bin/solvia-admin-app
 install -m 0644 solvia-admin.desktop /usr/share/applications/solvia-admin.desktop
 if [[ -f /opt/solvia/ui/solvia-icon.png ]]; then
@@ -127,6 +131,7 @@ chmod 0644 "$mobile_config"
 printf '\nSOLVIA готова: https://%s:8443\n' "$ip"
 echo 'HTTP 8765 доступний лише локально; телефони підключаються через HTTPS 8443.'
 printf 'Файл підключення телефона: %s\n' "$mobile_config"
+echo 'Керування сервером: SOLVIA Server у меню програм або solvia-server-control у терміналі.'
 echo 'Linux Admin: відкрийте «SOLVIA Admin» у меню програм або виконайте solvia-admin-app.'
 echo 'Оновлення: sudo solvia-admin check-update / sudo solvia-admin update'
 echo 'Сертифікат для ПК/Android: /etc/solvia/ca/QureMed-Local-CA.crt'

@@ -18,6 +18,9 @@ sudo solvia-admin start
 sudo systemctl is-active solvia solvia-http solvia-network.timer solvia-certificate.timer
 sudo solvia-admin health
 sudo bash tests/linux-updater.sh
+sudo test -f /usr/local/lib/solvia/solvia-linux-app.py
+sudo test -x /usr/local/bin/solvia-server-control
+sudo desktop-file-validate /usr/share/applications/solvia-server.desktop
 sudo test -x /usr/local/bin/solvia-admin-app
 sudo test -x /usr/local/sbin/solvia-updater
 sudo test -f /opt/solvia/VERSION

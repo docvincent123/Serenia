@@ -192,7 +192,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build Linux browser interface
+      - name: Build Linux client interface
         run: |
           npm --prefix frontend ci --no-audit --no-fund
           npm --prefix frontend run build
@@ -214,7 +214,7 @@ jobs:
           test -n "$version"
           printf '%s\n' "$version" > out/SOLVIA-Linux/VERSION
           find build-server/vcpkg_installed/x64-linux/share -name copyright -exec sh -c 'cp "$1" "out/SOLVIA-Linux/licenses/$(basename "$(dirname "$1")").txt"' _ {} \;
-          chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
+          chmod +x out/SOLVIA-Linux/*.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater out/SOLVIA-Linux/solvia-server-control
           bash -n out/SOLVIA-Linux/install.sh out/SOLVIA-Linux/solvia-admin out/SOLVIA-Linux/solvia-admin-app out/SOLVIA-Linux/solvia-updater
           cd out/SOLVIA-Linux
           find . -type f ! -name SHA256SUMS ! -name LINUX.md -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
@@ -222,6 +222,14 @@ jobs:
       - name: Verify Linux install, HTTPS, backup, restore and upgrade
         timeout-minutes: 8
         run: bash tests/linux-install.sh out/SOLVIA-Linux
+
+      - name: Verify native Linux window and server controller
+        timeout-minutes: 3
+        run: |
+          sudo apt-get install -y xvfb dbus-x11
+          python3 tests/linux-client.py
+          bash tests/linux-server-control.sh
+          timeout 70s xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/linux-native-ui.py
 
       - name: Linux diagnostics
         if: failure()
