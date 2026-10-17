@@ -9,8 +9,15 @@ for file in solvia-linux-app.py solvia-admin-app solvia-admin.desktop; do
   [[ -f $package/$file ]] || { echo "Немає $file у пакеті" >&2; exit 1; }
 done
 [[ -f $package/ui/index.html ]] || { echo "Немає локального інтерфейсу ui/index.html у пакеті" >&2; exit 1; }
-apt-get update
-apt-get install -y python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 ca-certificates desktop-file-utils
+missing=()
+for dependency in python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 ca-certificates desktop-file-utils; do
+  installed_status=$(dpkg-query -W -f='${Status}' "$dependency" 2>/dev/null || true)
+  [[ $installed_status == 'install ok installed' ]] || missing+=("$dependency")
+done
+if ((${#missing[@]})); then
+  apt-get update
+  apt-get install -y "${missing[@]}"
+fi
 install -d -m 0755 /usr/local/lib/solvia
 rm -rf /usr/local/lib/solvia/ui
 cp -r "$package/ui" /usr/local/lib/solvia/ui
