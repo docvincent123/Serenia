@@ -338,7 +338,7 @@ async function request(base, token, method, path, body) {
       signal: AbortSignal.timeout(15000)
     });
   } catch {
-    throw Object.assign(new Error('Сервер недоступний. Зверніться до системного адміністратора.'), { status: 0 });
+    throw Object.assign(new Error('Немає зв’язку із сервером. Перевірте адресу Linux/Windows-сервера, мережу центру та довіру до його CA-сертифіката.'), { status: 0 });
   }
 
   const text = await response.text();
@@ -523,7 +523,7 @@ function Login({ initialBase, onLogin }) {
       if (health.ok !== true || !health.version) throw new Error('За цією адресою немає SOLVIA API.');
       localStorage.setItem('solvia_api', base);
       setConnection(`Сервер SOLVIA ${health.version} доступний · ${health.platform || 'HTTPS'}`);
-    } catch (e) { setError(e.message); }
+    } catch (e) { setError(e.status === 0 || e.status >= 500 ? 'Сервер недоступний. Зверніться до системного адміністратора.' : e.message); }
     finally { setChecking(false); }
   }
   const [busy, setBusy] = useState(false);
@@ -539,7 +539,7 @@ function Login({ initialBase, onLogin }) {
       const result = await request(base, '', 'POST', '/api/login', { login, password, ...deviceIdentity() });
       await onLogin(base, result, password);
     } catch (e) {
-      setError(e.message);
+      setError(e.status === 0 || e.status >= 500 ? 'Сервер недоступний. Зверніться до системного адміністратора.' : e.message);
     } finally {
       setBusy(false);
     }
