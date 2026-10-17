@@ -93,6 +93,18 @@ class Scenario(unittest.TestCase):
             self.api('director','GET','/api/desktop-updates/package?platform='+platform+'&sha='+sha,status=404)
         self.api('admin','POST','/api/desktop-updates',{'platform':'../../evil'},status=400)
 
+    def test_a_scoped_settings_preserve_other_program(self):
+        original=self.api('admin','GET','/api/settings/center')
+        self.api('admin','PATCH','/api/settings/center',{'server_name':'Server Console test','vps_name':'Scoped VPS'})
+        server_saved=self.api('admin','GET','/api/settings/center')
+        self.assertEqual(server_saved['center_name'],original['center_name'])
+        self.assertEqual(server_saved['logo_data'],original['logo_data'])
+        self.api('admin','PATCH','/api/settings/center',{'center_name':'Clinical workspace test'})
+        clinic_saved=self.api('admin','GET','/api/settings/center')
+        self.assertEqual(clinic_saved['server_name'],'Server Console test')
+        self.assertEqual(clinic_saved['vps_name'],'Scoped VPS')
+        self.api('admin','PATCH','/api/settings/center',original)
+
     def test_b_single_session_across_devices(self):
         uid=self.api('admin','POST','/api/users',{'name':'Single session test','login':'single-session','password':'single-session-password','role':'reception'})['id']
         def login(device, password='single-session-password'):

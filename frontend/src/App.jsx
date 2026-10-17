@@ -2686,8 +2686,10 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
   async function save(e) {
     e.preventDefault();
     try {
-      await api('PATCH', '/api/settings/center', form);
-      setSaved('Налаштування центру збережено.');
+      const connectionFields=new Set(['server_name','connection_mode','local_api_url','vps_api_url','vps_name']);
+      const changes=Object.fromEntries(Object.entries(form).filter(([key])=>technical?connectionFields.has(key):!connectionFields.has(key)&&!['id','updated'].includes(key)));
+      await api('PATCH', '/api/settings/center', changes);
+      setSaved(technical?'Налаштування сервера збережено.':'Налаштування центру збережено.');
       setTimeout(() => setSaved(''), 2500);
     } catch (e) { setError(e.message); }
   }
