@@ -95,7 +95,7 @@ INSERT INTO audit(user_id,event,entity,entity_id,created)
 SELECT NULL,'local_terminate','session',user_id,to_char(clock_timestamp(),'YYYY-MM-DD"T"HH24:MI:SS') FROM removed;
 COMMIT;
 SQL
-    echo 'Попередній сеанс завершено. Тепер можна ввійти в SOLVIA.' ;;
+    echo 'Сеанси вказаного логіна завершено, якщо вони існували. Тепер можна ввійти в SOLVIA.' ;;
   version) cat /opt/solvia/VERSION 2>/dev/null || echo "unknown" ;;
   check-update) /usr/local/sbin/solvia-updater check ;;
   update) /usr/local/sbin/solvia-updater apply ;;

@@ -23,6 +23,7 @@ class Scenario(unittest.TestCase):
     def setUpClass(cls):
         cls.update_dir=tempfile.TemporaryDirectory()
         os.environ['SOLVIA_MOBILE_UPDATE_DIR']=cls.update_dir.name
+        os.environ['SOLVIA_DESKTOP_UPDATE_DIR']=str(pathlib.Path(cls.update_dir.name)/'pc')
         cls.database = os.environ.get('SOLVIA_TEST_DATABASE_URL', '')
         if not cls.database:
             raise RuntimeError('SOLVIA_TEST_DATABASE_URL is required')

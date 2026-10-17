@@ -3659,7 +3659,7 @@ export default function App() {
   useEffect(()=>{
     function sharedSession(event){
       if(event.key!=='solvia_pc_session')return;
-      if(event.newValue){try{const saved=JSON.parse(event.newValue);if(cleanBase(saved.base)!==cleanBase(apiBase))return;sessionStorage.setItem('solvia_token',saved.token);activeToken.current=saved.token;setToken(saved.token);setUser(null);setBooting(true);}catch{}}
+      if(event.newValue){try{const saved=JSON.parse(event.newValue);if(cleanBase(saved.base)!==cleanBase(apiBase))return;sessionStorage.setItem('solvia_token',saved.token);activeToken.current=saved.token;setToken(saved.token);setUser(null);setDraftSession(null);setBooting(true);}catch{}}
       else{sessionStorage.removeItem('solvia_token');activeToken.current='';setToken('');setUser(null);setDraftSession(null);setBooting(false);}
     }
     window.addEventListener('storage',sharedSession);return()=>window.removeEventListener('storage',sharedSession);
