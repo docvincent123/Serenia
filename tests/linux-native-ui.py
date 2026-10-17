@@ -19,7 +19,9 @@ gi.require_version('WebKit2', '4.1')
 from gi.repository import GLib, WebKit2
 
 failures = []
-with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
+# WebKit/Mesa helpers can finish writing shader caches after Gtk.Application quits.
+# Cleanup of disposable cache files must not hide the assertions below.
+with tempfile.TemporaryDirectory(prefix='solvia-native-test-', ignore_cleanup_errors=True) as directory:
     root = Path(directory)
     for key in ('XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME'):
         os.environ[key] = str(root/key)
