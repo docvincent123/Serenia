@@ -124,7 +124,9 @@ try {
   await page.setViewportSize({width:1280,height:600});
     await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   await page.screenshot({ path:'out/design/desktop-settings.png',fullPage:true });
-  await page.locator('.settings-nav').getByRole('button',{name:/Оновлення Android/}).click();
+  assert.equal(await page.locator('.settings-nav').getByRole('button',{name:/Оновлення Android/}).count(),0);
+  await page.goto(base+'/?mode=server');
+  await page.getByRole('button',{name:'Оновлення Android',exact:true}).click();
   await page.getByRole('heading',{name:'Оновлення Android',exact:true}).waitFor();
   await page.getByLabel('Опис випуску — release.json',{exact:true}).setInputFiles({name:'release.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version_code:32,version_name:'3.0.0',package_name:'com.quremed.solvia',sha256:'a'.repeat(64)}))});
   await page.getByLabel('Підписаний APK',{exact:true}).setInputFiles({name:'app.apk',mimeType:'application/vnd.android.package-archive',buffer:Buffer.from('PK synthetic')});
@@ -133,6 +135,7 @@ try {
   const published=JSON.parse((await publication).postData());
   assert.equal(published.version_code,32);assert.equal(Buffer.from(published.apk_base64,'base64').toString(),'PK synthetic');
   await page.getByText('Оновлення опубліковано на сервері центру.',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'Налаштування сервера',exact:true}).click();
   await page.locator('.settings-nav').getByRole('button',{name:/Підключення/}).click();
   const configDownload = page.waitForEvent('download');
   await page.getByRole('button',{name:'Файл для телефону',exact:true}).click();
@@ -142,7 +145,7 @@ try {
   assert.equal(config.api_url,'https://192.168.1.100:8443');
   assert.equal(config.format,'quremed.solvia.mobile');
   // Settings remain accessible even with the shift closed.
-  open = false; await page.reload(); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
+  open = false; await page.goto(base); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   open = true; await page.reload();
   if(await page.getByRole('button',{name:'Прийоми',exact:true}).getAttribute('aria-expanded')==='false') await page.getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('button',{name:'Прийоми за зміну',exact:true}).click();

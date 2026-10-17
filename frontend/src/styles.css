@@ -2596,3 +2596,5 @@ html[data-compact="true"] .appointment, html[data-compact="true"] .patient-row, 
     }
   }
 }
+
+.pc-update-notice{position:fixed;right:20px;bottom:20px;z-index:200;max-width:min(440px,calc(100vw - 40px));max-height:60vh;overflow:auto;padding:20px;border:1px solid #e4bb32;border-radius:14px;background:#fffdf2;color:#252525;box-shadow:0 8px 32px #0002}.pc-update-notice p{margin:10px 0;line-height:1.45;overflow-wrap:anywhere}.pc-update-notice .button{margin-top:6px}

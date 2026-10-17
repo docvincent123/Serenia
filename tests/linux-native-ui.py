@@ -3,6 +3,7 @@
 Tests trusted HTTPS React rendering, native reconnect UI and untrusted TLS refusal.
 """
 import importlib.util
+import json
 import os
 from pathlib import Path
 import ssl
@@ -18,7 +19,9 @@ gi.require_version('WebKit2', '4.1')
 from gi.repository import GLib, WebKit2
 
 failures = []
-with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
+# WebKit/Mesa helpers can finish writing shader caches after Gtk.Application quits.
+# Cleanup of disposable cache files must not hide the assertions below.
+with tempfile.TemporaryDirectory(prefix='solvia-native-test-', ignore_cleanup_errors=True) as directory:
     root = Path(directory)
     for key in ('XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME'):
         os.environ[key] = str(root/key)
@@ -50,6 +53,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
     busy = False
     printed = False
     app = None
+    console_process = None
 
     def failed(message):
         failures.append(message)
@@ -64,7 +68,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
         assert app.view.get_website_data_manager().get_tls_errors_policy() == WebKit2.TLSErrorsPolicy.FAIL
         app.view.connect('print', printing)
         GLib.timeout_add(250, poll)
-        GLib.timeout_add_seconds(45, lambda: failed(
+        GLib.timeout_add_seconds(55, lambda: failed(
             f'Native client timed out: phase={phase}, uri={app.view.get_uri()}, '
             f'loading={app.view.is_loading()}, screen={app.stack.get_visible_child_name()}'))
         return False
@@ -81,6 +85,27 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
             app.origin = f'https://127.0.0.1:{offline_socket.getsockname()[1]}'
             phase = 'offline'
             app.load(force=True)
+            return True
+        if phase == 'console':
+            other = app.application.controllers.get('server')
+            if not other or other.view.is_loading() or busy:
+                return True
+            assert other.view.get_context() == app.view.get_context()
+            assert other.window.get_title() == 'SOLVIA Server Console'
+            busy = True
+            def console_rendered(view, result, _):
+                global busy, phase
+                busy = False
+                try:
+                    data = json.loads(view.evaluate_javascript_finish(result).to_string())
+                    if 'Вхід до Server Console' not in data['text'] or data['shared'] != 'same-context':
+                        return
+                    assert 'mode=server' in view.get_uri()
+                    phase = 'done'
+                    app.quit()
+                except Exception as error:
+                    failed(str(error))
+            other.view.evaluate_javascript("JSON.stringify({text:document.body.innerText,shared:localStorage.getItem('solvia-native-shared-test')})", -1, None, None, None, console_rendered, None)
             return True
         if busy or app.view.is_loading() or phase == 'print':
             return True
@@ -109,8 +134,10 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
                     app.load(force=True)
                 elif phase == 'tls' and 'Сервер недоступний. Зверніться до системного адміністратора.' in text:
                     assert 'UNTRUSTED SERVER MUST NOT RENDER' not in text
-                    phase = 'done'
-                    app.quit()
+                    global console_process
+                    view.evaluate_javascript("localStorage.setItem('solvia-native-shared-test','same-context')", -1, None, None, None, None, None)
+                    phase = 'console'
+                    console_process = subprocess.Popen(['/usr/bin/python3', '/usr/local/lib/solvia/solvia-linux-app.py', '--server-console'])
             except Exception as error:
                 failed(str(error))
         app.view.evaluate_javascript('document.body.innerText', -1, None, None, None, rendered, None)
@@ -119,8 +146,11 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
     try:
         module.run(ready)
     finally:
+        if console_process:
+            try: console_process.wait(timeout=5)
+            except subprocess.TimeoutExpired: console_process.terminate(); console_process.wait(timeout=5)
         offline_socket.close()
         server.shutdown()
     assert phase == 'done', (phase, failures)
     assert not failures, failures
-print('PASS: real GTK/WebKit window, local React login, trusted HTTPS API, offline recovery and self-signed TLS rejection')
+print('PASS: real GTK/WebKit window, local React login, trusted HTTPS API, offline recovery, strict TLS and separate Server Console sharing native storage')

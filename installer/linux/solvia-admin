@@ -85,6 +85,17 @@ case ${1:-help} in
     systemctl stop solvia-http.service solvia.service
     echo 'Сервер зупинено. Запуск: sudo solvia-admin start'
     echo 'Після перезавантаження ПК штатний автозапуск увімкне сервер.' ;;
+  end-sessions)
+    [[ $# == 2 && -n $2 ]] || { echo 'sudo solvia-admin end-sessions LOGIN' >&2; exit 2; }
+    runuser -u solvia -- psql -X "$SOLVIA_DATABASE_URL" -v ON_ERROR_STOP=1 -v login="$2" <<'SQL'
+BEGIN;
+SELECT id FROM users WHERE login=:'login' FOR UPDATE;
+WITH removed AS (DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE login=:'login') RETURNING user_id)
+INSERT INTO audit(user_id,event,entity,entity_id,created)
+SELECT NULL,'local_terminate','session',user_id,to_char(clock_timestamp(),'YYYY-MM-DD"T"HH24:MI:SS') FROM removed;
+COMMIT;
+SQL
+    echo 'Сеанси вказаного логіна завершено, якщо вони існували. Тепер можна ввійти в SOLVIA.' ;;
   version) cat /opt/solvia/VERSION 2>/dev/null || echo "unknown" ;;
   check-update) /usr/local/sbin/solvia-updater check ;;
   update) /usr/local/sbin/solvia-updater apply ;;
@@ -147,5 +158,5 @@ SQL
     echo '== DATABASE =='; "$0" db-status
     echo '== BACKUPS =='; "$0" backups | head -5
     ;;
-  *) echo 'sudo solvia-admin {start|stop|restart|health|network|status|logs [--follow]|version|check-update|update|backup|backups|verify-backup FILE|db-status|doctor|restore FILE}' ;;
+  *) echo 'sudo solvia-admin {start|stop|restart|health|network|status|logs [--follow]|end-sessions LOGIN|version|check-update|update|backup|backups|verify-backup FILE|db-status|doctor|restore FILE}' ;;
 esac

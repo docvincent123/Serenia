@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SOLVIA Server Console
+Comment=Налаштування сервера, оновлення ПК і телефонів та сеанси пристроїв
+Exec=/usr/local/bin/solvia-server-app
+Icon=solvia-admin
+Terminal=false
+Categories=System;Utility;
+Keywords=SOLVIA;сервер;оновлення;

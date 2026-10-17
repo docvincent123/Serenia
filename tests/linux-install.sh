@@ -20,6 +20,8 @@ sudo solvia-admin health
 sudo bash tests/linux-updater.sh
 sudo test -f /usr/local/lib/solvia/solvia-linux-app.py
 sudo test -x /usr/local/bin/solvia-server-control
+sudo test -x /usr/local/bin/solvia-server-app
+sudo desktop-file-validate /usr/share/applications/solvia-server-console.desktop
 sudo desktop-file-validate /usr/share/applications/solvia-server.desktop
 sudo test -x /usr/local/bin/solvia-admin-app
 sudo test -x /usr/local/sbin/solvia-updater
@@ -56,6 +58,26 @@ with client.open(request) as r:
     system=json.load(r)
     assert system['database']['name']=='solvia'
     assert int(system['counts']['users']) >= 1
+import subprocess, urllib.error
+# Local OS administration can recover one locked account without touching another.
+payload={'name':'Recovery observer','login':'recovery-observer','password':'CI-observer-password','role':'director'}
+request=urllib.request.Request(base+'/api/users',data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'})
+with client.open(request) as r: json.load(r)
+request=urllib.request.Request(base+'/api/login',data=json.dumps({'login':'recovery-observer','password':'CI-observer-password'}).encode(),headers={'Content-Type':'application/json'})
+with client.open(request) as r: other=json.load(r)['token']
+subprocess.check_call(['sudo','solvia-admin','end-sessions','admin'],stdout=subprocess.DEVNULL)
+try:
+    client.open(urllib.request.Request(base+'/api/me',headers={'Authorization':'Bearer '+token}))
+except urllib.error.HTTPError as error: assert error.code==401
+else: raise AssertionError('Old admin session survived recovery')
+with client.open(urllib.request.Request(base+'/api/me',headers={'Authorization':'Bearer '+other})) as r: assert json.load(r)['role']=='director'
+request=urllib.request.Request(base+'/api/login',data=json.dumps({'login':'admin','password':'CI-password-long-2026'}).encode(),headers={'Content-Type':'application/json'})
+with client.open(request) as r: restored=json.load(r)['token']
+for active in (other,restored):
+    request=urllib.request.Request(base+'/api/logout',data=b'{}',headers={'Authorization':'Bearer '+active,'Content-Type':'application/json'})
+    with client.open(request) as r: assert json.load(r)['ok']
+print('PASS: targeted local administrator session recovery without disrupting another account')
+
 PY
 python3 - <<'PY'
 import json, os, urllib.request, urllib.error, http.client
@@ -132,7 +154,7 @@ ca_before=$(sha256sum /tmp/solvia-ci-ca.crt | cut -d' ' -f1)
 sudo --preserve-env=SOLVIA_SERVER_IP bash "$package/install.sh" </dev/null
 ca_after=$(sudo sha256sum /etc/solvia/ca/QureMed-Local-CA.crt | cut -d' ' -f1)
 test "$ca_before" = "$ca_after"
-test "$(sudo -u solvia psql -X -p 55432 -d solvia -Atc 'SELECT count(*) FROM users')" = 1
+test "$(sudo -u solvia psql -X -p 55432 -d solvia -Atc "SELECT count(*) FROM users WHERE login IN ('admin','recovery-observer')")" = 2
 sudo solvia-admin restart
 # Failed TLS verification must never be bypassed; certificate contains the LAN SAN.
 SOLVIA_SERVER_IP=$(cat /usr/local/share/solvia/address)

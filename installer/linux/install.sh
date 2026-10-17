@@ -96,6 +96,8 @@ rm -rf /usr/local/lib/solvia/ui
 cp -r ui /usr/local/lib/solvia/ui
 chmod -R a+rX /usr/local/lib/solvia/ui
 install -m 0755 solvia-server-control /usr/local/bin/solvia-server-control
+install -m 0755 solvia-server-app /usr/local/bin/solvia-server-app
+install -m 0644 solvia-server-console.desktop /usr/share/applications/solvia-server-console.desktop
 install -m 0644 solvia-server.desktop /usr/share/applications/solvia-server.desktop
 install -m 0755 solvia-admin-app /usr/local/bin/solvia-admin-app
 install -m 0644 solvia-admin.desktop /usr/share/applications/solvia-admin.desktop

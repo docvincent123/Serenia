@@ -51,6 +51,7 @@ jobs:
 
       - name: Check connection address validation
         run: |
+          node tests/pc-updates.mjs
           node tests/connection.mjs
           node tests/auth-session.mjs
           node tests/drafts.mjs
@@ -130,17 +131,21 @@ jobs:
       - name: Install and open Windows client without local server
         shell: powershell
         timeout-minutes: 3
-        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-2.5.0-Windows-x64.exe
+        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-2.5.1-Windows-x64.exe
+
+      - name: Install and open separate Server Console without local server
+        shell: pwsh
+        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-2.5.1-Windows-x64.exe -Component console
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-2.5.0-Windows-x64-portable
+          name: SOLVIA-2.5.1-Windows-x64-portable
           path: out/SOLVIA/
           retention-days: 14
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-2.5.0-Setup-EXE
+          name: SOLVIA-2.5.1-Setup-EXE
           path: out/installer/*.exe
           if-no-files-found: error
           retention-days: 14
@@ -196,6 +201,7 @@ jobs:
         run: |
           npm --prefix frontend ci --no-audit --no-fund
           npm --prefix frontend run build
+          node tests/pc-updates.mjs
           node tests/connection.mjs
           python3 tests/network-address.py
           node tests/auth-session.mjs
@@ -238,12 +244,12 @@ jobs:
           sudo pg_lsclusters || true
 
       - name: Archive Linux package
-        run: tar -C out -czf out/SOLVIA-2.5.0-Linux-x64.tar.gz SOLVIA-Linux
+        run: tar -C out -czf out/SOLVIA-2.5.1-Linux-x64.tar.gz SOLVIA-Linux
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-2.5.0-Linux-x64-installer
-          path: out/SOLVIA-2.5.0-Linux-x64.tar.gz
+          name: SOLVIA-2.5.1-Linux-x64-installer
+          path: out/SOLVIA-2.5.1-Linux-x64.tar.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -265,6 +271,7 @@ jobs:
         env:
           SOLVIA_PLAYWRIGHT_MODULE: /tmp/solvia-browser-tests/node_modules/playwright
         run: |
+          node tests/pc-updates-ui.mjs
           node tests/offline-login.mjs
           node tests/ui-regression.mjs
           node tests/reception-booking.mjs
