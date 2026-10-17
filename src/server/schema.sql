@@ -615,3 +615,17 @@ CREATE TABLE IF NOT EXISTS mobile_recovery(
  UNIQUE(user_id,device_id,client_key)
 );
 CREATE INDEX IF NOT EXISTS idx_mobile_recovery_state ON mobile_recovery(state,updated);
+
+-- Preserve the first active session when upgrading older databases with duplicates.
+-- Closed shifts and expired unbound sessions no longer reserve the account.
+DELETE FROM sessions WHERE (shift_date='' AND expires<=extract(epoch from now())::bigint)
+  OR (shift_date<>'' AND NOT EXISTS(SELECT 1 FROM shift_days WHERE shift_date=sessions.shift_date AND closed_at IS NULL));
+-- created is the login time; token provides a deterministic tie-breaker.
+DELETE FROM sessions WHERE token IN (
+  SELECT token FROM (
+    SELECT token, row_number() OVER (
+      PARTITION BY user_id ORDER BY created ASC, token ASC
+    ) AS position FROM sessions
+  ) duplicates WHERE position > 1
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_one_per_user ON sessions(user_id);

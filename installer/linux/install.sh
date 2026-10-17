@@ -92,6 +92,9 @@ install -m 0755 solvia-admin /usr/local/sbin/solvia-admin
 install -m 0755 solvia-updater /usr/local/sbin/solvia-updater
 install -d -m 0755 /usr/local/lib/solvia
 install -m 0644 solvia-linux-app.py /usr/local/lib/solvia/solvia-linux-app.py
+rm -rf /usr/local/lib/solvia/ui
+cp -r ui /usr/local/lib/solvia/ui
+chmod -R a+rX /usr/local/lib/solvia/ui
 install -m 0755 solvia-server-control /usr/local/bin/solvia-server-control
 install -m 0644 solvia-server.desktop /usr/share/applications/solvia-server.desktop
 install -m 0755 solvia-admin-app /usr/local/bin/solvia-admin-app

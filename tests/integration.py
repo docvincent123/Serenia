@@ -63,6 +63,31 @@ class Scenario(unittest.TestCase):
         code, result=self.call(method,path,body,self.tokens.get(role))
         self.assertEqual(code,status,result)
         return result
+    def test_b_single_session_across_devices(self):
+        uid=self.api('admin','POST','/api/users',{'name':'Single session test','login':'single-session','password':'single-session-password','role':'reception'})['id']
+        def login(device, password='single-session-password'):
+            return self.call('POST','/api/login',{'login':'single-session','password':password,'platform':device,'device_id':device})
+        code, first=login('Windows')
+        self.assertEqual(code,200,first)
+        self.assertEqual(login('Linux','wrong-password')[0],401)
+        self.assertEqual(login('Linux')[0],409)
+        self.assertEqual(self.call('GET','/api/me',token=first['token'])[0],200)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            denied=list(pool.map(login,['Android','Windows','Linux']))
+        self.assertTrue(all(code==409 and 'token' not in body for code,body in denied),denied)
+        self.assertEqual(self.call('GET','/api/me',token=first['token'])[0],200)
+        self.assertEqual(self.call('POST','/api/logout',{},first['token'])[0],200)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            results=list(pool.map(login,['Android','Windows','Linux']))
+        successful=[auth for code,auth in results if code==200]
+        self.assertEqual(len(successful),1,results)
+        self.assertEqual(sum(code==409 for code,_ in results),2,results)
+        sessions=[row for row in self.api('admin','GET','/api/admin/sessions') if row['user_id']==uid]
+        self.assertEqual(len(sessions),1)
+        self.api('admin','DELETE',f'/api/users/{uid}/sessions',{})
+        self.assertEqual(login('Linux')[0],200)
+        self.api('admin','DELETE',f'/api/users/{uid}/sessions',{})
+
     def test_plain_http_must_not_bind_to_the_lan(self):
         # Windows exposes LAN traffic through Caddy HTTPS only. Regression guard
         # for accidentally starting the raw HTTP API on 0.0.0.0 without TLS.
@@ -479,8 +504,12 @@ class Scenario(unittest.TestCase):
         for who in readiness['unknown_psychologists']:
             login='psychologist' if who['id']==3 else 'other'
             password=self.passwords['psychologist'] if who['id']==3 else 'long-test-password'
-            code,account=self.call('POST','/api/login',{'login':login,'password':password,'device_id':f"ci-cleanup-{who['id']}",'device_name':'Synthetic'})
-            self.assertEqual(code,200,account)
+            previous=self.tokens.get(login)
+            if previous and self.call('GET','/api/me',token=previous)[0]==200:
+                account={'token':previous}
+            else:
+                code,account=self.call('POST','/api/login',{'login':login,'password':password,'device_id':f"ci-cleanup-{who['id']}",'device_name':'Synthetic'})
+                self.assertEqual(code,200,account)
             code,info=self.call('POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':0,'blocked_count':0,'last_sync':'','error_code':''},account['token'])
             self.assertEqual(code,200,info)
         self.api(psy,'POST','/api/mobile-status',{'version_code':34,'version_name':'3.2.0','pending_count':1,'blocked_count':0,'error_code':'pending'})
@@ -519,11 +548,11 @@ class Scenario(unittest.TestCase):
         self.api(admin,'POST','/api/shift-day',{'action':'open'})
         self.assertEqual(len(self.api(psy,'GET',f'/api/patients/{pid}')['consultations']),3)
         # Successful logins behind one reverse proxy must not exhaust the failure quota.
+        self.api(psy,'POST','/api/logout',{})
         for _ in range(12):
             code,login=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist']})
             self.assertEqual(code,200,login)
             self.call('POST','/api/logout',{},login['token'])
-        self.api(psy,'POST','/api/logout',{})
         self.api(psy,'GET','/api/me',status=401)
 
     def test_features_drafts_waiting_list_and_retry(self):
@@ -630,12 +659,15 @@ class Scenario(unittest.TestCase):
 
     def test_y_staff_message_device_scope_and_receipts(self):
         def login(role, device):
+            if self.tokens.get(role): self.call('POST','/api/logout',{},self.tokens[role])
             code, auth = self.call('POST','/api/login',{'login':role,'password':self.passwords[role],'platform':'Android','device_id':device,'device_name':device})
             self.assertEqual(code,200,auth)
+            self.tokens[role]=auth['token']
             return auth['token'], auth['user']['id']
         admin,_=login('admin','staff-desktop')
         psy,uid=login('psychologist','staff-phone')
-        second,_=login('psychologist','staff-other-phone')
+        denied,_=self.call('POST','/api/login',{'login':'psychologist','password':self.passwords['psychologist'],'platform':'Android','device_id':'staff-other-phone'})
+        self.assertEqual(denied,409)
         rec,_=login('reception','staff-reception')
         def call(token,method,path,body=None,status=200):
             code,result=self.call(method,path,body,token)
@@ -658,9 +690,7 @@ class Scenario(unittest.TestCase):
         self.assertEqual(message['id'],again['id'])
         call(admin,'POST','/api/staff/messages',{**payload,'body':'Змінений текст'},status=409)
         self.assertTrue(any(m['id']==message['id'] for m in call(psy,'GET','/api/staff/messages')))
-        self.assertFalse(any(m['id']==message['id'] for m in call(second,'GET','/api/staff/messages')))
         path=f"/api/staff/messages/{message['id']}"
-        call(second,'POST',path+'/read',{},status=404)
         call(rec,'POST',path+'/read',{},status=403)
         call(psy,'POST',path+'/delivered',{})
         sent=next(m for m in call(admin,'GET','/api/staff/messages') if m['id']==message['id'])
@@ -669,6 +699,10 @@ class Scenario(unittest.TestCase):
         read=next(m for m in call(admin,'GET','/api/staff/messages') if m['id']==message['id'])
         self.assertIsNotNone(read['read_at'])
         call(psy,'POST',path+'/read',{})
+        call(psy,'POST','/api/logout',{})
+        second,_=login('psychologist','staff-other-phone')
+        self.assertFalse(any(m['id']==message['id'] for m in call(second,'GET','/api/staff/messages')))
+        call(second,'POST',path+'/read',{},status=404)
         call(admin,'POST','/api/staff/messages',{**payload,'device_id':'','client_key':'staff-all-phones'})
         self.assertTrue(any(m['client_key']=='staff-all-phones' for m in call(second,'GET','/api/staff/messages')))
 

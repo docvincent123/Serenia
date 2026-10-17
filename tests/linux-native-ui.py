@@ -46,6 +46,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
     offline_socket = socket.socket()
     offline_socket.bind(('127.0.0.1', 0))  # Reserved but not listening: real connection refusal.
     phase = 'login'
+    trusted_origin = 'https://localhost:8443'
     busy = False
     printed = False
     app = None
@@ -76,39 +77,43 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
 
     def poll():
         global busy, phase
-        if phase == 'login' and not busy and not app.view.is_loading():
-            if app.stack.get_visible_child_name() == 'error':
-                failed('Trusted localhost certificate rejected: ' + app.message.get_text())
-                return False
-            busy = True
-            def rendered(view, result, _):
-                global busy, phase
-                try:
-                    text = view.evaluate_javascript_finish(result).to_string()
-                    if 'Вхід до SOLVIA' not in text:
-                        busy = False
-                        return
-                    phase = 'print'
-                    view.evaluate_javascript('window.print()', -1, None, None, None, None, None)
-                except Exception as error:
-                    failed(str(error))
-            app.view.evaluate_javascript('document.body.innerText', -1, None, None, None, rendered, None)
-        elif phase == 'print' and printed:
+        if phase == 'print' and printed:
             app.origin = f'https://127.0.0.1:{offline_socket.getsockname()[1]}'
             phase = 'offline'
-            app.load()
-        elif phase == 'offline' and app.stack.get_visible_child_name() == 'error':
-            assert 'Не вдалося підключитися' in app.message.get_text()
-            app.origin = f'https://localhost:{server.server_port}'
-            phase = 'tls'
-            app.load()
-        elif phase == 'tls' and app.stack.get_visible_child_name() == 'error':
-            if 'Сертифікат' not in app.message.get_text():
-                failed('Untrusted TLS did not show certificate error')
-            else:
-                phase = 'done'
-                app.quit()
+            app.load(force=True)
+            return True
+        if busy or app.view.is_loading() or phase == 'print':
+            return True
+        if app.stack.get_visible_child_name() == 'error':
+            failed('Local login failed: ' + app.message.get_text())
             return False
+        busy = True
+        def rendered(view, result, _):
+            global busy, phase
+            busy = False
+            try:
+                text = view.evaluate_javascript_finish(result).to_string()
+                if 'Вхід до SOLVIA' not in text:
+                    return
+                assert view.get_uri().startswith('solvia://app/')
+                if phase == 'login' and 'Сервер доступний. Можна увійти.' in text:
+                    phase = 'print'
+                    view.evaluate_javascript('window.print()', -1, None, None, None, None, None)
+                elif phase == 'offline' and 'Сервер недоступний. Зверніться до системного адміністратора.' in text:
+                    app.origin = trusted_origin
+                    phase = 'recovery'
+                    app.load(force=True)
+                elif phase == 'recovery' and 'Сервер доступний. Можна увійти.' in text:
+                    app.origin = f'https://localhost:{server.server_port}'
+                    phase = 'tls'
+                    app.load(force=True)
+                elif phase == 'tls' and 'Сервер недоступний. Зверніться до системного адміністратора.' in text:
+                    assert 'UNTRUSTED SERVER MUST NOT RENDER' not in text
+                    phase = 'done'
+                    app.quit()
+            except Exception as error:
+                failed(str(error))
+        app.view.evaluate_javascript('document.body.innerText', -1, None, None, None, rendered, None)
         return True
 
     try:
@@ -118,4 +123,4 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-') as directory:
         server.shutdown()
     assert phase == 'done', (phase, failures)
     assert not failures, failures
-print('PASS: real GTK/WebKit window, trusted HTTPS React login, offline recovery and self-signed TLS rejection')
+print('PASS: real GTK/WebKit window, local React login, trusted HTTPS API, offline recovery and self-signed TLS rejection')
