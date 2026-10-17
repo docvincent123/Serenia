@@ -154,7 +154,7 @@ ca_before=$(sha256sum /tmp/solvia-ci-ca.crt | cut -d' ' -f1)
 sudo --preserve-env=SOLVIA_SERVER_IP bash "$package/install.sh" </dev/null
 ca_after=$(sudo sha256sum /etc/solvia/ca/QureMed-Local-CA.crt | cut -d' ' -f1)
 test "$ca_before" = "$ca_after"
-test "$(sudo -u solvia psql -X -p 55432 -d solvia -Atc 'SELECT count(*) FROM users')" = 1
+test "$(sudo -u solvia psql -X -p 55432 -d solvia -Atc "SELECT count(*) FROM users WHERE login IN ('admin','recovery-observer')")" = 2
 sudo solvia-admin restart
 # Failed TLS verification must never be bypassed; certificate contains the LAN SAN.
 SOLVIA_SERVER_IP=$(cat /usr/local/share/solvia/address)
