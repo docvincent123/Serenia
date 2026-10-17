@@ -29,3 +29,18 @@ source = Path('installer/linux/solvia-linux-app.py').read_text()
 assert 'TLSErrorsPolicy.FAIL' in source
 assert 'allow_tls_certificate_for_host' not in source
 print('PASS: HTTPS-only server origins, credential/path rejection, dedicated launcher and strict TLS configuration')
+
+import tempfile
+with tempfile.TemporaryDirectory() as directory:
+    root=Path(directory)
+    (root/'index.html').write_text('local login')
+    assert module.local_asset(root, 'solvia://app/index.html?api=ignored') == (b'local login','text/html')
+    for uri in ['solvia://app/../outside','solvia://app/%2e%2e/outside','solvia://evil/index.html','file:///etc/passwd']:
+        try: module.local_asset(root,uri)
+        except ValueError: pass
+        else: raise AssertionError(uri)
+    (root/'escape').symlink_to('/etc/passwd')
+    try: module.local_asset(root,'solvia://app/escape')
+    except ValueError: pass
+    else: raise AssertionError('symlink escaped UI root')
+print('PASS: local UI assets and traversal/symlink rejection')

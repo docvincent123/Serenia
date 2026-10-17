@@ -494,6 +494,27 @@ function Login({ initialBase, onLogin }) {
   const [checking, setChecking] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const [availability, setAvailability] = useState({ state: 'checking', message: 'Перевіряємо з’єднання із сервером…' });
+  useEffect(() => {
+    let cancelled = false, timer;
+    async function probe() {
+      let base;
+      try { base = cleanBase(server); }
+      catch (e) { setAvailability({ state: 'invalid', message: e.message }); return; }
+      try {
+        const health = await request(base, '', 'GET', '/api/health');
+        if (health.ok !== true || !health.version) throw new Error('За цією адресою немає SOLVIA API.');
+        if (!cancelled) setAvailability({ state: 'online', message: 'Сервер доступний. Можна увійти.' });
+      } catch (e) {
+        if (!cancelled) setAvailability({ state: 'offline', message: e.status === 0 || e.status >= 500 ? 'Сервер недоступний. Зверніться до системного адміністратора.' : e.message });
+      }
+      if (!cancelled) timer = setTimeout(probe, 5000);
+    }
+    setAvailability({ state: 'checking', message: 'Перевіряємо з’єднання із сервером…' });
+    void probe();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [server]);
+
   async function checkConnection() {
     setChecking(true); setConnection(''); setError('');
     try {
@@ -502,7 +523,7 @@ function Login({ initialBase, onLogin }) {
       if (health.ok !== true || !health.version) throw new Error('За цією адресою немає SOLVIA API.');
       localStorage.setItem('solvia_api', base);
       setConnection(`Сервер SOLVIA ${health.version} доступний · ${health.platform || 'HTTPS'}`);
-    } catch (e) { setError(e.message); }
+    } catch (e) { setError(e.status === 0 || e.status >= 500 ? 'Сервер недоступний. Зверніться до системного адміністратора.' : e.message); }
     finally { setChecking(false); }
   }
   const [busy, setBusy] = useState(false);
@@ -518,7 +539,7 @@ function Login({ initialBase, onLogin }) {
       const result = await request(base, '', 'POST', '/api/login', { login, password, ...deviceIdentity() });
       await onLogin(base, result, password);
     } catch (e) {
-      setError(e.message);
+      setError(e.status === 0 || e.status >= 500 ? 'Сервер недоступний. Зверніться до системного адміністратора.' : e.message);
     } finally {
       setBusy(false);
     }
@@ -553,6 +574,7 @@ function Login({ initialBase, onLogin }) {
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
+          <div className={`alert ${availability.state === 'offline' ? 'error' : ''}`} role="status" aria-live="polite" data-testid="login-server-status">{availability.message}</div>
           {error && <div className="alert error" role="alert">{error}</div>}
 
           <Field label="Логін" full>
@@ -3700,7 +3722,7 @@ export default function App() {
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');
   const appMode = params.get('mode') || 'center';
-  const runtimeBase = window.location.hostname === 'app.solvia.invalid' ? (appMode === 'server' ? 'http://127.0.0.1:8765' : '') : window.location.origin;
+  const runtimeBase = (window.location.hostname === 'app.solvia.invalid' || window.location.protocol === 'solvia:') ? (appMode === 'server' ? 'http://127.0.0.1:8765' : '') : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || params.get('default_api') || runtimeBase);
   const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
   const activeToken = useRef(token);
@@ -3719,19 +3741,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      setBooting(false);
-      return;
+    if (!token) { setBooting(false); return; }
+    let cancelled = false, timer;
+    async function restoreSession() {
+      try {
+        const me = await request(apiBase, token, 'GET', '/api/me');
+        if (!cancelled && activeToken.current === token) setUser(me);
+      } catch (e) {
+        if (cancelled || activeToken.current !== token) return;
+        if (e.status === 401) {
+          sessionStorage.removeItem('solvia_token');
+          activeToken.current = '';
+          setToken(''); setUser(null);
+        } else {
+          // A stopped server does not revoke the employee's existing session.
+          timer = setTimeout(restoreSession, 5000);
+        }
+      } finally { if (!cancelled) setBooting(false); }
     }
-    request(apiBase, token, 'GET', '/api/me')
-      .then((me) => setUser(me))
-      .catch(() => {
-        sessionStorage.removeItem('solvia_token');
-        setToken('');
-        setUser(null);
-      })
-      .finally(() => setBooting(false));
-  }, []);
+    void restoreSession();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [apiBase, token]);
 
   async function login(base, result, password) {
     const identity = await draftIdentity(base, result.user, password).catch(() => null);

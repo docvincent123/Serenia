@@ -265,6 +265,7 @@ jobs:
         env:
           SOLVIA_PLAYWRIGHT_MODULE: /tmp/solvia-browser-tests/node_modules/playwright
         run: |
+          node tests/offline-login.mjs
           node tests/ui-regression.mjs
           node tests/reception-booking.mjs
           node tests/desktop-system.mjs

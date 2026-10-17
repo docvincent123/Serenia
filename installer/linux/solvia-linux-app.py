@@ -2,7 +2,8 @@
 """SOLVIA Linux client: GTK3 window with WebKitGTK 4.1, no Chrome process."""
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, unquote, urlencode
+import mimetypes
 
 
 def server_url(value):
@@ -24,6 +25,19 @@ def server_url(value):
     return url._replace(netloc=authority).geturl().rstrip('/')
 
 
+def local_asset(root, uri):
+    parsed = urlsplit(uri)
+    if parsed.scheme != 'solvia' or parsed.netloc != 'app':
+        raise ValueError('Невідома адреса локального інтерфейсу.')
+    root = Path(root).resolve()
+    path = (root / unquote(parsed.path).lstrip('/')).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise ValueError('Файл локального інтерфейсу не знайдено.')
+    mime = {'.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html'}.get(
+        path.suffix, mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
+    return path.read_bytes(), mime
+
+
 def run(on_ready=None):
     try:
         import gi
@@ -36,6 +50,10 @@ def run(on_ready=None):
         return 1
 
     config = Path(GLib.get_user_config_dir()) / 'solvia' / 'server-url'
+    ui_root = next((root for root in (Path(__file__).resolve().parent / 'ui', Path('/usr/local/lib/solvia/ui'), Path('/opt/solvia/ui')) if (root / 'index.html').is_file()), None)
+    if ui_root is None:
+        print('Не знайдено локальний інтерфейс SOLVIA. Повторно встановіть повний пакет клієнта.', file=sys.stderr)
+        return 1
 
     class Solvia(Gtk.Application):
         def __init__(self):
@@ -75,6 +93,17 @@ def run(on_ready=None):
                                                 base_cache_directory=str(cache_dir))
             manager.set_tls_errors_policy(WebKit2.TLSErrorsPolicy.FAIL)
             context = WebKit2.WebContext.new_with_website_data_manager(manager)
+            security = context.get_security_manager()
+            security.register_uri_scheme_as_secure('solvia')
+            security.register_uri_scheme_as_cors_enabled('solvia')
+            def asset(request):
+                try:
+                    data, mime = local_asset(ui_root, request.get_uri())
+                    stream = Gio.MemoryInputStream.new_from_bytes(GLib.Bytes.new(data))
+                    request.finish(stream, len(data), mime)
+                except (OSError, ValueError):
+                    request.finish_error(GLib.Error('Файл локального інтерфейсу SOLVIA недоступний.'))
+            context.register_uri_scheme('solvia', asset)
             # Local LAN connections must not be sent to a desktop HTTP proxy.
             manager.set_network_proxy_settings(WebKit2.NetworkProxyMode.NO_PROXY, None)
             self.view = WebKit2.WebView(web_context=context)
@@ -110,12 +139,12 @@ def run(on_ready=None):
             if on_ready:
                 GLib.idle_add(on_ready, self)
 
-        def load(self):
+        def load(self, force=False):
             if not self.origin:
                 self.connection()
                 return
             self.stack.set_visible_child_name('app')
-            self.view.load_uri(self.origin)
+            self.view.load_uri('solvia://app/index.html?' + urlencode({'api' if force else 'default_api': self.origin}))
 
         def show_error(self, message):
             self.spinner.stop()
@@ -131,9 +160,7 @@ def run(on_ready=None):
         def failed(self, view, event, uri, error):
             if error.matches(WebKit2.network_error_quark(), WebKit2.NetworkError.CANCELLED):
                 return False
-            self.show_error('Не вдалося підключитися до сервера SOLVIA. '
-                            'Перевірте адресу, мережу та стан сервера. '
-                            'На серверному ПК: sudo solvia-admin start')
+            self.show_error('Не вдалося відкрити локальний інтерфейс SOLVIA. Повторно встановіть повний пакет клієнта.')
             return True
 
         def tls_failed(self, view, uri, certificate, errors):
@@ -151,7 +178,8 @@ def run(on_ready=None):
             parsed = urlsplit(uri)
             target = urlsplit(self.origin)
             if kind == WebKit2.PolicyDecisionType.NAVIGATION_ACTION and (
-                    uri == 'about:blank' or uri.startswith('blob:' + self.origin + '/')
+                    uri == 'about:blank' or uri.startswith('blob:solvia://app/') or (parsed.scheme, parsed.netloc) == ('solvia', 'app')
+                    or uri.startswith('blob:' + self.origin + '/')
                     or (parsed.scheme, parsed.netloc) == (target.scheme, target.netloc)):
                 return False
             decision.ignore()
@@ -184,7 +212,7 @@ def run(on_ready=None):
                     temporary.chmod(0o600)
                     temporary.replace(config)
                     self.origin = new_origin
-                    self.load()
+                    self.load(force=True)
                     break
                 except (OSError, ValueError) as error:
                     error_label.set_text(str(error))
