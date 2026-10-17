@@ -44,6 +44,28 @@ try{
   assert.equal(loginCalls,1);
   assert.equal(await page.evaluate(()=>sessionStorage.getItem('solvia_token')),null);
   assert.equal(await page.getByRole('heading',{name:'Вхід до SOLVIA'}).count(),1);
+  // Starting while the API is down must not discard a still-valid saved token.
+  const restored=await browser.newPage();let restoredOnline=false;
+  await restored.addInitScript(()=>sessionStorage.setItem('solvia_token','saved-session-token'));
+  await restored.route('**/api/**',async route=>{
+    if(!restoredOnline){await route.abort('connectionrefused');return;}
+    const path=new URL(route.request().url()).pathname;
+    let data=[];
+    if(path==='/api/me')data={id:4,name:'Чинний керівник',role:'director'};
+    else if(path==='/api/health')data={ok:true,version:'2.5.0'};
+    else if(path==='/api/stats')data={load:[],total_patients:0};
+    else if(path==='/api/shift-day')data={open:false,shift_date:'2026-10-17'};
+    else if(path==='/api/reception-access')data={allowed:false};
+    else if(path==='/api/settings/center')data={center_name:'SOLVIA'};
+    await route.fulfill({json:data});
+  });
+  await restored.goto(`http://127.0.0.1:${server.address().port}`);
+  await restored.getByRole('heading',{name:'Вхід до SOLVIA'}).waitFor();
+  assert.equal(await restored.evaluate(()=>sessionStorage.getItem('solvia_token')),'saved-session-token');
+  restoredOnline=true;
+  await restored.getByRole('button',{name:'Вийти',exact:true}).waitFor({timeout:22000});
+  assert.equal(await restored.evaluate(()=>sessionStorage.getItem('solvia_token')),'saved-session-token');
+  await restored.close();
   assert.deepEqual(errors,[]);
   console.log('PASS: local login while offline, recovery without reload, duplicate login stays unauthenticated');
 }finally{await browser.close();await new Promise(r=>server.close(r));}

@@ -3741,19 +3741,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
-      setBooting(false);
-      return;
+    if (!token) { setBooting(false); return; }
+    let cancelled = false, timer;
+    async function restoreSession() {
+      try {
+        const me = await request(apiBase, token, 'GET', '/api/me');
+        if (!cancelled && activeToken.current === token) setUser(me);
+      } catch (e) {
+        if (cancelled || activeToken.current !== token) return;
+        if (e.status === 401) {
+          sessionStorage.removeItem('solvia_token');
+          activeToken.current = '';
+          setToken(''); setUser(null);
+        } else {
+          // A stopped server does not revoke the employee's existing session.
+          timer = setTimeout(restoreSession, 5000);
+        }
+      } finally { if (!cancelled) setBooting(false); }
     }
-    request(apiBase, token, 'GET', '/api/me')
-      .then((me) => setUser(me))
-      .catch(() => {
-        sessionStorage.removeItem('solvia_token');
-        setToken('');
-        setUser(null);
-      })
-      .finally(() => setBooting(false));
-  }, []);
+    void restoreSession();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [apiBase, token]);
 
   async function login(base, result, password) {
     const identity = await draftIdentity(base, result.user, password).catch(() => null);
