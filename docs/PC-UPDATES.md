@@ -8,7 +8,7 @@
 
 Windows: в інсталяторі можна вибрати тільки робоче місце, тільки Server Console (без PostgreSQL та API) або сервер. Ярлики Center і Server Console окремі.
 
-Linux: `solvia-admin-app` — Center, `solvia-server-app` — Server Console. Ярлик «SOLVIA Server» залишається термінальним керуванням службами; кнопка «Служби сервера» в консолі відкриває це меню. Центр і консоль — окремі вікна одного GTK-процесу зі спільним сховищем сеансу. На Windows обидва EXE використовують той самий локальний WebView2-профіль.
+Linux: для окремої консолі без API/БД виконайте `sudo bash install-client.sh --console`; для обох програм — `sudo bash install-client.sh --with-console`. `solvia-admin-app` — Center, `solvia-server-app` — Server Console. Ярлик «SOLVIA Server» залишається термінальним керуванням службами; кнопка «Служби сервера» в консолі відкриває це меню. Центр і консоль — окремі вікна одного GTK-процесу зі спільним сховищем сеансу. На Windows обидва EXE використовують той самий локальний WebView2-профіль.
 
 ## Вхід після оновлення
 

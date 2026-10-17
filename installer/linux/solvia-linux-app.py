@@ -81,6 +81,8 @@ def run(on_ready=None):
                 header.pack_end(button)
             if console:
                 services = Gtk.Button(label='Служби сервера')
+                services.set_sensitive(Path('/usr/local/bin/solvia-server-control').is_file())
+                services.set_tooltip_text('Керування службами доступне на серверному ПК.')
                 services.connect('clicked', lambda *_: subprocess.Popen(['/usr/local/bin/solvia-server-control', '--terminal']))
                 header.pack_end(services)
             self.stack = Gtk.Stack()

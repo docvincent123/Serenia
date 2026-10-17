@@ -3720,7 +3720,7 @@ export default function App() {
   }
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} />;
-  if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
+  if (appMode === 'server') return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
   return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
 }
 
