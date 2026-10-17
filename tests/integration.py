@@ -63,6 +63,15 @@ class Scenario(unittest.TestCase):
         code, result=self.call(method,path,body,self.tokens.get(role))
         self.assertEqual(code,status,result)
         return result
+    def test_a_local_desktop_cors(self):
+        for method in ('GET','OPTIONS'):
+            for origin in ('solvia://app','https://app.solvia.invalid','https://untrusted.invalid'):
+                request=urllib.request.Request(self.base+'/api/health',headers={'Origin':origin},method=method)
+                with urllib.request.urlopen(request) as response:
+                    expected='solvia://app' if origin=='solvia://app' else 'https://app.solvia.invalid'
+                    self.assertEqual(response.headers.get_all('Access-Control-Allow-Origin'),[expected])
+                    self.assertEqual(response.headers['Vary'],'Origin')
+
     def test_b_single_session_across_devices(self):
         uid=self.api('admin','POST','/api/users',{'name':'Single session test','login':'single-session','password':'single-session-password','role':'reception'})['id']
         def login(device, password='single-session-password'):
