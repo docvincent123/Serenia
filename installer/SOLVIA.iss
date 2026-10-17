@@ -1,5 +1,5 @@
 #define MyAppName "SOLVIA by QureMed"
-#define MyAppVersion "2.5.0"
+#define MyAppVersion "2.5.1"
 #define MyAppPublisher "QureMed Industries"
 #define MyAppExeName "Solvia.exe"
 
@@ -25,21 +25,23 @@ SetupIconFile=..\assets\solvia.ico
 [Types]
 Name: "client"; Description: "Робоче місце — підключення до Linux-сервера"
 Name: "server"; Description: "Сервер центру"
+Name: "console"; Description: "Лише Server Console — керування наявним сервером"
 Name: "full"; Description: "Сервер + робоче місце"; Flags: iscustom
 
 [Components]
 Name: "client"; Description: "SOLVIA Center — робоча програма"; Types: client full
-Name: "server"; Description: "SOLVIA Server + Server Console"; Types: server full
+Name: "server"; Description: "SOLVIA Server — API та база даних"; Types: server full
+Name: "console"; Description: "SOLVIA Server Console — оновлення та налаштування"; Types: console server full
 
 [Files]
-Source: "Trust-Server-Certificate.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; Components: client
+Source: "Trust-Server-Certificate.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; Components: client console
 Source: "Stop-Server.ps1"; Flags: dontcopy
 Source: "..\assets\solvia.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Setup.Common.ps1"; Flags: dontcopy
 Source: "..\out\SOLVIA\Solvia.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: client
-Source: "..\out\SOLVIA\SolviaServerConsole.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: server
+Source: "..\out\SOLVIA\SolviaServerConsole.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: console server
 Source: "..\out\SOLVIA\SolviaServer.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: server
-Source: "..\out\SOLVIA\ui\*"; DestDir: "{app}\ui"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: client server
+Source: "..\out\SOLVIA\ui\*"; DestDir: "{app}\ui"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: client console server
 Source: "..\out\SOLVIA\installer\*"; DestDir: "{app}\installer"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: server
 Source: "..\out\SOLVIA\bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: server
 Source: "..\out\SOLVIA\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
@@ -49,15 +51,15 @@ Source: "..\out\SOLVIA\README.md"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{autoprograms}\SOLVIA Center"; Filename: "{app}\Solvia.exe"; Components: client
 Name: "{autodesktop}\SOLVIA Center"; Filename: "{app}\Solvia.exe"; Components: client
-Name: "{autoprograms}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: server
-Name: "{autodesktop}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: server
+Name: "{autoprograms}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: console server
+Name: "{autodesktop}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: console server
 Name: "{autoprograms}\Налаштувати SOLVIA Server"; Filename: "{app}\installer\Configure-SOLVIA.cmd"; Components: server
 
-Name: "{autoprograms}\Довірити сертифікат сервера SOLVIA"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Trust-Server-Certificate.ps1"""; Components: client
+Name: "{autoprograms}\Довірити сертифікат сервера SOLVIA"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Trust-Server-Certificate.ps1"""; Components: client console
 
 [Run]
 Filename: "{app}\Solvia.exe"; Description: "Запустити SOLVIA Center"; Flags: nowait postinstall skipifsilent; Components: client; Check: IsServerConfigured
-Filename: "{app}\SolviaServerConsole.exe"; Description: "Відкрити SOLVIA Server Console"; Flags: nowait postinstall skipifsilent; Components: server; Check: IsServerConfigured
+Filename: "{app}\SolviaServerConsole.exe"; Description: "Відкрити SOLVIA Server Console"; Flags: nowait postinstall skipifsilent; Components: console server; Check: IsServerConfigured
 
 [UninstallRun]
 Filename: "schtasks.exe"; Parameters: "/Delete /TN ""SOLVIA Local Server"" /F"; Flags: runhidden; Components: server
@@ -76,7 +78,7 @@ end;
 
 function IsClientSelected: Boolean;
 begin
-  Result := WizardIsComponentSelected('client');
+  Result := WizardIsComponentSelected('client') or WizardIsComponentSelected('console');
 end;
 
 function ExistingSetup: Boolean;

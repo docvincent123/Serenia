@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {readPcSession,savePcSession,clearPcSession} from '../frontend/src/pc-session.mjs';
+import {newerVersion,pcPlatform,packageHash,checkedPackage} from '../frontend/src/pc-updates.mjs';
+const storage=()=>{const m=new Map();return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)}};
+const local=storage(),session=storage();savePcSession('https://server.example','old-token',local,session);
+assert.equal(readPcSession('https://server.example',local,storage()),'old-token');
+assert.equal(readPcSession('https://other.example',local,session),'');
+clearPcSession(local,session);assert.equal(readPcSession('https://server.example',local,session),'');
+const legacy=storage();legacy.setItem('solvia_token','legacy-token');assert.equal(readPcSession('https://server.example',local,legacy),'legacy-token');
+assert(newerVersion('2.10.0','2.9.9'));assert(!newerVersion('2.5.1','2.5.1'));assert(!newerVersion('bad','2.5.1'));
+assert.equal(pcPlatform({platform:'Linux x86_64'}),'linux');assert.equal(pcPlatform({platform:'Win32'}),'windows');assert.equal(pcPlatform({platform:'Linux'},true),'windows');
+const bytes=new TextEncoder().encode('MZsynthetic-package');const info={size_bytes:bytes.length,sha256:await packageHash(bytes)};
+assert.deepEqual(await checkedPackage(new Response(bytes),info),bytes);
+await assert.rejects(checkedPackage(new Response(bytes),{...info,sha256:'0'.repeat(64)}));
+await assert.rejects(checkedPackage(new Response(bytes),{...info,size_bytes:bytes.length-1}));
+await assert.rejects(checkedPackage(new Response(bytes,{status:401}),info));
+console.log('PASS: persistent same-server session, explicit logout, semantic versions, OS selection and bounded SHA-256 downloads');

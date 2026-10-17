@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit, unquote, urlencode
 import mimetypes
+import subprocess
 
 
 def server_url(value):
@@ -55,26 +56,21 @@ def run(on_ready=None):
         print('Не знайдено локальний інтерфейс SOLVIA. Повторно встановіть повний пакет клієнта.', file=sys.stderr)
         return 1
 
-    class Solvia(Gtk.Application):
-        def __init__(self):
-            super().__init__(application_id='com.quremed.solvia.desktop',
-                             flags=Gio.ApplicationFlags.FLAGS_NONE)
+    class WindowController:
+        def __init__(self, application, console=False):
+            self.application = application
+            self.console = console
             self.window = None
             self.origin = ''
-
-        def do_activate(self):
-            if self.window:
-                self.window.present()
-                return
-            self.window = Gtk.ApplicationWindow(application=self, title='SOLVIA')
+            self.window = Gtk.ApplicationWindow(application=application, title='SOLVIA Server Console' if console else 'SOLVIA')
             display = Gdk.Display.get_default()
             monitor = display.get_primary_monitor() or display.get_monitor(0)
             area = monitor.get_workarea()
             self.window.set_default_size(min(1200, max(480, area.width - 40)),
                                          min(800, max(360, area.height - 60)))
-            self.window.set_wmclass('SOLVIAAdmin', 'SOLVIAAdmin')
+            self.window.set_wmclass('SOLVIAServerConsole' if console else 'SOLVIAAdmin', 'SOLVIAAdmin')
             self.window.set_icon_name('solvia-admin')
-            header = Gtk.HeaderBar(title='SOLVIA', show_close_button=True)
+            header = Gtk.HeaderBar(title='SOLVIA Server Console' if console else 'SOLVIA', show_close_button=True)
             self.window.set_titlebar(header)
             self.spinner = Gtk.Spinner()
             header.pack_start(self.spinner)
@@ -83,29 +79,36 @@ def run(on_ready=None):
                 button = Gtk.Button(label=label)
                 button.connect('clicked', callback)
                 header.pack_end(button)
+            if console:
+                services = Gtk.Button(label='Служби сервера')
+                services.connect('clicked', lambda *_: subprocess.Popen(['/usr/local/bin/solvia-server-control', '--terminal']))
+                header.pack_end(services)
             self.stack = Gtk.Stack()
             self.window.add(self.stack)
-            data_dir = Path(GLib.get_user_data_dir()) / 'solvia-desktop'
-            cache_dir = Path(GLib.get_user_cache_dir()) / 'solvia-desktop'
-            for directory in (data_dir, cache_dir):
-                directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-            manager = WebKit2.WebsiteDataManager(base_data_directory=str(data_dir),
-                                                base_cache_directory=str(cache_dir))
-            manager.set_tls_errors_policy(WebKit2.TLSErrorsPolicy.FAIL)
-            context = WebKit2.WebContext.new_with_website_data_manager(manager)
-            security = context.get_security_manager()
-            security.register_uri_scheme_as_secure('solvia')
-            security.register_uri_scheme_as_cors_enabled('solvia')
-            def asset(request):
-                try:
-                    data, mime = local_asset(ui_root, request.get_uri())
-                    stream = Gio.MemoryInputStream.new_from_bytes(GLib.Bytes.new(data))
-                    request.finish(stream, len(data), mime)
-                except (OSError, ValueError):
-                    request.finish_error(GLib.Error('Файл локального інтерфейсу SOLVIA недоступний.'))
-            context.register_uri_scheme('solvia', asset)
-            # Local LAN connections must not be sent to a desktop HTTP proxy.
-            manager.set_network_proxy_settings(WebKit2.NetworkProxyMode.NO_PROXY, None)
+            if application.context is None:
+                data_dir = Path(GLib.get_user_data_dir()) / 'solvia-desktop'
+                cache_dir = Path(GLib.get_user_cache_dir()) / 'solvia-desktop'
+                for directory in (data_dir, cache_dir):
+                    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+                manager = WebKit2.WebsiteDataManager(base_data_directory=str(data_dir),
+                                                    base_cache_directory=str(cache_dir))
+                manager.set_tls_errors_policy(WebKit2.TLSErrorsPolicy.FAIL)
+                context = WebKit2.WebContext.new_with_website_data_manager(manager)
+                security = context.get_security_manager()
+                security.register_uri_scheme_as_secure('solvia')
+                security.register_uri_scheme_as_cors_enabled('solvia')
+                def asset(request):
+                    try:
+                        data, mime = local_asset(ui_root, request.get_uri())
+                        stream = Gio.MemoryInputStream.new_from_bytes(GLib.Bytes.new(data))
+                        request.finish(stream, len(data), mime)
+                    except (OSError, ValueError):
+                        request.finish_error(GLib.Error('Файл локального інтерфейсу SOLVIA недоступний.'))
+                context.register_uri_scheme('solvia', asset)
+                # Local LAN connections must not be sent to a desktop HTTP proxy.
+                manager.set_network_proxy_settings(WebKit2.NetworkProxyMode.NO_PROXY, None)
+                application.context = context
+            context = application.context
             self.view = WebKit2.WebView(web_context=context)
             self.view.get_settings().set_enable_developer_extras(False)
             self.view.connect('load-changed', self.changed)
@@ -117,7 +120,8 @@ def run(on_ready=None):
             self.view.connect('permission-request', lambda _, request: (request.deny(), True)[1])
             self.view.connect('close', lambda *_: self.window.destroy())
             self.window.connect('delete-event', self.close)
-            context.connect('download-started', self.download)
+            self.download_handler = context.connect('download-started', self.download)
+            self.window.connect('destroy', self.destroyed)
             self.stack.add_named(self.view, 'app')
             error_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
                                 margin=40, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
@@ -136,7 +140,7 @@ def run(on_ready=None):
                 self.load()
             except (OSError, ValueError) as error:
                 self.show_error(str(error))
-            if on_ready:
+            if on_ready and not console:
                 GLib.idle_add(on_ready, self)
 
         def load(self, force=False):
@@ -144,7 +148,10 @@ def run(on_ready=None):
                 self.connection()
                 return
             self.stack.set_visible_child_name('app')
-            self.view.load_uri('solvia://app/index.html?' + urlencode({'api' if force else 'default_api': self.origin}))
+            params = {'api' if force else 'default_api': self.origin}
+            if self.console:
+                params['mode'] = 'server'
+            self.view.load_uri('solvia://app/index.html?' + urlencode(params))
 
         def show_error(self, message):
             self.spinner.stop()
@@ -218,12 +225,21 @@ def run(on_ready=None):
                     error_label.set_text(str(error))
             dialog.destroy()
 
+        def quit(self):
+            self.application.quit()
+
+        def destroyed(self, *_):
+            self.application.controllers.pop('server' if self.console else 'center', None)
+            self.application.context.disconnect(self.download_handler)
+
         def close(self, *_):
             # WebKit runs beforeunload handlers, preserving existing draft warnings.
             self.view.try_close()
             return True
 
         def download(self, context, download):
+            if download.get_web_view() != self.view:
+                return
             def destination(item, suggested):
                 dialog = Gtk.FileChooserDialog(title='Зберегти файл SOLVIA', parent=self.window,
                                               action=Gtk.FileChooserAction.SAVE)
@@ -239,7 +255,26 @@ def run(on_ready=None):
                 return True
             download.connect('decide-destination', destination)
 
-    return Solvia().run([sys.argv[0]])
+    class Solvia(Gtk.Application):
+        def __init__(self):
+            super().__init__(application_id='com.quremed.solvia.desktop', flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
+            self.add_main_option('server-console', 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE, 'Open Server Console', None)
+            self.controllers = {}
+            self.context = None
+
+        def do_command_line(self, command_line):
+            args = command_line.get_arguments()[1:]
+            if any(arg != '--server-console' for arg in args):
+                print('Використання: solvia-admin-app [--server-console]', file=sys.stderr)
+                return 2
+            mode = 'server' if command_line.get_options_dict().contains('server-console') or '--server-console' in args else 'center'
+            if mode in self.controllers:
+                self.controllers[mode].window.present()
+            else:
+                self.controllers[mode] = WindowController(self, mode == 'server')
+            return 0
+
+    return Solvia().run([sys.argv[0]] + (sys.argv[1:] if on_ready is None else []))
 
 
 if __name__ == '__main__':

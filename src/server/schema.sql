@@ -629,3 +629,14 @@ DELETE FROM sessions WHERE token IN (
   ) duplicates WHERE position > 1
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_one_per_user ON sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS desktop_updates(
+  platform TEXT PRIMARY KEY CHECK(platform IN ('windows','linux')),
+  version TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL,
+  release_notes TEXT NOT NULL DEFAULT '',
+  published TEXT NOT NULL,
+  published_by BIGINT REFERENCES users(id)
+);

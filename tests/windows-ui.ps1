@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$BuildDir)
+param([Parameter(Mandatory=$true)][string]$BuildDir, [ValidateSet("Solvia.exe","SolviaServerConsole.exe")][string]$Executable="Solvia.exe")
 $ErrorActionPreference = 'Stop'
 $bin = (Resolve-Path $BuildDir).Path
 New-Item -ItemType Directory -Force 'out/ui' | Out-Null
@@ -35,7 +35,7 @@ public static class Native {
 Remove-Item Env:SOLVIA_API -ErrorAction SilentlyContinue
 $report = Join-Path (Resolve-Path 'out/ui').Path ('react-ready-' + [guid]::NewGuid() + '.txt')
 $env:SOLVIA_UI_SMOKE_RESULT = $report
-$client = Start-Process "$bin/Solvia.exe" -PassThru
+$client = Start-Process (Join-Path $bin $Executable) -PassThru
 try {
   $hwnd = [IntPtr]::Zero
   for ($i = 0; $i -lt 80; $i++) {

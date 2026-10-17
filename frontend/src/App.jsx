@@ -1,3 +1,5 @@
+import {readPcSession,savePcSession,clearPcSession} from './pc-session.mjs';
+import {DesktopReleaseSettings,DesktopUpdateNotice} from './DesktopUpdates.jsx';
 import StaffMessages from './StaffMessages.jsx';
 import {backupNeedsAttention} from './backup-status.mjs';
 import {DeviceHealth,ShiftReadiness,Addenda,PatientProgress} from './Operations.jsx';
@@ -485,7 +487,7 @@ function PageHead({ eyebrow, title, subtitle, actions }) {
   );
 }
 
-function Login({ initialBase, onLogin }) {
+function Login({ initialBase, onLogin, consoleMode = false }) {
   const [server, setServer] = useState(initialBase);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
@@ -570,7 +572,7 @@ function Login({ initialBase, onLogin }) {
           </div>
 
           <div className="login-copy">
-            <h2>Вхід до SOLVIA</h2>
+            <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA"}</h2>
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
@@ -2419,63 +2421,7 @@ function Rooms({ api }) {
 }
 
 function Devices({ api, onMessage }) {
-  const [sessions, setSessions] = useState([]);
-  const [error, setError] = useState('');
-
-  async function load() {
-    try { setSessions(await api('GET', '/api/admin/sessions')); setError(''); }
-    catch (e) { setError(e.message); }
-  }
-  useEffect(() => {
-    load();
-    const timer = setInterval(load, 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  async function terminate(session) {
-    if (!window.confirm(`Завершити сесію «${session.name}» на пристрої «${session.device_name || session.platform}»?`)) return;
-    try {
-      await api('DELETE', `/api/admin/sessions/${session.session_id}`, {});
-      await load();
-    } catch (e) { setError(e.message); }
-  }
-
-  const online = sessions.filter((x) => x.online).length;
-  return (
-    <>
-      <PageHead
-        eyebrow="БЕЗПЕКА ТА ПРИСТРОЇ"
-        title="Активні пристрої"
-        subtitle="Телефони, планшети та ПК, на яких зараз є активний вхід у SOLVIA."
-        actions={<Button variant="secondary" onClick={load}>Оновити</Button>}
-      />
-      {error && <div className="alert error">{error}</div>}
-      <DeviceHealth api={api} onMessage={onMessage} Modal={Dialog} />
-      <div className="stat-grid">
-        <article className="stat-card"><strong>{sessions.length}</strong><h3>Активних сесій</h3><p>До завершення входу або 8 годин</p></article>
-        <article className="stat-card"><strong>{online}</strong><h3>Онлайн зараз</h3><p>Активність протягом останніх 2 хвилин</p></article>
-        <article className="stat-card"><strong>{sessions.filter((x) => x.platform === 'Android').length}</strong><h3>Телефони / планшети</h3><p>Android-клієнти</p></article>
-        <article className="stat-card"><strong>{sessions.filter((x) => x.platform === 'Windows').length}</strong><h3>ПК</h3><p>Windows-клієнти</p></article>
-      </div>
-      <section className="surface">
-        <div className="device-list">
-          {sessions.map((s) => (
-            <article className="device-card" key={s.session_id}>
-              <div className={`device-status ${s.online ? 'online' : ''}`} />
-              <div className="device-main">
-                <strong>{s.device_name || s.platform || 'Невідомий пристрій'}</strong>
-                <span>{s.name} · {roleLabels[s.role] || s.role}</span>
-                <small>{s.platform} · IP {s.ip_address || '—'} · остання активність {s.last_seen?.replace('T',' ') || '—'}</small>
-              </div>
-              <Badge tone={s.online ? 'forest' : 'stone'}>{s.online ? 'Онлайн' : 'Неактивний'}</Badge>
-              <Button variant="danger" onClick={() => terminate(s)}>Завершити сесію</Button>
-            </article>
-          ))}
-        </div>
-        {!sessions.length && <Empty title="Активних пристроїв немає" text="Після входу працівника його ПК, телефон або планшет з’явиться тут." />}
-      </section>
-    </>
-  );
+  return <><PageHead eyebrow="КОНСУЛЬТАЦІЇ" title="Синхронізація консультацій" subtitle="Стан передавання записів із телефонів та звірка проблемних консультацій." /><DeviceHealth api={api} onMessage={onMessage} Modal={Dialog} /></>;
 }
 
 function ReminderBar({ api, role }) {
@@ -2583,77 +2529,22 @@ function ServerMaintenance({ api, apiBase }) {
 }
 
 function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
-  const [showSettings, setShowSettings] = useState(false);
-  const [sessions, setSessions] = useState([]);
-  const [shift, setShift] = useState(null);
-  const [reminders, setReminders] = useState([]);
-  const [center, setCenter] = useState(null);
-  const [error, setError] = useState('');
-
-  async function load() {
-    try {
-      const [s, sh, r, ce] = await Promise.all([
-        api('GET','/api/admin/sessions'),
-        api('GET','/api/shift-day'),
-        api('GET','/api/reminders'),
-        api('GET','/api/settings/center')
-      ]);
-      setSessions(s); setShift(sh); setReminders(r); setCenter(ce); setError('');
-    } catch (e) { setError(e.message); }
-  }
-  useEffect(() => {
-    load();
-    const timer=setInterval(load,30000);
-    return ()=>clearInterval(timer);
-  }, []);
-
-  async function terminate(session) {
-    if (!window.confirm(`Завершити сесію ${session.name} на ${session.device_name || session.platform}?`)) return;
-    try { await api('DELETE', `/api/admin/sessions/${session.session_id}`, {}); await load(); }
-    catch(e){ setError(e.message); }
-  }
-
-  if (user.role !== 'admin') {
-    return <div className="server-console"><div className="alert error">Server Console доступна тільки адміністратору.</div><Button onClick={onLogout}>Вийти</Button></div>;
-  }
-
-  return (
-    <div className="server-console">
-      <header className="server-console-head">
-        <div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console</strong><span>{center?.center_name || 'QureMed'}</span></div></div>
-        <div className="page-actions">
-          <Button variant="secondary" onClick={() => setShowSettings(!showSettings)}>{showSettings ? 'Закрити налаштування' : 'Налаштування системи'}</Button>
-          <Button variant="secondary" onClick={load}>Оновити</Button>
-          <Button variant="ghost" onClick={onLogout}>Вийти</Button>
-        </div>
-      </header>
-      {error && <div className="alert error">{error}</div>}
-      {showSettings && <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />}
-      <div className="server-status-grid">
-        <article className="stat-card"><strong>ONLINE</strong><h3>Local API</h3><p>{apiBase} · SOLVIA 2.3</p></article>
-        <article className="stat-card"><strong>{shift?.open ? 'OPEN' : 'CLOSED'}</strong><h3>Робоча зміна</h3><p>{shift?.shift_date || localDate()}</p></article>
-        <article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Онлайн пристроїв</h3><p>{sessions.length} активних сесій</p></article>
-        <article className="stat-card"><strong>{reminders.length}</strong><h3>Найближчих записів</h3><p>Нагадування психологам і адміну</p></article>
-      </div>
-      <section className="surface">
-        <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Сервер центру</h2></div><Badge tone="forest">Local</Badge></div>
-        <ServerMaintenance api={api} apiBase={apiBase} />
-      </section>
-      <WorkflowSettings api={api} />
-      <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />
-      <section className="surface">
-        <div className="section-head"><div><div className="eyebrow">ПІДКЛЮЧЕННЯ</div><h2>Телефони, планшети та ПК</h2></div><Badge tone="stone">{sessions.length}</Badge></div>
-        <div className="device-list">
-          {sessions.map((s) => <article className="device-card" key={s.session_id}>
-            <div className={`device-status ${s.online ? 'online':''}`} />
-            <div className="device-main"><strong>{s.device_name || s.platform}</strong><span>{s.name} · {roleLabels[s.role]}</span><small>{s.ip_address || '—'} · {s.last_seen?.replace('T',' ')}</small></div>
-            <Badge tone={s.online?'forest':'stone'}>{s.online?'Онлайн':'Очікує'}</Badge>
-            <Button variant="danger" onClick={() => terminate(s)}>Завершити</Button>
-          </article>)}
-        </div>
-      </section>
-    </div>
-  );
+  const [page,setPage]=useState('overview'),[sessions,setSessions]=useState([]),[center,setCenter]=useState(null),[error,setError]=useState('');
+  async function load(){if(user.role!=='admin')return;try{const [devices,settings]=await Promise.all([api('GET','/api/admin/sessions'),api('GET','/api/settings/center')]);setSessions(devices);setCenter(settings);setError('');}catch(e){setError(e.message);}}
+  useEffect(()=>{load();const timer=setInterval(load,30000);return()=>clearInterval(timer);},[]);
+  async function terminate(session){if(!window.confirm(`Завершити сесію ${session.name} на ${session.device_name||session.platform}?`))return;try{await api('DELETE',`/api/admin/sessions/${session.session_id}`,{});await load();}catch(e){setError(e.message);}}
+  if(user.role!=='admin')return <div className="server-console"><div className="alert error">Server Console доступна тільки адміністратору.</div><Button onClick={onLogout}>Вийти</Button></div>;
+  return <div className="server-console">
+    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
+    <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
+    {error&&<div className="alert error">{error}</div>}
+    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><section className="surface"><h2>Обслуговування сервера</h2><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
+    {page==='settings'&&<Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} technical />}
+    {page==='pc'&&<DesktopReleaseSettings api={api} />}
+    {page==='mobile'&&<MobileReleaseSettings api={api} />}
+    {page==='account'&&<AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />}
+    {page==='sessions'&&<section className="surface"><h2>Сеанси пристроїв</h2><p>Якщо працівник не може ввійти після зміни ПК, завершіть його попередній сеанс тут.</p><div className="device-list">{sessions.map(s=><article className="device-card" key={s.session_id}><div className={`device-status ${s.online?'online':''}`} /><div className="device-main"><strong>{s.device_name||s.platform}</strong><span>{s.name} · {roleLabels[s.role]}</span><small>{s.ip_address||'—'} · {s.last_seen?.replace('T',' ')}</small></div><Button variant="danger" onClick={()=>terminate(s)}>Завершити</Button></article>)}</div></section>}
+  </div>;
 }
 
 function WorkflowSettings({ api }) {
@@ -2758,7 +2649,7 @@ function MobileReleaseSettings({ api }) {
   </section>;
 }
 
-function Settings({ api, apiBase, onSwitchApi }) {
+function Settings({ api, apiBase, onSwitchApi, technical = false }) {
   const empty = {
     server_name: 'Основний', center_name: '', short_name: '', address: '', phone: '', email: '', website: '', city: '',
     director_name: '', admin_name: '', work_hours: '', document_footer: '', discharge_signatory: '',
@@ -2769,7 +2660,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
   const [connectionTest, setConnectionTest] = useState({ state: 'idle', message: '' });
-  const [activeSection, setActiveSection] = useState('center');
+  const [activeSection, setActiveSection] = useState(technical?'connection':'center');
 
   async function load() {
     try { setForm({ ...empty, ...(await api('GET', '/api/settings/center')) }); }
@@ -2846,7 +2737,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
     <>
       <PageHead
         eyebrow="СИСТЕМА"
-        title="Налаштування SOLVIA"
+        title={technical?"Налаштування сервера":"Налаштування SOLVIA"}
         subtitle="Центр, документи, підключення до локального сервера або VPS і технічне обслуговування."
       />
       {error && <div className="alert error">{error}</div>}
@@ -2859,9 +2750,10 @@ function Settings({ api, apiBase, onSwitchApi }) {
             ['documents','Документи','Виписки та підписи'],
             ['connection','Підключення','Local / VPS'],
             ['mobile','Оновлення Android','APK для телефонів'],
+            ['desktop','Оновлення ПК','Windows та Linux'],
             ['workflow','Правила роботи','Розклад і безпека'],
             ['maintenance','Backup','Резервні копії']
-          ].map(([key,title,text]) => (
+          ].filter(([key])=>technical?['connection','maintenance'].includes(key):['center','documents','workflow'].includes(key)).map(([key,title,text]) => (
             <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => setActiveSection(key)}>
               <span><AppIcon name={key === "center" ? "rooms" : key === "documents" ? "reports" : key === "connection" ? "devices" : "preferences"} /></span>
               <div><strong>{title}</strong><small>{text}</small></div>
@@ -2976,6 +2868,7 @@ function Settings({ api, apiBase, onSwitchApi }) {
 
           {activeSection === 'workflow' && <WorkflowSettings api={api} />}
           {activeSection === 'mobile' && <MobileReleaseSettings api={api} />}
+          {activeSection === 'desktop' && <DesktopReleaseSettings api={api} />}
             {activeSection === 'maintenance' && (
             <section className="surface settings-panel">
               <div className="section-head"><div><div className="eyebrow">ОБСЛУГОВУВАННЯ</div><h2>Backup / Restore</h2></div><Badge tone="sand">Admin only</Badge></div>
@@ -3724,7 +3617,7 @@ export default function App() {
   const appMode = params.get('mode') || 'center';
   const runtimeBase = (window.location.hostname === 'app.solvia.invalid' || window.location.protocol === 'solvia:') ? (appMode === 'server' ? 'http://127.0.0.1:8765' : '') : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || params.get('default_api') || runtimeBase);
-  const [token, setToken] = useState(() => sessionStorage.getItem('solvia_token') || '');
+  const [token, setToken] = useState(() => readPcSession(apiBase));
   const activeToken = useRef(token);
   const [draftSession, setDraftSession] = useState(null);
   const [user, setUser] = useState(null);
@@ -3746,11 +3639,11 @@ export default function App() {
     async function restoreSession() {
       try {
         const me = await request(apiBase, token, 'GET', '/api/me');
-        if (!cancelled && activeToken.current === token) setUser(me);
+        if (!cancelled && activeToken.current === token) { savePcSession(apiBase,token); setUser(me); }
       } catch (e) {
         if (cancelled || activeToken.current !== token) return;
         if (e.status === 401) {
-          sessionStorage.removeItem('solvia_token');
+          clearPcSession();
           activeToken.current = '';
           setToken(''); setUser(null);
         } else {
@@ -3763,11 +3656,20 @@ export default function App() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [apiBase, token]);
 
+  useEffect(()=>{
+    function sharedSession(event){
+      if(event.key!=='solvia_pc_session')return;
+      if(event.newValue){try{const saved=JSON.parse(event.newValue);if(cleanBase(saved.base)!==cleanBase(apiBase))return;sessionStorage.setItem('solvia_token',saved.token);activeToken.current=saved.token;setToken(saved.token);setUser(null);setBooting(true);}catch{}}
+      else{sessionStorage.removeItem('solvia_token');activeToken.current='';setToken('');setUser(null);setDraftSession(null);setBooting(false);}
+    }
+    window.addEventListener('storage',sharedSession);return()=>window.removeEventListener('storage',sharedSession);
+  },[apiBase]);
+
   async function login(base, result, password) {
     const identity = await draftIdentity(base, result.user, password).catch(() => null);
     setDraftSession(identity);
     localStorage.setItem('solvia_api', base);
-    sessionStorage.setItem('solvia_token', result.token);
+    savePcSession(base,result.token);
     activeToken.current = result.token;
     setApiBase(base);
     setToken(result.token);
@@ -3777,7 +3679,7 @@ export default function App() {
   function logout() {
     const previousBase = apiBase;
     const previousToken = token;
-    sessionStorage.removeItem('solvia_token');
+    clearPcSession();
     activeToken.current = '';
     setToken('');
     setUser(null);
@@ -3792,7 +3694,7 @@ export default function App() {
       return await request(apiBase, token, method, path, body);
     } catch (e) {
       if (e.status === 401 && activeToken.current === token) {
-        sessionStorage.removeItem('solvia_token');
+        clearPcSession();
         activeToken.current = '';
         setToken('');
         setUser(null);
@@ -3805,7 +3707,7 @@ export default function App() {
   function switchApi(nextBase) {
     const clean = cleanBase(nextBase);
     localStorage.setItem('solvia_api', clean);
-    sessionStorage.removeItem('solvia_token');
+    clearPcSession();
     activeToken.current = '';
     setApiBase(clean);
     setToken('');
@@ -3817,8 +3719,8 @@ export default function App() {
     return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
   }
 
-  if (!user) return <Login initialBase={apiBase} onLogin={login} />;
+  if (!user) return <Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} />;
   if (appMode === 'server') return <ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} />;
-  return <Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} />;
+  return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
 }
 

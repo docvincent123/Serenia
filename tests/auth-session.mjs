@@ -20,6 +20,8 @@ const context = vm.createContext({
   setDraftSession() {},
   request(...args) { calls.push(['request', ...args]); return new Promise((resolve, reject) => pending.push({ resolve, reject })); },
   cleanBase: value => value,
+  savePcSession() {},
+  clearPcSession() { calls.push(['remove','solvia_token']); },
 });
 vm.runInContext(functions, context);
 // An offline server must not delay returning to login or clearing the local session.

@@ -41,7 +41,7 @@ case ${1:-menu} in
   *) echo 'Використання: solvia-server-control [start|stop|restart|status|health|logs|update]' >&2; exit 2;;
 esac
 while true; do
-  printf '\nSOLVIA SERVER\n\n1  Запустити сервер\n2  Перезапустити сервер\n3  Зупинити сервер\n4  Стан служб\n5  Перевірити API / HTTPS\n6  Журнал наживо (Ctrl+C — назад)\n0  Закрити меню\n\n'
+  printf '\nSOLVIA SERVER\n\n1  Запустити сервер\n2  Перезапустити сервер\n3  Зупинити сервер\n4  Стан служб\n5  Перевірити API / HTTPS\n6  Журнал наживо (Ctrl+C — назад)\n7  Завершити сеанси за логіном\n0  Закрити меню\n\n'
   read -r -p 'Оберіть дію: ' choice || exit 0
   case $choice in
     1) run_action start;;
@@ -51,6 +51,8 @@ while true; do
     4) run_action status;;
     5) run_action health;;
     6) run_action logs;;
+    7) read -r -p 'Логін працівника: ' login
+       if [[ -n $login ]]; then "${admin[@]}" end-sessions "$login"; fi;;
     0) exit 0;;
     *) echo 'Оберіть число зі списку.';;
   esac
