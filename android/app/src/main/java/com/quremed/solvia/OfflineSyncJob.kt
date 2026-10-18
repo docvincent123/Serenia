@@ -47,16 +47,23 @@ class OfflineSyncJob : JobService() {
                 val authorized=consultationsAuthorized && recovery.run()
                 if(!authorized) { store.revokeSession(); AppointmentReminders.restore(this) }
                 if(authorized && !cancelled.get()) {
-                    val shift = get(base, auth, "/api/shift-day") as JSONObject
-                    store.saveCache("/api/shift-day", shift)
-                    if(!shift.optBoolean("open")) { AppointmentReminders.cancelScope(this, base, uid); ShiftNotifications.refresh(this, base, uid) }
-                    else {
-                        for(day in 0..1) {
-                            val path = "/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())
-                            val rows = get(base, auth, path) as JSONArray
-                            store.saveCache(path, rows)
+                    val snapshot=AppointmentInbox.receive(store,session.optJSONObject("user")?.optString("shift_date")) { path ->
+                        if(cancelled.get() || store.session()?.optString("token")!=auth) throw SyncFailure(401,"Сесію змінено")
+                        get(base,auth,path)
+                    }
+                    if(!snapshot.shift.optBoolean("open")) { AppointmentReminders.cancelScope(this,base,uid);ShiftNotifications.refresh(this,base,uid) }
+                    else if(!cancelled.get() && store.session()?.optString("token")==auth) {
+                        AppointmentReminders.refreshFromCache(this,base,uid)
+                        AppointmentInbox.cacheMissingCards(store,snapshot.entries) { path ->
+                            if(cancelled.get() || store.session()?.optString("token")!=auth) throw SyncFailure(401,"Сесію змінено")
+                            get(base,auth,path)
                         }
-                        if(!cancelled.get() && store.session()?.optString("token") == auth) AppointmentReminders.refreshFromCache(this, base, uid)
+                        for(day in listOf(LocalDate.now().toString(),LocalDate.now().plusDays(1).toString()).distinct().filter { it!=snapshot.day }) {
+                            if(cancelled.get()) break
+                            try { val path="/api/appointments?date=$day";store.saveCache(path,get(base,auth,path)) }
+                            catch(e:Exception) { if(e is SyncFailure && e.status==401) throw e }
+                        }
+                        if(!cancelled.get() && store.session()?.optString("token")==auth) AppointmentReminders.refreshFromCache(this,base,uid)
                     }
                 }
                 if(authorized && !cancelled.get()) {

@@ -9,8 +9,8 @@ android {
         applicationId 'com.quremed.solvia'
         minSdk 26
         targetSdk 35
-        versionCode = (project.findProperty('solviaVersionCode') ?: '42').toString().toInteger()
-        versionName '3.0.0'
+        versionCode = (project.findProperty('solviaVersionCode') ?: '43').toString().toInteger()
+        versionName '3.0.1'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
