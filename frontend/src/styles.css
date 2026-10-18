@@ -1337,7 +1337,12 @@ h1, h2, h3 { letter-spacing: -.025em; }
 .device-main small { font-size: 10px; color: #87978f; overflow-wrap: anywhere; }
 
 .server-console {
-  min-height: 100vh;
+  /* The body is locked for the main workspace. Console owns its viewport. */
+  height: 100vh;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
   padding: 24px;
   background: #f2f6f3;
 }

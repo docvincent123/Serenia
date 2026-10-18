@@ -20,7 +20,7 @@ export function DesktopReleaseSettings({api}){
     <p>Windows: EXE з цієї збірки. Linux: tar.gz з install-client.sh; на робочому місці запускайте саме install-client.sh, щоб оновити клієнт.</p>
     <form className="form-grid" onSubmit={publish}>
       <div className="field"><label>Платформа<select aria-label="Платформа оновлення ПК" value={platform} disabled={busy} onChange={e=>{setPlatform(e.target.value);setFile(null);}}><option value="windows">Windows</option><option value="linux">Linux</option></select></label></div>
-      <div className="field"><label>Версія<input aria-label="Версія оновлення ПК" required pattern="[0-9]+\.[0-9]+\.[0-9]+" value={version} disabled={busy} onChange={e=>setVersion(e.target.value)} placeholder="2.5.2" /></label></div>
+      <div className="field"><label>Версія<input aria-label="Версія оновлення ПК" required pattern="[0-9]+\.[0-9]+\.[0-9]+" value={version} disabled={busy} onChange={e=>setVersion(e.target.value)} placeholder="3.0.0" /></label></div>
       <div className="field full"><label>Пакет оновлення<input key={platform} aria-label="Пакет оновлення ПК" type="file" accept={platform==='windows'?'.exe':'.tar.gz'} disabled={busy} onChange={e=>setFile(e.target.files[0]||null)} /></label></div>
       <div className="field full"><label>Що змінилося<textarea aria-label="Опис оновлення ПК" maxLength={3000} value={notes} disabled={busy} onChange={e=>setNotes(e.target.value)} /></label></div>
       <button className="button" type="submit" disabled={busy}>{busy?'Завантажуємо…':'Опублікувати оновлення ПК'}</button>

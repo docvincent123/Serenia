@@ -976,7 +976,7 @@ class MainActivity : Activity() {
                         server = candidate
                         prefs.edit().putString("server", server).apply()
                         runOnUiThread {
-                            Toast.makeText(this, "Підключено · SOLVIA " + health.optString("version", "2.0"), Toast.LENGTH_LONG).show()
+                            Toast.makeText(this, "Підключено · SOLVIA " + health.optString("version", "—"), Toast.LENGTH_LONG).show()
                             loginScreen()
                         }
                     } catch (e: Exception) {

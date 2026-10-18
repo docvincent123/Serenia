@@ -1,5 +1,5 @@
 #define MyAppName "SOLVIA by QureMed"
-#define MyAppVersion "2.5.1"
+#define MyAppVersion "3.0.0"
 #define MyAppPublisher "QureMed Industries"
 #define MyAppExeName "Solvia.exe"
 
