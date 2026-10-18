@@ -1,3 +1,5 @@
+import TvSettings,{TvCallPanel} from './TvSettings.jsx';
+import './tv-control.css';
 import pkg from '../package.json';
 import {readPcSession,savePcSession,clearPcSession} from './pc-session.mjs';
 import {DesktopReleaseSettings,DesktopUpdateNotice} from './DesktopUpdates.jsx';
@@ -2537,12 +2539,13 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
   if(user.role!=='admin')return <div className="server-console"><div className="alert error">Server Console доступна тільки адміністратору.</div><Button onClick={onLogout}>Вийти</Button></div>;
   return <div className="server-console" tabIndex={0} role="region" aria-label="SOLVIA Server Console">
     <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
-    <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
+    <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['tv','TV-табло'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
     {error&&<div className="alert error">{error}</div>}
     {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><section className="surface"><h2>Обслуговування сервера</h2><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
     {page==='settings'&&<Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} technical />}
     {page==='pc'&&<DesktopReleaseSettings api={api} />}
     {page==='mobile'&&<MobileReleaseSettings api={api} />}
+    {page==='tv'&&<TvSettings api={api} apiBase={apiBase} />}
     {page==='account'&&<AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />}
     {page==='sessions'&&<section className="surface"><h2>Сеанси пристроїв</h2><p>Якщо працівник не може ввійти після зміни ПК, завершіть його попередній сеанс тут.</p><div className="device-list">{sessions.map(s=><article className="device-card" key={s.session_id}><div className={`device-status ${s.online?'online':''}`} /><div className="device-main"><strong>{s.device_name||s.platform}</strong><span>{s.name} · {roleLabels[s.role]}</span><small>{s.ip_address||'—'} · {s.last_seen?.replace('T',' ')}</small></div><Button variant="danger" onClick={()=>terminate(s)}>Завершити</Button></article>)}</div></section>}
   </div>;
@@ -3457,7 +3460,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [accessDialog,setAccessDialog]=useState(false);
   const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '' });
-  const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
+  const navigation = [...navFor(user.role), ...(['admin','reception','psychologist'].includes(user.role)?[['tv-calls','TV-виклики']]:[]), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
   useEffect(() => {
@@ -3506,6 +3509,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
     if (page === 'dashboard') return <Dashboard api={api} role={user.role} onNavigate={navigate} access={receptionAccess} />;
+    if (page === 'tv-calls') return <TvCallPanel api={api} />;
     if (page === 'calendar') return <Calendar key={bookingVersion} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={bookingResult?.date} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} onBook={startBooking} createRequest={createRequest} onCreateRequestConsumed={()=>setCreateRequest(null)} />;
     if (page === 'families') return <Families api={api} openPatient={openPatient} />;

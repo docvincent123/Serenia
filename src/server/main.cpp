@@ -212,6 +212,7 @@ J saveConsultation(DB&db,const J&u,const J&b,const J*actor=nullptr){allow(u,{"ps
 #include "operations.h"
 #include "staff_messages.h"
 #include "desktop_updates.h"
+#include "tv_display.h"
 
 std::string staffNumber(DB&db,const J&id){
  auto rows=db.query("SELECT staff_number FROM users WHERE id=?",{id});
@@ -254,6 +255,16 @@ if(path=="/api/health"&&method=="GET")return {{"ok",true},{"version",SOLVIA_VERS
 "linux"
 #endif
 }};
+if(path=="/api/tv/pair"&&method=="POST"){
+ auto key="tv-pair:"+r.remote_addr;checkAttempts(key);failedAttempt(key);
+ db.query("DELETE FROM tv_pairings WHERE expires<=?",{epoch()});
+ check(db.query("SELECT count(*) n FROM tv_pairings")[0]["n"].get<int>()<100,"Забагато запитів підключення",429);
+ std::string code;for(int attempt=0;attempt<20;++attempt){code=std::to_string(100000+std::stoul(randomToken().substr(0,8),nullptr,16)%900000);if(db.query("SELECT code FROM tv_pairings WHERE code=?",{code}).empty())break;code.clear();}
+ check(!code.empty(),"Не вдалося створити код",503);auto credential=randomToken();
+ db.query("INSERT INTO tv_pairings(token_hash,code,expires) VALUES(?,?,?)",{digest(credential),code,epoch()+600});
+ return {{"token",credential},{"code",code},{"expires_in",600}};
+}
+if(path=="/api/tv/pairing"||path=="/api/tv/schedule")return tvPublic(db,r);
 if(path=="/api/login"&&method=="POST"){auto ipKey="ip:"+r.remote_addr;checkAttempts(ipKey);auto login=str(b,"login",100),pw=str(b,"password",256),platform=str(b,"platform",40,false),deviceId=str(b,"device_id",160,false),deviceName=str(b,"device_name",160,false);auto accountKey="account:"+digest(login);checkAttempts(accountKey);if(platform.empty())platform="Unknown";if(deviceName.empty())deviceName=platform;auto rows=db.query("SELECT * FROM users WHERE login=? AND active=TRUE",{login});auto dummy=std::string(64,'0')+":"+std::string(64,'0');bool ok=verify(pw,rows.empty()?dummy:rows[0]["password"].get<std::string>());if(rows.empty()||!ok){failedAttempt(ipKey);failedAttempt(accountKey);throw Error(401,"Неправильний логін або пароль");}auto u=rows[0];std::string shiftDate;
 if(platform=="Android"&&u["role"]=="psychologist"){
  auto shifts=db.query("SELECT shift_date FROM shift_days WHERE closed_at IS NULL ORDER BY opened_at DESC LIMIT 1");auto day=shifts.empty()?now().substr(0,10):shifts[0]["shift_date"].get<std::string>();
@@ -318,12 +329,13 @@ if(path=="/api/reception-access"){
         db.query("INSERT INTO shift_days(shift_date,opened_by,opened_at,closed_by,closed_at) VALUES(?,?,?,NULL,NULL) ON CONFLICT(shift_date) DO UPDATE SET opened_by=EXCLUDED.opened_by,opened_at=EXCLUDED.opened_at,closed_by=NULL,closed_at=NULL",{today,u["id"],now()});
     audit(db,u,enabled?"grant_access":"revoke_access","reception_access",0);return {{"ok",true}};
 }
-bool receptionWrite=path=="/api/patients"||path.rfind("/api/patients/",0)==0||path=="/api/families"||path.rfind("/api/families/",0)==0||path=="/api/appointments"||path.rfind("/api/appointments/",0)==0||path=="/api/waiting-list"||path.rfind("/api/waiting-list/",0)==0;
+bool receptionWrite=path=="/api/tv/call"||path=="/api/patients"||path.rfind("/api/patients/",0)==0||path=="/api/families"||path.rfind("/api/families/",0)==0||path=="/api/appointments"||path.rfind("/api/appointments/",0)==0||path=="/api/waiting-list"||path.rfind("/api/waiting-list/",0)==0;
 if(u["role"]=="reception"&&method!="GET"&&receptionWrite){
     auto access=db.query("SELECT access_date FROM reception_access WHERE access_date=? AND enabled=TRUE AND starts_at<=?",{now().substr(0,10),now().substr(0,16)});
     check(!access.empty(),"Адміністратор має надати доступ реєстратурі на сьогодні",423);
 }
 if(u["role"]!="admin"&&path!="/api/shift-day"&&path!="/api/mobile-update"&&path!="/api/mobile-update/apk"&&path!="/api/mobile-status"&&path!="/api/mobile-recovery"){auto day=now().substr(0,10);auto openShift=db.query("SELECT shift_date FROM shift_days WHERE closed_at IS NULL LIMIT 1");check(!openShift.empty(),"Робоча зміна ще не відкрита або вже завершена адміністратором",423);}
+if(path.rfind("/api/admin/tv-displays",0)==0||path=="/api/tv/candidates"||path=="/api/tv/call")return tvAdmin(db,u,r,b);
 if(path=="/api/mobile-recovery"||path=="/api/admin/recovery"||std::regex_match(path,std::regex("/api/admin/recovery/[0-9]+")))return syncRecovery(db,u,r,b,token);
 if(path=="/api/mobile-status"||path=="/api/admin/devices"||path=="/api/shift-readiness"||std::regex_match(path,std::regex("/api/appointments/[0-9]+/(start|attendance)"))||std::regex_match(path,std::regex("/api/consultations/[0-9]+/addenda"))||std::regex_match(path,std::regex("/api/patients/[0-9]+/progress")))return operations(db,u,r,b,token);
 if(path=="/api/admin/sessions"&&method=="GET"){allow(u,{"admin"});db.query("DELETE FROM sessions WHERE expires<? AND (shift_date='' OR NOT EXISTS(SELECT 1 FROM shift_days WHERE shift_date=sessions.shift_date AND closed_at IS NULL))",{epoch()});return db.query("SELECT s.token session_id,s.user_id,u.name,u.role,s.platform,s.device_id,s.device_name,s.ip_address,s.created,s.last_seen,s.expires,(s.last_seen::timestamp >= now()-interval '2 minutes') online FROM sessions s JOIN users u ON u.id=s.user_id ORDER BY online DESC,s.last_seen DESC");}
@@ -506,9 +518,23 @@ throw Error(404,"Не знайдено");}
 const char* assessmentHtml=R"HTML(<!doctype html><html lang="uk"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SOLVIA • Самопочуття</title><link rel="stylesheet" href="/assessment.css"><main><small>SOLVIA by QureMed</small><h1>Як ви сьогодні?</h1><p>Авторська анкета самоспостереження. Це не діагностична шкала. 0 — найнижче, 10 — найвище.</p><form id="form"></form><p id="status" role="status"></p></main><script src="/assessment.js"></script></html>)HTML";
 const char* assessmentJs=R"JS('use strict';const token=location.hash.slice(1);history.replaceState(null,'',location.pathname);const form=document.querySelector('#form'),status=document.querySelector('#status');async function call(method,body){const r=await fetch('/api/respond/'+token,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok)throw Error(j.error);return j;}call('GET').then(j=>{j.questions.forEach((q,i)=>{let label=document.createElement('label');label.textContent=q;let input=document.createElement('select');input.name='q'+i;input.required=true;let empty=new Option('Оберіть відповідь','');input.add(empty);for(let n=0;n<=10;n++)input.add(new Option(n,n));label.append(input);form.append(label)});const b=document.createElement('button');b.textContent='Зберегти відповіді';form.append(b)}).catch(e=>status.textContent=e.message);form.onsubmit=async e=>{e.preventDefault();const b=form.querySelector('button');b.disabled=true;try{await call('POST',{answers:[...form.querySelectorAll('select')].map(x=>Number(x.value))});form.replaceChildren();status.textContent='Дякуємо. Ваші відповіді збережено.'}catch(e){status.textContent=e.message;b.disabled=false}};)JS";
 void serve(App&app,httplib::Server&server,const std::string&host,int port,const std::string&uiDir){server.set_payload_max_length(46137344);server.set_read_timeout(10,0);server.set_write_timeout(10,0);server.set_default_headers({{"Cache-Control","no-store"},{"X-Frame-Options","DENY"},{"Permissions-Policy","camera=(), microphone=(), geolocation=()"},{"X-Content-Type-Options","nosniff"},{"Referrer-Policy","no-referrer"},{"Content-Security-Policy","default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"},{"Access-Control-Allow-Origin","https://app.solvia.invalid"},{"Access-Control-Allow-Headers","Authorization, Content-Type"},{"Access-Control-Allow-Methods","GET, POST, PATCH, DELETE, OPTIONS"}});
-auto desktopCors=[](const httplib::Request&r,httplib::Response&res){if(r.get_header_value("Origin")=="solvia://app"){res.headers.erase("Access-Control-Allow-Origin");res.set_header("Access-Control-Allow-Origin","solvia://app");}res.set_header("Vary","Origin");};
+auto desktopCors=[](const httplib::Request&r,httplib::Response&res){
+ const auto origin=r.get_header_value("Origin");
+ const bool tvPath=r.path=="/api/tv/pair"||r.path=="/api/tv/pairing"||r.path=="/api/tv/schedule";
+ const auto configuredTvOrigin=environmentUtf8("SOLVIA_TV_SITE_ORIGIN");
+ const bool tvSite=tvPath&&(origin=="https://solvia-tv-display.mykhailoyurkevich123.chatgpt.site"||(!configuredTvOrigin.empty()&&origin==configuredTvOrigin));
+ if(origin=="solvia://app"||tvSite){res.headers.erase("Access-Control-Allow-Origin");res.set_header("Access-Control-Allow-Origin",origin);}
+ if(tvSite){res.set_header("Access-Control-Allow-Methods","GET, POST, OPTIONS");
+  if(r.get_header_value("Access-Control-Request-Private-Network")=="true")res.set_header("Access-Control-Allow-Private-Network","true");}
+ res.set_header("Vary","Origin, Access-Control-Request-Private-Network");
+};
 auto handler=[&](const httplib::Request&r,httplib::Response&res){desktopCors(r,res);try{auto payload=app.route(r);if(r.path=="/api/desktop-updates/package"&&r.method=="GET"){auto file=payload["desktop_file"].get<std::string>();check(std::filesystem::file_size(file)<=32*1024*1024,"Пакет завеликий",500);std::ifstream input(file,std::ios::binary);std::ostringstream bytes;bytes<<input.rdbuf();check(input.good()||input.eof(),"Не вдалося прочитати пакет",500);res.set_header("Content-Disposition","attachment; filename="+payload["filename"].get<std::string>());res.set_content(bytes.str(),payload["content_type"].get<std::string>());return;}if(r.path=="/api/mobile-update/apk"&&r.method=="GET"){auto file=payload["apk_file"].get<std::string>();check(std::filesystem::file_size(file)<=8*1024*1024,"APK завеликий",500);std::ifstream input(file,std::ios::binary);std::ostringstream bytes;bytes<<input.rdbuf();res.set_header("Content-Disposition","attachment; filename=SOLVIA-update.apk");res.set_content(bytes.str(),"application/vnd.android.package-archive");}else if(r.path=="/api/mobile-config"&&r.method=="GET"){res.set_header("Content-Disposition","attachment; filename=SOLVIA-Mobile.solvia");res.set_content(payload.dump(2),"application/vnd.solvia.connection+json");}else res.set_content(payload.dump(),"application/json; charset=utf-8");}catch(const Error&e){res.status=e.status;res.set_content(J({{"error",e.what()}}).dump(),"application/json; charset=utf-8");}catch(const J::exception&){res.status=400;res.set_content(J({{"error","Некоректні поля запиту"}}).dump(),"application/json; charset=utf-8");}catch(const std::invalid_argument&){res.status=400;res.set_content(J({{"error","Некоректний ідентифікатор"}}).dump(),"application/json; charset=utf-8");}catch(const std::out_of_range&){res.status=400;res.set_content(J({{"error","Значення поза допустимими межами"}}).dump(),"application/json; charset=utf-8");}catch(const std::exception&){res.status=500;res.set_content(J({{"error","Внутрішня помилка сервера"}}).dump(),"application/json; charset=utf-8");}};
 server.Options("/api/.*",[&](const auto&r,auto&res){desktopCors(r,res);res.status=204;});server.Get("/api/.*",handler);server.Post("/api/.*",handler);server.Patch("/api/.*",handler);server.Delete("/api/.*",handler);
+server.Get("/tv",[uiDir](const auto&,auto&res){
+ auto path=std::filesystem::path(uiDir)/"tv"/"index.html";
+ if(uiDir.empty()||!std::filesystem::is_regular_file(path)){res.status=503;res.set_content("SOLVIA TV: UI package is not installed", "text/plain");return;}
+ std::ifstream file(path,std::ios::binary);std::ostringstream data;data<<file.rdbuf();res.set_content(data.str(),"text/html; charset=utf-8");
+});
 server.Get("/assessment",[](const auto&,auto&res){res.set_content(assessmentHtml,"text/html; charset=utf-8");});
 server.Get("/assessment.js",[](const auto&,auto&res){res.set_content(assessmentJs,"text/javascript; charset=utf-8");});
 server.Get("/assessment.css",[](const auto&,auto&res){res.set_content("body{font:18px system-ui;color:#173c34;background:#f3f5f1;margin:0}main{max-width:540px;margin:7vh auto;padding:40px;background:white;border-radius:24px}small{letter-spacing:3px}h1{font-size:38px}p{line-height:1.7;color:#63756f}label{display:block;margin:24px 0}select,button{display:block;box-sizing:border-box;width:100%;padding:14px;margin-top:12px;border:1px solid #c8d4cd;border-radius:10px;font:inherit}button{background:#195844;color:white;cursor:pointer}","text/css");});
