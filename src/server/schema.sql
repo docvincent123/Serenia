@@ -640,3 +640,31 @@ CREATE TABLE IF NOT EXISTS desktop_updates(
   published TEXT NOT NULL,
   published_by BIGINT REFERENCES users(id)
 );
+
+-- Dedicated display devices never reference or create staff sessions.
+CREATE TABLE IF NOT EXISTS tv_displays(
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  room_id BIGINT REFERENCES rooms(id) ON DELETE CASCADE,
+  message TEXT NOT NULL DEFAULT '',
+  page_seconds INTEGER NOT NULL DEFAULT 12 CHECK(page_seconds BETWEEN 6 AND 60),
+  show_full_names BOOLEAN NOT NULL DEFAULT TRUE,
+  created TEXT NOT NULL,
+  last_seen TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS tv_pairings(
+  token_hash TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  expires BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tv_pairings_expires ON tv_pairings(expires);
+CREATE TABLE IF NOT EXISTS tv_calls(
+  appointment_id BIGINT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+  patient_id BIGINT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  called_at BIGINT NOT NULL,
+  called_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  PRIMARY KEY(appointment_id,patient_id),
+  FOREIGN KEY(appointment_id,patient_id) REFERENCES attendees(appointment_id,patient_id) ON DELETE CASCADE
+);

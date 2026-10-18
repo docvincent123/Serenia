@@ -73,6 +73,60 @@ class Scenario(unittest.TestCase):
                     self.assertEqual(response.headers.get_all('Access-Control-Allow-Origin'),[expected])
                     self.assertEqual(response.headers['Vary'],'Origin')
 
+    def test_a_tv_display_pairing_scope_and_live_schedule(self):
+        def tv(method,path,body=None,key=None):
+            return self.call(method,path,body,key)
+        def sql(statement):
+            return subprocess.check_output(['psql',self.database,'-X','-qAt','-v','ON_ERROR_STOP=1','-c',statement],text=True).strip()
+        self.assertEqual(tv('GET','/api/tv/schedule')[0],401)
+        code,pair=tv('POST','/api/tv/pair',{})
+        self.assertEqual(code,200)
+        self.assertRegex(pair['code'],r'^\d{6}$')
+        key=pair['token']
+        self.assertEqual(tv('GET','/api/tv/pairing',key=key)[1],{'paired':False})
+        self.assertEqual(tv('GET','/api/tv/schedule',key=key)[0],401)
+        self.assertEqual(tv('GET','/api/patients',key=key)[0],401)
+        self.assertEqual(tv('GET','/api/admin/tv-displays',key=key)[0],401)
+        form={'code':pair['code'],'name':'Synthetic TV','room_id':0,'message':'Welcome','page_seconds':6,'show_full_names':True,'enabled':True}
+        device=self.api('admin','POST','/api/admin/tv-displays',form)
+        self.assertNotIn('token_hash',device)
+        self.api('admin','POST','/api/admin/tv-displays',form,status=409)
+        self.assertEqual(tv('GET','/api/tv/pairing',key=key)[1],{'paired':True})
+        self.assertEqual(tv('GET','/api/me',key=key)[0],401)
+        psy=self.api('admin','GET','/api/meta')['psychologists'][0]['id']
+        room=self.api('admin','POST','/api/rooms',{'name':'TV integration test room'})['id']
+        patient=self.api('admin','POST','/api/patients',{'name':'Тестовий Іван Іванович','phone':'+380000001234','dob':'1990-01-01','category':'Інше','psychologist_id':psy})['id']
+        day=dt.date.today().isoformat()
+        aid=int(sql(f"INSERT INTO appointments(psychologist_id,room_id,start,\"end\",kind,status,created) VALUES({psy},{room},'{day}T00:00','{day}T23:59','individual','scheduled','{day}T00:00:00') RETURNING id"))
+        sql(f"INSERT INTO attendees(appointment_id,patient_id) VALUES({aid},{patient})")
+        try:
+            feed=tv('GET','/api/tv/schedule',key=key)[1]
+            entry=next(row for row in feed['entries'] if row['appointment_id']==aid)
+            self.assertEqual(entry['patient'],'Тестовий Іван Іванович')
+            self.assertNotIn('phone',entry);self.assertNotIn('note',entry)
+            payload={'appointment_id':aid,'patient_id':patient}
+            self.api('admin','POST','/api/tv/call',payload,status=409)
+            sql(f"UPDATE attendees SET arrived_at='{day}T00:00:01' WHERE appointment_id={aid}")
+            self.api('admin','POST','/api/tv/call',payload)
+            entry=next(row for row in tv('GET','/api/tv/schedule',key=key)[1]['entries'] if row['appointment_id']==aid)
+            self.assertEqual(entry['state'],'called')
+            self.api('admin','PATCH','/api/admin/tv-displays/'+str(device['id']),{**form,'room_id':room,'show_full_names':False})
+            feed=tv('GET','/api/tv/schedule',key=key)[1]
+            self.assertTrue(all(row['room']=='TV integration test room' for row in feed['entries']))
+            self.assertEqual(feed['entries'][0]['patient'],'Тестовий І. І.')
+            self.api('admin','DELETE','/api/tv/call',payload)
+            sql(f"UPDATE appointments SET status='cancelled' WHERE id={aid}")
+            self.assertFalse(tv('GET','/api/tv/schedule',key=key)[1]['entries'])
+            self.api('admin','PATCH','/api/admin/tv-displays/'+str(device['id']),{**form,'enabled':False})
+            self.assertEqual(tv('GET','/api/tv/schedule',key=key)[0],403)
+            self.api('admin','DELETE','/api/admin/tv-displays/'+str(device['id']),{})
+            self.assertEqual(tv('GET','/api/tv/schedule',key=key)[0],401)
+            expired=tv('POST','/api/tv/pair',{})[1]
+            sql(f"UPDATE tv_pairings SET expires=0 WHERE code='{expired['code']}'")
+            self.assertEqual(tv('GET','/api/tv/pairing',key=expired['token'])[0],401)
+        finally:
+            sql(f"DELETE FROM appointments WHERE id={aid}; DELETE FROM patients WHERE id={patient}; DELETE FROM rooms WHERE id={room}")
+
     def test_a_pc_update_distribution(self):
         self.assertEqual(self.call('GET','/api/desktop-updates')[0],401)
         self.assertFalse(self.api('director','GET','/api/desktop-updates?platform=windows')['available'])

@@ -1,6 +1,6 @@
 # SOLVIA 3.0.0
 
-Єдина версія сервера, Windows, Linux, Server Console та Android. Android versionCode: 42; встановлюйте APK з тим самим підписом поверх попереднього. Деталі: [версія 3.0](docs/RELEASE-3.0.md), [концепція TV-табло](docs/TV-DISPLAY.md).
+Єдина версія сервера, Windows, Linux, Server Console та Android. Android versionCode: 42; встановлюйте APK з тим самим підписом поверх попереднього. Деталі: [версія 3.0](docs/RELEASE-3.0.md), [TV-табло для Smart TV](docs/TV-DISPLAY.md).
 
 ## Можливості SOLVIA
 
