@@ -521,7 +521,8 @@ void serve(App&app,httplib::Server&server,const std::string&host,int port,const 
 auto desktopCors=[](const httplib::Request&r,httplib::Response&res){
  const auto origin=r.get_header_value("Origin");
  const bool tvPath=r.path=="/api/tv/pair"||r.path=="/api/tv/pairing"||r.path=="/api/tv/schedule";
- const bool tvSite=origin=="https://solvia-tv-display.mykhailoyurkevich123.chatgpt.site"&&tvPath;
+ const auto configuredTvOrigin=environmentUtf8("SOLVIA_TV_SITE_ORIGIN");
+ const bool tvSite=tvPath&&(origin=="https://solvia-tv-display.mykhailoyurkevich123.chatgpt.site"||(!configuredTvOrigin.empty()&&origin==configuredTvOrigin));
  if(origin=="solvia://app"||tvSite){res.headers.erase("Access-Control-Allow-Origin");res.set_header("Access-Control-Allow-Origin",origin);}
  if(tvSite){res.set_header("Access-Control-Allow-Methods","GET, POST, OPTIONS");
   if(r.get_header_value("Access-Control-Request-Private-Network")=="true")res.set_header("Access-Control-Allow-Private-Network","true");}

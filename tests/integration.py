@@ -24,6 +24,7 @@ class Scenario(unittest.TestCase):
         cls.update_dir=tempfile.TemporaryDirectory()
         os.environ['SOLVIA_MOBILE_UPDATE_DIR']=cls.update_dir.name
         os.environ['SOLVIA_DESKTOP_UPDATE_DIR']=str(pathlib.Path(cls.update_dir.name)/'pc')
+        os.environ['SOLVIA_TV_SITE_ORIGIN']='https://solvia-test.netlify.app'
         cls.database = os.environ.get('SOLVIA_TEST_DATABASE_URL', '')
         if not cls.database:
             raise RuntimeError('SOLVIA_TEST_DATABASE_URL is required')
@@ -74,13 +75,13 @@ class Scenario(unittest.TestCase):
                     self.assertIn('Origin',response.headers['Vary'])
 
     def test_a_tv_site_cors_is_limited_to_display_endpoints(self):
-        site='https://solvia-tv-display.mykhailoyurkevich123.chatgpt.site'
-        for path in ['/api/tv/pair','/api/tv/pairing','/api/tv/schedule','/api/patients','/api/login']:
-            request=urllib.request.Request(self.base+path,headers={'Origin':site,'Access-Control-Request-Private-Network':'true'},method='OPTIONS')
-            with urllib.request.urlopen(request) as response:
-                allowed=path.startswith('/api/tv/')
-                self.assertEqual(response.headers['Access-Control-Allow-Origin'],site if allowed else 'https://app.solvia.invalid')
-                self.assertEqual(response.headers.get('Access-Control-Allow-Private-Network'),'true' if allowed else None)
+        for site in ['https://solvia-tv-display.mykhailoyurkevich123.chatgpt.site',os.environ['SOLVIA_TV_SITE_ORIGIN']]:
+            for path in ['/api/tv/pair','/api/tv/pairing','/api/tv/schedule','/api/patients','/api/login']:
+                request=urllib.request.Request(self.base+path,headers={'Origin':site,'Access-Control-Request-Private-Network':'true'},method='OPTIONS')
+                with urllib.request.urlopen(request) as response:
+                    allowed=path.startswith('/api/tv/')
+                    self.assertEqual(response.headers['Access-Control-Allow-Origin'],site if allowed else 'https://app.solvia.invalid')
+                    self.assertEqual(response.headers.get('Access-Control-Allow-Private-Network'),'true' if allowed else None)
         request=urllib.request.Request(self.base+'/api/tv/schedule',headers={'Origin':'https://untrusted.invalid','Access-Control-Request-Private-Network':'true'},method='OPTIONS')
         with urllib.request.urlopen(request) as response:
             self.assertNotEqual(response.headers['Access-Control-Allow-Origin'],'https://untrusted.invalid')
