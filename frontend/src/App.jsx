@@ -1,3 +1,4 @@
+import pkg from '../package.json';
 import {readPcSession,savePcSession,clearPcSession} from './pc-session.mjs';
 import {DesktopReleaseSettings,DesktopUpdateNotice} from './DesktopUpdates.jsx';
 import StaffMessages from './StaffMessages.jsx';
@@ -572,7 +573,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
           </div>
 
           <div className="login-copy">
-            <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA"}</h2>
+            <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA"}</h2><small>Версія {pkg.version}</small>
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
@@ -2529,16 +2530,16 @@ function ServerMaintenance({ api, apiBase }) {
 }
 
 function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
-  const [page,setPage]=useState('overview'),[sessions,setSessions]=useState([]),[center,setCenter]=useState(null),[error,setError]=useState('');
-  async function load(){if(user.role!=='admin')return;try{const [devices,settings]=await Promise.all([api('GET','/api/admin/sessions'),api('GET','/api/settings/center')]);setSessions(devices);setCenter(settings);setError('');}catch(e){setError(e.message);}}
+  const [page,setPage]=useState('overview'),[sessions,setSessions]=useState([]),[center,setCenter]=useState(null),[health,setHealth]=useState(null),[error,setError]=useState('');
+  async function load(){if(user.role!=='admin')return;try{const [devices,settings,serverHealth]=await Promise.all([api('GET','/api/admin/sessions'),api('GET','/api/settings/center'),api('GET','/api/health')]);setSessions(devices);setCenter(settings);setHealth(serverHealth);setError('');}catch(e){setHealth(null);setError(e.message);}}
   useEffect(()=>{load();const timer=setInterval(load,30000);return()=>clearInterval(timer);},[]);
   async function terminate(session){if(!window.confirm(`Завершити сесію ${session.name} на ${session.device_name||session.platform}?`))return;try{await api('DELETE',`/api/admin/sessions/${session.session_id}`,{});await load();}catch(e){setError(e.message);}}
   if(user.role!=='admin')return <div className="server-console"><div className="alert error">Server Console доступна тільки адміністратору.</div><Button onClick={onLogout}>Вийти</Button></div>;
-  return <div className="server-console">
-    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
+  return <div className="server-console" tabIndex={0} role="region" aria-label="SOLVIA Server Console">
+    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
     <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
     {error&&<div className="alert error">{error}</div>}
-    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><section className="surface"><h2>Обслуговування сервера</h2><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
+    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><section className="surface"><h2>Обслуговування сервера</h2><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
     {page==='settings'&&<Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} technical />}
     {page==='pc'&&<DesktopReleaseSettings api={api} />}
     {page==='mobile'&&<MobileReleaseSettings api={api} />}
@@ -2617,7 +2618,7 @@ function AccountSettings({ api, apiBase, onLogout, user }) {
           <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" disabled={busy} value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field></div>
           <Button type="submit" disabled={busy}>{busy ? 'Змінюємо пароль…' : 'Змінити пароль'}</Button>
         </form></section>
-        <section className="surface account-section account-version"><header><h2>Про SOLVIA</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a></div><small>Оновлення встановлює адміністратор центру.</small></section>
+        <section className="surface account-section account-version"><header><h2>Про SOLVIA {pkg.version}</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a></div><small>Оновлення встановлює адміністратор центру.</small></section>
       </div>
     </div>
   </>;
@@ -2719,7 +2720,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
       const endpoint = selectedEndpoint();
       const result = await request(endpoint, '', 'GET', '/api/health');
       if (!result.ok) throw new Error('API відповів без статусу OK');
-      setConnectionTest({ state: 'ok', message: `SOLVIA ${result.version || '2.0'} доступна · ${endpoint}` });
+      setConnectionTest({ state: 'ok', message: `SOLVIA ${result.version || '—'} доступна · ${endpoint}` });
     } catch (e) {
       setConnectionTest({ state: 'error', message: e.message });
     }
@@ -2771,7 +2772,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
                   <div className="eyebrow">{activeSection === 'center' ? 'ПРОФІЛЬ ЦЕНТРУ' : 'ДОКУМЕНТИ'}</div>
                   <h2>{activeSection === 'center' ? 'Реквізити та оформлення' : 'Виписки та підписи'}</h2>
                 </div>
-                <Badge tone="forest">SOLVIA 2.3</Badge>
+                <Badge tone="forest">SOLVIA {pkg.version}</Badge>
               </div>
 
               <form className="form-grid" onSubmit={save}>
@@ -3455,7 +3456,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [dailyReport,setDailyReport]=useState(false);
   const [accessDialog,setAccessDialog]=useState(false);
   const [messageTarget,setMessageTarget]=useState(null);
-  const [health, setHealth] = useState({ online: true, version: '2.5.0' });
+  const [health, setHealth] = useState({ online: true, version: '' });
   const navigation = [...navFor(user.role), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
@@ -3490,7 +3491,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     async function ping() {
       try {
         const result = await api('GET', '/api/health');
-        if (alive) setHealth(previous=>{const next={online:Boolean(result.ok),version:result.version||'2.5.0'};return previous.online===next.online&&previous.version===next.version?previous:next;});
+        if (alive) setHealth(previous=>{const next={online:Boolean(result.ok),version:result.version||''};return previous.online===next.online&&previous.version===next.version?previous:next;});
       } catch {
         if (alive) setHealth(previous=>previous.online===false&&previous.version===''?previous:{online:false,version:''});
       }
@@ -3539,7 +3540,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       }}>
         <div className="sidebar-brand">
           <div className="product-mark inverse"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
-          <div><strong>SOLVIA</strong><span>by QureMed</span></div>
+          <div><strong>SOLVIA {pkg.version}</strong><span>by QureMed</span></div>
         </div>
 
         <WorkspaceNavigation navigation={navigation.filter(([key]) => !['settings', 'preferences'].includes(key))} page={page} locked={locked} onNavigate={navigate} />

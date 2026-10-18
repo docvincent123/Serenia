@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Solvia VERSION 2.5.1 LANGUAGES CXX)
+project(Solvia VERSION 3.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,7 +24,7 @@ target_link_libraries(SolviaServer PRIVATE
   OpenSSL::Crypto
   OpenSSL::SSL
 )
-target_compile_definitions(SolviaServer PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+target_compile_definitions(SolviaServer PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT SOLVIA_VERSION="${PROJECT_VERSION}")
 
 if(WIN32)
   find_package(unofficial-webview2 CONFIG REQUIRED)

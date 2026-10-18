@@ -1,4 +1,8 @@
-# SOLVIA by QureMed — 2.2.0
+# SOLVIA 3.0.0
+
+Єдина версія сервера, Windows, Linux, Server Console та Android. Android versionCode: 42; встановлюйте APK з тим самим підписом поверх попереднього. Деталі: [версія 3.0](docs/RELEASE-3.0.md), [концепція TV-табло](docs/TV-DISPLAY.md).
+
+## Можливості SOLVIA
 
 SOLVIA — локальна система для приватного психологічного реабілітаційного центру. Репозиторій має назву Serenia; назва продукту в інтерфейсі — **SOLVIA by QureMed**.
 
@@ -6,8 +10,8 @@ SOLVIA — локальна система для приватного псих�
 
 Основний варіант встановлення: **Ubuntu 24.04 / elementary OS 8 x86_64 → Windows-клієнти та Android у LAN**. Покроково: [docs/LINUX.md](docs/LINUX.md).
 
-- Linux artifact: **SOLVIA-2.2.0-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **SOLVIA Admin** у меню Linux.
-- Windows artifact: **SOLVIA-2.2.0-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
+- Linux artifact: **SOLVIA-3.0.0-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **SOLVIA Admin** у меню Linux.
+- Windows artifact: **SOLVIA-3.0.0-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
 - Сервер: C++20, PostgreSQL, HTTPS/8443, systemd, щоденні резервні копії.
 - Linux Admin: окремий desktop launcher з ізольованим вікном браузера, автоматичною перевіркою локального API та імпортом локального CA у NSS-сховище користувача.
 - Linux updater: `sudo solvia-admin check-update` / `sudo solvia-admin update` або дія «Оновити SOLVIA» у меню програми; оновлення береться з перевіреного GitHub Release зі SHA-256 і pre-update backup.

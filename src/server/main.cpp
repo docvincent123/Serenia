@@ -247,7 +247,7 @@ void failedAttempt(const std::string&key){attempts[key].push_back(epoch());}
 
 J route(const httplib::Request&r){std::lock_guard<std::mutex> lock(mutex);Transaction tx(db);auto result=dispatch(r);tx.commit();return result;}
 J dispatch(const httplib::Request&r){auto path=r.path,method=r.method;J b=J::object();if(method!="GET"){check(r.body.size()<=(path=="/api/desktop-updates"?46137344:path=="/api/mobile-update"?12582912:2097152),"Запит завеликий",413);check(r.get_header_value("Content-Type").find("application/json")==0,"Потрібен JSON",415);try{b=J::parse(r.body);}catch(...){throw Error(400,"Некоректний JSON");}check(b.is_object(),"Очікується JSON-об’єкт");}
-if(path=="/api/health"&&method=="GET")return {{"ok",true},{"version","2.5.1"},{"platform",
+if(path=="/api/health"&&method=="GET")return {{"ok",true},{"version",SOLVIA_VERSION},{"platform",
 #ifdef _WIN32
 "windows"
 #else
