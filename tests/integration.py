@@ -71,7 +71,20 @@ class Scenario(unittest.TestCase):
                 with urllib.request.urlopen(request) as response:
                     expected='solvia://app' if origin=='solvia://app' else 'https://app.solvia.invalid'
                     self.assertEqual(response.headers.get_all('Access-Control-Allow-Origin'),[expected])
-                    self.assertEqual(response.headers['Vary'],'Origin')
+                    self.assertIn('Origin',response.headers['Vary'])
+
+    def test_a_tv_site_cors_is_limited_to_display_endpoints(self):
+        site='https://solvia-tv-display.mykhailoyurkevich123.chatgpt.site'
+        for path in ['/api/tv/pair','/api/tv/pairing','/api/tv/schedule','/api/patients','/api/login']:
+            request=urllib.request.Request(self.base+path,headers={'Origin':site,'Access-Control-Request-Private-Network':'true'},method='OPTIONS')
+            with urllib.request.urlopen(request) as response:
+                allowed=path.startswith('/api/tv/')
+                self.assertEqual(response.headers['Access-Control-Allow-Origin'],site if allowed else 'https://app.solvia.invalid')
+                self.assertEqual(response.headers.get('Access-Control-Allow-Private-Network'),'true' if allowed else None)
+        request=urllib.request.Request(self.base+'/api/tv/schedule',headers={'Origin':'https://untrusted.invalid','Access-Control-Request-Private-Network':'true'},method='OPTIONS')
+        with urllib.request.urlopen(request) as response:
+            self.assertNotEqual(response.headers['Access-Control-Allow-Origin'],'https://untrusted.invalid')
+            self.assertIsNone(response.headers.get('Access-Control-Allow-Private-Network'))
 
     def test_a_tv_display_pairing_scope_and_live_schedule(self):
         def tv(method,path,body=None,key=None):
