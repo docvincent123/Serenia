@@ -33,9 +33,9 @@ object ShiftNotifications {
     @Synchronized fun refresh(c: Context, base: String, uid: Long) {
         val p = prefs(c); p.edit().putString("server", base).putLong("user", uid).apply()
         val store = OfflineStore(c, base, uid); val session = store.session()
-        val today = LocalDate.now().toString()
         val shift = store.cache("/api/shift-day") as? JSONObject
-        if(session == null || shift == null || !shift.optBoolean("open") || shift.optString("shift_date") != today) { clear(c); return }
+        val today = ShiftDate.active(session?.optJSONObject("user")?.optString("shift_date"),shift?.optString("shift_date"),shift?.optBoolean("open")==true)
+        if(session == null || shift == null || !shift.optBoolean("open")) { clear(c); return }
         val rows = store.cache("/api/appointments?date=$today") as? JSONArray ?: return
         val settings = c.getSharedPreferences("solvia_settings", 0)
         val scope = "$base|$uid|$today"

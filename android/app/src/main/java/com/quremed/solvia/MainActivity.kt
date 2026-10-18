@@ -41,6 +41,7 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("solvia_settings", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
     private val cacheIo = Executors.newSingleThreadExecutor()
+    private val appointmentIo = Executors.newSingleThreadExecutor()
     private var cachePreparing = false
     private val openConfigRequest = 4101
 
@@ -92,20 +93,25 @@ class MainActivity : Activity() {
     private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var homeAppointmentsRefresh: ((JSONArray) -> Unit)? = null
     private var appointmentRefreshRunning = false
+    private val appointmentPrefetchRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var appointmentErrorView: TextView? = null
+    private val appointmentTick = object : Runnable {
+        override fun run() { refreshAppointments(); syncHandler.postDelayed(this,10000) }
+    }
     private val syncTick = object : Runnable {
-        override fun run() { syncNow(); refreshAppointments(); if(token.isNotBlank()) { updates.check(); refreshStaffMessages() }; syncHandler.postDelayed(this, 60000) }
+        override fun run() { syncNow(); if(token.isNotBlank()) { updates.check(); refreshStaffMessages() }; syncHandler.postDelayed(this, 60000) }
     }
     private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
     private fun offlineStore() = OfflineStore(this, server, userId)
-    override fun onResume() { super.onResume(); updates.resume(); syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick) }
-    override fun onPause() { syncHandler.removeCallbacks(syncTick); super.onPause() }
+    override fun onResume() { super.onResume(); updates.resume(); syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick); syncHandler.removeCallbacks(appointmentTick); syncHandler.post(appointmentTick) }
+    override fun onPause() { syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(appointmentTick); super.onPause() }
     override fun onDestroy() {
-        syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(draftSyncTick)
+        syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(appointmentTick); syncHandler.removeCallbacks(draftSyncTick)
         networkCallback?.let { runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(it) } }
         consultationWindow?.dismiss(); consultationWindow = null
         pdfPreview?.close(); pdfPreview = null
         sideMenu?.dismiss(); sideMenu = null
-        updates.close(); io.shutdown(); cacheIo.shutdown(); super.onDestroy()
+        updates.close(); io.shutdown(); cacheIo.shutdown(); appointmentIo.shutdown(); super.onDestroy()
     }
     private fun unavailable(error: Exception) = error is java.io.IOException && error !is javax.net.ssl.SSLException
     private fun updateConnectionStatus() {
@@ -172,31 +178,60 @@ class MainActivity : Activity() {
         }
     }
     private fun refreshAppointments() {
-        if(token.isBlank() || role != "psychologist" || appointmentRefreshRunning) return
+        if(token.isBlank() || role != "psychologist" || appointmentRefreshRunning || isDestroyed) return
         appointmentRefreshRunning = true
-        val base = server; val auth = token; val uid = userId; val shiftDay = currentShiftDate()
-        cacheIo.execute {
+        val base = server; val auth = token; val uid = userId; val profileDay = currentShiftDate()
+        appointmentIo.execute {
+            val store = OfflineStore(this,base,uid)
             try {
-                val store = OfflineStore(this, base, uid)
-                val shift = requestAt(base, "GET", "/api/shift-day", authToken = auth) as JSONObject
-                store.saveCache("/api/shift-day", shift)
-                if(!shift.optBoolean("open")) {
-                    if(token == auth && server == base) { AppointmentReminders.cancelScope(this, base, uid); ShiftNotifications.refresh(this, base, uid) }
-                } else {
-                    for(day in listOf(shiftDay, LocalDate.now().toString(), LocalDate.now().plusDays(1).toString()).distinct()) {
-                        val path = "/api/appointments?date=" + day
-                        store.saveCache(path, requestAt(base, "GET", path, authToken = auth))
-                    }
-                    if(token == auth && server == base) {
-                        AppointmentReminders.refreshFromCache(this, base, uid)
+                val snapshot = AppointmentInbox.receive(store,profileDay) { path ->
+                    if(token!=auth || server!=base || store.session()?.optString("token")!=auth) throw ApiError(401,"Сесію змінено")
+                    requestAt(base,"GET",path,authToken=auth)
+                }
+                if(token==auth && server==base) {
+                    if(!snapshot.shift.optBoolean("open")) {
+                        AppointmentReminders.cancelScope(this,base,uid); ShiftNotifications.refresh(this,base,uid)
+                        runOnUiThread { if(token==auth && server==base && consultationWindow==null && selectedNavigation in listOf("home","archive")) renderShiftGate(snapshot.shift) }
+                    } else {
                         runOnUiThread {
-                            if(token == auth && server == base && workspaceReady && consultationWindow == null && selectedNavigation in listOf("home", "archive"))
-                                homeAppointmentsRefresh?.invoke(store.cache("/api/appointments?date=" + currentShiftDate()) as? JSONArray ?: JSONArray())
+                            if(token==auth && server==base && !isDestroyed) {
+                                offlineMode=false;updateConnectionStatus()
+                                appointmentErrorView?.apply { text="";visibility=View.GONE }
+                                if(consultationWindow==null && selectedNavigation in listOf("home","archive")) {
+                                    if(homeAppointmentsRefresh!=null && workspaceReady) homeAppointmentsRefresh?.invoke(snapshot.entries)
+                                    else renderHomeScreen(if(selectedNavigation=="archive") "completed" else "active")
+                                }
+                            }
+                        }
+                        // Deliver the list before downloading other days and patient cards.
+                        AppointmentReminders.refreshFromCache(this,base,uid)
+                        if(!isDestroyed && appointmentPrefetchRunning.compareAndSet(false,true)) cacheIo.execute {
+                            try {
+                                fun get(path:String):Any {
+                                    if(token!=auth || server!=base || store.session()?.optString("token")!=auth) throw ApiError(401,"Сесію змінено")
+                                    return requestAt(base,"GET",path,authToken=auth)
+                                }
+                                AppointmentInbox.cacheMissingCards(store,snapshot.entries,::get)
+                                for(day in listOf(LocalDate.now().toString(),LocalDate.now().plusDays(1).toString()).distinct().filter { it!=snapshot.day }) {
+                                    val path="/api/appointments?date=$day";store.saveCache(path,get(path))
+                                }
+                                if(token==auth && server==base) AppointmentReminders.refreshFromCache(this,base,uid)
+                            } catch(_:Exception) { /* The received list and existing offline cards stay available. */ }
+                            finally { appointmentPrefetchRunning.set(false) }
                         }
                     }
                 }
-            } catch(_: Exception) { }
-            finally { runOnUiThread { appointmentRefreshRunning = false } }
+            } catch(e: Exception) {
+                runOnUiThread {
+                    if(token==auth && server==base && !isDestroyed) {
+                        if(e is ApiError && e.status==401) { store.revokeSession();logout() }
+                        else {
+                            offlineMode=true;updateConnectionStatus()
+                            appointmentErrorView?.apply { text="Не вдалося отримати прийоми: "+(e.message ?: "перевірте мережу")+". Повторюємо автоматично.";visibility=View.VISIBLE }
+                        }
+                    }
+                }
+            } finally { runOnUiThread { appointmentRefreshRunning=false } }
         }
     }
     private fun prepareOfflineCache(base: String, auth: String, store: OfflineStore) {
@@ -1134,6 +1169,7 @@ class MainActivity : Activity() {
     }
 
     private fun renderShiftGate(shift: JSONObject) {
+        workspaceReady=false;homeAppointmentsRefresh=null;selectedNavigation="home"
         val body = root(); body.addView(title("Зміна ще не відкрита"))
         body.addView(caption("Дата: " + shift.optString("shift_date", LocalDate.now().toString())))
         body.addView(caption("Адміністратор має відкрити зміну в програмі центру."))
@@ -1144,7 +1180,8 @@ class MainActivity : Activity() {
     private fun currentShiftDate(): String {
         val profile = runCatching { JSONObject(prefs.getString("profile:$server:$userId", "{}")) }.getOrDefault(JSONObject())
         val day = profile.optString("shift_date")
-        return ShiftDate.resolve(day)
+        val shift=offlineStore().cache("/api/shift-day") as? JSONObject
+        return ShiftDate.active(day,shift?.optString("shift_date"),shift?.optBoolean("open")==true)
     }
 
     private fun renderHomeScreen(initialTab: String = "active") {
@@ -1157,6 +1194,7 @@ class MainActivity : Activity() {
 
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         body.addView(tabs)
+        appointmentErrorView=caption("Отримуємо актуальний список прийомів…").apply { tag="appointment_receive_status" };body.addView(appointmentErrorView)
         val today = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(today)
         val homeScroll = scroll(body)
         homeScroll.setOnTouchListener(object : View.OnTouchListener {
@@ -1168,8 +1206,9 @@ class MainActivity : Activity() {
             }
         })
         mount(homeScroll)
-        if(role != "director") apiAsync("GET", "/api/appointments?date=" + LocalDate.parse(currentShiftDate())) { value ->
-            var entries = value as JSONArray
+        fun showAppointments(value: JSONArray) {
+            appointmentErrorView?.apply { text="";visibility=View.GONE }
+            var entries = value
             val visits = mutableListOf<Pair<JSONObject, JSONObject>>()
             for(i in 0 until entries.length()) {
                 val item = entries.getJSONObject(i)
@@ -1279,7 +1318,14 @@ class MainActivity : Activity() {
                 }
             }
         }
-
+        val path="/api/appointments?date="+currentShiftDate()
+        (offlineStore().cache(path) as? JSONArray)?.let { showAppointments(it) }
+        if(role!="director") apiAsync("GET",path,onError={ message ->
+            appointmentErrorView?.apply { text="Не вдалося отримати прийоми: $message. Повторюємо автоматично.";visibility=View.VISIBLE }
+        }) { value ->
+            val rows=value as JSONArray
+            if(homeAppointmentsRefresh==null) showAppointments(rows) else homeAppointmentsRefresh?.invoke(rows)
+        }
     }
 
     @Suppress("UNUSED_PARAMETER")

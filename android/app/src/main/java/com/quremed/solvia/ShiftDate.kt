@@ -6,4 +6,9 @@ import java.time.LocalDate
 object ShiftDate {
     fun resolve(value: String?, today: LocalDate = LocalDate.now()): String =
         runCatching { LocalDate.parse(value).toString() }.getOrDefault(today.toString())
+
+    fun active(profileDate: String?, serverDate: String?, open: Boolean, today: LocalDate = LocalDate.now()): String {
+        if(open) runCatching { LocalDate.parse(serverDate).toString() }.getOrNull()?.let { return it }
+        return resolve(profileDate, today)
+    }
 }

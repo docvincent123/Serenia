@@ -101,8 +101,10 @@ object AppointmentReminders {
     fun refreshFromCache(c: Context, server: String, user: Long) {
         val store = OfflineStore(c, server, user)
         val all = JSONArray()
-        for(day in 0..1) {
-            val rows = store.cache("/api/appointments?date=" + LocalDate.now().plusDays(day.toLong())) as? JSONArray ?: continue
+        val shift=store.cache("/api/shift-day") as? JSONObject
+        val activeDay=ShiftDate.active(store.session()?.optJSONObject("user")?.optString("shift_date"),shift?.optString("shift_date"),shift?.optBoolean("open")==true)
+        for(day in listOf(activeDay,LocalDate.now().toString(),LocalDate.now().plusDays(1).toString()).distinct()) {
+            val rows = store.cache("/api/appointments?date=" + day) as? JSONArray ?: continue
             for(i in 0 until rows.length()) all.put(rows.getJSONObject(i))
         }
         update(c, server, user, all)
