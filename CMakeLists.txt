@@ -96,3 +96,12 @@ if(BUILD_TESTING)
 endif()
 
 
+
+if(BUILD_TESTING)
+  add_executable(SolviaLicenseTests tests/center-license.cpp)
+  target_link_libraries(SolviaLicenseTests PRIVATE nlohmann_json::nlohmann_json OpenSSL::Crypto)
+  if(MSVC)
+    target_compile_options(SolviaLicenseTests PRIVATE /utf-8)
+  endif()
+  add_test(NAME center_license COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/center-license.py $<TARGET_FILE:SolviaLicenseTests>)
+endif()

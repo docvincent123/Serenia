@@ -766,6 +766,13 @@ class MainActivity : Activity() {
 
     private fun requestAt(base: String, method: String, path: String, body: JSONObject? = null, authToken: String = token): Any {
         PhoneNetworkStats.sent(this,base)
+        if(path == "/api/login") {
+            val expected = prefs.getString("server_id:$base", "").orEmpty()
+            if(expected.isNotBlank()) {
+                val health = requestAt(base, "GET", "/api/health", authToken = "") as JSONObject
+                require(health.optString("server_id") == expected) { "Це інший сервер SOLVIA. Отримайте правильний файл підключення." }
+            }
+        }
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
         connection.instanceFollowRedirects = false
@@ -889,6 +896,10 @@ class MainActivity : Activity() {
                 val json = JSONObject(text)
                 require(json.optString("format") == "quremed.solvia.mobile") { "Це не файл підключення SOLVIA" }
 
+                val version = json.optInt("version", 1)
+                require(version in 1..2) { "Оновіть SOLVIA для цього формату підключення" }
+                val expectedId = json.optString("server_id")
+                if(version == 2) require(expectedId.matches(Regex("[a-f0-9]{64}"))) { "У файлі відсутній ідентифікатор сервера" }
                 val preferred = json.optString("preferred", "https")
                 val httpsSource = json.optString("https_url").ifBlank {
                     json.optString("api_url").takeIf { it.startsWith("https://", true) }.orEmpty()
@@ -899,17 +910,20 @@ class MainActivity : Activity() {
                 val firstSource = if (preferred == "http" && httpSource.isNotBlank()) httpSource
                     else httpsSource.ifBlank { json.optString("api_url").ifBlank { httpSource } }
                 val candidate = configAddress(firstSource)
+                if(version == 2) require(candidate.startsWith("https://")) { "Профіль центру потребує HTTPS" }
 
                 try {
                     val health = requestAt(candidate, "GET", "/api/health", authToken = "") as JSONObject
                     require(health.optBoolean("ok")) { "Сервер не підтвердив готовність" }
+                    if(expectedId.isNotBlank()) require(health.optString("server_id") == expectedId) { "Файл належить іншому серверу SOLVIA" }
+                    prefs.edit().putString("server_id:$candidate", expectedId).apply()
                     rememberServer(candidate)
                     runOnUiThread {
                         Toast.makeText(this, "Сервер SOLVIA підключено: $server", Toast.LENGTH_LONG).show()
                         loginScreen()
                     }
                 } catch (primary: Exception) {
-                    if (candidate.startsWith("https://", true) && httpSource.isNotBlank()) {
+                    if (version == 1 && candidate.startsWith("https://", true) && httpSource.isNotBlank()) {
                         val localHttp = configAddress(httpSource)
                         val health = requestAt(localHttp, "GET", "/api/health", authToken = "") as JSONObject
                         require(health.optBoolean("ok")) { "Локальний HTTP сервер не готовий" }
@@ -982,7 +996,7 @@ class MainActivity : Activity() {
         val body = root()
         body.addView(logo())
         body.addView(title("Підключення до SOLVIA", 27f))
-        body.addView(caption("Найпростіше — відкрити файл SOLVIA-Mobile.solvia, створений серверним ПК. IP і порт підтягнуться автоматично."))
+        body.addView(caption("Найпростіше — відкрити файл SOLVIA-Mobile.solvia, створений серверним ПК. Адреса підтягнеться автоматично; профіль із DNS-іменем працює після зміни IP."))
 
         val importCard = card()
         importCard.background = rounded(forestSoft, 17, line)
@@ -1008,8 +1022,7 @@ class MainActivity : Activity() {
                     try {
                         val health = requestAt(candidate, "GET", "/api/health") as JSONObject
                         require(health.optBoolean("ok")) { "Сервер не готовий" }
-                        server = candidate
-                        prefs.edit().putString("server", server).apply()
+                        rememberServer(candidate)
                         runOnUiThread {
                             Toast.makeText(this, "Підключено · SOLVIA " + health.optString("version", "—"), Toast.LENGTH_LONG).show()
                             loginScreen()

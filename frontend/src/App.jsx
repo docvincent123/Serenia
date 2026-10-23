@@ -7,7 +7,8 @@ import StaffMessages from './StaffMessages.jsx';
 import {backupNeedsAttention} from './backup-status.mjs';
 import {DeviceHealth,ShiftReadiness,Addenda,PatientProgress} from './Operations.jsx';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { cleanBase } from './connection.mjs';
+import { cleanBase, connectionProfile, verifyProfile } from './connection.mjs';
+import CenterLicense from './CenterLicense.jsx';
 import { lightweightMode } from './performance.mjs';
 import { draftIdentity, readDraft, writeDraft, removeDraft, DraftWriter } from './drafts.mjs';
 import WaitingList from './WaitingList.jsx';
@@ -520,6 +521,18 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [server]);
 
+  async function importConnection(file) {
+    if (!file) return;
+    setChecking(true); setError('');
+    try {
+      if (file.size > 65536) throw new Error('Файл підключення завеликий.');
+      const profile = connectionProfile(await file.text());
+      verifyProfile(profile, await request(profile.base, '', 'GET', '/api/health'));
+      localStorage.setItem('solvia_profile:' + profile.base, JSON.stringify(profile));
+      localStorage.setItem('solvia_api', profile.base);
+      setServer(profile.base); setConnection('Підключено: ' + profile.center); setShowServer(false);
+    } catch(e) { setError(e.message); } finally { setChecking(false); }
+  }
   async function checkConnection() {
     setChecking(true); setConnection(''); setError('');
     try {
@@ -541,6 +554,8 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
     setError('');
     try {
       const base = cleanBase(server);
+      const profileText = localStorage.getItem('solvia_profile:' + base);
+      if (profileText) verifyProfile(JSON.parse(profileText), await request(base, '', 'GET', '/api/health'));
       const result = await request(base, '', 'POST', '/api/login', { login, password, ...deviceIdentity() });
       await onLogin(base, result, password);
     } catch (e) {
@@ -594,6 +609,9 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
           </Button>
 
+          <label className="field full">Підключити центр із файла
+            <input type="file" accept=".solvia,.json" disabled={checking||busy} onChange={e=>{importConnection(e.target.files?.[0]);e.target.value='';}} />
+          </label>
           <button type="button" className="server-toggle" onClick={() => setShowServer((v) => !v)}>
             {showServer ? 'Сховати підключення' : 'Підключення до центру'}
           </button>
@@ -2700,7 +2718,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
 
   async function downloadMobileConfig() {
     try {
-      const config = await api('GET', '/api/mobile-config');
+      const config = await api('GET', '/api/mobile-config?stable=1');
       if (config.format !== 'quremed.solvia.mobile' || !config.api_url) throw new Error('Сервер не створив файл підключення.');
       const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/vnd.solvia.connection+json' });
       const href = URL.createObjectURL(blob);
@@ -2758,8 +2776,9 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
             ['mobile','Оновлення Android','APK для телефонів'],
             ['desktop','Оновлення ПК','Windows та Linux'],
             ['workflow','Правила роботи','Розклад і безпека'],
+            ['license','Право користування','Активація центру'],
             ['maintenance','Backup','Резервні копії']
-          ].filter(([key])=>technical?['connection','maintenance'].includes(key):['center','documents','workflow'].includes(key)).map(([key,title,text]) => (
+          ].filter(([key])=>technical?['connection','license','maintenance'].includes(key):['center','documents','workflow'].includes(key)).map(([key,title,text]) => (
             <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => setActiveSection(key)}>
               <span><AppIcon name={key === "center" ? "rooms" : key === "documents" ? "reports" : key === "connection" ? "devices" : "preferences"} /></span>
               <div><strong>{title}</strong><small>{text}</small></div>
@@ -2835,7 +2854,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
               </div>
 
               <form className="form-grid" onSubmit={save}>
-                <Field label="Local API URL" full hint="Наприклад: https://192.168.1.100:8443">
+                <Field label="Local API URL" full hint="Постійне DNS-ім’я, наприклад https://solvia.center.example:8443. DNS має працювати в мережі центру, а сертифікат — відповідати імені.">
                   <input value={form.local_api_url} onChange={(e) => setForm({ ...form, local_api_url: e.target.value })} placeholder={apiBase || 'https://192.168.1.100:8443'} />
                 </Field>
                 <Field label="Назва VPS"><input value={form.vps_name} onChange={(e) => setForm({ ...form, vps_name: e.target.value })} placeholder="Напр. QureMed Cloud 1" /></Field>
@@ -2858,7 +2877,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
                 <div className="form-actions full-span split-actions">
                   <Button type="button" variant="secondary" onClick={testConnection} disabled={connectionTest.state === 'busy'}>Перевірити з’єднання</Button>
                   <div>
-                    <Button type="button" variant="secondary" onClick={downloadMobileConfig}>Файл для телефону</Button>
+                    <Button type="button" variant="secondary" onClick={downloadMobileConfig}>Файл для Android / ПК</Button>
                     <Button type="submit" variant="secondary">Зберегти профіль</Button>
                     <Button type="button" onClick={applyConnection}>Підключити цей ПК</Button>
                   </div>
@@ -2872,6 +2891,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
             </section>
           )}
 
+          {activeSection === 'license' && <CenterLicense api={api} />}
           {activeSection === 'workflow' && <WorkflowSettings api={api} />}
           {activeSection === 'mobile' && <MobileReleaseSettings api={api} />}
           {activeSection === 'desktop' && <DesktopReleaseSettings api={api} />}

@@ -9,6 +9,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/crypto.h>
+#include <openssl/pem.h>
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -213,6 +214,7 @@ J saveConsultation(DB&db,const J&u,const J&b,const J*actor=nullptr){allow(u,{"ps
 #include "staff_messages.h"
 #include "desktop_updates.h"
 #include "tv_display.h"
+#include "center_access.h"
 
 std::string staffNumber(DB&db,const J&id){
  auto rows=db.query("SELECT staff_number FROM users WHERE id=?",{id});
@@ -238,7 +240,7 @@ J mobileProfile(DB&db,J u,const std::string&session){
  u["shift_bound"]=!rows[0]["shift_date"].get<std::string>().empty();return u;
 }
 
-struct App{DB db;std::mutex mutex;std::map<std::string,std::vector<long long>> attempts;explicit App(const std::string&file):db(file){}
+struct App{DB db;std::mutex mutex;std::map<std::string,std::vector<long long>> attempts;explicit App(const std::string&file):db(file){db.query("INSERT INTO installation_identity(id,server_id) VALUES(1,?) ON CONFLICT(id) DO NOTHING",{randomToken()});}
 void checkAttempts(const std::string&key){
     auto t=epoch();for(auto it=attempts.begin();it!=attempts.end();){std::erase_if(it->second,[&](auto x){return t-x>300;});if(it->second.empty())it=attempts.erase(it);else ++it;}
     auto it=attempts.find(key);check(it!=attempts.end()||attempts.size()<4096,"Забагато спроб. Зачекайте 5 хвилин.",429);
@@ -248,13 +250,17 @@ void failedAttempt(const std::string&key){attempts[key].push_back(epoch());}
 
 J route(const httplib::Request&r){std::lock_guard<std::mutex> lock(mutex);Transaction tx(db);auto result=dispatch(r);tx.commit();return result;}
 J dispatch(const httplib::Request&r){auto path=r.path,method=r.method;J b=J::object();if(method!="GET"){check(r.body.size()<=(path=="/api/desktop-updates"?46137344:path=="/api/mobile-update"?12582912:2097152),"Запит завеликий",413);check(r.get_header_value("Content-Type").find("application/json")==0,"Потрібен JSON",415);try{b=J::parse(r.body);}catch(...){throw Error(400,"Некоректний JSON");}check(b.is_object(),"Очікується JSON-об’єкт");}
-if(path=="/api/health"&&method=="GET")return {{"ok",true},{"version",SOLVIA_VERSION},{"platform",
+if(path=="/api/health"&&method=="GET")return {{"server_id",installationId(db)},{"ok",true},{"version",SOLVIA_VERSION},{"platform",
 #ifdef _WIN32
 "windows"
 #else
 "linux"
 #endif
 }};
+// Licensing never removes records or prevents sign-in/read/export/renewal.
+if(method!="GET" && path!="/api/login" && path!="/api/logout" && path!="/api/license") {
+ auto access=centerAccess(db);check(access["write_allowed"].get<bool>(),"Право користування SOLVIA потребує поновлення. Дані доступні для перегляду; зверніться до адміністратора.",402);
+}
 if(path=="/api/tv/pair"&&method=="POST"){
  auto key="tv-pair:"+r.remote_addr;checkAttempts(key);failedAttempt(key);
  db.query("DELETE FROM tv_pairings WHERE expires<=?",{epoch()});
@@ -281,6 +287,14 @@ db.query("DELETE FROM sessions WHERE user_id=? AND ((shift_date='' AND expires<=
 check(db.query("SELECT token FROM sessions WHERE user_id=?",{u["id"]}).empty(),"Цей обліковий запис уже використовується на іншому пристрої. Спочатку завершіть попередній сеанс або зверніться до системного адміністратора.",409);db.query("INSERT INTO sessions(token,user_id,csrf,expires,platform,device_id,device_name,ip_address,created,last_seen) VALUES(?,?,?,?,?,?,?,?,?,?)",{digest(token),u["id"],"",epoch()+workflow(db)["session_hours"].get<int>()*3600,platform,deviceId,deviceName,clientIp,now(),now()});db.query("UPDATE sessions SET shift_date=? WHERE token=?",{shiftDate,digest(token)});audit(db,u,"login","user",u["id"]);return {{"token",token},{"user",mobileProfile(db,{{"id",u["id"]},{"name",u["name"]},{"role",u["role"]},{"phone",u["phone"]}},digest(token))}};}
 if(path.rfind("/api/respond/",0)==0){auto token=path.substr(13);check(token.size()==64,"Недійсне посилання",404);auto rows=db.query("SELECT * FROM assessments WHERE token=? AND expires>? AND completed IS NULL",{digest(token),epoch()});check(!rows.empty(),"Посилання недійсне, прострочене або використане",404);if(method=="GET")return {{"questions",questions},{"title","Самопочуття сьогодні"},{"description","Авторська анкета самоспостереження, не діагностична шкала. 0 — найнижче, 10 — найвище."}};check(method=="POST","Метод не дозволений",405);check(b.contains("answers")&&b["answers"].is_array()&&b["answers"].size()==3,"Потрібно три відповіді");int score=0;for(auto&a:b["answers"]){check(a.is_number_integer()&&a>=0&&a<=10,"Відповіді: 0–10");score+=a.get<int>();}db.query("UPDATE assessments SET answers=?,score=?,completed=? WHERE id=?",{b["answers"].dump(),score,now(),rows[0]["id"]});return {{"ok",true}};}
 auto bearer=r.get_header_value("Authorization");check(bearer.rfind("Bearer ",0)==0,"Увійдіть у систему",401);auto token=digest(bearer.substr(7));auto rows=db.query("SELECT u.id,u.name,u.role,u.phone FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND (s.expires>? OR s.shift_date<>'') AND (s.shift_date='' OR EXISTS(SELECT 1 FROM shift_days WHERE shift_date=s.shift_date AND closed_at IS NULL)) AND u.active=TRUE",{token,epoch()});check(!rows.empty(),"Сесія завершилася. Увійдіть знову.",401);auto u=rows[0];db.query("UPDATE sessions SET last_seen=? WHERE token=?",{now(),token});
+if(path=="/api/license"){
+ if(method=="GET")return centerAccess(db);
+ allow(u,{"admin"});check(method=="POST","Метод не дозволений",405);
+ auto verified=verifyCenterLicense(b,installationId(db));
+ check(verified["expires_at"].get<long long>()>epoch(),"Ліцензія вже завершилася");
+ db.query("INSERT INTO center_license(id,envelope) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET envelope=EXCLUDED.envelope",{b.dump()});
+ audit(db,u,"activate","center_license",1);return centerAccess(db);
+}
 if(path=="/api/desktop-updates"||path=="/api/desktop-updates/package")return desktopUpdates(db,u,r,b);
 if(path=="/api/me"&&method=="GET")return mobileProfile(db,u,token);
 if(path=="/api/logout"&&method=="POST"){db.query("DELETE FROM sessions WHERE token=?",{token});return {{"ok",true}};}
@@ -439,17 +453,19 @@ if(path=="/api/mobile-config"&&method=="GET"){
     auto rows=db.query("SELECT * FROM center_settings WHERE id=1");
     check(!rows.empty(),"Спочатку збережіть налаштування центру",409);
     auto settings=rows[0];auto mode=settings.value("connection_mode",std::string("local"));
-    auto url=mode=="vps"?settings.value("vps_api_url",std::string()):lanUrl();
+    auto url=mode=="vps"?settings.value("vps_api_url",std::string()):settings.value("local_api_url",std::string());
+    if(url.empty()&&mode!="vps")url=lanUrl();
     if(url.empty()&&mode!="vps")url=settings.value("local_api_url",std::string());
     while(!url.empty()&&url.back()=='/')url.pop_back();
     check(std::regex_match(url,std::regex("https://[A-Za-z0-9.-]+(:[0-9]{1,5})?")),"Для телефона збережіть HTTPS адресу сервера без шляху",400);
     auto host=url.substr(8);auto colon=host.find(':');
     if(colon!=std::string::npos){auto port=std::stoi(host.substr(colon+1));check(port>=1&&port<=65535,"Порт сервера: 1–65535",400);}
     host=host.substr(0,colon);
+    if(r.has_param("stable")&&r.get_param_value("stable")=="1")check(!std::regex_match(host,std::regex("[0-9.]+")),"Для файла без IP збережіть постійне DNS-ім’я сервера в Local API URL або VPS API URL",409);
     check(host!="localhost"&&host!="0.0.0.0"&&host.rfind("127.",0)!=0,"Для телефона потрібна мережева адреса сервера",400);
-    return {{"format","quremed.solvia.mobile"},{"version",1},{"center",settings.value("center_name",std::string("SOLVIA"))},{"preferred","https"},{"api_url",url},{"https_url",url},{"generated",now()}};
+    return {{"format","quremed.solvia.mobile"},{"version",2},{"server_id",installationId(db)},{"center",settings.value("center_name",std::string("SOLVIA"))},{"preferred","https"},{"api_url",url},{"https_url",url},{"generated",now()}};
 }
-if(path=="/api/settings/center"){allow(u,{"admin","reception","psychologist","director"});if(method=="GET"){auto s=db.query("SELECT * FROM center_settings WHERE id=1");auto settings=s.empty()?J::object():s[0];auto lan=lanUrl();if(!lan.empty())settings["local_api_url"]=lan;return settings;}allow(u,{"admin"});check(method=="PATCH","Метод не дозволений",405);auto existingSettings=db.query("SELECT * FROM center_settings WHERE id=1 FOR UPDATE");check(!existingSettings.empty(),"Налаштування центру відсутні",409);auto changes=b;b=existingSettings[0];b.update(changes);auto serverName=b.contains("server_name")?str(b,"server_name",120):db.query("SELECT server_name FROM center_settings WHERE id=1")[0]["server_name"].get<std::string>();db.query("UPDATE center_settings SET server_name=? WHERE id=1",{serverName});auto logo=str(b,"logo_data",1500000,false);imageData(logo,true);int reminder=b.value("appointment_reminder_minutes",30);check(reminder>=5&&reminder<=240,"Нагадування: 5–240 хвилин");auto connectionMode=str(b,"connection_mode",20,false);if(connectionMode.empty())connectionMode="local";check(connectionMode=="local"||connectionMode=="vps","Режим підключення: local або vps");auto localUrl=str(b,"local_api_url",500,false);auto vpsUrl=str(b,"vps_api_url",500,false);auto vpsName=str(b,"vps_name",120,false);auto normalizeUrl=[](std::string&value){while(!value.empty()&&value.back()=='/')value.pop_back();};if(!localUrl.empty()){check(localUrl.rfind("http://",0)==0||localUrl.rfind("https://",0)==0,"Локальна адреса API має починатися з http:// або https://");check(localUrl.find(' ')==std::string::npos,"Некоректна локальна адреса API");normalizeUrl(localUrl);}if(!vpsUrl.empty()){check(vpsUrl.rfind("https://",0)==0,"VPS API має використовувати HTTPS");check(vpsUrl.find(' ')==std::string::npos,"Некоректна адреса VPS API");normalizeUrl(vpsUrl);}if(connectionMode=="vps")check(!vpsUrl.empty(),"Для режиму VPS вкажіть HTTPS адресу API");db.query("UPDATE center_settings SET center_name=?,short_name=?,address=?,phone=?,email=?,website=?,city=?,director_name=?,admin_name=?,work_hours=?,document_footer=?,discharge_signatory=?,head_name=?,head_title=?,logo_data=?,appointment_reminder_minutes=?,connection_mode=?,local_api_url=?,vps_api_url=?,vps_name=?,updated=? WHERE id=1",{str(b,"center_name",200),str(b,"short_name",100,false),str(b,"address",300,false),str(b,"phone",100,false),str(b,"email",200,false),str(b,"website",300,false),str(b,"city",120,false),str(b,"director_name",200,false),str(b,"admin_name",200,false),str(b,"work_hours",200,false),str(b,"document_footer",2000,false),str(b,"discharge_signatory",200,false),str(b,"head_name",200,false),str(b,"head_title",120,false),logo,reminder,connectionMode,localUrl,vpsUrl,vpsName,now()});audit(db,u,"update","center_settings",1);return {{"ok",true},{"connection_mode",connectionMode},{"local_api_url",localUrl},{"vps_api_url",vpsUrl}};}
+if(path=="/api/settings/center"){allow(u,{"admin","reception","psychologist","director"});if(method=="GET"){auto s=db.query("SELECT * FROM center_settings WHERE id=1");auto settings=s.empty()?J::object():s[0];auto lan=lanUrl();if(!lan.empty()&&settings.value("local_api_url",std::string()).empty())settings["local_api_url"]=lan;return settings;}allow(u,{"admin"});check(method=="PATCH","Метод не дозволений",405);auto existingSettings=db.query("SELECT * FROM center_settings WHERE id=1 FOR UPDATE");check(!existingSettings.empty(),"Налаштування центру відсутні",409);auto changes=b;b=existingSettings[0];b.update(changes);auto serverName=b.contains("server_name")?str(b,"server_name",120):db.query("SELECT server_name FROM center_settings WHERE id=1")[0]["server_name"].get<std::string>();db.query("UPDATE center_settings SET server_name=? WHERE id=1",{serverName});auto logo=str(b,"logo_data",1500000,false);imageData(logo,true);int reminder=b.value("appointment_reminder_minutes",30);check(reminder>=5&&reminder<=240,"Нагадування: 5–240 хвилин");auto connectionMode=str(b,"connection_mode",20,false);if(connectionMode.empty())connectionMode="local";check(connectionMode=="local"||connectionMode=="vps","Режим підключення: local або vps");auto localUrl=str(b,"local_api_url",500,false);auto vpsUrl=str(b,"vps_api_url",500,false);auto vpsName=str(b,"vps_name",120,false);auto normalizeUrl=[](std::string&value){while(!value.empty()&&value.back()=='/')value.pop_back();};if(!localUrl.empty()){check(localUrl.rfind("http://",0)==0||localUrl.rfind("https://",0)==0,"Локальна адреса API має починатися з http:// або https://");check(localUrl.find(' ')==std::string::npos,"Некоректна локальна адреса API");normalizeUrl(localUrl);}if(!vpsUrl.empty()){check(vpsUrl.rfind("https://",0)==0,"VPS API має використовувати HTTPS");check(vpsUrl.find(' ')==std::string::npos,"Некоректна адреса VPS API");normalizeUrl(vpsUrl);}if(connectionMode=="vps")check(!vpsUrl.empty(),"Для режиму VPS вкажіть HTTPS адресу API");db.query("UPDATE center_settings SET center_name=?,short_name=?,address=?,phone=?,email=?,website=?,city=?,director_name=?,admin_name=?,work_hours=?,document_footer=?,discharge_signatory=?,head_name=?,head_title=?,logo_data=?,appointment_reminder_minutes=?,connection_mode=?,local_api_url=?,vps_api_url=?,vps_name=?,updated=? WHERE id=1",{str(b,"center_name",200),str(b,"short_name",100,false),str(b,"address",300,false),str(b,"phone",100,false),str(b,"email",200,false),str(b,"website",300,false),str(b,"city",120,false),str(b,"director_name",200,false),str(b,"admin_name",200,false),str(b,"work_hours",200,false),str(b,"document_footer",2000,false),str(b,"discharge_signatory",200,false),str(b,"head_name",200,false),str(b,"head_title",120,false),logo,reminder,connectionMode,localUrl,vpsUrl,vpsName,now()});audit(db,u,"update","center_settings",1);return {{"ok",true},{"connection_mode",connectionMode},{"local_api_url",localUrl},{"vps_api_url",vpsUrl}};}
 if(path=="/api/search"&&method=="GET"){
     allow(u,{"admin","reception","psychologist"});
     auto q=r.has_param("q")?r.get_param_value("q"):"";
