@@ -140,7 +140,6 @@ object AppointmentReminders {
         // Recheck cached cancellations and locally completed visits immediately before ringing.
         refreshFromCache(c, base, uid)
         if(key !in p.getStringSet("keys", emptySet())!!) return
-        p.edit().putBoolean("fired:$key", true).commit()
         if(!allowed(c)) return
         channel(c)
         val open = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java)
@@ -154,6 +153,8 @@ object AppointmentReminders {
             .addAction(Notification.Action.Builder(null, "Вимкнути звук", dismiss).build()).build()
         notification.flags = notification.flags or Notification.FLAG_INSISTENT
         (c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(key, 1, notification)
+        // Do not consume an alarm while Android notification permission is disabled.
+        p.edit().putBoolean("fired:$key", true).commit()
     }
 }
 

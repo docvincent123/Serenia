@@ -668,3 +668,7 @@ CREATE TABLE IF NOT EXISTS tv_calls(
   PRIMARY KEY(appointment_id,patient_id),
   FOREIGN KEY(appointment_id,patient_id) REFERENCES attendees(appointment_id,patient_id) ON DELETE CASCADE
 );
+
+-- Stable across address changes; included in backups and connection profiles.
+CREATE TABLE IF NOT EXISTS installation_identity(id INTEGER PRIMARY KEY CHECK(id=1), server_id TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS center_license(id INTEGER PRIMARY KEY CHECK(id=1), envelope TEXT NOT NULL);

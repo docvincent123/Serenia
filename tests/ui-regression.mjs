@@ -51,7 +51,7 @@ try {
     else if(path === '/api/shift-readiness') data=readiness;
     else if(path === '/api/shift-reports') { if(method === 'POST') { reportCalls++; const body=route.request().postDataJSON(); assert.equal(body.shift_date,'2026-10-02','Report must use active shift date, not device calendar date'); data={id:1,consultations_count:3}; } }
     else if (path === '/api/mobile-update') data = { available:false };
-    else if (path === '/api/mobile-config') data = { format:'quremed.solvia.mobile',version:1,api_url:'https://192.168.1.100:8443',https_url:'https://192.168.1.100:8443',preferred:'https' };
+    else if (path === '/api/mobile-config') data = { format:'quremed.solvia.mobile',version:2,server_id:'a'.repeat(64),api_url:'https://solvia.example.test',https_url:'https://solvia.example.test',preferred:'https' };
     else if (path === '/api/settings/center') data = { center_name:'SOLVIA · демонстрація', connection_mode:'local' };
     else if (path === '/api/settings/workflow') data = { opening_time:'09:00',closing_time:'18:00',working_days:'1234567',slot_step_minutes:60,default_duration_minutes:60,session_hours:8 };
     else if (path === '/api/admin/system') data = { database:{name:'solvia',size:'8 MB',version:'16'},counts:{patients:24,consultations:42},backups:[{id:1,action:'verify',status:'success',created:'2026-10-02T10:00',details:'isolated restore checked'}] };
@@ -138,11 +138,12 @@ try {
   await page.getByRole('button',{name:'Налаштування сервера',exact:true}).click();
   await page.locator('.settings-nav').getByRole('button',{name:/Підключення/}).click();
   const configDownload = page.waitForEvent('download');
-  await page.getByRole('button',{name:'Файл для телефону',exact:true}).click();
+  await page.getByRole('button',{name:'Файл для Android / ПК',exact:true}).click();
   const downloaded = await configDownload;
   assert.equal(downloaded.suggestedFilename(),'SOLVIA-Mobile.solvia');
   const config = JSON.parse(await readFile(await downloaded.path(),'utf8'));
-  assert.equal(config.api_url,'https://192.168.1.100:8443');
+  assert.equal(config.api_url,'https://solvia.example.test');
+  assert.equal(config.server_id,'a'.repeat(64));
   assert.equal(config.format,'quremed.solvia.mobile');
   // Settings remain accessible even with the shift closed.
   open = false; await page.goto(base); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
