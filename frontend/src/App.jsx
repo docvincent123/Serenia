@@ -573,8 +573,8 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
         </div>
         <div className="login-brand-copy">
           <div className="eyebrow light">ПРОСТІР ЦЕНТРУ</div>
-          <h1>Поруч із людьми.<br />У ритмі центру.</h1>
-          <p>Спокійний робочий простір для команди, яка допомагає іншим.</p><div className="login-capabilities"><span>01 · Прийоми та пацієнти</span><span>02 · Кабінети й команда</span><span>03 · Документи та рекомендації</span></div>
+          <h1>Менше рутини.<br />Більше уваги людині.</h1>
+          <p>Один простір для записів, консультацій і злагодженої роботи команди.</p><div className="login-capabilities"><span>01 · Прийоми та пацієнти</span><span>02 · Кабінети й команда</span><span>03 · Документи та рекомендації</span></div>
         </div>
 
       </section>

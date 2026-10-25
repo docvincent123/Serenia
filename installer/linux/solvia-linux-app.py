@@ -68,6 +68,19 @@ def run(on_ready=None):
             area = monitor.get_workarea()
             self.window.set_default_size(min(1200, max(480, area.width - 40)),
                                          min(800, max(360, area.height - 60)))
+            self.window.get_style_context().add_class('solvia-native')
+            provider = Gtk.CssProvider()
+            provider.load_from_data(b'''
+                .solvia-native { background-color: #f3f3e9; color: #112c2b; }
+                .solvia-native headerbar { background: #112c2b; color: #f4f6ec;
+                    border-color: #34584a; box-shadow: none; }
+                .solvia-native headerbar button { background: #25443d; color: #f4f6ec;
+                    border-color: #426255; border-radius: 8px; box-shadow: none; }
+                .solvia-native headerbar button:hover { background: #34584a; }
+                .solvia-native headerbar button:focus { border-color: #a7edcf; }
+            ''')
+            Gtk.StyleContext.add_provider_for_screen(self.window.get_screen(), provider,
+                                                     Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             self.window.set_wmclass('SOLVIAServerConsole' if console else 'SOLVIAAdmin', 'SOLVIAAdmin')
             self.window.set_icon_name('solvia-admin')
             header = Gtk.HeaderBar(title='SOLVIA Server Console 3.0.0' if console else 'SOLVIA 3.0.0', show_close_button=True)

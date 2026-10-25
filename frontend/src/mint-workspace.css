@@ -1,0 +1,116 @@
+/* SOLVIA Motion → production desktop. Imported last; keeps the existing layout,
+   role gates, print rules and Linux lightweight rendering behaviour. */
+:root {
+  --bg:#f3f3e9; --ink:#112c2b; --ink-2:#34584a; --muted:#697f74;
+  --line:#dbe4d7; --paper:#fffffc; --paper-2:#f6f8f0;
+  --forest:#112c2b; --forest-dark:#25443d; --forest-soft:#d3efdf;
+  --mint:#a7edcf; --gold:#4d8269; --olive:#557b63; --sand:#f1ecd9;
+  --sky:#e5f0ed; --shadow:0 12px 34px #112c2b0a;
+}
+@media screen {
+  body {background:var(--bg);color:var(--ink);font-family:'Segoe UI','DejaVu Sans',system-ui,sans-serif;}
+  .app-shell {--ink:#112c2b;--muted:#697f74;--line:#dbe4d7;}
+  .app-shell,.app-shell .workspace {background:var(--bg);color:var(--ink);}
+  .app-shell .sidebar {background:var(--ink);border:0;}
+  .sidebar .sidebar-brand {border-bottom:1px solid #ffffff16;padding-bottom:20px;}
+  .sidebar .sidebar-brand strong {color:#f4f6ec;letter-spacing:.12em;font-weight:700;}
+  .sidebar .sidebar-brand span,.sidebar .nav-group-toggle {color:#a9c4b5;}
+  .sidebar .product-logo,.sidebar .product-mark,.shift-gate img {filter:none;}
+  .sidebar .nav-item,.sidebar .nav-icon {color:#d9e7dc;}
+  .sidebar .nav-item {border-radius:11px;min-height:39px;}
+  .sidebar .nav-item:hover {background:#25443d;color:#fff;}
+  .sidebar .nav-item.active {background:var(--mint);color:var(--ink);border-color:var(--mint);box-shadow:none;}
+  .sidebar .nav-item.active .nav-icon {color:var(--ink);}
+  .sidebar .nav-group-toggle:hover {color:var(--mint);}
+  .sidebar .sidebar-actions {border-color:#ffffff20;}
+  .sidebar .sidebar-support {border-color:#ffffff20;}
+  .sidebar .sidebar-support-head strong {color:#a9c4b5;}
+  .sidebar .user-card {border-color:#ffffff20;}
+  .sidebar .user-copy strong {color:#f4f6ec;}
+  .sidebar .user-copy span {color:#a9c4b5;}
+  .workspace-topbar {background:#fffffc;border-color:var(--line);}
+  .workspace-topbar .global-search {background:#f6f8f0;border-color:var(--line);border-radius:12px;}
+  .workspace-profile>.avatar,.account-avatar {background:var(--ink);color:var(--mint);border-radius:50%;}
+  .workspace-profile strong,.workspace-breadcrumb strong {color:var(--ink);}
+  .workspace-profile small,.workspace-breadcrumb small,.app-shell .eyebrow {color:var(--muted);}
+  .workspace-topbar .connection-pill.online strong {color:#2d6d4c;}
+  .shift-bar {background:#e3efdf;color:#365c47;border-color:#cbdcc8;}
+  .shift-bar .button {background:#fffffc;color:var(--ink);border-color:#cbdcc8;}
+  .shift-bar .shift-dot {background:#36865b;}
+  .page-head h1 {color:var(--ink);font-weight:650;letter-spacing:-.035em;}
+  .page-head p,.app-shell .field>span,.app-shell .field>label {color:var(--muted);}
+  .app-shell .surface {background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 4px 16px #112c2b03;}
+  .app-shell .button,.login-refined .button {border-radius:11px;}
+  .app-shell .button.primary,.button.primary,.login-refined .login-submit {
+    background:var(--ink)!important;color:#fffffc!important;border:1px solid var(--ink);box-shadow:none;
+  }
+  .app-shell .button.primary:hover,.button.primary:hover,.login-refined .login-submit:hover {
+    background:#25443d!important;border-color:#25443d;
+  }
+  .app-shell .button.secondary {background:#fffffc;color:var(--ink);border-color:var(--line);}
+  .app-shell .button.secondary:hover {background:#e9f0e2;border-color:#a1b7a6;}
+  .app-shell .button.ghost {color:#4b6b57;}
+  .app-shell .button.danger {color:#983d35;background:#fff6f3;border-color:#e6c9c1;}
+  .app-shell input:not([type=checkbox]):not([type=radio]):not([type=file]),.app-shell select,.app-shell textarea,.login-refined :is(input,select,textarea) {
+    color:var(--ink);background:#fffffc;border-color:#cbd9cc;border-radius:11px;accent-color:#376c50;
+  }
+  .app-shell :is(input,select,textarea):focus,.login-refined input:focus {
+    border-color:#568c71;box-shadow:0 0 0 3px #a7edcf55;
+  }
+  .app-shell :is(button,a,summary):focus-visible,.login-refined :is(button,a):focus-visible {
+    outline:3px solid #619b7d;outline-offset:3px;
+  }
+  .app-shell :is(.overview-kpi,.stat-card) {background:#fffffc;border-color:var(--line);border-radius:18px;}
+  .app-shell .overview-kpi:first-child,.app-shell .stat-card:first-child {background:#d3efdf;border-color:#c6e6d2;}
+  .app-shell .overview-kpi>strong,.app-shell .stat-value,.app-shell .stat-card>strong {color:var(--ink);font-weight:600;}
+  .app-shell .overview-kpi-icon,.app-shell .role-action-icon,.booking-step {background:#e3f0e1;color:#365f49;border-radius:12px;}
+  .app-shell .overview-kpi>span:not(.overview-kpi-icon),.app-shell .overview-kpi>small {color:var(--muted);}
+  .overview-actions .role-actions button:hover,.role-actions button:hover {background:#f0f6e9;border-color:#c0d4bf;}
+  .app-shell .workspace-table th {background:#e9f0e2;color:#58715f;border-color:var(--line);}
+  .app-shell .workspace-table td {color:#345449;border-color:#e8eee1;}
+  .workspace-table tbody tr:hover {background:#f0f6e9;}
+  .app-shell .directory-patient-name {color:var(--ink);}
+  .app-shell .workspace-table td small {color:var(--muted);}
+  .toolbar .search-box {background:#f6f8f0;border-color:var(--line);border-radius:11px;}
+  .app-shell :is(.badge,.directory-category) {background:#e8f0e1;color:#466650;border-color:#d9e6d3;}
+  .app-shell .badge.rose {color:#983d35;background:#fff1ee;border-color:#e6c9c1;}
+  .app-shell :is(.shift-tabs button.active,.calendar-view-switch button.active,.segmented button.active) {background:var(--mint);color:var(--ink);border-color:#92cfb1;}
+  .app-shell .visit-status {background:#e9f0e2;color:#4e6957;border-color:#d5e3cc;}
+  .app-shell .visit-status.completed {background:#d3efdf;color:#285d3c;border-color:#bcd9c4;}
+  .app-shell .visit-status.in_progress {background:var(--ink);color:var(--mint);border-color:var(--ink);}
+  .app-shell .visit-status.excluded {background:#f7e9e1;color:#8b4c36;border-color:#e6cebd;}
+  .app-shell .shift-visit.selected,.app-shell .appointment.selected {background:#edf6e9;border-color:#83b897;box-shadow:inset 3px 0 #72b18e;}
+  .shift-detail {border-top-color:#72b18e;}
+  .app-shell :is(.booking-selected>div,.booking-assignment,.booking-free-times,.booking-summary,.registration-extra) {background:#f3f7ec;border-color:var(--line);color:#345449;}
+  .app-shell :is(.booking-slot.selected,.waiting-slot.selected) {background:var(--ink);color:var(--mint);border-color:var(--ink);}
+  .app-shell :is(.workload-bar,.load-track>span),.app-shell .progress>span {background:#72b18e;}
+  .app-shell .appointment {background:#e3efdf;border-color:#bad6c0;color:#25443d;}
+  .app-shell .booking-slots>button[aria-pressed=true],.app-shell .booking-duration>button[aria-pressed=true] {background:#d3efdf;border-color:#72b18e;color:#112c2b;box-shadow:inset 0 0 0 1px #72b18e;}
+  .app-shell .dialog {border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 60px #112c2b20;}
+  .app-shell .dialog-head {background:#f3f7ec;border-color:var(--line);}
+  .app-shell .dialog-head h2 {color:var(--ink);}
+  .app-shell .dialog-head p {color:var(--muted);}
+  .daily-report-metrics article {background:#f6f8f0;border-color:var(--line);border-radius:14px;}
+  .daily-report-metrics strong {color:var(--ink);}
+  .recovery-entry,.recovery-existing {background:#f6f8f0;border-color:var(--line);border-radius:12px;}
+  .recovery-entry.selected {border-color:#72b18e;box-shadow:inset 3px 0 #72b18e;}
+  .login-refined {background:var(--bg);}
+  .login-refined .login-brand {background:var(--ink);color:#f4f6ec;}
+  .login-refined .login-brand-copy h1 {color:#f4f6ec;letter-spacing:-.045em;line-height:1.15;}
+  .login-refined .login-brand-copy>p,.login-refined .eyebrow,.login-refined .login-capabilities {color:#b7d3c1;}
+  .login-refined .brand-orbit {background:#e3efdf;filter:none;border-radius:22px;}
+  .login-refined .login-panel {background:var(--bg);}
+  .login-refined .login-card {background:#fffffc;border-color:var(--line);border-radius:22px;box-shadow:0 12px 40px #112c2b09;}
+  .login-refined .product-mark {background:#e3efdf;filter:none;border-radius:12px;}
+  .login-refined .login-copy h2,.login-refined .product strong {color:var(--ink);}
+  .login-refined .login-copy p,.login-refined .login-foot {color:var(--muted);}
+  .login-refined .server-toggle {color:#376c50;}
+  @media(min-width:1051px) {
+    .app-shell {grid-template-columns:248px minmax(0,1fr);}
+    .workspace-inner {padding:30px 32px 44px;}
+    .page-head h1 {font-size:32px;}
+  }
+  @media(prefers-reduced-motion:reduce) {
+    .app-shell *,.login-refined * {transition:none!important;animation:none!important;}
+  }
+}
