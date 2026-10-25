@@ -23,6 +23,8 @@ public static class Native {
  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h,System.Text.StringBuilder s,int count);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h,System.Text.StringBuilder s,int count);
+ [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h,int x,int y,int width,int height,bool repaint);
+ [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int command);
  public static string DialogText(uint pid) { var texts=new System.Collections.Generic.List<string>(); EnumWindows((h,l)=>{uint p;GetWindowThreadProcessId(h,out p);var cls=new System.Text.StringBuilder(100);GetClassName(h,cls,100);if(p==pid && cls.ToString()=="#32770")EnumChildWindows(h,(c,z)=>{var cn=new System.Text.StringBuilder(100);GetClassName(c,cn,100);if(cn.ToString()=="Static"){var t=new System.Text.StringBuilder(2048);GetWindowText(c,t,2048);texts.Add(t.ToString());}return true;},IntPtr.Zero);return true;},IntPtr.Zero);return string.Join(" | ",texts); }
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr h,uint msg,IntPtr wp,IntPtr lp,uint flags,uint timeout,out IntPtr result);
  public static IntPtr SendMessage(IntPtr h,uint msg,IntPtr wp,IntPtr lp) { IntPtr result; if(SendMessageTimeout(h,msg,wp,lp,2,12000,out result)==IntPtr.Zero) throw new Exception("Native action timed out"); return result; }
@@ -31,6 +33,16 @@ public static class Native {
  public struct RECT { public int Left,Top,Right,Bottom; }
 }
 '@
+function Save-ClientFrame([IntPtr]$Handle,[string]$Name) {
+    $rect=New-Object Native+RECT
+    [Native]::GetWindowRect($Handle,[ref]$rect) | Out-Null
+    $bitmap=New-Object Drawing.Bitmap(($rect.Right-$rect.Left),($rect.Bottom-$rect.Top))
+    $graphics=[Drawing.Graphics]::FromImage($bitmap)
+    $dc=$graphics.GetHdc()
+    try { [Native]::PrintWindow($Handle,$dc,2) | Out-Null } finally { $graphics.ReleaseHdc($dc) }
+    $bitmap.Save((Join-Path (Resolve-Path 'out/ui').Path "$Name.png"))
+    $graphics.Dispose(); $bitmap.Dispose()
+}
 $env:SOLVIA_API = 'http://127.0.0.1:18765'
 $serverProcess = Start-Process "$bin/SolviaServer.exe" -ArgumentList @('--db', $db, '--port', '18765') -PassThru -WindowStyle Hidden
 $client = $null
@@ -58,20 +70,31 @@ try {
     $hwnd=[IntPtr]::Zero
     for ($i=0; $i -lt 40; $i++) { Start-Sleep -Milliseconds 200; $client.Refresh(); if ($client.HasExited) { throw "Client crashed: $role" }; $hwnd=$client.MainWindowHandle; if ($hwnd -ne [IntPtr]::Zero) { break } }
     if ($hwnd -eq [IntPtr]::Zero) { throw 'No native window' }
+    if ($role -eq 'admin') { Save-ClientFrame $hwnd 'login' }
     [Native]::SetWindowText([Native]::GetDlgItem($hwnd,12),$role) | Out-Null
     [Native]::SetWindowText([Native]::GetDlgItem($hwnd,13),$passwords[$role]) | Out-Null
     try { [Native]::SendMessage($hwnd,0x0111,[IntPtr]14,[IntPtr]::Zero) | Out-Null }
     catch { throw ("Native login failed: " + [Native]::DialogText($client.Id) + " / " + $_.Exception.Message) }
     Start-Sleep -Milliseconds 400
     if ([Native]::GetDlgItem($hwnd,50) -eq [IntPtr]::Zero) { throw "Login did not show native table: $role" }
-    $rect=New-Object Native+RECT
-    [Native]::GetWindowRect($hwnd,[ref]$rect) | Out-Null
-    $bitmap=New-Object Drawing.Bitmap(($rect.Right-$rect.Left),($rect.Bottom-$rect.Top))
-    $graphics=[Drawing.Graphics]::FromImage($bitmap)
-    $dc=$graphics.GetHdc()
-    try { [Native]::PrintWindow($hwnd,$dc,2) | Out-Null } finally { $graphics.ReleaseHdc($dc) }
-    $bitmap.Save((Join-Path (Resolve-Path 'out/ui').Path "$role.png"))
-    $graphics.Dispose(); $bitmap.Dispose()
+    Save-ClientFrame $hwnd $role
+    $pages = @(switch ($role) {
+      'admin' { @('dashboard','calendar','patients','families','users','rooms','audit') }
+      'reception' { @('calendar','patients','families') }
+      'psychologist' { @('calendar','patients') }
+      'director' { @('dashboard') }
+    })
+    for ($pageIndex=0; $pageIndex -lt $pages.Count; $pageIndex++) {
+      [Native]::SendMessage($hwnd,0x0111,[IntPtr](100+$pageIndex),[IntPtr]::Zero) | Out-Null
+      if ([Native]::GetDlgItem($hwnd,50) -eq [IntPtr]::Zero) { throw "Navigation failed: $role / $($pages[$pageIndex])" }
+      Save-ClientFrame $hwnd "$role-$($pages[$pageIndex])"
+    }
+    if ($role -eq 'admin') {
+      [Native]::ShowWindow($hwnd,9) | Out-Null
+      [Native]::MoveWindow($hwnd,0,0,1280,780,$true) | Out-Null
+      [Native]::SendMessage($hwnd,0x0111,[IntPtr]101,[IntPtr]::Zero) | Out-Null
+      Save-ClientFrame $hwnd 'admin-calendar-1280'
+    }
     [Native]::SendMessage($hwnd,0x0111,[IntPtr]90,[IntPtr]::Zero) | Out-Null
     if ([Native]::GetDlgItem($hwnd,12) -eq [IntPtr]::Zero) { throw "Logout failed: $role" }
     Stop-Process -Id $client.Id -Force
