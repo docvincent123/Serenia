@@ -77,6 +77,8 @@ try{
   await page.getByRole('button',{name:'Редагувати Кабінет 101',exact:true}).click();const roomDialog=page.getByRole('dialog',{name:'Редагування приміщення',exact:true});assert.equal(await roomDialog.getByLabel('Назва',{exact:true}).inputValue(),'Кабінет 101');await capture('room-editor');await roomDialog.getByRole('button',{name:'Зберегти',exact:true}).click();await roomDialog.getByRole('alert').getByText('Не вдалося зберегти демонстраційне приміщення',{exact:true}).waitFor();assert.equal(await roomDialog.getByLabel('Назва',{exact:true}).inputValue(),'Кабінет 101');await roomDialog.getByRole('button',{name:'Закрити',exact:true}).click();
   await open('Календар','Календар центру');await page.locator('.appointment').first().click();await capture('calendar');
   assert.equal(await page.locator('.motion-timeline-appointment').count(),3);
+  await page.getByLabel('Психолог у календарі').selectOption('4');assert.equal(await page.locator('.motion-timeline-appointment').count(),1);
+  await page.getByLabel('Психолог у календарі').selectOption('');
   await page.getByRole('button',{name:'Список',exact:true}).click();assert.equal(await page.locator('.appointment-list .appointment').count(),3);
   await page.getByRole('button',{name:'Сітка часу',exact:true}).click();
   await page.getByRole('button',{name:'Новий запис: Марченко Оксана, 14:00',exact:true}).click();

@@ -744,6 +744,7 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const canSchedule = role === 'admin' || role === 'reception';
+  const visibleAppointments=useMemo(()=>appointments.filter(a=>!psychologistFilter||String(a.psychologist_id)===psychologistFilter),[appointments,psychologistFilter]);
 
   async function load(targetDate = date) {
     const request=++generation.current;setLoading(true);setError('');
@@ -807,12 +808,12 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
               <div className="eyebrow">ДЕНЬ</div>
               <h2>{date}</h2>
             </div>
-            <Badge tone="stone">{appointments.length} подій</Badge>
+            <Badge tone="stone">{visibleAppointments.length} подій</Badge>
           </div>
 
-          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:view==='grid'?<DayTimeline appointments={appointments.filter(a=>!psychologistFilter||String(a.psychologist_id)===psychologistFilter)} psychologists={psychologists.filter(p=>!psychologistFilter||String(p.id)===psychologistFilter)} selected={selected} onSelect={setSelected} canSchedule={canSchedule} onEmptySlot={options=>onBook({date,...options})}/>:!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
+          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:view==='grid'?<DayTimeline appointments={visibleAppointments} psychologists={psychologists.filter(p=>!psychologistFilter||String(p.id)===psychologistFilter)} selected={selected} onSelect={setSelected} canSchedule={canSchedule} onEmptySlot={options=>onBook({date,...options})}/>:!visibleAppointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
             <div className="appointment-list">
-              {appointments.filter(item=>!psychologistFilter||String(item.psychologist_id)===psychologistFilter).map((item) => (
+              {visibleAppointments.map((item) => (
                 <button
                   key={item.id}
                   className={`appointment ${selected?.id === item.id ? 'selected' : ''} ${item.status}`}
