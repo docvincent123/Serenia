@@ -30,12 +30,14 @@ public static class Native {
  public static string DialogText(uint pid) { var texts=new System.Collections.Generic.List<string>(); EnumWindows((h,l)=>{uint p;GetWindowThreadProcessId(h,out p);var cls=new System.Text.StringBuilder(100);GetClassName(h,cls,100);if(p==pid && cls.ToString()=="#32770")EnumChildWindows(h,(c,z)=>{var cn=new System.Text.StringBuilder(100);GetClassName(c,cn,100);if(cn.ToString()=="Static"){var t=new System.Text.StringBuilder(2048);GetWindowText(c,t,2048);texts.Add(t.ToString());}return true;},IntPtr.Zero);return true;},IntPtr.Zero);return string.Join(" | ",texts); }
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr h,uint msg,IntPtr wp,IntPtr lp,uint flags,uint timeout,out IntPtr result);
  public static IntPtr SendMessage(IntPtr h,uint msg,IntPtr wp,IntPtr lp) { IntPtr result; if(SendMessageTimeout(h,msg,wp,lp,2,12000,out result)==IntPtr.Zero) throw new Exception("Native action timed out"); return result; }
+ [DllImport("user32.dll")] public static extern bool RedrawWindow(IntPtr h,IntPtr rect,IntPtr region,uint flags);
  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h,IntPtr dc,uint flags);
  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out RECT rect);
  public struct RECT { public int Left,Top,Right,Bottom; }
 }
 '@
 function Save-ClientFrame([IntPtr]$Handle,[string]$Name) {
+    [Native]::RedrawWindow($Handle,[IntPtr]::Zero,[IntPtr]::Zero,0x181) | Out-Null
     $rect=New-Object Native+RECT
     [Native]::GetWindowRect($Handle,[ref]$rect) | Out-Null
     $bitmap=New-Object Drawing.Bitmap(($rect.Right-$rect.Left),($rect.Bottom-$rect.Top))
