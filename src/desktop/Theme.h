@@ -32,6 +32,16 @@ inline LRESULT CALLBACK buttonProc(HWND h,UINT msg,WPARAM wp,LPARAM lp,UINT_PTR 
     return DefSubclassProc(h,msg,wp,lp);
 }
 
+// The header belongs to the ListView, so forward its custom drawing to the app.
+inline LRESULT CALLBACK tableProc(HWND h,UINT msg,WPARAM wp,LPARAM lp,UINT_PTR id,DWORD_PTR){
+    if(msg==WM_NOTIFY){auto*note=(NMHDR*)lp;
+        if(note->hwndFrom==ListView_GetHeader(h)&&note->code==NM_CUSTOMDRAW)
+            return SendMessageW(GetParent(h),msg,wp,lp);
+    }
+    if(msg==WM_NCDESTROY)RemoveWindowSubclass(h,tableProc,id);
+    return DefSubclassProc(h,msg,wp,lp);
+}
+
 enum class Icon {None,Overview,Calendar,Patients,Family,Team,Room,Audit,Logout};
 inline void drawIcon(HDC dc,Icon icon,int x,int y,COLORREF color){
     auto pen=CreatePen(PS_SOLID,2,color);auto oldPen=SelectObject(dc,pen);

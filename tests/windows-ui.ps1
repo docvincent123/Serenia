@@ -25,6 +25,8 @@ public static class Native {
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h,System.Text.StringBuilder s,int count);
  [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h,int x,int y,int width,int height,bool repaint);
  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int command);
+ [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h,uint msg,IntPtr wp,IntPtr lp);
+ public static IntPtr FindForm(uint pid) { IntPtr found=IntPtr.Zero; EnumWindows((h,l)=>{uint p;GetWindowThreadProcessId(h,out p);var cls=new System.Text.StringBuilder(100);GetClassName(h,cls,100);if(p==pid && cls.ToString()=="SolviaForm") {found=h;return false;}return true;},IntPtr.Zero);return found; }
  public static string DialogText(uint pid) { var texts=new System.Collections.Generic.List<string>(); EnumWindows((h,l)=>{uint p;GetWindowThreadProcessId(h,out p);var cls=new System.Text.StringBuilder(100);GetClassName(h,cls,100);if(p==pid && cls.ToString()=="#32770")EnumChildWindows(h,(c,z)=>{var cn=new System.Text.StringBuilder(100);GetClassName(c,cn,100);if(cn.ToString()=="Static"){var t=new System.Text.StringBuilder(2048);GetWindowText(c,t,2048);texts.Add(t.ToString());}return true;},IntPtr.Zero);return true;},IntPtr.Zero);return string.Join(" | ",texts); }
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr h,uint msg,IntPtr wp,IntPtr lp,uint flags,uint timeout,out IntPtr result);
  public static IntPtr SendMessage(IntPtr h,uint msg,IntPtr wp,IntPtr lp) { IntPtr result; if(SendMessageTimeout(h,msg,wp,lp,2,12000,out result)==IntPtr.Zero) throw new Exception("Native action timed out"); return result; }
@@ -94,6 +96,16 @@ try {
       [Native]::MoveWindow($hwnd,0,0,1280,780,$true) | Out-Null
       [Native]::SendMessage($hwnd,0x0111,[IntPtr]101,[IntPtr]::Zero) | Out-Null
       Save-ClientFrame $hwnd 'admin-calendar-1280'
+      [Native]::PostMessage($hwnd,0x0111,[IntPtr]32,[IntPtr]::Zero) | Out-Null
+      $modal=[IntPtr]::Zero
+      for ($attempt=0; $attempt -lt 30; $attempt++) {
+        Start-Sleep -Milliseconds 100
+        $modal=[Native]::FindForm($client.Id)
+        if ($modal -ne [IntPtr]::Zero -and [Native]::GetDlgItem($modal,1) -ne [IntPtr]::Zero) { break }
+      }
+      if ($modal -eq [IntPtr]::Zero) { throw 'Patient form did not open' }
+      Save-ClientFrame $modal 'new-patient-form'
+      [Native]::SendMessage($modal,0x0111,[IntPtr]2,[IntPtr]::Zero) | Out-Null
     }
     [Native]::SendMessage($hwnd,0x0111,[IntPtr]90,[IntPtr]::Zero) | Out-Null
     if ([Native]::GetDlgItem($hwnd,12) -eq [IntPtr]::Zero) { throw "Logout failed: $role" }
