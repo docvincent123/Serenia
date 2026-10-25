@@ -20,6 +20,7 @@ jobs:
         run: |
           python3 tests/linux-client.py
           python3 tests/mint-ui-update.py
+          node tests/motion-workspace.mjs
           python3 -m py_compile installer/linux/solvia-linux-app.py
       - name: Verify native GTK theme
         run: |
@@ -39,8 +40,8 @@ jobs:
       - run: python3 tools/package-mint-ui.py
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.0.0-Linux-Mint-UI
-          path: out/SOLVIA-3.0.0-Linux-Mint-UI.tar.gz
+          name: SOLVIA-3.0.0-Linux-Motion-Workspace
+          path: out/SOLVIA-3.0.0-Linux-Motion-Workspace.tar.gz
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -114,3 +114,130 @@
     .app-shell *,.login-refined * {transition:none!important;animation:none!important;}
   }
 }
+
+/* Motion layout: real role workspaces and a working time grid, beyond a colour skin. */
+@media screen {
+ .motion-brand-mark {color:#a7edcf;flex-shrink:0;}
+ .sidebar .sidebar-brand strong {font-size:23px;letter-spacing:.13em;line-height:1.3;}
+ .sidebar .sidebar-brand span {font-size:11px;letter-spacing:0;}
+ .motion-sidebar-version {display:block;font-size:10px;color:#89aa99;margin-top:7px;}
+ .motion-overview-hero {display:flex;align-items:center;justify-content:space-between;gap:28px;background:#d3efdf;border:1px solid #c6e6d2;border-radius:22px;padding:30px 34px;margin-bottom:22px;position:relative;overflow:hidden;}
+ .motion-overview-hero::after {content:'';position:absolute;right:200px;top:-100px;width:350px;height:350px;border:1px solid #a4cdb2;border-radius:50%;opacity:.45;pointer-events:none;}
+ .motion-hero-eyebrow {font-size:10px;letter-spacing:.14em;color:#4a7058;font-weight:650;}
+ .motion-overview-hero h2 {font-size:38px;letter-spacing:-.045em;line-height:1.12;margin:16px 0 12px;color:#112c2b;}
+ .motion-overview-hero p {font-size:13px;color:#4b6b57;margin:0;line-height:1.6;}
+ .motion-hero-actions {display:flex;flex-direction:column;align-items:stretch;gap:10px;position:relative;z-index:1;flex-shrink:0;}
+ .motion-hero-actions .button {min-width:205px;justify-content:space-between;padding:13px 18px;}
+ .motion-hero-actions .button.secondary {background:#f7fbf2;}
+ .motion-quick-strip .role-actions {margin-bottom:20px;}
+ .motion-quick-strip .role-actions button {background:#fffffc;border-color:#dbe4d7;border-radius:15px;min-height:84px;}
+ .motion-activity {min-width:0;}
+ .motion-activity .section-head {align-items:flex-start;gap:10px;}
+ .motion-activity .section-head h2 {font-size:21px;letter-spacing:-.025em;margin:8px 0;}
+ .motion-activity .section-head p {font-size:12px;color:#697f74;margin:0;}
+ .motion-text-link {background:transparent;border:0;color:#477557;padding:5px 0;cursor:pointer;font-size:12px;white-space:nowrap;}
+ .motion-bars {display:flex;align-items:flex-end;gap:20px;overflow-x:auto;padding:16px 5px 0;}
+ .motion-bar-column {display:flex;flex:1 0 75px;min-width:0;align-items:center;flex-direction:column;text-align:center;}
+ .motion-bar-column>span {font-size:15px;color:#112c2b;font-weight:650;}
+ .motion-bar-track {height:125px;width:45px;display:flex;align-items:flex-end;margin:10px 0 12px;}
+ .motion-bar-track i {display:block;width:100%;background:#8ed2ac;border-radius:7px 7px 0 0;}
+ .motion-bar-column:nth-child(3n+2) i {background:#112c2b;}
+ .motion-bar-column>strong {font-size:11px;line-height:1.5;font-weight:550;max-width:115px;color:#345449;}
+ .motion-bar-column>small {font-size:10px;line-height:1.5;margin-top:5px;color:#697f74;}
+ .motion-chart-empty {display:grid;place-items:center;min-height:215px;padding:25px;color:#697f74;text-align:center;font-size:14px;}
+ .motion-access-chip {padding:10px 15px;background:#d3efdf;border:1px solid #c6e6d2;border-radius:40px;font-size:12px;color:#285d3c;white-space:nowrap;}
+ .motion-module-tools {display:flex;flex-direction:column;gap:18px;margin-bottom:28px;}
+ .motion-module-search {display:flex;align-items:center;gap:12px;width:min(100%,530px);background:#fffffc;border:1px solid #cbd9cc;border-radius:12px;padding:0 15px;color:#697f74;}
+ .motion-module-search input[type=search] {border:0;box-shadow:none;background:transparent;outline-offset:2px;}
+ .motion-group-filter {display:flex;gap:8px;flex-wrap:wrap;}
+ .motion-group-filter button {border:1px solid #dbe4d7;border-radius:30px;background:#fffffc;color:#58715f;padding:10px 15px;font-size:12px;cursor:pointer;}
+ .motion-group-filter button[aria-pressed=true] {background:#112c2b;color:#a7edcf;border-color:#112c2b;}
+ .motion-module-group {margin-bottom:30px;}
+ .motion-section-title {display:flex;align-items:center;gap:15px;margin-bottom:15px;}
+ .motion-section-title h2 {font-size:18px;color:#112c2b;margin:0;font-weight:600;}
+ .motion-section-title>span {font-size:11px;color:#697f74;}
+ .motion-module-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:15px;}
+ .motion-module-card {position:relative;background:#fffffc;border:1px solid #dbe4d7;border-radius:18px;padding:23px;display:flex;flex-direction:column;align-items:flex-start;gap:10px;text-align:left;cursor:pointer;color:#112c2b;min-height:178px;}
+ .motion-module-card:hover {border-color:#8ab499;background:#f5faef;}
+ .motion-module-icon {display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#e3f0e1;color:#3f7051;margin-bottom:5px;}
+ .motion-module-icon svg {width:23px;height:23px;}
+ .motion-module-card>strong {font-size:17px;font-weight:600;letter-spacing:-.025em;}
+ .motion-module-card>small {font-size:12px;line-height:1.6;color:#697f74;}
+ .motion-module-arrow {position:absolute;right:23px;top:23px;color:#7d9d87;}
+ .motion-module-empty {padding:40px;text-align:center;}
+ .motion-calendar-toolbar {display:flex;justify-content:space-between;gap:15px;align-items:center;flex-wrap:wrap;margin-bottom:20px;}
+ .motion-calendar-date-nav {display:flex;gap:6px;}
+ .motion-calendar-options {display:flex;gap:12px;align-items:center;min-width:0;flex-wrap:wrap;}
+ .app-shell .motion-calendar-options select {width:auto;min-width:170px;max-width:250px;}
+ .motion-calendar-views {display:flex;background:#e9f0e2;border:1px solid #dbe4d7;border-radius:10px;padding:4px;}
+ .motion-calendar-views button {border:0;border-radius:7px;background:transparent;color:#58715f;padding:8px 13px;font-size:12px;cursor:pointer;}
+ .motion-calendar-views button[aria-pressed=true] {background:#fffffc;color:#112c2b;box-shadow:0 1px 4px #112c2b0c;}
+ .motion-calendar-layout {grid-template-columns:minmax(0,1fr);}
+ .motion-calendar-layout>.context-panel {display:none;}
+ .motion-calendar-layout.has-selection {grid-template-columns:minmax(0,1fr) 265px;gap:18px;}
+ .motion-calendar-layout.has-selection>.context-panel {display:block;min-width:0;}
+ .motion-calendar-layout .calendar-surface {min-width:0;padding:20px 18px 16px;}
+ .motion-calendar-layout .context-content h2 {font-size:22px;letter-spacing:-.035em;}
+ .motion-patient-actions {display:grid;gap:8px;margin:18px 0;}
+ .motion-patient-actions .button {white-space:normal;text-align:left;justify-content:flex-start;font-size:12px;}
+ .motion-timeline {min-width:0;border:1px solid #e1e9da;border-radius:12px;overflow:hidden;}
+ .motion-timeline-scroll {max-height:615px;overflow:auto;position:relative;scrollbar-width:thin;}
+ .motion-timeline-grid {display:grid;min-width:100%;width:max-content;}
+ .motion-time-heading,.motion-psychologist-heading {position:sticky;top:0;z-index:4;background:#f3f7ec;border-bottom:1px solid #dbe4d7;min-height:68px;}
+ .motion-time-heading {display:grid;place-items:center;font-size:9px;color:#809582;letter-spacing:.08em;}
+ .motion-psychologist-heading {display:flex;align-items:center;gap:10px;padding:13px 14px;border-left:1px solid #dbe4d7;}
+ .motion-psychologist-heading>span {display:grid;place-items:center;background:#d3efdf;color:#345449;width:30px;height:30px;border-radius:50%;font-size:13px;flex-shrink:0;}
+ .motion-psychologist-heading>div {min-width:0;max-width:230px;}
+ .motion-psychologist-heading strong {display:block;font-size:12px;font-weight:600;color:#345449;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+ .motion-psychologist-heading small {display:block;margin-top:5px;font-size:10px;color:#78907c;}
+ .motion-time-axis {position:sticky;left:0;background:#fffffc;z-index:2;}
+ .motion-time-axis>span {position:absolute;left:8px;right:6px;text-align:center;font-size:10px;color:#78907c;padding-top:9px;font-variant-numeric:tabular-nums;}
+ .motion-day-column {position:relative;border-left:1px solid #e1e9da;background:#fffffc;min-width:0;}
+ .motion-empty-hour,.motion-hour-line {position:absolute;left:0;width:100%;border:0;border-top:1px solid #edf1e7;background:transparent;}
+ .motion-empty-hour {cursor:pointer;}
+ .motion-empty-hour:hover {background:#f0f7e9;}
+ .motion-empty-hour:focus-visible {outline-offset:-4px;}
+ .app-shell .motion-timeline-appointment {position:absolute;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;gap:4px;padding:8px 10px;margin:0;min-height:0;border:1px solid #b7d9c0;border-left:3px solid #72b18e;border-radius:8px;background:#dff0df;color:#234b37;z-index:1;overflow:hidden;text-align:left;box-shadow:none;}
+ .app-shell .motion-timeline-appointment.selected {border-color:#376c50;background:#c9eacb;box-shadow:inset 0 0 0 1px #376c50;}
+ .motion-timeline-appointment>strong {font-size:12px;font-weight:650;line-height:1.4;overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap;flex-shrink:0;}
+ .motion-timeline-appointment>small {font-size:10px;line-height:1.4;color:#4d7359;}
+ .motion-event-time {font-size:10px;line-height:1.3;font-weight:500;flex-shrink:0;font-variant-numeric:tabular-nums;}
+ .app-shell .motion-timeline-appointment.completed {background:#edf1e6;border-color:#d5dfcc;border-left-color:#9bad8e;}
+ .app-shell .motion-timeline-appointment.cancelled,.app-shell .motion-timeline-appointment.no_show {background:#f9eee8;border-color:#dfc8b9;border-left-color:#c5967c;color:#88543d;}
+ .motion-invalid-times {padding:12px;display:grid;gap:8px;}
+ .motion-timeline .motion-invalid-times .appointment {padding:12px;}
+ @media(min-width:1051px) { .motion-modules>.page-head h1,.page-head h1 {font-size:34px;} }
+ @media(max-width:1100px) { .motion-calendar-layout.has-selection {grid-template-columns:minmax(0,1fr);} .motion-calendar-layout.has-selection>.context-panel {display:block;} .motion-overview-hero {padding:25px;} .motion-overview-hero h2 {font-size:32px;} }
+ @media(max-width:760px) { .motion-overview-hero {flex-direction:column;align-items:stretch;padding:23px;border-radius:17px;} .motion-hero-actions {align-items:stretch;} .motion-module-grid {grid-template-columns:repeat(auto-fit,minmax(200px,1fr));} .motion-access-chip {white-space:normal;} .motion-calendar-options {width:100%;} .motion-activity .section-head {flex-wrap:wrap;} }
+}
+@media print { .motion-overview-hero,.motion-module-tools,.motion-quick-strip {display:none;} }
+@media screen {
+ .app-shell .motion-timeline-appointment {padding:5px 9px;gap:2px;}
+ .motion-timeline-appointment>small {font-size:9px;line-height:1.3;}
+ .app-shell .motion-timeline-appointment.motion-short {flex-direction:row;align-items:center;padding:1px 5px;gap:5px;}
+ .motion-short .motion-event-time {font-size:9px;white-space:nowrap;}
+ .motion-short>strong {font-size:10px;line-height:1.2;}
+ .motion-timeline-appointment.motion-hide-meta>small {display:none;}
+ .motion-time-heading {left:0;z-index:5;}
+}
+@media screen {
+ .motion-role-map {background:#e9f0e2;border:1px solid #dbe4d7;border-radius:14px;padding:15px 20px;margin-bottom:25px;}
+ .motion-role-map summary {cursor:pointer;color:#345449;font-size:13px;font-weight:600;}
+ .motion-role-map-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:20px;}
+ .motion-role-map-grid article {padding:18px;background:#fffffc;border:1px solid #dbe4d7;border-radius:12px;}
+ .motion-role-map-grid h3 {color:#112c2b;font-size:15px;margin:0 0 8px;}
+ .motion-role-map-grid span {color:#4a7058;font-size:11px;}
+ .motion-role-map-grid p {color:#697f74;font-size:11px;line-height:1.8;margin:12px 0 0;}
+}
+@media screen {
+ .motion-analysis-more>summary {color:#58715f;cursor:pointer;font-size:13px;font-weight:500;}
+ .motion-analysis-more .analytics-grid {margin-top:20px;}
+ .motion-analysis-more .analytics-grid>.surface {border:0;box-shadow:none;padding:10px 0;}
+}
+@media screen {
+ .app-shell .motion-module-search input[type=search]:not([type=checkbox]):not([type=radio]),
+ .app-shell .workspace-topbar .global-search input:not([type=file]) {border:0;box-shadow:none;background:transparent;}
+ .app-shell .sidebar-actions .nav-item {color:#d9e7dc;}
+ .app-shell .sidebar-actions .nav-item.active {color:#112c2b;}
+ .motion-module-grid {grid-template-columns:repeat(auto-fill,minmax(215px,1fr));}
+}

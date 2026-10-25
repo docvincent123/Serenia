@@ -23,7 +23,7 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
         if(initial.patientId&&!selected)throw new Error('Пацієнта не знайдено. Оновіть список пацієнтів.');
         if(!alive)return;
         setMeta(m);setPatients(p);
-        setForm({date:initial.date,patient_ids:appointment?appointment.patients.map(x=>Number(x.id)):selected?[Number(selected.id)]:[],psychologist_id:String(appointment?.psychologist_id || selected?.psychologist_id || ''),room_id:String(appointment?.room_id || m.rooms?.[0]?.id || ''),start:appointment?.start?.slice(11,16) || initial.start || m.workflow?.opening_time || '08:00',duration:appointment?Math.round((new Date(appointment.end)-new Date(appointment.start))/60000):m.workflow?.default_duration_minutes || 60,kind:appointment?.kind || 'individual',status:appointment?.status || 'scheduled',note:appointment?.note || ''});
+        setForm({date:initial.date,patient_ids:appointment?appointment.patients.map(x=>Number(x.id)):selected?[Number(selected.id)]:[],psychologist_id:String(appointment?.psychologist_id || selected?.psychologist_id || (m.psychologists?.some(p=>String(p.id)===String(initial.psychologistId))?initial.psychologistId:'')),room_id:String(appointment?.room_id || m.rooms?.[0]?.id || ''),start:appointment?.start?.slice(11,16) || initial.start || m.workflow?.opening_time || '08:00',duration:appointment?Math.round((new Date(appointment.end)-new Date(appointment.start))/60000):m.workflow?.default_duration_minutes || 60,kind:appointment?.kind || 'individual',status:appointment?.status || 'scheduled',note:appointment?.note || ''});
       }catch(e){if(alive)setError(e.message);}finally{if(alive)setLoading(false);}
     }
     load();return()=>{alive=false;};

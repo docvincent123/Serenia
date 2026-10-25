@@ -17,6 +17,7 @@ import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
+import {ModuleDirectory,PeriodActivity,DayTimeline} from './MotionWorkspace.jsx';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -108,6 +109,7 @@ function AppIcon({ name, size = 18 }) {
     'waiting-list': <><rect x="3" y="4" width="12" height="17" rx="2"/><path d="M6 8h6M6 12h5M6 16h3"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/></>,
     documents: <><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></>,
     preferences: <><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M18 3l1 1 2-2"/></>,
+    'module-directory': <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
     dashboard: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></>,
     'shift-workspace': <><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M9 3h6v3H9zM8 11h8M8 16h4M15 16l2 2 4-4"/></>,
@@ -695,48 +697,20 @@ function Dashboard({ api, role, onNavigate, access }) {
       {error && <div className="alert error">{error}</div>}
       {!stats ? <Spinner /> : (
         <>
+          <section className="motion-overview-hero"><div><span className="motion-hero-eyebrow">{role==='admin'?'АДМІНІСТРАТОР · УСІ РОЗДІЛИ':'КЕРІВНИК · РОБОТА КОМАНДИ'}</span><h2>Один простір.<br/>Уся команда.</h2><p>{role==='admin'?'Розклад, пацієнти, команда та керування центром.':'Показники, завантаження та підсумки супроводу.'}</p></div><div className="motion-hero-actions"><Button onClick={()=>onNavigate('module-directory')}>Усі розділи <span aria-hidden="true">↗</span></Button><Button variant="secondary" onClick={()=>onNavigate(role==='admin'?'calendar':'workload')}>{role==='admin'?'Перейти до календаря':'Навантаження команди'}</Button></div></section>
           <div className="overview-primary" aria-label="Основні показники">
             {[cards[1],cards[4],cards[6],cards[3]].map(([label,value,hint],i)=><article className="overview-kpi" key={label}><span className="overview-kpi-icon"><AppIcon name={['patients','calendar','reports','families'][i]} /></span><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></article>)}
           </div>
           <div className="overview-workbench">
-            <section className="surface overview-actions"><div className="section-head"><div><h2>Робочі дії</h2><p>Перейдіть до потрібного розділу.</p></div></div><RoleActions role={role} onNavigate={onNavigate} /></section>
+            <PeriodActivity stats={stats} onNavigate={onNavigate}/>
             <section className="surface overview-status"><div className="section-head"><h2>{role==='admin'?'Стан центру':'Документи та команда'}</h2></div>
               {role==='admin'?<><div className="overview-status-row"><span>Реєстратура</span><strong className={access?.allowed?'status-positive':'status-pending'}>{access?.allowed?'Доступ надано':'Очікує дозволу'}</strong></div><div className="overview-status-row"><span>База даних</span><strong>{system?.database?.name || 'Стан не завантажено'}</strong></div><div className="overview-status-row"><span>Резервна копія</span><strong>{!system?.backups?.length?'Немає даних':system.backups[0].status==='success'?system.backups[0].created?.slice(0,16).replace('T',' '):'Потребує перевірки'}</strong></div><button className="button secondary" onClick={()=>onNavigate('devices')}>Стан пристроїв</button></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
             </section>
           </div>
+          <div className="motion-quick-strip"><RoleActions role={role} onNavigate={onNavigate}/></div>
           <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
-          <section className="surface">
-            <div className="section-head">
-              <div>
-                <div className="eyebrow">НАВАНТАЖЕННЯ КОМАНДИ</div>
-                <h2>Психологи</h2>
-              </div>
-              <Badge tone="forest">{stats.load?.length || 0} спеціалістів</Badge>
-            </div>
-
-            {!stats.load?.length ? <Empty title="Немає даних" text="Додайте психологів і записи в календар." /> : (
-              <div className="load-list">
-                {stats.load.map((item) => {
-                  const hours = Number(item.hours || 0);
-                  const width = Math.max(0,Math.min(100,hours / Math.max(1,...stats.load.map(x=>Number(x.hours || 0))) * 100));
-                  return (
-                    <div className="load-row" key={item.name}>
-                      <div className="avatar">{String(item.name || '?').slice(0, 1).toUpperCase()}</div>
-                      <div className="load-main">
-                        <div className="load-label">
-                          <strong>{item.name}</strong>
-                          <span>{item.appointments} записів · {hours} год</span>
-                        </div>
-                        <div className="progress"><span style={{ width: `${width}%` }} /></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
+          <details className="surface motion-analysis-more"><summary>Структура звернень та джерела направлень</summary>
           <div className="analytics-grid">
             <section className="surface">
               <div className="section-head"><div><div className="eyebrow">СТРУКТУРА ЗВЕРНЕНЬ</div><h2>Категорії пацієнтів</h2></div></div>
@@ -753,6 +727,7 @@ function Dashboard({ api, role, onNavigate, access }) {
               </div>
             </section>
           </div>
+          </details>
         </>
       )}
     </>
@@ -761,6 +736,8 @@ function Dashboard({ api, role, onNavigate, access }) {
 
 function Calendar({ api, role, openPatient, onBook, initialDate }) {
   const [date, setDate] = useState(initialDate || localDate());
+  const [view,setView]=useState('grid'),[psychologists,setPsychologists]=useState([]),[psychologistFilter,setPsychologistFilter]=useState('');
+  function moveDate(days){const next=new Date(date+'T12:00:00');next.setDate(next.getDate()+days);setDate(localDate(next));}
   const [appointments, setAppointments] = useState([]);
   const [loading,setLoading]=useState(true);
   const generation=useRef(0);
@@ -771,8 +748,8 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
   async function load(targetDate = date) {
     const request=++generation.current;setLoading(true);setError('');
     try {
-      const result=await api('GET', `/api/appointments?date=${targetDate}`);
-      if(request===generation.current){setAppointments(result);setSelected(null);}
+      const [result,meta]=await Promise.all([api('GET', `/api/appointments?date=${targetDate}`),api('GET','/api/meta').catch(()=>({psychologists:[]}))]);
+      if(request===generation.current){setAppointments(result);setPsychologists(role==='psychologist'?[]:(meta.psychologists||[]));setSelected(null);}
     } catch(e){if(request===generation.current)setError(e.message);}
     finally{if(request===generation.current)setLoading(false);}
   }
@@ -780,7 +757,7 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
   useEffect(() => { load(date);return()=>{++generation.current;}; }, [date]);
 
   function openNew() { onBook({date}); }
-  function openEdit() { if(selected) onBook({date:selected.start.slice(0,10),appointmentId:selected.id}); }
+  function openEdit() { if(selected) onBook({date:(selected.start?.slice(0,10)||date),appointmentId:selected.id}); }
 
   async function cancelAppointment() {
     if (!selected) return;
@@ -822,7 +799,8 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
 
       {error && <div className="alert error">{error}</div>}
 
-      <div className="calendar-layout">
+      <div className="motion-calendar-toolbar"><div className="motion-calendar-date-nav"><button className="button secondary" aria-label="Попередній день" onClick={()=>moveDate(-1)}>‹</button><button className="button secondary" onClick={()=>setDate(localDate())}>Сьогодні</button><button className="button secondary" aria-label="Наступний день" onClick={()=>moveDate(1)}>›</button></div><div className="motion-calendar-options">{role!=='psychologist'&&<select aria-label="Психолог у календарі" value={psychologistFilter} onChange={e=>{setPsychologistFilter(e.target.value);setSelected(null);}}><option value="">Усі психологи</option>{psychologists.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}<div className="motion-calendar-views" role="group" aria-label="Вигляд календаря"><button aria-pressed={view==='grid'} onClick={()=>setView('grid')}>Сітка часу</button><button aria-pressed={view==='list'} onClick={()=>setView('list')}>Список</button></div></div></div>
+      <div className={`calendar-layout motion-calendar-layout ${selected?'has-selection':''}`}>
         <section className="surface calendar-surface">
           <div className="section-head compact">
             <div>
@@ -832,9 +810,9 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
             <Badge tone="stone">{appointments.length} подій</Badge>
           </div>
 
-          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
+          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:view==='grid'?<DayTimeline appointments={appointments.filter(a=>!psychologistFilter||String(a.psychologist_id)===psychologistFilter)} psychologists={psychologists.filter(p=>!psychologistFilter||String(p.id)===psychologistFilter)} selected={selected} onSelect={setSelected} canSchedule={canSchedule} onEmptySlot={options=>onBook({date,...options})}/>:!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
             <div className="appointment-list">
-              {appointments.map((item) => (
+              {appointments.filter(item=>!psychologistFilter||String(item.psychologist_id)===psychologistFilter).map((item) => (
                 <button
                   key={item.id}
                   className={`appointment ${selected?.id === item.id ? 'selected' : ''} ${item.status}`}
@@ -876,7 +854,7 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
         </section>
 
         <aside className="surface context-panel">
-          <div className="eyebrow">ДЕТАЛІ</div>
+          <div className="eyebrow">ДЕТАЛІ ЗУСТРІЧІ</div>
           {!selected ? (
             <div className="context-empty">
               <div className="context-symbol">↗</div>
@@ -887,15 +865,16 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
             <div className="context-content">
               <h2>{selected.kind === 'group' ? 'Групове заняття' : selected.patients?.[0]?.name}</h2>
               <dl>
-                <div><dt>Час</dt><dd>{selected.start.slice(11, 16)} — {selected.end.slice(11, 16)}</dd></div>
+                <div><dt>Час</dt><dd>{(selected.start?.slice(11,16)||'—')} — {(selected.end?.slice(11,16)||'—')}</dd></div>
                 <div><dt>Психолог</dt><dd>{selected.psychologist}</dd></div>
                 <div><dt>Кабінет</dt><dd>{selected.room}</dd></div>
                 <div><dt>Статус</dt><dd>{statusLabel(selected.status)}</dd></div>
               </dl>
               <div className="context-people">
                 <span>Учасники</span>
-                {selected.patients.map((p) => <strong key={p.id}>{p.name}</strong>)}
+                {(selected.patients||[]).map((p) => <strong key={p.id}>{p.name}</strong>)}
               </div>
+              <div className="motion-patient-actions">{(selected.patients||[]).map(p=><button className="button secondary" key={p.id} onClick={()=>openPatient(p.id)}>Картка пацієнта · {p.name}</button>)}</div>
               {canSchedule && ['draft','scheduled','confirmed'].includes(selected.status) && (
                 <div className="context-actions">
                   <Button variant="secondary" onClick={openEdit}>Перенести / змінити</Button>
@@ -3480,7 +3459,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [accessDialog,setAccessDialog]=useState(false);
   const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '' });
-  const navigation = [...navFor(user.role), ...(['admin','reception','psychologist'].includes(user.role)?[['tv-calls','TV-виклики']]:[]), ['preferences', 'Налаштування профілю']];
+  const navigation = [['module-directory','Усі розділи'],...navFor(user.role), ...(['admin','reception','psychologist'].includes(user.role)?[['tv-calls','TV-виклики']]:[]), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
   useEffect(() => {
@@ -3527,6 +3506,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
+    if (page === 'module-directory') return <ModuleDirectory role={user.role} onNavigate={navigate} Icon={AppIcon}/>;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
     if (page === 'dashboard') return <Dashboard api={api} role={user.role} onNavigate={navigate} access={receptionAccess} />;
     if (page === 'tv-calls') return <TvCallPanel api={api} />;
@@ -3563,8 +3543,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         }
       }}>
         <div className="sidebar-brand">
-          <div className="product-mark inverse"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
-          <div><strong>SOLVIA {pkg.version}</strong><span>by QureMed</span></div>
+          <div className="product-mark inverse motion-brand-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></div>
+          <div><strong>SOLVIA</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · QureMed</small></div>
         </div>
 
         <WorkspaceNavigation navigation={navigation.filter(([key]) => !['settings', 'preferences'].includes(key))} page={page} locked={locked} onNavigate={navigate} />
