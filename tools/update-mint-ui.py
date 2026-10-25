@@ -53,8 +53,9 @@ def apply(package, prefix=Path('/')):
                 for file in (stage/'ui').rglob('*'):
                     file.chmod(0o755 if file.is_dir() else 0o644)
             if wrapper.is_file():
-                wrapper_backup = wrapper.with_name('solvia-linux-app.py.before-mint-'+stamp)
-                shutil.copy2(wrapper, wrapper_backup)
+                backup_path = wrapper.with_name('solvia-linux-app.py.before-mint-'+stamp)
+                shutil.copy2(wrapper, backup_path)
+                wrapper_backup = backup_path
             for base, stage in zip(targets, staged):
                 backup = base/('ui.before-mint-'+stamp)
                 (base/'ui').rename(backup)
