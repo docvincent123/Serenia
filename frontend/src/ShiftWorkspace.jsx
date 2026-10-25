@@ -18,6 +18,7 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [updated, setUpdated] = useState('');
+  const [success,setSuccess]=useState('');
   const generation = useRef(0);
   const previousShiftDate = useRef(date);
   useEffect(() => {
@@ -39,8 +40,9 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
   loadRef.current = load;
   useEffect(() => {
     setRows([]); setSelected(''); setLoaded(false); setError(''); loadRef.current();
-    const timer = setInterval(() => { if(!document.hidden && !actionLock.current) loadRef.current(); }, 30000);
-    return () => { ++generation.current; clearInterval(timer); };
+    const timer = setInterval(() => { if(!document.hidden && !actionLock.current) loadRef.current(); }, 10000);
+    const refresh=()=>{if(!document.hidden&&!actionLock.current)loadRef.current();};window.addEventListener('solvia:workflow-updated',refresh);
+    return () => { ++generation.current; clearInterval(timer);window.removeEventListener('solvia:workflow-updated',refresh); };
   }, [day,refreshVersion]);
   const counts = useMemo(() => ({active:rows.filter(r=>['expected','arrived','in_progress'].includes(visitState(r))).length,
     arrived:rows.filter(r=>visitState(r)==='arrived').length, completed:rows.filter(r=>visitState(r)==='completed').length,
@@ -56,6 +58,11 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
       await loadRef.current();
     } catch(e) { setError(e.message); }
     finally {actionLock.current=false;setBusy(false);}
+  }
+  async function callOnTv(row){
+    if(actionLock.current)return;actionLock.current=true;setBusy(true);setError('');setSuccess('');
+    try{await api('POST','/api/tv/call',{appointment_id:row.appointment_id,patient_id:row.patient_id});setSuccess('Виклик передано на TV-табло.');await loadRef.current();}
+    catch(e){setError(e.message);}finally{actionLock.current=false;setBusy(false);}
   }
   async function exclude(row,status) {
     const reason=window.prompt(status==='no_show'?'Причина неявки / коментар':'Причина скасування');
@@ -75,6 +82,7 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
       <article><span>Проконсультовано</span><strong>{counts.completed}</strong></article>
       <article><span>Не проведено</span><strong>{counts.excluded}</strong></article>
     </div>
+    {success&&<div className="alert" role="status">{success}</div>}
     {error && <div className="alert error" role="alert">{error} <button className="button ghost" onClick={load}>Повторити</button></div>}
     <section className="surface shift-controls">
       <div className="shift-tabs" role="group" aria-label="Статус прийомів">{[['active','Активні'],['completed','Проконсультовані'],['excluded','Не проведені']].map(([key,label])=>
@@ -97,6 +105,7 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
       <aside className="surface shift-detail"><div className="eyebrow">КАРТКА ПРИЙОМУ</div>{!detail ? <div className="shift-empty"><strong>Оберіть пацієнта</strong><p>Контактні дані, час і доступні дії з’являться тут.</p></div> : <>
         <h2>{detail.patient}</h2><span className={`visit-status ${visitState(detail)}`}>{stateLabels[visitState(detail)]}</span>
         <div className="reception-detail-actions">        {visitState(detail)==='expected' && day===date && <button className="button primary" disabled={busy} onClick={()=>arrive(detail)}>{busy?'Зберігаємо…':'Пацієнт прибув'}</button>}
+        {visitState(detail)==='arrived'&&<button className="button primary" disabled={busy} onClick={()=>callOnTv(detail)}>Запросити на TV</button>}
         {['expected','arrived'].includes(visitState(detail)) && <button className="button secondary" disabled={busy} onClick={()=>onBook({date:detail.start.slice(0,10),appointmentId:detail.appointment_id})}>Перенести прийом</button>}
         <button className="button secondary" onClick={()=>openPatient(detail.patient_id)}>Відкрити картку пацієнта</button>
 </div>

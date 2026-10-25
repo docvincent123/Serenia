@@ -18,6 +18,8 @@ import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
 import {ModuleDirectory,PeriodActivity,DayTimeline} from './MotionWorkspace.jsx';
+import WorkflowEvents from './WorkflowEvents.jsx';
+import {feedbackFor} from './workflow-events.mjs';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -746,16 +748,20 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
   const canSchedule = role === 'admin' || role === 'reception';
   const visibleAppointments=useMemo(()=>appointments.filter(a=>!psychologistFilter||String(a.psychologist_id)===psychologistFilter),[appointments,psychologistFilter]);
 
-  async function load(targetDate = date) {
-    const request=++generation.current;setLoading(true);setError('');
+  async function load(targetDate = date,silent=false) {
+    const request=++generation.current;if(!silent)setLoading(true);setError('');
     try {
       const [result,meta]=await Promise.all([api('GET', `/api/appointments?date=${targetDate}`),api('GET','/api/meta').catch(()=>({psychologists:[]}))]);
-      if(request===generation.current){setAppointments(result);setPsychologists(role==='psychologist'?[]:(meta.psychologists||[]));setSelected(null);}
+      if(request===generation.current){setAppointments(result);setPsychologists(role==='psychologist'?[]:(meta.psychologists||[]));setSelected(previous=>previous?result.find(item=>item.id===previous.id)||null:null);}
     } catch(e){if(request===generation.current)setError(e.message);}
     finally{if(request===generation.current)setLoading(false);}
   }
 
-  useEffect(() => { load(date);return()=>{++generation.current;}; }, [date]);
+  useEffect(() => {
+    void load(date);const refresh=()=>{if(!document.hidden&&!document.querySelector('[role=dialog]'))void load(date,true);};
+    const timer=setInterval(refresh,10000);window.addEventListener('solvia:workflow-updated',refresh);
+    return()=>{++generation.current;clearInterval(timer);window.removeEventListener('solvia:workflow-updated',refresh);};
+  },[date]);
 
   function openNew() { onBook({date}); }
   function openEdit() { if(selected) onBook({date:(selected.start?.slice(0,10)||date),appointmentId:selected.id}); }
@@ -811,7 +817,7 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
             <Badge tone="stone">{visibleAppointments.length} подій</Badge>
           </div>
 
-          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:view==='grid'?<DayTimeline appointments={visibleAppointments} psychologists={psychologists.filter(p=>!psychologistFilter||String(p.id)===psychologistFilter)} selected={selected} onSelect={setSelected} canSchedule={canSchedule} onEmptySlot={options=>onBook({date,...options})}/>:!visibleAppointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
+          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error&&!appointments.length?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:view==='grid'?<DayTimeline appointments={visibleAppointments} psychologists={psychologists.filter(p=>!psychologistFilter||String(p.id)===psychologistFilter)} selected={selected} onSelect={setSelected} canSchedule={canSchedule} onEmptySlot={options=>onBook({date,...options})}/>:!visibleAppointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
             <div className="appointment-list">
               {visibleAppointments.map((item) => (
                 <button
@@ -875,7 +881,7 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
                 <span>Учасники</span>
                 {(selected.patients||[]).map((p) => <strong key={p.id}>{p.name}</strong>)}
               </div>
-              <div className="motion-patient-actions">{(selected.patients||[]).map(p=><button className="button secondary" key={p.id} onClick={()=>openPatient(p.id)}>Картка пацієнта · {p.name}</button>)}</div>
+              <div className="motion-patient-actions">{(selected.patients||[]).map(p=><button className="button secondary" key={p.id} onClick={()=>openPatient(p.id)}>Картка пацієнта · {p.name}</button>)}</div.name}</button>)}</div>
               {canSchedule && ['draft','scheduled','confirmed'].includes(selected.status) && (
                 <div className="context-actions">
                   <Button variant="secondary" onClick={openEdit}>Перенести / змінити</Button>
@@ -3447,10 +3453,11 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [bookingIntent,setBookingIntent]=useState(null);
   const [bookingResult,setBookingResult]=useState(null);
   const [bookingVersion,setBookingVersion]=useState(0);
+  const [calendarFocus,setCalendarFocus]=useState(null);
   const [createRequest,setCreateRequest]=useState(null);
   function startBooking(options){setBookingIntent({...options,date:options.date || receptionAccess?.access_date || localDate()});}
   function registerPatient(date,bookAfter=false){setBookingIntent(null);setCreateRequest({key:Date.now(),date:date || receptionAccess?.access_date || localDate(),bookAfter});navigate('patients');}
-  function booked(result){setBookingIntent(null);setBookingResult(result);setBookingVersion(v=>v+1);}
+  function booked(result){setBookingIntent(null);setBookingResult(result);setCalendarFocus(result.date);setBookingVersion(v=>v+1);}
   const [patientId, setPatientId] = useState(null);
   const [patientOrigin, setPatientOrigin] = useState('patients');
   const [shift, setShift] = useState(null);
@@ -3511,7 +3518,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
     if (page === 'dashboard') return <Dashboard api={api} role={user.role} onNavigate={navigate} access={receptionAccess} />;
     if (page === 'tv-calls') return <TvCallPanel api={api} />;
-    if (page === 'calendar') return <Calendar key={bookingVersion} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={bookingResult?.date} />;
+    if (page === 'calendar') return <Calendar key={`${bookingVersion}:${calendarFocus||''}`} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={calendarFocus||bookingResult?.date} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} onBook={startBooking} createRequest={createRequest} onCreateRequestConsumed={()=>setCreateRequest(null)} />;
     if (page === 'families') return <Families api={api} openPatient={openPatient} />;
     if (page === 'team') return <Team api={api} currentUser={user} />;
@@ -3592,6 +3599,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
             </div>
             {['admin','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
+            <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
             <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
           </div>
         </>}
@@ -3699,7 +3707,10 @@ export default function App() {
 
   async function api(method, path, body) {
     try {
-      return await request(apiBase, token, method, path, body);
+      const result=await request(apiBase, token, method, path, body);
+      const feedback=feedbackFor(method,path,body||{});
+      if(feedback&&activeToken.current===token)window.dispatchEvent(new CustomEvent('solvia:feedback',{detail:feedback}));
+      return result;
     } catch (e) {
       if (e.status === 401 && activeToken.current === token) {
         clearPcSession();
@@ -3729,6 +3740,4 @@ export default function App() {
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} />;
   if (appMode === 'server') return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
-  return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
-}
-
+  return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={dr

@@ -128,7 +128,7 @@ try {
   await page.goto(base+'/?mode=server');
   await page.getByRole('button',{name:'Оновлення Android',exact:true}).click();
   await page.getByRole('heading',{name:'Оновлення Android',exact:true}).waitFor();
-  await page.getByLabel('Опис випуску — release.json',{exact:true}).setInputFiles({name:'release.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version_code:32,version_name:'3.0.0',package_name:'com.quremed.solvia',sha256:'a'.repeat(64)}))});
+  await page.getByLabel('Опис випуску — release.json',{exact:true}).setInputFiles({name:'release.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version_code:32,version_name:'3.1.0',package_name:'com.quremed.solvia',sha256:'a'.repeat(64)}))});
   await page.getByLabel('Підписаний APK',{exact:true}).setInputFiles({name:'app.apk',mimeType:'application/vnd.android.package-archive',buffer:Buffer.from('PK synthetic')});
   const publication=page.waitForRequest(r=>r.url().endsWith('/api/mobile-update')&&r.method()==='POST');
   await page.getByRole('button',{name:'Опублікувати оновлення телефона',exact:true}).click();

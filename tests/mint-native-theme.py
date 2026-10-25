@@ -9,7 +9,7 @@ styles=[node.args[0].value for node in ast.walk(source) if isinstance(node,ast.C
 assert len(styles)==1
 provider=Gtk.CssProvider();provider.load_from_data(styles[0])
 window=Gtk.Window();window.get_style_context().add_class('solvia-native')
-header=Gtk.HeaderBar(title='SOLVIA 3.0.0');window.set_titlebar(header)
+header=Gtk.HeaderBar(title='SOLVIA 3.1.0');window.set_titlebar(header)
 Gtk.StyleContext.add_provider_for_screen(window.get_screen(),provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 window.show_all()
 while Gtk.events_pending(): Gtk.main_iteration()

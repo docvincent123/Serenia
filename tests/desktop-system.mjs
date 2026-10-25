@@ -99,7 +99,7 @@ try{
   assert.equal(await report.locator('.daily-report-metrics article').count(),4);
   assert.deepEqual(await report.locator('.daily-report-metrics strong').allTextContents(),['1','0','1','0']);
   await report.getByLabel('Дата звіту').fill('2026-10-14');
-  await report.locator('.daily-report-date').filter({hasText:'2026-10-14'}).waitFor();
+  await report.locator('.daily-report-date').filter({hasText:'14.10.2026'}).waitFor();
   await report.locator('.daily-report-metrics').waitFor();
   await capture('daily-report');
   await page.emulateMedia({media:'print'});

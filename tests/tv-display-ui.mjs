@@ -15,7 +15,7 @@ const server=createServer(async(req,res)=>{try{
   res.end(await readFile(path));
 }catch{res.writeHead(404).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
-const browser=await chromium.launch({headless:true});
+const browser=await chromium.launch({headless:true,...(process.env.SOLVIA_CHROMIUM_EXECUTABLE?{executablePath:process.env.SOLVIA_CHROMIUM_EXECUTABLE}:{})});
 try{
   const context=await browser.newContext({viewport:{width:1920,height:1080}}),page=await context.newPage();
   let paired=false,offline=false,revoked=false;const errors=[];

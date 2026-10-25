@@ -241,3 +241,30 @@
  .app-shell .sidebar-actions .nav-item.active {color:#112c2b;}
  .motion-module-grid {grid-template-columns:repeat(auto-fill,minmax(215px,1fr));}
 }
+@media screen {
+ .workflow-bell {order:2;position:relative;display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border:1px solid #dbe4d7;border-radius:50%;background:#f3f7ec;color:#345449;cursor:pointer;}
+ .workflow-bell>span {position:absolute;right:-5px;top:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:20px;background:#285d3c;color:#fff;font-size:9px;display:grid;place-items:center;}
+ .workflow-toasts {position:fixed;right:24px;bottom:24px;z-index:1800;display:grid;gap:10px;width:min(410px,calc(100vw - 32px));pointer-events:none;}
+ .workflow-toast {pointer-events:auto;display:flex;align-items:center;gap:13px;background:#112c2b;color:#f4f6ec;border:1px solid #426255;padding:18px;border-radius:15px;box-shadow:0 12px 35px #112c2b26;}
+ .workflow-toast>strong {flex:1;font-size:14px;line-height:1.5;font-weight:550;}
+ .workflow-toast-mark {display:grid;place-items:center;width:28px;height:28px;border-radius:50%;color:#112c2b;background:#a7edcf;flex-shrink:0;}
+ .workflow-toast>button {border:0;background:transparent;color:#c3dcc9;font-size:22px;cursor:pointer;}
+ .workflow-drawer {position:fixed;z-index:1700;right:20px;top:85px;bottom:20px;width:min(420px,calc(100vw - 40px));background:#fffffc;border:1px solid #cbd9cc;border-radius:20px;box-shadow:0 15px 60px #112c2b26;display:flex;flex-direction:column;overflow:hidden;}
+ .workflow-drawer>header {display:flex;align-items:center;justify-content:space-between;padding:23px;background:#f3f7ec;border-bottom:1px solid #dbe4d7;}
+ .workflow-drawer h2 {font-size:20px;color:#112c2b;margin:7px 0 0;}
+ .workflow-drawer>header>button {border:0;background:transparent;color:#58715f;font-size:28px;cursor:pointer;}
+ .workflow-event-settings {padding:15px 20px;border-bottom:1px solid #dbe4d7;display:flex;align-items:center;gap:12px;}
+ .workflow-event-settings small {font-size:10px;color:#697f74;line-height:1.5;}
+ .workflow-event-settings .button {font-size:11px;white-space:nowrap;}
+ .workflow-event-list {overflow:auto;min-height:0;flex:1;padding:10px;}
+ .workflow-event {display:flex;align-items:flex-start;gap:12px;width:100%;padding:17px 12px;background:transparent;border:0;border-bottom:1px solid #edf1e7;text-align:left;cursor:pointer;color:#345449;border-radius:9px;}
+ .workflow-event:hover {background:#f3f7ec;}
+ .workflow-event-dot {width:8px;height:8px;background:#72b18e;flex-shrink:0;border-radius:50%;margin-top:6px;}
+ .workflow-event strong {font-size:13px;line-height:1.5;color:#112c2b;}
+ .workflow-event p {font-size:12px;margin:5px 0;color:#58715f;}
+ .workflow-event small {font-size:10px;color:#809582;}
+ .workflow-events-empty {padding:32px 15px;text-align:center;color:#697f74;}
+ .workflow-events-empty h3 {font-size:17px;}
+ .workflow-events-empty p {font-size:13px;line-height:1.7;}
+}
+@media print { .workflow-toasts,.workflow-drawer,.workflow-bell {display:none!important;} }

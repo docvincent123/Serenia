@@ -79,7 +79,7 @@ J tvAdmin(DB& db, const J& u, const httplib::Request& r, const J& b) {
         check(a["arrived_at"] != "", "Спочатку відмітьте прибуття пацієнта", 409);
         check(db.query("SELECT id FROM consultations WHERE appointment_id=? AND patient_id=?", {aid, pid}).empty(), "Консультацію завершено", 409);
         db.query("INSERT INTO tv_calls(appointment_id,patient_id,called_at,called_by) VALUES(?,?,?,?) ON CONFLICT(appointment_id,patient_id) DO UPDATE SET called_at=EXCLUDED.called_at,called_by=EXCLUDED.called_by", {aid, pid, epoch(), u["id"]});
-        audit(db, u, "tv_call", "appointment", aid); return {{"ok", true}};
+        audit(db, u, "tv_call", "appointment", aid);workflowEvent(db,u,"patient.called",aid,pid); return {{"ok", true}};
     }
     allow(u, {"admin"});
     const std::string fields = "id,name,enabled,room_id,message,page_seconds,show_full_names,last_seen,created";

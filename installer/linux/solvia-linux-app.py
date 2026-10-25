@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, unquote, urlencode
 import mimetypes
 import subprocess
+import json
 
 
 def server_url(value):
@@ -62,7 +63,7 @@ def run(on_ready=None):
             self.console = console
             self.window = None
             self.origin = ''
-            self.window = Gtk.ApplicationWindow(application=application, title='SOLVIA Server Console 3.0.0' if console else 'SOLVIA 3.0.0')
+            self.window = Gtk.ApplicationWindow(application=application, title='SOLVIA Server Console 3.1.0' if console else 'SOLVIA 3.1.0')
             display = Gdk.Display.get_default()
             monitor = display.get_primary_monitor() or display.get_monitor(0)
             area = monitor.get_workarea()
@@ -83,7 +84,7 @@ def run(on_ready=None):
                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             self.window.set_wmclass('SOLVIAServerConsole' if console else 'SOLVIAAdmin', 'SOLVIAAdmin')
             self.window.set_icon_name('solvia-admin')
-            header = Gtk.HeaderBar(title='SOLVIA Server Console 3.0.0' if console else 'SOLVIA 3.0.0', show_close_button=True)
+            header = Gtk.HeaderBar(title='SOLVIA Server Console 3.1.0' if console else 'SOLVIA 3.1.0', show_close_button=True)
             self.window.set_titlebar(header)
             self.spinner = Gtk.Spinner()
             header.pack_start(self.spinner)
@@ -126,6 +127,9 @@ def run(on_ready=None):
             context = application.context
             self.view = WebKit2.WebView(web_context=context)
             self.view.get_settings().set_enable_developer_extras(False)
+            manager = self.view.get_user_content_manager()
+            manager.register_script_message_handler('solviaEvents')
+            manager.connect('script-message-received::solviaEvents', self.workflow_notification)
             self.view.connect('load-changed', self.changed)
             self.view.connect('load-failed', self.failed)
             self.view.connect('load-failed-with-tls-errors', self.tls_failed)
@@ -157,6 +161,27 @@ def run(on_ready=None):
                 self.show_error(str(error))
             if on_ready and not console:
                 GLib.idle_add(on_ready, self)
+
+        def workflow_notification(self, manager, message):
+            if not (self.view.get_uri() or '').startswith('solvia://app/'):
+                return
+            titles = {'appointment.created':'Новий запис', 'appointment.updated':'Запис оновлено',
+                      'appointment.cancelled':'Запис скасовано', 'appointment.no_show':'Відмічено неявку',
+                      'patient.arrived':'Пацієнт прибув', 'patient.called':'Пацієнта запрошено до кабінету',
+                      'consultation.started':'Консультацію розпочато', 'consultation.completed':'Консультацію завершено'}
+            try:
+                raw = message.get_js_value().to_string()
+                if len(raw) > 1000: return
+                event = json.loads(raw)
+                if not isinstance(event, dict): return
+                if event.get('kind') not in titles or not isinstance(event.get('id'), int): return
+                notice = Gio.Notification.new('SOLVIA · '+titles[event['kind']])
+                notice.set_body('Відкрийте робочий простір SOLVIA для перегляду.')
+                notice.set_default_action('app.open-workspace')
+                notice.set_priority(Gio.NotificationPriority.NORMAL)
+                self.application.send_notification('workflow-'+str(event['id']), notice)
+            except (ValueError, TypeError, GLib.Error):
+                pass
 
         def load(self, force=False):
             if not self.origin:
@@ -276,6 +301,14 @@ def run(on_ready=None):
             self.add_main_option('server-console', 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE, 'Open Server Console', None)
             self.controllers = {}
             self.context = None
+            action = Gio.SimpleAction.new('open-workspace', None)
+            action.connect('activate', self.open_workspace)
+            self.add_action(action)
+
+        def open_workspace(self, *_):
+            if 'center' not in self.controllers:
+                self.controllers['center'] = WindowController(self)
+            self.controllers['center'].window.present()
 
         def do_command_line(self, command_line):
             args = command_line.get_arguments()[1:]
