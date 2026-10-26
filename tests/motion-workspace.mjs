@@ -10,7 +10,7 @@ for (const role of ['admin','reception','psychologist','director']) {
  const navigation=[['module-directory','Усі розділи'],...navFor(role),['preferences','Налаштування профілю']];
  const {primary,secondary,directory}=focusNavigation(role,navigation);
  const keys=[...primary,...secondary].map(([key])=>key);
- assert.deepEqual(keys.slice().sort(),navFor(role).map(([key])=>key).sort(),`No ${role} module is lost in compact navigation`);
+ assert.deepEqual(keys.slice().sort(),navFor(role).map(([key])=>key).filter(key=>key!=='settings').sort(),`No ${role} work module is lost; settings stays in account actions`);
  assert.equal(new Set(keys).size,keys.length,'Navigation cannot duplicate a module');
  assert.equal(directory[0],'module-directory','Full catalogue remains available');
  assert(primary.every(([key])=>primaryKeysByRole[role].includes(key)));
