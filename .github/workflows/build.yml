@@ -276,6 +276,7 @@ jobs:
           node tests/pc-updates-ui.mjs
           node tests/offline-login.mjs
           node tests/ui-regression.mjs
+          node tests/motion-workspace.mjs
           node tests/reception-booking.mjs
           node tests/desktop-system.mjs
           node tests/device-recovery.mjs
