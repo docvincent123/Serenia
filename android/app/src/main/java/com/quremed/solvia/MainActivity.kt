@@ -400,9 +400,10 @@ class MainActivity : Activity() {
     }
 
     private fun lightSystemBars(target: android.view.Window) {
-        if(Build.VERSION.SDK_INT >= 30) target.insetsController?.setSystemBarsAppearance(0,
+        if(Build.VERSION.SDK_INT >= 30) target.insetsController?.setSystemBarsAppearance(
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
             android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
-        else target.decorView.systemUiVisibility = 0
+        else target.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
     }
 
     private fun mobileApi(): MobileApi = object : MobileApi {

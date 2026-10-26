@@ -59,7 +59,8 @@ try{
   await dialog.getByRole('button',{name:'Друк / Зберегти PDF',exact:true}).click();
   const frame=page.frames().find(f=>f!==page.mainFrame());assert(frame,'Print document is isolated in its own frame');
   const html=await frame.content();assert(html.includes('КІНЕЦЬ_ВИПИСКИ'));assert(html.includes('Абзац 90.'));
-  const output=await browser.newPage();await output.setContent(html);await output.emulateMedia({media:'print'});
+  const output=await browser.newPage();await output.setContent(html.replace('<head>',`<head><base href="http://127.0.0.1:${server.address().port}/">`));
+  await output.waitForFunction(()=>[...document.images].every(image=>image.complete&&image.naturalWidth>0));await output.emulateMedia({media:'print'});
   const paragraph=output.locator('.discharge-print section p').first();assert.equal(await paragraph.evaluate(el=>getComputedStyle(el).whiteSpace),'pre-wrap');
   const pdf=await output.pdf({path:'out/design/discharge-long.pdf',format:'A4',preferCSSPageSize:true,printBackground:true});
   assert((pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length>=3,'Long clinical notes span multiple pages');

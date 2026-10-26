@@ -3,9 +3,9 @@
     <style name="SolviaBase" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#112C2B</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">#112C2B</item>
-        <item name="android:navigationBarColor">#112C2B</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F3F3E9</item>
+        <item name="android:navigationBarColor">#F3F3E9</item>
         <item name="android:windowActionModeOverlay">false</item>
     </style>
     <style name="SolviaTheme" parent="SolviaBase" />

@@ -179,6 +179,17 @@ class NativeWorkflowTest {
             InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent 4").close()
         }
     }
+    @Test fun systemIconsHaveDarkAppearanceOnTheIvorySurface() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { activity ->
+            if(android.os.Build.VERSION.SDK_INT>=30) {
+                val mask=android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                assertEquals(mask,activity.window.insetsController!!.systemBarsAppearance and mask)
+            } else {
+                val mask=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                assertEquals(mask,activity.window.decorView.systemUiVisibility and mask)
+            }
+        } }
+    }
     @Test fun nativeMenuIsGroupedWithoutRemovedNavigation() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
