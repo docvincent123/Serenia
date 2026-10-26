@@ -65,7 +65,7 @@ class LiveShiftService : Service() {
                     else StaffMessageNotifications.clear(this)
                 }.onFailure { if(it is SyncFailure&&it.status==401)throw it }
             }catch(error:Exception){
-                if(error is SyncFailure && error.status==401 && !stopped.get() && scope==next && store.session()?.optString("token")==auth){store.revokeSession();AppointmentReminders.cancelScope(this,base,uid);ShiftNotifications.clear(this);stopSelf()}
+                if(error is SyncFailure && error.status==401 && !stopped.get() && scope==next && store.revokeSessionIfToken(auth)){AppointmentReminders.cancelScope(this,base,uid);ShiftNotifications.clear(this);stopSelf()}
                 // Other failures keep cached records and retry; scheduled reminders remain active.
             }
         },0,10,TimeUnit.SECONDS) }

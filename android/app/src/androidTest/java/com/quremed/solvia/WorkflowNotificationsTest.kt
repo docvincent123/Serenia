@@ -28,6 +28,16 @@ class WorkflowNotificationsTest {
         WorkflowNotifications.receive(context,base,uid) { JSONObject() }
         assertEquals(2,WorkflowNotifications.history(store).length())
     }
+    @Test fun staleUnauthorizedResponseCannotRevokeANewSession() {
+        val store=OfflineStore(context,"https://${UUID.randomUUID()}.invalid",52L)
+        val user=JSONObject().put("id",52L).put("role","psychologist")
+        store.saveSession(user,"previous-session")
+        store.saveSession(user,"renewed-session")
+        assertFalse(store.revokeSessionIfToken("previous-session"))
+        assertEquals("renewed-session",store.session()!!.optString("token"))
+        assertTrue(store.revokeSessionIfToken("renewed-session"))
+        assertNull(store.session())
+    }
     @Test fun liveServiceHasTheRequiredTypeAndIsNotExported() {
         val service=context.packageManager.getServiceInfo(ComponentName(context,LiveShiftService::class.java),0)
         assertFalse(service.exported)

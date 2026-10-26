@@ -11,7 +11,7 @@ import org.json.JSONObject
 object StaffMessageNotifications {
     private const val CHANNEL = "solvia_staff_messages_v1"
     private const val ID = 205
-    fun show(context: Context, count: Int, store: OfflineStore, newest: Long) {
+    @Synchronized fun show(context: Context, count: Int, store: OfflineStore, newest: Long) {
         if(!AppointmentReminders.allowed(context)) return
         val previous=(store.cache("/local/staff-notification") as? JSONObject)?.optLong("newest",0L) ?: 0L
         val fresh=newest>previous
