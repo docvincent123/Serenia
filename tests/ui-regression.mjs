@@ -40,6 +40,7 @@ try {
     const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
     let data = [];
     if (path === '/api/me') data = currentUser;
+    else if(path==='/api/workflow-events') data={cursor:1,events:[{id:1,kind:'patient.arrived',actor_id:2,actor:'Черговий реєстратури',patient_name:'ЦЕ_ПРИВАТНЕ_ПІБ',created:'2026-10-15T09:00'}]};
     else if (path === '/api/login') data = { token:'synthetic-psychologist-token',user:currentUser };
     else if (path === '/api/health') data = { ok:true,version:'2.3.0',platform:'linux' };
     else if (path === '/api/shift-day') { if(method === 'POST' && route.request().postDataJSON().action === 'close') { closeCalls++; open = false; } data = { open,shift_date:'2026-10-02' }; }
@@ -93,6 +94,14 @@ try {
     await route.fulfill({ contentType:'application/json',body:JSON.stringify(data) });
   });
   await page.goto(base); await page.getByRole('heading',{name:'Огляд центру',exact:true}).waitFor();
+  assert.equal(await page.locator('.focus-nav-primary').getByRole('button',{name:'Прийоми за зміну',exact:true}).count(),1,'Shift operations are always one click away');
+  assert.equal(await page.getByRole('button',{name:'Прийоми',exact:true}).getAttribute('aria-expanded'),'false','Secondary groups start collapsed');
+  assert.equal(await page.getByRole('button',{name:'Усі розділи',exact:true}).count() > 0,true,'Every authorized module stays discoverable');
+  await page.getByRole('button',{name:/Останні робочі події/}).click();
+  await page.locator('.focus-recent-row').first().waitFor();
+  assert.equal(await page.locator('.focus-recent-row').count(),1);
+  assert.equal(await page.locator('.focus-recent-row').getByText('ЦЕ_ПРИВАТНЕ_ПІБ').count(),0,'No patient names in dashboard activity feed');
+  await page.getByRole('button',{name:/Останні робочі події/}).click();
   const systemSettings = page.getByRole('button',{name:'Налаштування центру',exact:true});
   const exit = page.getByRole('button',{name:'Вийти',exact:true});
   for (const target of [systemSettings, exit]) {
@@ -163,6 +172,8 @@ try {
   await page.getByRole('button',{name:'Активні',exact:true}).click();
   await page.getByLabel('Знайти пацієнта',{exact:true}).fill('12345');
   assert.equal(await page.locator('.shift-visit').count(),2);
+  assert.equal(await page.getByRole('button',{name:/Дата і психолог/}).getAttribute('aria-expanded'),'false');
+  await page.getByRole('button',{name:/Дата і психолог/}).click();
   await page.getByLabel('Психолог',{exact:true}).selectOption('3');
   await page.screenshot({path:'out/design/desktop-shift-active.png',fullPage:true});
   await page.locator('.shift-visit').first().click();

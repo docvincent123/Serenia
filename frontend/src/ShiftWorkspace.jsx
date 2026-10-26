@@ -11,6 +11,7 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
   useEffect(()=>{if(savedDate)setDay(savedDate);},[savedDate]);
   const [rows, setRows] = useState([]);
   const [tab, setTab] = useState('active');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [psychologist, setPsychologist] = useState('');
   const [selected, setSelected] = useState('');
@@ -45,7 +46,9 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
     return () => { ++generation.current; clearInterval(timer);window.removeEventListener('solvia:workflow-updated',refresh); };
   }, [day,refreshVersion]);
   const counts = useMemo(() => ({active:rows.filter(r=>['expected','arrived','in_progress'].includes(visitState(r))).length,
-    arrived:rows.filter(r=>visitState(r)==='arrived').length, completed:rows.filter(r=>visitState(r)==='completed').length,
+    expected:rows.filter(r=>visitState(r)==='expected').length,
+    onsite:rows.filter(r=>['arrived','in_progress'].includes(visitState(r))).length,
+    completed:rows.filter(r=>visitState(r)==='completed').length,
     excluded:rows.filter(r=>visitState(r)==='excluded').length}), [rows]);
   const visible = filterVisits(rows,{tab,psychologist,query});
   const detail = visible.find(r=>visitKey(r)===selected);
@@ -74,23 +77,39 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
   return <div className="shift-workspace">
     <header className="page-head"><div><div className="eyebrow">РОБОЧИЙ СПИСОК ЦЕНТРУ</div><h1>Прийоми за зміну</h1>
       <p>Запис, прибуття та перебіг прийомів.</p></div>
-      <div className="page-actions">
-        <button className="button secondary" onClick={openCalendar}>Відкрити календар</button><button className="button secondary" onClick={()=>onCreatePatient(day)}>+ Новий пацієнт</button><button className="button primary" onClick={()=>onBook({date:day})}>+ Записати на прийом</button></div></header>
-    <div className="shift-summary" aria-label="Підсумок зміни">
-      <article><span>Активні прийоми</span><strong>{counts.active}</strong></article>
-      <article><span>У центрі</span><strong>{counts.arrived}</strong></article>
+      <div className="page-actions focus-reception-actions">
+        <button className="button secondary" onClick={()=>onCreatePatient(day)}>+ Новий пацієнт</button>
+        <button className="button primary" onClick={()=>onBook({date:day})}>+ Записати на прийом</button>
+      </div></header>
+    <div className="shift-summary focus-shift-summary" aria-label="Підсумок зміни">
+      <article><span>Очікуємо прибуття</span><strong>{counts.expected}</strong></article>
+      <article><span>У центрі / на консультації</span><strong>{counts.onsite}</strong></article>
       <article><span>Проконсультовано</span><strong>{counts.completed}</strong></article>
-      <article><span>Не проведено</span><strong>{counts.excluded}</strong></article>
     </div>
     {success&&<div className="alert" role="status">{success}</div>}
     {error && <div className="alert error" role="alert">{error} <button className="button ghost" onClick={load}>Повторити</button></div>}
     <section className="surface shift-controls">
       <div className="shift-tabs" role="group" aria-label="Статус прийомів">{[['active','Активні'],['completed','Проконсультовані'],['excluded','Не проведені']].map(([key,label])=>
         <button key={key} aria-pressed={tab===key} className={tab===key?'active':''} onClick={()=>{setTab(key);setSelected('');}}>{label}</button>)}</div>
-      <div className="shift-filters">{(query || psychologist) && <button className="button ghost" onClick={() => {setQuery('');setPsychologist('');setSelected('');}}>Скинути фільтри</button>}<label>Дата зміни<input type="date" value={day} disabled={busy} onChange={e=>{if(e.target.value)setDay(e.target.value);}} /></label>
-        <label>Психолог<select aria-label="Психолог" value={psychologist} onChange={e=>setPsychologist(e.target.value)}><option value="">Усі психологи</option>
-          {psychologists.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>
-        <label className="shift-search">Знайти пацієнта<input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="ПІБ, номер картки або телефон" /></label></div>
+      <div className="focus-shift-search">
+        <label className="shift-search">Знайти пацієнта
+          <input type="search" value={query} onChange={e=>setQuery(e.target.value)}
+            placeholder="ПІБ, номер картки або телефон" />
+        </label>
+        <button className="button secondary focus-filter-toggle" type="button" aria-expanded={filtersOpen}
+          aria-controls="focus-visit-filters" onClick={()=>setFiltersOpen(v=>!v)}>
+          Дата і психолог {psychologist || day !== date ? '• Застосовано' : ''}
+        </button>
+      </div>
+      {filtersOpen && <div className="shift-filters focus-visit-filters" id="focus-visit-filters">
+        <label>Дата зміни<input type="date" value={day} disabled={busy} onChange={e=>{if(e.target.value)setDay(e.target.value);}} /></label>
+        <label>Психолог<select aria-label="Психолог" value={psychologist} onChange={e=>setPsychologist(e.target.value)}>
+          <option value="">Усі психологи</option>
+          {psychologists.map(([id,name])=><option key={id} value={id}>{name}</option>)}
+        </select></label>
+        {(query || psychologist) && <button className="button ghost" onClick={() => {setQuery('');setPsychologist('');setSelected('');}}>Скинути фільтри</button>}
+        <button className="button secondary" onClick={openCalendar}>Відкрити календар</button>
+      </div>}
     </section>
     <div className="shift-columns">
       <section className="surface shift-roster"><div className="section-head"><h2>{tab==='completed'?'Завершені консультації':tab==='excluded'?'Не проведені прийоми':'Активні пацієнти'}</h2><small>{updated ? `Оновлено о ${updated}` : 'Завантаження…'}</small></div>
@@ -109,7 +128,10 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
         {['expected','arrived'].includes(visitState(detail)) && <button className="button secondary" disabled={busy} onClick={()=>onBook({date:detail.start.slice(0,10),appointmentId:detail.appointment_id})}>Перенести прийом</button>}
         <button className="button secondary" onClick={()=>openPatient(detail.patient_id)}>Відкрити картку пацієнта</button>
 </div>
-        <dl>{[['Номер картки',detail.patient_no],['Телефон',detail.phone],['Категорія',detail.category],['Психолог',detail.psychologist],['Кабінет',detail.room],['Прийом',`${time(detail.start)} — ${time(detail.end)}`],['Прибув / прибула',detail.arrived_at ? time(detail.arrived_at):'Ще не відмічено'],['Початок консультації',detail.started_at ? time(detail.started_at):'Ще не розпочато'],['Проконсультовано',detail.completed_at ? time(detail.completed_at):'Ще не завершено']].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}</dl>
+        <dl className="focus-visit-essential">{[['Психолог',detail.psychologist],['Кабінет',detail.room],['Час',`${time(detail.start)} — ${time(detail.end)}`]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}</dl>
+        <details className="focus-visit-more"><summary>Контакти й додаткові відомості</summary>
+          <dl>{[['Номер картки',detail.patient_no],['Телефон',detail.phone],['Категорія',detail.category],['Прибув / прибула',detail.arrived_at ? time(detail.arrived_at):'Ще не відмічено'],['Початок консультації',detail.started_at ? time(detail.started_at):'Ще не розпочато'],['Проконсультовано',detail.completed_at ? time(detail.completed_at):'Ще не завершено']].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}</dl>
+        </details>
 <details className="reception-exceptions"><summary>Неявка або скасування</summary>        {['expected','arrived'].includes(visitState(detail)) && <div className="page-actions">
           <button className="button secondary" disabled={busy} onClick={()=>exclude(detail,'no_show')}>Неявка</button>
           <button className="button danger" disabled={busy} onClick={()=>exclude(detail,'cancelled')}>Скасувати</button>

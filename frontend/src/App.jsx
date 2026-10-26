@@ -17,8 +17,10 @@ import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
+import {focusNavigation} from './focus-workspace.mjs';
 import {ModuleDirectory,PeriodActivity,DayTimeline} from './MotionWorkspace.jsx';
 import WorkflowEvents from './WorkflowEvents.jsx';
+import RecentCenterEvents from './RecentCenterEvents.jsx';
 import {feedbackFor} from './workflow-events.mjs';
 
 const roleLabels = {
@@ -365,22 +367,31 @@ async function request(base, token, method, path, body) {
   return data;
 }
 
-function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
+function WorkspaceNavigation({ navigation, role, page, locked, onNavigate }) {
   const active = page === 'patient-card' ? 'patients' : page;
+  const { primary, secondary, directory } = focusNavigation(role, navigation);
   const groupFor = key => navigationGroups.find(([, , keys]) => keys.includes(key))?.[0];
-  const [expanded, setExpanded] = useState(() => new Set(navigationGroups.map(([id]) => id)));
-  useEffect(() => { setExpanded(current => new Set([...current, groupFor(active)])); }, [active]);
+  const [expanded, setExpanded] = useState(() => new Set());
+  useEffect(() => {
+    const group = groupFor(active);
+    if (group) setExpanded(current => new Set([...current, group]));
+  }, [active]);
   function item(key, label) {
     return <button key={key} disabled={locked && key !== 'staff-messages'} aria-current={active === key ? 'page' : undefined}
       className={`nav-item ${active === key ? 'active' : ''}`} onClick={() => onNavigate(key)}>
       <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
     </button>;
   }
-  return <nav aria-label="Робочі розділи" className={locked ? 'nav-locked' : ''}>
+  return <nav aria-label="Робочі розділи" className={`focus-navigation ${locked ? 'nav-locked' : ''}`}>
+    <div className="focus-nav-primary" aria-label="Основні робочі дії">
+      <span className="focus-nav-caption">Головне</span>
+      {primary.map(([key, label]) => item(key, label))}
+    </div>
+    {secondary.length > 0 && <span className="focus-nav-caption">Інші розділи</span>}
     {navigationGroups.map(([id, label, keys]) => {
-      const items = navigation.filter(([key]) => keys.includes(key));
-      if(!items.length) return null;
-      if(items.length === 1) return <div className="nav-group single" key={id}>{item(...items[0])}</div>;
+      const items = secondary.filter(([key]) => keys.includes(key));
+      if (!items.length) return null;
+      if (items.length === 1) return <div className="nav-group single" key={id}>{item(...items[0])}</div>;
       return <section className="nav-group" key={id}>
         <button className="nav-group-toggle" aria-expanded={expanded.has(id)} aria-controls={`nav-${id}`}
           onClick={() => setExpanded(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; })}>
@@ -389,6 +400,7 @@ function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
         <div id={`nav-${id}`} className="nav-group-items" hidden={!expanded.has(id)}>{items.map(([key, text]) => item(key,text))}</div>
       </section>;
     })}
+    {directory && <div className="focus-nav-directory">{item(...directory)}</div>}
   </nav>;
 }
 
@@ -699,17 +711,32 @@ function Dashboard({ api, role, onNavigate, access }) {
       {error && <div className="alert error">{error}</div>}
       {!stats ? <Spinner /> : (
         <>
-          <section className="motion-overview-hero"><div><span className="motion-hero-eyebrow">{role==='admin'?'АДМІНІСТРАТОР · УСІ РОЗДІЛИ':'КЕРІВНИК · РОБОТА КОМАНДИ'}</span><h2>Один простір.<br/>Уся команда.</h2><p>{role==='admin'?'Розклад, пацієнти, команда та керування центром.':'Показники, завантаження та підсумки супроводу.'}</p></div><div className="motion-hero-actions"><Button onClick={()=>onNavigate('module-directory')}>Усі розділи <span aria-hidden="true">↗</span></Button><Button variant="secondary" onClick={()=>onNavigate(role==='admin'?'calendar':'workload')}>{role==='admin'?'Перейти до календаря':'Навантаження команди'}</Button></div></section>
+          <section className="focus-dashboard-head" aria-label="Швидкий початок роботи">
+            <div><span className="eyebrow">{role==='admin'?'РОБОЧИЙ СТАН ЦЕНТРУ':'ОГЛЯД РОБОТИ КОМАНДИ'}</span>
+              <h2>{role==='admin'?'Що відбувається в центрі':'Робота команди'}</h2>
+              <p>Показники за обраний період. Для деталей оберіть потрібний розділ.</p></div>
+            <div className="focus-dashboard-actions">
+              <Button onClick={()=>onNavigate(role==='admin'?'shift-workspace':'workload')}>{role==='admin'?'Перейти до прийомів':'Навантаження'}</Button>
+              <Button variant="secondary" onClick={()=>onNavigate('module-directory')}>Усі розділи</Button>
+            </div>
+          </section>
           <div className="overview-primary" aria-label="Основні показники">
             {[cards[1],cards[4],cards[6],cards[3]].map(([label,value,hint],i)=><article className="overview-kpi" key={label}><span className="overview-kpi-icon"><AppIcon name={['patients','calendar','reports','families'][i]} /></span><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></article>)}
           </div>
           <div className="overview-workbench">
             <PeriodActivity stats={stats} onNavigate={onNavigate}/>
-            <section className="surface overview-status"><div className="section-head"><h2>{role==='admin'?'Стан центру':'Документи та команда'}</h2></div>
-              {role==='admin'?<><div className="overview-status-row"><span>Реєстратура</span><strong className={access?.allowed?'status-positive':'status-pending'}>{access?.allowed?'Доступ надано':'Очікує дозволу'}</strong></div><div className="overview-status-row"><span>База даних</span><strong>{system?.database?.name || 'Стан не завантажено'}</strong></div><div className="overview-status-row"><span>Резервна копія</span><strong>{!system?.backups?.length?'Немає даних':system.backups[0].status==='success'?system.backups[0].created?.slice(0,16).replace('T',' '):'Потребує перевірки'}</strong></div><button className="button secondary" onClick={()=>onNavigate('devices')}>Стан пристроїв</button></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
+            <section className="surface overview-status"><div className="section-head"><h2>{role==='admin'?'Що потребує уваги':'Документи та команда'}</h2></div>
+              {role==='admin'?<><div className="overview-status-row"><span>Реєстратура</span><strong className={access?.allowed?'status-positive':'status-pending'}>{access?.allowed?'Доступ надано':'Очікує дозволу'}</strong></div>
+                <button className="button secondary" onClick={()=>onNavigate('shift-workspace')}>Переглянути прийоми</button>
+                <details className="focus-technical"><summary>Технічний стан і резервні копії</summary>
+                  <div className="overview-status-row"><span>База даних</span><strong>{system?.database?.name || 'Стан не завантажено'}</strong></div>
+                  <div className="overview-status-row"><span>Резервна копія</span><strong>{!system?.backups?.length?'Немає даних':system.backups[0].status==='success'?system.backups[0].created?.slice(0,16).replace('T',' '):'Потребує перевірки'}</strong></div>
+                  <button className="button secondary" onClick={()=>onNavigate('devices')}>Стан пристроїв</button>
+                </details></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
             </section>
           </div>
           <div className="motion-quick-strip"><RoleActions role={role} onNavigate={onNavigate}/></div>
+          {role==='admin'&&<RecentCenterEvents api={api}/>}
           <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
           <details className="surface motion-analysis-more"><summary>Структура звернень та джерела направлень</summary>
@@ -3555,7 +3582,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           <div><strong>SOLVIA</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · QureMed</small></div>
         </div>
 
-        <WorkspaceNavigation navigation={navigation.filter(([key]) => !['settings', 'preferences'].includes(key))} page={page} locked={locked} onNavigate={navigate} />
+        <WorkspaceNavigation navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} />
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">

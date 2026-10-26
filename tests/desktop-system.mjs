@@ -50,7 +50,14 @@ try{
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
   const nav=page.getByRole('navigation',{name:'Робочі розділи'});
-  async function open(label,title){await nav.getByRole('button',{name:label,exact:true}).click();await page.getByRole('heading',{name:title,exact:true}).waitFor();}
+  async function open(label,title){
+    const target=nav.getByRole('button',{name:label,exact:true,includeHidden:true});
+    if(!await target.isVisible()){
+      const toggle=target.locator('xpath=ancestor::section[contains(@class,"nav-group")]/button[contains(@class,"nav-group-toggle")]');
+      if(await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
+    }
+    await target.click();await page.getByRole('heading',{name:title,exact:true}).waitFor();
+  }
   async function capture(name){await page.evaluate(()=>{const pane=document.querySelector('.workspace');if(pane)pane.scrollTop=0;});await page.screenshot({path:`out/design/full-${name}.png`,fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`No page-wide overflow: ${name}`);}
   await mkdir('out/design',{recursive:true});await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.locator('.overview-kpi').first().waitFor();assert.equal(await page.locator('.overview-kpi').count(),4);

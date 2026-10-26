@@ -1,9 +1,19 @@
 import assert from 'node:assert/strict';
 import {modulesFor,timelineLayout} from '../frontend/src/motion-workspace.mjs';
 import {navFor} from '../frontend/src/workspace-model.mjs';
+import {focusNavigation, primaryKeysByRole} from '../frontend/src/focus-workspace.mjs';
 for(const role of ['admin','director','reception','psychologist']){
  const modules=modulesFor(role);assert.equal(new Set(modules.map(m=>m.key)).size,modules.length);
  for(const [key] of navFor(role))assert(modules.some(m=>m.key===key),`Every existing ${role} module is discoverable`);
+}
+for (const role of ['admin','reception','psychologist','director']) {
+ const navigation=[['module-directory','Усі розділи'],...navFor(role),['preferences','Налаштування профілю']];
+ const {primary,secondary,directory}=focusNavigation(role,navigation);
+ const keys=[...primary,...secondary].map(([key])=>key);
+ assert.deepEqual(keys.slice().sort(),navFor(role).map(([key])=>key).filter(key=>key!=='settings').sort(),`No ${role} work module is lost; settings stays in account actions`);
+ assert.equal(new Set(keys).size,keys.length,'Navigation cannot duplicate a module');
+ assert.equal(directory[0],'module-directory','Full catalogue remains available');
+ assert(primary.every(([key])=>primaryKeysByRole[role].includes(key)));
 }
 assert(modulesFor('admin').some(m=>m.key==='settings'));assert(!modulesFor('reception').some(m=>['team','settings','audit','devices'].includes(m.key)));assert(!modulesFor('director').some(m=>m.key==='patients'));assert.deepEqual(modulesFor('unknown'),[]);
 const ap=(id,start,end)=>({id,start:'2026-10-26T'+start,end:'2026-10-26T'+end,psychologist_id:3});

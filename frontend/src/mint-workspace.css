@@ -288,3 +288,62 @@
  .daily-report thead {display:table-header-group;}
  .daily-report-footer {break-inside:avoid;}
 }
+
+
+/* SOLVIA focused workspaces: fewer competing controls, same authorized actions. */
+@media screen {
+  .focus-navigation { display:flex;flex-direction:column;gap:3px; }
+  .focus-nav-caption { display:block;margin:12px 14px 7px;font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:#a9c4b5; }
+  .focus-nav-primary { padding-bottom:10px;border-bottom:1px solid #ffffff18; }
+  .focus-nav-primary .nav-item { font-weight:600; }
+  .focus-nav-directory { margin-top:12px;border-top:1px solid #ffffff18;padding-top:12px; }
+  .focus-dashboard-head { display:flex;align-items:center;justify-content:space-between;gap:20px;padding:19px 22px;margin-bottom:18px;border:1px solid #cfe3d2;border-radius:18px;background:#e5f2e4; }
+  .focus-dashboard-head h2 { font-size:23px;letter-spacing:-.03em;line-height:1.2;margin:5px 0;color:#173b32; }
+  .focus-dashboard-head p { font-size:13px;color:#4f6d5c;line-height:1.5;margin:0; }
+  .focus-dashboard-actions { display:flex;gap:9px;align-items:center;flex-wrap:wrap;flex-shrink:0; }
+  .focus-technical { margin-top:14px;border-top:1px solid var(--line);padding-top:12px; }
+  .focus-technical summary, .focus-visit-more summary { color:#365c47;font-size:13px;font-weight:600;cursor:pointer;min-height:36px;padding:8px 2px; }
+  .focus-technical[open] summary,.focus-visit-more[open] summary { margin-bottom:8px; }
+  .focus-shift-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .focus-shift-search { display:flex;align-items:end;gap:12px;flex-wrap:wrap; }
+  .focus-shift-search .shift-search { flex:1 1 320px;min-width:0; }
+  .focus-filter-toggle { flex-shrink:0;margin-bottom:0; }
+  .focus-visit-filters { margin-top:12px;padding-top:12px;border-top:1px solid var(--line); }
+  .focus-visit-filters label { min-width:165px; }
+  .focus-visit-essential { margin-bottom:8px; }
+  .focus-visit-more { border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:10px 0 12px;padding:3px 0; }
+  .focus-visit-more dl { margin-top:0; }
+  .focus-reception-actions { flex-wrap:wrap; }
+}
+@media screen and (max-width:900px) {
+  .focus-dashboard-head { align-items:stretch;flex-direction:column; }
+  .focus-dashboard-actions { flex-shrink:1; }
+}
+@media screen and (max-width:560px) {
+  .focus-shift-summary { grid-template-columns:repeat(3,minmax(0,1fr));gap:7px; }
+  .focus-shift-summary article { padding:12px 9px;min-width:0; }
+  .focus-shift-summary article span { overflow-wrap:anywhere;font-size:11px; }
+  .focus-dashboard-head { padding:16px; }
+  .focus-reception-actions .button { flex:1 1 160px; }
+  .focus-shift-search .shift-search { flex-basis:100%; }
+  .focus-filter-toggle { width:100%; }
+  .focus-visit-filters { display:flex;flex-direction:column;align-items:stretch; }
+}
+
+
+@media screen {
+  .focus-recent-events { margin:0 0 18px;padding:0;overflow:hidden; }
+  .focus-recent-toggle { display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;border:0;background:transparent;color:var(--ink);text-align:left;padding:16px 19px;cursor:pointer; }
+  .focus-recent-toggle>span:first-child { display:grid;gap:4px; }
+  .focus-recent-toggle strong { font-size:14px; }
+  .focus-recent-toggle small { color:var(--muted);font-size:12px; }
+  .focus-recent-toggle>span:last-child { font-size:21px;color:#477557; }
+  .focus-recent-list { padding:3px 19px 16px;border-top:1px solid var(--line); }
+  .focus-recent-list>p { color:var(--muted);font-size:13px; }
+  .focus-recent-row { display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line); }
+  .focus-recent-row:last-child { border-bottom:0; }
+  .focus-recent-mark { width:7px;height:7px;border-radius:50%;background:#77bd9e;flex-shrink:0; }
+  .focus-recent-row>div { display:flex;flex-direction:column;gap:3px;min-width:0; }
+  .focus-recent-row strong { font-size:13px;font-weight:600; }
+  .focus-recent-row small { font-size:11px;color:var(--muted);overflow-wrap:anywhere; }
+}
