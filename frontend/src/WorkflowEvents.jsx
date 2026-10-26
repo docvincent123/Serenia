@@ -1,0 +1,24 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {eventTitles,mergeWorkflow,incomingWorkflow,EventSound} from './workflow-events.mjs';
+export default function WorkflowEvents({api,user,apiBase,onNavigate}){
+ const [history,setHistory]=useState([]),[unread,setUnread]=useState(0),[open,setOpen]=useState(false),[soundOn,setSoundOn]=useState(false),[toasts,setToasts]=useState([]),[status,setStatus]=useState('Підключаємо події…');
+ const apiRef=useRef(api),sound=useRef(null),counter=useRef(0),timers=useRef(new Set()),openRef=useRef(false);apiRef.current=api;openRef.current=open;
+ function toast(title,kind='local'){const id=++counter.current;setToasts(old=>[...old.slice(-2),{id,title,kind}]);const timer=setTimeout(()=>{setToasts(old=>old.filter(t=>t.id!==id));timers.current.delete(timer);},6000);timers.current.add(timer);}
+ useEffect(()=>{sound.current=new EventSound();const local=e=>{if(e.detail?.title){toast(e.detail.title);sound.current?.play();}};window.addEventListener('solvia:feedback',local);return()=>{window.removeEventListener('solvia:feedback',local);for(const t of timers.current)clearTimeout(t);timers.current.clear();sound.current?.close();};},[]);
+ useEffect(()=>{let alive=true,timer,cursor=null;setHistory([]);setUnread(0);setStatus('Підключаємо події…');
+  async function poll(){let delay=5000;try{const data=await apiRef.current('GET',cursor===null?'/api/workflow-events':`/api/workflow-events?after=${cursor}`);if(!alive)return;const batch=incomingWorkflow(data,cursor,user.id);if(!batch){delay=30000;setStatus('Стрічка подій потребує оновлення сервера');return;}cursor=batch.cursor;setHistory(old=>mergeWorkflow(old,batch.events));setStatus('Події оновлюються автоматично');
+   if(!batch.initial&&batch.events.length)window.dispatchEvent(new CustomEvent('solvia:workflow-updated',{detail:batch.events}));
+   if(batch.alert.length){if(!openRef.current)setUnread(n=>n+batch.alert.length);const newest=batch.alert.at(-1);toast(batch.alert.length>1?`${eventTitles[newest.kind]} · ще ${batch.alert.length-1} подій`:eventTitles[newest.kind],'remote');sound.current?.play(newest.kind==='patient.called'?'call':'event');
+    const bridge=window.webkit?.messageHandlers?.solviaEvents;
+    try{if(bridge)bridge.postMessage(JSON.stringify({id:newest.id,kind:newest.kind}));else window.chrome?.webview?.postMessage('workflow:'+newest.kind);}catch{}
+   }if(data.has_more)delay=250;
+  }catch(error){if(!alive)return;setStatus(error.status===404?'Потрібне оновлення сервера для подій':'Немає зв’язку зі стрічкою подій');if(error.status===404){delay=30000;return;}}finally{if(alive)timer=setTimeout(poll,delay);}}
+  void poll();return()=>{alive=false;clearTimeout(timer);};
+ },[user.id,apiBase]);
+ useEffect(()=>{if(open)setUnread(0);},[open]);
+ async function toggleSound(){if(soundOn){sound.current?.close();setSoundOn(false);return;}try{const enabled=await sound.current?.enable();setSoundOn(Boolean(enabled));if(enabled)sound.current.play();else toast('Звук недоступний у цьому середовищі');}catch{toast('Не вдалося ввімкнути звук');}}
+ return <><button className="workflow-bell" aria-label="Події та повідомлення" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M5 17h14l-2-4V8a5 5 0 0 0-10 0v5zM10 21h4"/></svg>{unread>0&&<span>{unread>99?'99+':unread}</span>}</button>
+ <div className="workflow-toasts" aria-live="polite" aria-atomic="false">{toasts.map(t=><div className="workflow-toast" key={t.id}><span className="workflow-toast-mark" aria-hidden="true">✓</span><strong>{t.title}</strong><button aria-label="Приховати сповіщення" onClick={()=>setToasts(old=>old.filter(x=>x.id!==t.id))}>×</button></div>)}</div>
+ {open&&<aside className="workflow-drawer" aria-label="Події центру" onKeyDown={e=>{if(e.key==='Escape')setOpen(false);}}><header><div><span className="eyebrow">РОБОЧА СТРІЧКА</span><h2>Події та повідомлення</h2></div><button aria-label="Закрити події" onClick={()=>setOpen(false)}>×</button></header><div className="workflow-event-settings"><button className="button secondary" onClick={toggleSound}>{soundOn?'Вимкнути звук':'Увімкнути звук'}</button><small role="status">{status}</small></div><div className="workflow-event-list">{!history.length?<div className="workflow-events-empty"><h3>Тут будуть робочі події</h3><p>Нові записи, прибуття пацієнтів, виклики та завершені консультації.</p></div>:history.map(e=><button className="workflow-event" key={e.id} onClick={()=>{onNavigate(user.role==='director'?'dashboard':'calendar',e.start?.slice(0,10));setOpen(false);}}><span className="workflow-event-dot"/><div><strong>{eventTitles[e.kind]}</strong><p>{[e.start?.slice(11,16),e.room].filter(Boolean).join(' · ')}</p><small>{e.actor} · {e.created?.replace('T',' ')}</small></div></button>)}</div></aside>}
+ </>;
+}

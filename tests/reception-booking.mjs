@@ -40,6 +40,7 @@ try{
     else if(path==='/api/appointments/7'&&method==='PATCH'){patches.push(req.postDataJSON());data={id:7};}
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
+  await page.addInitScript(()=>localStorage.setItem('solvia_navigation','all'));
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
   await page.getByRole('button',{name:'+ Записати на прийом',exact:true}).click();

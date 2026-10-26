@@ -41,7 +41,7 @@ J operations(DB&db,const J&u,const httplib::Request&r,const J&b,const std::strin
         db.query("UPDATE attendees SET visit_status=?,exclusion_reason=? WHERE appointment_id=? AND patient_id=?",{status,str(b,"reason",1000),aid,pid});
         auto count=db.query("SELECT count(*) total,count(*) FILTER(WHERE t.visit_status<>'' OR EXISTS(SELECT 1 FROM consultations c WHERE c.appointment_id=t.appointment_id AND c.patient_id=t.patient_id)) done FROM attendees t WHERE appointment_id=?",{aid})[0];
         if(count["total"]==count["done"]){auto completed=db.query("SELECT id FROM consultations WHERE appointment_id=?",{aid});db.query("UPDATE appointments SET status=? WHERE id=?",{completed.empty()?status:"completed",aid});}
-        audit(db,u,status,"attendance",aid);return {{"ok",true}};
+        audit(db,u,status,"attendance",aid);if(rows[0]["visit_status"]!=status)workflowEvent(db,u,status=="cancelled"?"appointment.cancelled":"appointment.no_show",aid,pid);return {{"ok",true}};
     }
     if(std::regex_match(path,match,std::regex("/api/appointments/([0-9]+)/start"))){
         allow(u,{"psychologist"});check(method=="POST","Метод не дозволений",405);
@@ -52,7 +52,7 @@ J operations(DB&db,const J&u,const httplib::Request&r,const J&b,const std::strin
         check(a["start"].get<std::string>().substr(0,10)==now().substr(0,10),"Початок можна відмітити лише сьогодні",409);
         check(!a["arrived_at"].get<std::string>().empty(),"Спочатку відмітьте прибуття пацієнта",409);
         check(db.query("SELECT id FROM consultations WHERE appointment_id=? AND patient_id=?",{aid,pid}).empty(),"Консультацію вже завершено",409);
-        if(a["started_at"]==""){db.query("UPDATE attendees SET started_at=? WHERE appointment_id=? AND patient_id=? AND started_at=''",{now(),aid,pid});audit(db,u,"start","appointment",aid);}
+        if(a["started_at"]==""){db.query("UPDATE attendees SET started_at=? WHERE appointment_id=? AND patient_id=? AND started_at=''",{now(),aid,pid});audit(db,u,"start","appointment",aid);workflowEvent(db,u,"consultation.started",aid,pid);}
         return {{"ok",true},{"started_at",db.query("SELECT started_at FROM attendees WHERE appointment_id=? AND patient_id=?",{aid,pid})[0]["started_at"]}};
     }
     if(std::regex_match(path,match,std::regex("/api/consultations/([0-9]+)/addenda"))){

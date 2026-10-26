@@ -1,0 +1,54 @@
+name: SOLVIA Linux mint design
+on:
+  pull_request:
+    branches: [feature/center-connection]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm --prefix frontend ci --no-audit --no-fund
+      - run: npm --prefix frontend run build
+      - name: Verify existing Linux client and reversible updater
+        run: |
+          python3 tests/linux-client.py
+          python3 tests/mint-ui-update.py
+          node tests/motion-workspace.mjs
+          node tests/workflow-events.mjs
+          python3 -m py_compile installer/linux/solvia-linux-app.py
+      - name: Verify native GTK theme
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 xvfb
+          xvfb-run -a /usr/bin/python3 tests/mint-native-theme.py
+      - name: Install browser runtime
+        run: |
+          npm install --prefix /tmp/mint-tests --no-save playwright@1.62.1
+          /tmp/mint-tests/node_modules/.bin/playwright install --with-deps chromium
+      - name: Verify real rendered workspaces
+        env:
+          SOLVIA_PLAYWRIGHT_MODULE: /tmp/mint-tests/node_modules/playwright
+        run: |
+          node tests/desktop-system.mjs
+          node tests/calm-desktop-ui.mjs
+          node tests/workflow-events-ui.mjs
+          node tests/documents-print-ui.mjs
+          node tests/tv-display-ui.mjs
+          node tests/ui-regression.mjs
+      - run: python3 tools/package-mint-ui.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SOLVIA-3.1.0-Linux-Motion-Workspace
+          path: out/SOLVIA-3.1.0-Linux-Motion-Workspace.tar.gz
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: SOLVIA-Linux-Mint-Previews
+          path: out/design/

@@ -1,7 +1,8 @@
 import React, {useEffect,useState,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
-import {TV_KEY,pageEntries,liveCalls,serverClock} from './model.mjs';
+import {TV_KEY,pageEntries,liveCalls,serverClock,tvChanges} from './model.mjs';
 import './tv.css';
+import {EventSound} from '../workflow-events.mjs';
 
 async function call(path,token,method='GET') {
   const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),8000);
@@ -20,7 +21,13 @@ function TV(){
   const [token,setToken]=useState(savedKey),[pair,setPair]=useState(null),[snapshot,setSnapshot]=useState(null),
     [problem,setProblem]=useState(''),[tick,setTick]=useState(Date.now()),[received,setReceived]=useState(0),
     [page,setPage]=useState(0),[size,setSize]=useState(3),[busy,setBusy]=useState(false);
-  const scheduleRef=useRef(null);
+  const scheduleRef=useRef(null),previous=useRef(null),sound=useRef(null),flashTimer=useRef(null);
+  const [soundOn,setSoundOn]=useState(false),[flash,setFlash]=useState('');
+  useEffect(()=>{sound.current=new EventSound();return()=>{sound.current?.close();clearTimeout(flashTimer.current);};},[]);
+  async function toggleSound(){if(soundOn){sound.current?.close();setSoundOn(false);return;}try{const ready=await sound.current?.enable();setSoundOn(Boolean(ready));if(ready)sound.current.play('call');}catch{setSoundOn(false);}}
+  useEffect(()=>{if(!snapshot){previous.current=null;return;}const changes=tvChanges(previous.current,snapshot);previous.current=snapshot;
+   if(changes.length){const called=changes.some(c=>c.kind==='call');sound.current?.play(called?'call':'event');setFlash(called?'Запрошуємо до кабінету':changes.some(c=>c.kind==='arrival')?'Пацієнт прибув':'Новий запис у розкладі');clearTimeout(flashTimer.current);flashTimer.current=setTimeout(()=>setFlash(''),7000);}
+  },[snapshot]);
   const calls=snapshot?liveCalls(snapshot.entries):[];
   useEffect(()=>{
     const element=scheduleRef.current;if(!element)return;
@@ -68,7 +75,7 @@ function TV(){
           <div className="tv-rows" key={displayed.page+':'+snapshot.date}>{displayed.rows.map(x=><article className={'tv-row '+x.state} key={x.appointment_id+':'+x.patient_id}><time>{x.start.slice(11,16)}</time><strong>{x.patient}</strong><span>{x.psychologist}</span><b>{x.room}</b><span className="tv-state">{{called:'Запрошуємо',waiting:'Прибув',in_progress:'На консультації',scheduled:'Заплановано'}[x.state]}</span></article>)}</div>
         </>:<div className="tv-empty"><span>✓</span><h2>Наразі немає записів до показу</h2><p>Нові прийоми з’являться тут автоматично.</p></div>}
       </section>
-      <footer className="tv-footer"><div className="tv-ticker"><b>Новини центру</b><div className="tv-ticker-window" aria-label={snapshot.message||'Вітаємо у центрі'}><div className="tv-ticker-track" style={{animationDuration:Math.max(24,(snapshot.message||'').length/4)+'s'}}>{[0,1].map(copy=><span key={copy} aria-hidden={copy===1?'true':undefined}>{(snapshot.message||'Будь ласка, очікуйте запрошення до кабінету. Дякуємо за довіру.').split('\n').filter(x=>x.trim()).join('   •   ')}<i>•</i></span>)}</div></div></div><span>{displayed.pages>1?`${displayed.page+1} / ${displayed.pages}`:'SOLVIA 3.0'}</span></footer>
+      <footer className="tv-footer"><div className="tv-ticker"><b>Новини центру</b><div className="tv-ticker-window" aria-label={snapshot.message||'Вітаємо у центрі'}><div className="tv-ticker-track" style={{animationDuration:Math.max(24,(snapshot.message||'').length/4)+'s'}}>{[0,1].map(copy=><span key={copy} aria-hidden={copy===1?'true':undefined}>{(snapshot.message||'Будь ласка, очікуйте запрошення до кабінету. Дякуємо за довіру.').split('\n').filter(x=>x.trim()).join('   •   ')}<i>•</i></span>)}</div></div></div><span>{displayed.pages>1?`${displayed.page+1} / ${displayed.pages}`:'SOLVIA 3.1'}</span></footer>
     </>:<section className="tv-setup" aria-live="polite">
       <span className="tv-setup-icon">{token&&!pair?'↻':'TV'}</span>
       <h1>{pair?'Підключення телевізора':token?'Очікуємо з’єднання':'Вітаємо на SOLVIA Табло'}</h1>
@@ -76,6 +83,8 @@ function TV(){
       {pair&&problem&&<p role="alert">{problem}</p>}
       {(!token||pair&&tick>=pair.expires)&&<button disabled={busy} onClick={connect} autoFocus>{busy?'З’єднуємо…':'Отримати код підключення'}</button>}
     </section>}
+    {flash&&<div className="tv-event-flash" role="status">{flash}</div>}
+    <button className="tv-sound" aria-pressed={soundOn} onClick={toggleSound}>{soundOn?'Звук увімкнено':'Увімкнути звук'}</button>
     <button className="tv-fullscreen" onClick={fullScreen} aria-label="На весь екран" title="На весь екран">⛶</button>
   </main>;
 }

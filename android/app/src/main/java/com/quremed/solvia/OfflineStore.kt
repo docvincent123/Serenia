@@ -58,6 +58,12 @@ class OfflineStore(context: Context, server: String, userId: Long) {
         read("session")?.takeIf { it.optLong("expires") > now && it.optLong("expires") <= now + (if(it.optJSONObject("user")?.optBoolean("shift_bound") == true) 24 * 60 * 60 * 1000L else SESSION_TTL) }
     }
     fun revokeSession() = synchronized(lock) { check(prefs.edit().remove("$scope|session").commit()) }
+    fun revokeSessionIfToken(token:String):Boolean = synchronized(lock) {
+        val saved=read("session") ?: return@synchronized false
+        if(saved.optString("token")!=token)return@synchronized false
+        check(prefs.edit().remove("$scope|session").commit())
+        true
+    }
     fun reportDraft(day: String): JSONObject? = synchronized(lock) { read("report:$day") }
     fun saveReportDraft(day: String, report: JSONObject) = synchronized(lock) { write("report:$day", report) }
     fun clearReportDraft(day: String, expected: JSONObject? = null) = synchronized(lock) {

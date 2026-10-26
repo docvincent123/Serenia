@@ -179,6 +179,17 @@ class NativeWorkflowTest {
             InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent 4").close()
         }
     }
+    @Test fun systemIconsHaveDarkAppearanceOnTheIvorySurface() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { activity ->
+            if(android.os.Build.VERSION.SDK_INT>=30) {
+                val mask=android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                assertEquals(mask,activity.window.insetsController!!.systemBarsAppearance and mask)
+            } else {
+                val mask=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                assertEquals(mask,activity.window.decorView.systemUiVisibility and mask)
+            }
+        } }
+    }
     @Test fun nativeMenuIsGroupedWithoutRemovedNavigation() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -195,7 +206,11 @@ class NativeWorkflowTest {
                 assertFalse(labels.contains("Архів зміни"))
                 assertFalse(labels.any { it.contains("центру") || it.contains("Пристрої") || it.contains("очікування") })
                 assertFalse(labels.any { it in listOf("Розклад", "Чернетки", "Мої чернетки", "Завершити зміну", "Усі функції", "Активні", "Меню", "Пацієнти", "Документи пацієнтів") })
-                assertEquals(android.graphics.Color.rgb(246,194,44), MobileUi.accent)
+                val foreground=android.graphics.Color.luminance(MobileUi.onAccent).toDouble()
+                val background=android.graphics.Color.luminance(MobileUi.accent).toDouble()
+                val contrast=(maxOf(foreground,background)+0.05)/(minOf(foreground,background)+0.05)
+                assertTrue("Primary labels stay readable on the mint workspace",contrast>=4.5)
+                assertTrue(android.graphics.Color.luminance(MobileUi.background)>0.8f)
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             var reference: MainActivity? = null

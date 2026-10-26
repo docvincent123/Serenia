@@ -123,7 +123,7 @@ class MainActivity : Activity() {
             visibility = if(syncTime.isBlank()) View.GONE else View.VISIBLE
         }
         statusView?.apply {
-            setTextColor(if(offlineMode) Color.rgb(255,185,160) else Color.rgb(122,223,162))
+            setTextColor(if(offlineMode) Color.rgb(152,61,53) else Color.rgb(45,109,76))
             text = if(offlineMode) "○ Офлайн" else "● Онлайн"
             val detail = (if(offlineMode) "Офлайн · копія " + if(lastCacheTime > 0) java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastCacheTime)) else "на телефоні" else "Онлайн") +
                 (if(count > 0) " · у черзі: $count" else "") + (if(cachePreparing) " · завантаження карток…" else "")
@@ -196,6 +196,7 @@ class MainActivity : Activity() {
                         runOnUiThread {
                             if(token==auth && server==base && !isDestroyed) {
                                 offlineMode=false;updateConnectionStatus()
+                                LiveShiftService.start(this@MainActivity,base,uid)
                                 appointmentErrorView?.apply { text="";visibility=View.GONE }
                                 if(consultationWindow==null && selectedNavigation in listOf("home","archive")) {
                                     if(homeAppointmentsRefresh!=null && workspaceReady) homeAppointmentsRefresh?.invoke(snapshot.entries)
@@ -205,6 +206,10 @@ class MainActivity : Activity() {
                         }
                         // Deliver the list before downloading other days and patient cards.
                         AppointmentReminders.refreshFromCache(this,base,uid)
+                        runCatching { WorkflowNotifications.receive(this,base,uid) { path ->
+                            if(token!=auth || server!=base || store.session()?.optString("token")!=auth) throw ApiError(401,"Сесію змінено")
+                            requestAt(base,"GET",path,authToken=auth)
+                        } }
                         if(!isDestroyed && appointmentPrefetchRunning.compareAndSet(false,true)) cacheIo.execute {
                             try {
                                 fun get(path:String):Any {
@@ -395,9 +400,10 @@ class MainActivity : Activity() {
     }
 
     private fun lightSystemBars(target: android.view.Window) {
-        if(Build.VERSION.SDK_INT >= 30) target.insetsController?.setSystemBarsAppearance(0,
+        if(Build.VERSION.SDK_INT >= 30) target.insetsController?.setSystemBarsAppearance(
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
             android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
-        else target.decorView.systemUiVisibility = 0
+        else target.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
     }
 
     private fun mobileApi(): MobileApi = object : MobileApi {
@@ -499,13 +505,24 @@ class MainActivity : Activity() {
             unread.filter { it.isNull("delivered_at") }.forEach { message ->
                 apiAsync("POST", "/api/staff/messages/${message.optLong("id")}/delivered", JSONObject(), onError = {}) {}
             }
-            if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size)
+            if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size, offlineStore(), unread.maxOf { it.optLong("id") })
+            else StaffMessageNotifications.clear(this)
         }
     }
 
     private fun messagesScreen() {
         selectedNavigation = "messages"; backAction = { homeScreen() }
         val body = root(); body.addView(topBar("Повідомлення", ::homeScreen))
+        body.addView(title("Події прийомів", 18f))
+        val events=WorkflowNotifications.history(offlineStore())
+        if(events.length()==0)body.addView(caption("Нові записи, прибуття та зміни прийомів з’являться після синхронізації."))
+        for(i in 0 until events.length()){
+            val event=events.getJSONObject(i);val row=card()
+            row.addView(title(WorkflowNotifications.title(event.optString("kind")),16f))
+            row.addView(caption(listOf(event.optString("start").takeIf { it.length>=16 }?.substring(11,16).orEmpty(),event.optString("room")).filter { it.isNotBlank() }.joinToString(" · ")))
+            row.addView(caption(event.optString("created").replace('T',' ')))
+            body.addView(row)
+        }
         body.addView(title("Від команди центру", 18f))
         val staff = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(staff)
         body.addView(title("Передавання записів", 18f))
@@ -1073,7 +1090,7 @@ class MainActivity : Activity() {
         backAction = { setupScreen() }
         val body = root().apply {
             setPadding(dp(24), dp(36), dp(24), dp(24))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(bg, Color.rgb(29, 34, 41)))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(bg, Color.rgb(233,240,226)))
         }
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         brand.addView(logo(88))
@@ -1096,7 +1113,7 @@ class MainActivity : Activity() {
         }
         form.addView(caption("Логін")); form.addView(login)
         form.addView(caption("Пароль")); form.addView(password)
-        val error = caption("").apply { visibility = View.GONE; setTextColor(Color.rgb(255, 180, 171)) }
+        val error = caption("").apply { visibility = View.GONE; setTextColor(Color.rgb(152,61,53)) }
         form.addView(error)
         var signingIn = false
         var submit: Button? = null
@@ -1292,7 +1309,7 @@ class MainActivity : Activity() {
                         patient.optString("started_at").isNotBlank() -> "● Консультація триває"
                         patient.optString("arrived_at").isNotBlank() -> "✓ Пацієнт прибув"
                         else -> "○ Очікуємо прибуття"
-                    }).apply {setTextColor(if(state=="blocked") Color.rgb(255,180,171) else if(completed(item,patient)&&state!="pending") Color.rgb(122,223,162) else forest)})
+                    }).apply {setTextColor(if(state=="blocked") Color.rgb(152,61,53) else if(completed(item,patient)&&state!="pending") Color.rgb(45,109,76) else forest)})
                     if(active(item,patient) && patient.optString("arrived_at").isBlank()) {
                         lateinit var arrived: Button
                         arrived = primary("Пацієнт прибув") {
@@ -1937,6 +1954,7 @@ class MainActivity : Activity() {
     }
 
     private fun logout() {
+        LiveShiftService.stop(this)
         ShiftNotifications.clear(this)
         StaffMessageNotifications.clear(this)
         consultationWindow?.dismiss(); consultationWindow = null
@@ -2010,11 +2028,12 @@ class MainActivity : Activity() {
             if(AppointmentReminders.allowed(this)) ShiftNotifications.testMessage(this)
             else requestNotificationAccess()
         })
-        listOf("shift_notification" to "Показувати активну зміну у шторці", "new_visit_notifications" to "Повідомляти про нові консультації").forEach { (key, label) ->
+        listOf("shift_notification" to "Показувати активну зміну у шторці", "new_visit_notifications" to "Повідомляти про нові консультації", "workflow_notifications" to "Прибуття та зміни прийомів", "live_shift" to "Фоновий зв’язок під час зміни").forEach { (key, label) ->
             body.addView(CheckBox(this).apply {
                 text = label; setTextColor(ink); isChecked = prefs.getBoolean(key, true)
                 setOnCheckedChangeListener { _, enabled ->
                     prefs.edit().putBoolean(key, enabled).apply()
+                    if(key=="live_shift") { if(enabled)refreshAppointments() else LiveShiftService.stop(this@MainActivity) }
                     if(userId > 0) ShiftNotifications.refresh(this@MainActivity, server, userId)
                 }
             })

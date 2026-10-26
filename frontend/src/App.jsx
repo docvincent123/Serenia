@@ -17,6 +17,9 @@ import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
+import {ModuleDirectory,PeriodActivity,DayTimeline} from './MotionWorkspace.jsx';
+import WorkflowEvents from './WorkflowEvents.jsx';
+import {feedbackFor} from './workflow-events.mjs';
 
 const roleLabels = {
   admin: 'Адміністратор',
@@ -106,8 +109,10 @@ function AppIcon({ name, size = 18 }) {
   const paths = {
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     'waiting-list': <><rect x="3" y="4" width="12" height="17" rx="2"/><path d="M6 8h6M6 12h5M6 16h3"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/></>,
+    'tv-calls': <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M8 9h5M8 12h8"/></>,
+    chevron: <path d="m9 5 7 7-7 7"/>,
     documents: <><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></>,
-    preferences: <><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M18 3l1 1 2-2"/></>,
+    'module-directory': <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
     dashboard: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></>,
     'shift-workspace': <><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M9 3h6v3H9zM8 11h8M8 16h4M15 16l2 2 4-4"/></>,
@@ -178,15 +183,15 @@ function printStandaloneNode(node, title = 'SOLVIA Document') {
 <meta charset="utf-8">
 <title>${safeTitle}</title>
 <style>
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A4 portrait; margin: 14mm 16mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fff; color: #172f27; font-family: "Segoe UI", Arial, sans-serif; }
-  body { width: 210mm; min-height: 297mm; }
+  body { width: auto; }
   .consent-print, .discharge-print {
-    width: 210mm !important;
-    min-height: 297mm !important;
+    width: 100% !important;
+    min-height: 0 !important;
     margin: 0 !important;
-    padding: 14mm 16mm !important;
+    padding: 0 !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -282,9 +287,9 @@ function printStandaloneNode(node, title = 'SOLVIA Document') {
     border-radius: 3mm;
     background: #f8faf9 !important;
   }
-  .discharge-print section { margin-top: 5mm; break-inside: avoid; }
-  .discharge-print section h3 { margin: 0 0 1.5mm; color: #436a59; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; }
-  .discharge-print section p { margin: 0; white-space: pre-wrap; line-height: 1.5; font-size: 9.5pt; }
+  .discharge-print section { margin-top: 5mm; }
+  .discharge-print section h3 { break-after: avoid; margin: 0 0 1.5mm; color: #436a59; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; }
+  .discharge-print section p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; orphans: 3; widows: 3; line-height: 1.5; font-size: 9.5pt; }
   .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16mm; margin-top: 10mm; break-inside: avoid; }
   .signature-block { display: grid; gap: 2mm; }
   .signature-block strong { color: #526b60; font-size: 8pt; }
@@ -361,10 +366,13 @@ async function request(base, token, method, path, body) {
   return data;
 }
 
-function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
+function WorkspaceNavigation({ navigation, page, locked, onNavigate, role }) {
   const active = page === 'patient-card' ? 'patients' : page;
   const groupFor = key => navigationGroups.find(([, , keys]) => keys.includes(key))?.[0];
   const [expanded, setExpanded] = useState(() => new Set(navigationGroups.map(([id]) => id)));
+  const [showAll,setShowAll]=useState(()=>localStorage.getItem('solvia_navigation')==='all');
+  const primary=new Set(({admin:['dashboard','shift-workspace','calendar','patients','staff-messages','module-directory'],reception:['shift-workspace','calendar','patients','waiting-list','module-directory'],psychologist:['calendar','patients','reports','module-directory'],director:['dashboard','workload','discharges','staff-messages','module-directory']})[role]||['module-directory']);
+  function toggleAll(){setShowAll(value=>{const next=!value;localStorage.setItem('solvia_navigation',next?'all':'simple');return next;});}
   useEffect(() => { setExpanded(current => new Set([...current, groupFor(active)])); }, [active]);
   function item(key, label) {
     return <button key={key} disabled={locked && key !== 'staff-messages'} aria-current={active === key ? 'page' : undefined}
@@ -372,8 +380,9 @@ function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
       <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
     </button>;
   }
-  return <nav aria-label="Робочі розділи" className={locked ? 'nav-locked' : ''}>
-    {navigationGroups.map(([id, label, keys]) => {
+  return <nav aria-label="Робочі розділи" className={`${locked ? 'nav-locked' : ''} ${showAll?'navigation-full':'navigation-simple'}`}>
+    {!showAll&&<div className="nav-primary"><span className="nav-section-caption">РОБОЧИЙ ПРОСТІР</span>{navigation.filter(([key])=>primary.has(key)&&key!=='module-directory').map(([key,label])=>item(key,label))}{navigation.filter(([key])=>key==='module-directory').map(([key,label])=>item(key,label))}{!primary.has(active)&&navigation.some(([key])=>key===active)&&<div className="nav-current-section"><span className="nav-section-caption">ВІДКРИТО ЗАРАЗ</span>{item(...navigation.find(([key])=>key===active))}</div>}</div>}
+    {showAll&&navigationGroups.map(([id, label, keys]) => {
       const items = navigation.filter(([key]) => keys.includes(key));
       if(!items.length) return null;
       if(items.length === 1) return <div className="nav-group single" key={id}>{item(...items[0])}</div>;
@@ -385,6 +394,7 @@ function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
         <div id={`nav-${id}`} className="nav-group-items" hidden={!expanded.has(id)}>{items.map(([key, text]) => item(key,text))}</div>
       </section>;
     })}
+    <button className="nav-density-toggle" aria-expanded={showAll} onClick={toggleAll}><AppIcon name={showAll?'close':'menu'} size={17}/><span>{showAll?'Спростити меню':'Більше розділів'}</span><AppIcon name="chevron" size={13}/></button>
   </nav>;
 }
 
@@ -566,26 +576,20 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
   }
 
   return (
-    <div className="login-screen login-refined">
+    <div className="login-screen login-refined login-calm">
       <section className="login-brand">
-        <div className="brand-orbit">
-          <img className="brand-logo" src="/solvia-icon.png" alt="SOLVIA" />
-        </div>
-        <div className="login-brand-copy">
-          <div className="eyebrow light">ПРОСТІР ЦЕНТРУ</div>
-          <h1>Поруч із людьми.<br />У ритмі центру.</h1>
-          <p>Спокійний робочий простір для команди, яка допомагає іншим.</p><div className="login-capabilities"><span>01 · Прийоми та пацієнти</span><span>02 · Кабінети й команда</span><span>03 · Документи та рекомендації</span></div>
-        </div>
-
+        <div className="login-brand-wordmark"><span className="login-solvia-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></span><strong>SOLVIA</strong></div>
+        <div className="login-brand-copy"><span className="eyebrow light">ПРОСТІР ВАШОГО ЦЕНТРУ</span><h1>Злагоджена робота.<br/>Спокійний день.</h1><p>Пацієнти, прийоми й команда в одному місці.</p></div>
+        <div className="login-brand-bottom"><span className="login-brand-rule"/><small>З турботою про людей · QureMed</small></div>
       </section>
 
       <section className="login-panel">
         <form className="login-card" onSubmit={submit}>
           <div className="product">
-            <div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
+            <div className="product-mark login-mobile-mark"><AppIcon name="lock" size={22}/></div>
             <div>
-              <strong>SOLVIA</strong>
-              <span>by QureMed</span>
+              <strong>Вітаємо у SOLVIA</strong>
+              <span>Робочий простір центру</span>
             </div>
           </div>
 
@@ -594,7 +598,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
-          <div className={`alert ${availability.state === 'offline' ? 'error' : ''}`} role="status" aria-live="polite" data-testid="login-server-status">{availability.message}</div>
+          <div className={`alert login-availability ${availability.state === 'offline' ? 'error' : ''}`} role="status" aria-live="polite" data-testid="login-server-status">{availability.message}</div>
           {error && <div className="alert error" role="alert">{error}</div>}
 
           <Field label="Логін" full>
@@ -609,22 +613,22 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
           </Button>
 
-          <label className="field full">Підключити центр із файла
-            <input type="file" accept=".solvia,.json" disabled={checking||busy} onChange={e=>{importConnection(e.target.files?.[0]);e.target.value='';}} />
-          </label>
           <button type="button" className="server-toggle" onClick={() => setShowServer((v) => !v)}>
             {showServer ? 'Сховати підключення' : 'Підключення до центру'}
           </button>
 
           {showServer && (
-            <>
+            <section className="login-connection" aria-label="Налаштування підключення">
+              <label className="field full">Підключити центр із файла
+                <input type="file" accept=".solvia,.json" disabled={checking||busy} onChange={e=>{importConnection(e.target.files?.[0]);e.target.value='';}} />
+              </label>
               <Field label="Адреса сервера центру" hint="Linux-сервер: https://192.168.1.105:8443. Адресу покаже інсталятор сервера." full>
                 <input value={server} onChange={(e) => { setServer(e.target.value); setConnection(''); }} spellCheck="false" placeholder="https://192.168.1.105:8443" />
               </Field>
               <Button type="button" variant="secondary" onClick={checkConnection} disabled={checking}>{checking ? 'Перевіряємо…' : 'Перевірити та зберегти адресу'}</Button>
               <p>Перед підключенням установіть CA-сертифікат, отриманий від адміністратора вашого Linux-сервера.</p>
               {connection && <div className="alert" role="status">{connection}</div>}
-            </>
+            </section>
           )}
 
           <div className="login-foot">SOLVIA · QureMed</div>
@@ -695,48 +699,20 @@ function Dashboard({ api, role, onNavigate, access }) {
       {error && <div className="alert error">{error}</div>}
       {!stats ? <Spinner /> : (
         <>
+
           <div className="overview-primary" aria-label="Основні показники">
             {[cards[1],cards[4],cards[6],cards[3]].map(([label,value,hint],i)=><article className="overview-kpi" key={label}><span className="overview-kpi-icon"><AppIcon name={['patients','calendar','reports','families'][i]} /></span><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></article>)}
           </div>
           <div className="overview-workbench">
-            <section className="surface overview-actions"><div className="section-head"><div><h2>Робочі дії</h2><p>Перейдіть до потрібного розділу.</p></div></div><RoleActions role={role} onNavigate={onNavigate} /></section>
+            <PeriodActivity stats={stats} onNavigate={onNavigate}/>
             <section className="surface overview-status"><div className="section-head"><h2>{role==='admin'?'Стан центру':'Документи та команда'}</h2></div>
               {role==='admin'?<><div className="overview-status-row"><span>Реєстратура</span><strong className={access?.allowed?'status-positive':'status-pending'}>{access?.allowed?'Доступ надано':'Очікує дозволу'}</strong></div><div className="overview-status-row"><span>База даних</span><strong>{system?.database?.name || 'Стан не завантажено'}</strong></div><div className="overview-status-row"><span>Резервна копія</span><strong>{!system?.backups?.length?'Немає даних':system.backups[0].status==='success'?system.backups[0].created?.slice(0,16).replace('T',' '):'Потребує перевірки'}</strong></div><button className="button secondary" onClick={()=>onNavigate('devices')}>Стан пристроїв</button></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
             </section>
           </div>
+          <details className="surface motion-quick-strip"><summary>Швидкі дії</summary><RoleActions role={role} onNavigate={onNavigate}/></details>
           <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
-          <section className="surface">
-            <div className="section-head">
-              <div>
-                <div className="eyebrow">НАВАНТАЖЕННЯ КОМАНДИ</div>
-                <h2>Психологи</h2>
-              </div>
-              <Badge tone="forest">{stats.load?.length || 0} спеціалістів</Badge>
-            </div>
-
-            {!stats.load?.length ? <Empty title="Немає даних" text="Додайте психологів і записи в календар." /> : (
-              <div className="load-list">
-                {stats.load.map((item) => {
-                  const hours = Number(item.hours || 0);
-                  const width = Math.max(0,Math.min(100,hours / Math.max(1,...stats.load.map(x=>Number(x.hours || 0))) * 100));
-                  return (
-                    <div className="load-row" key={item.name}>
-                      <div className="avatar">{String(item.name || '?').slice(0, 1).toUpperCase()}</div>
-                      <div className="load-main">
-                        <div className="load-label">
-                          <strong>{item.name}</strong>
-                          <span>{item.appointments} записів · {hours} год</span>
-                        </div>
-                        <div className="progress"><span style={{ width: `${width}%` }} /></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
+          <details className="surface motion-analysis-more"><summary>Структура звернень та джерела направлень</summary>
           <div className="analytics-grid">
             <section className="surface">
               <div className="section-head"><div><div className="eyebrow">СТРУКТУРА ЗВЕРНЕНЬ</div><h2>Категорії пацієнтів</h2></div></div>
@@ -753,6 +729,7 @@ function Dashboard({ api, role, onNavigate, access }) {
               </div>
             </section>
           </div>
+          </details>
         </>
       )}
     </>
@@ -761,26 +738,33 @@ function Dashboard({ api, role, onNavigate, access }) {
 
 function Calendar({ api, role, openPatient, onBook, initialDate }) {
   const [date, setDate] = useState(initialDate || localDate());
+  const [view,setView]=useState('grid'),[psychologists,setPsychologists]=useState([]),[psychologistFilter,setPsychologistFilter]=useState('');
+  function moveDate(days){const next=new Date(date+'T12:00:00');next.setDate(next.getDate()+days);setDate(localDate(next));}
   const [appointments, setAppointments] = useState([]);
   const [loading,setLoading]=useState(true);
   const generation=useRef(0);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const canSchedule = role === 'admin' || role === 'reception';
+  const visibleAppointments=useMemo(()=>appointments.filter(a=>!psychologistFilter||String(a.psychologist_id)===psychologistFilter),[appointments,psychologistFilter]);
 
-  async function load(targetDate = date) {
-    const request=++generation.current;setLoading(true);setError('');
+  async function load(targetDate = date,silent=false) {
+    const request=++generation.current;if(!silent)setLoading(true);setError('');
     try {
-      const result=await api('GET', `/api/appointments?date=${targetDate}`);
-      if(request===generation.current){setAppointments(result);setSelected(null);}
+      const [result,meta]=await Promise.all([api('GET', `/api/appointments?date=${targetDate}`),api('GET','/api/meta').catch(()=>({psychologists:[]}))]);
+      if(request===generation.current){setAppointments(result);setPsychologists(role==='psychologist'?[]:(meta.psychologists||[]));setSelected(previous=>previous?result.find(item=>item.id===previous.id)||null:null);}
     } catch(e){if(request===generation.current)setError(e.message);}
     finally{if(request===generation.current)setLoading(false);}
   }
 
-  useEffect(() => { load(date);return()=>{++generation.current;}; }, [date]);
+  useEffect(() => {
+    void load(date);const refresh=()=>{if(!document.hidden&&!document.querySelector('[role=dialog]'))void load(date,true);};
+    const timer=setInterval(refresh,10000);window.addEventListener('solvia:workflow-updated',refresh);
+    return()=>{++generation.current;clearInterval(timer);window.removeEventListener('solvia:workflow-updated',refresh);};
+  },[date]);
 
   function openNew() { onBook({date}); }
-  function openEdit() { if(selected) onBook({date:selected.start.slice(0,10),appointmentId:selected.id}); }
+  function openEdit() { if(selected) onBook({date:(selected.start?.slice(0,10)||date),appointmentId:selected.id}); }
 
   async function cancelAppointment() {
     if (!selected) return;
@@ -822,19 +806,20 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
 
       {error && <div className="alert error">{error}</div>}
 
-      <div className="calendar-layout">
+      <div className="motion-calendar-toolbar"><div className="motion-calendar-date-nav"><button className="button secondary" aria-label="Попередній день" onClick={()=>moveDate(-1)}>‹</button><button className="button secondary" onClick={()=>setDate(localDate())}>Сьогодні</button><button className="button secondary" aria-label="Наступний день" onClick={()=>moveDate(1)}>›</button></div><div className="motion-calendar-options">{role!=='psychologist'&&<select aria-label="Психолог у календарі" value={psychologistFilter} onChange={e=>{setPsychologistFilter(e.target.value);setSelected(null);}}><option value="">Усі психологи</option>{psychologists.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}<div className="motion-calendar-views" role="group" aria-label="Вигляд календаря"><button aria-pressed={view==='grid'} onClick={()=>setView('grid')}>Сітка часу</button><button aria-pressed={view==='list'} onClick={()=>setView('list')}>Список</button></div></div></div>
+      <div className={`calendar-layout motion-calendar-layout ${selected?'has-selection':''}`}>
         <section className="surface calendar-surface">
           <div className="section-head compact">
             <div>
               <div className="eyebrow">ДЕНЬ</div>
               <h2>{date}</h2>
             </div>
-            <Badge tone="stone">{appointments.length} подій</Badge>
+            <Badge tone="stone">{visibleAppointments.length} подій</Badge>
           </div>
 
-          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:!appointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
+          {loading?<div className="directory-loading" role="status"><Spinner/><span>Завантажуємо розклад…</span></div>:error&&!appointments.length?<Button variant="secondary" onClick={()=>load(date)}>Повторити завантаження</Button>:view==='grid'?<DayTimeline appointments={visibleAppointments} psychologists={psychologists.filter(p=>!psychologistFilter||String(p.id)===psychologistFilter)} selected={selected} onSelect={setSelected} canSchedule={canSchedule} onEmptySlot={options=>onBook({date,...options})}/>:!visibleAppointments.length ? <Empty title="Вільний день" text="На цю дату записів ще немає." /> : (
             <div className="appointment-list">
-              {appointments.map((item) => (
+              {visibleAppointments.map((item) => (
                 <button
                   key={item.id}
                   className={`appointment ${selected?.id === item.id ? 'selected' : ''} ${item.status}`}
@@ -876,7 +861,7 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
         </section>
 
         <aside className="surface context-panel">
-          <div className="eyebrow">ДЕТАЛІ</div>
+          <div className="eyebrow">ДЕТАЛІ ЗУСТРІЧІ</div>
           {!selected ? (
             <div className="context-empty">
               <div className="context-symbol">↗</div>
@@ -887,15 +872,16 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
             <div className="context-content">
               <h2>{selected.kind === 'group' ? 'Групове заняття' : selected.patients?.[0]?.name}</h2>
               <dl>
-                <div><dt>Час</dt><dd>{selected.start.slice(11, 16)} — {selected.end.slice(11, 16)}</dd></div>
+                <div><dt>Час</dt><dd>{(selected.start?.slice(11,16)||'—')} — {(selected.end?.slice(11,16)||'—')}</dd></div>
                 <div><dt>Психолог</dt><dd>{selected.psychologist}</dd></div>
                 <div><dt>Кабінет</dt><dd>{selected.room}</dd></div>
                 <div><dt>Статус</dt><dd>{statusLabel(selected.status)}</dd></div>
               </dl>
               <div className="context-people">
                 <span>Учасники</span>
-                {selected.patients.map((p) => <strong key={p.id}>{p.name}</strong>)}
+                {(selected.patients||[]).map((p) => <strong key={p.id}>{p.name}</strong>)}
               </div>
+              <div className="motion-patient-actions">{(selected.patients||[]).map(p=><button className="button secondary" key={p.id} onClick={()=>openPatient(p.id)}>Картка пацієнта · {p.name}</button>)}</div>
               {canSchedule && ['draft','scheduled','confirmed'].includes(selected.status) && (
                 <div className="context-actions">
                   <Button variant="secondary" onClick={openEdit}>Перенести / змінити</Button>
@@ -3467,10 +3453,11 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [bookingIntent,setBookingIntent]=useState(null);
   const [bookingResult,setBookingResult]=useState(null);
   const [bookingVersion,setBookingVersion]=useState(0);
+  const [calendarFocus,setCalendarFocus]=useState(null);
   const [createRequest,setCreateRequest]=useState(null);
   function startBooking(options){setBookingIntent({...options,date:options.date || receptionAccess?.access_date || localDate()});}
   function registerPatient(date,bookAfter=false){setBookingIntent(null);setCreateRequest({key:Date.now(),date:date || receptionAccess?.access_date || localDate(),bookAfter});navigate('patients');}
-  function booked(result){setBookingIntent(null);setBookingResult(result);setBookingVersion(v=>v+1);}
+  function booked(result){setBookingIntent(null);setBookingResult(result);setCalendarFocus(result.date);setBookingVersion(v=>v+1);}
   const [patientId, setPatientId] = useState(null);
   const [patientOrigin, setPatientOrigin] = useState('patients');
   const [shift, setShift] = useState(null);
@@ -3480,7 +3467,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [accessDialog,setAccessDialog]=useState(false);
   const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '' });
-  const navigation = [...navFor(user.role), ...(['admin','reception','psychologist'].includes(user.role)?[['tv-calls','TV-виклики']]:[]), ['preferences', 'Налаштування профілю']];
+  const navigation = [['module-directory','Усі розділи'],...navFor(user.role), ...(['admin','reception','psychologist'].includes(user.role)?[['tv-calls','TV-виклики']]:[]), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
   useEffect(() => {
@@ -3527,10 +3514,11 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const content = (() => {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
+    if (page === 'module-directory') return <ModuleDirectory role={user.role} onNavigate={navigate} Icon={AppIcon}/>;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
     if (page === 'dashboard') return <Dashboard api={api} role={user.role} onNavigate={navigate} access={receptionAccess} />;
     if (page === 'tv-calls') return <TvCallPanel api={api} />;
-    if (page === 'calendar') return <Calendar key={bookingVersion} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={bookingResult?.date} />;
+    if (page === 'calendar') return <Calendar key={`${bookingVersion}:${calendarFocus||''}`} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={calendarFocus||bookingResult?.date} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} onBook={startBooking} createRequest={createRequest} onCreateRequestConsumed={()=>setCreateRequest(null)} />;
     if (page === 'families') return <Families api={api} openPatient={openPatient} />;
     if (page === 'team') return <Team api={api} currentUser={user} />;
@@ -3563,11 +3551,11 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         }
       }}>
         <div className="sidebar-brand">
-          <div className="product-mark inverse"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
-          <div><strong>SOLVIA {pkg.version}</strong><span>by QureMed</span></div>
+          <div className="product-mark inverse motion-brand-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></div>
+          <div><strong>SOLVIA</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · QureMed</small></div>
         </div>
 
-        <WorkspaceNavigation navigation={navigation.filter(([key]) => !['settings', 'preferences'].includes(key))} page={page} locked={locked} onNavigate={navigate} />
+        <WorkspaceNavigation role={user.role} navigation={navigation.filter(([key]) => !['settings', 'preferences'].includes(key))} page={page} locked={locked} onNavigate={navigate} />
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
@@ -3609,8 +3597,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
                 <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
               </div>
             </div>
-            {['admin','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
+            <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
             <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
           </div>
         </>}
@@ -3718,7 +3706,10 @@ export default function App() {
 
   async function api(method, path, body) {
     try {
-      return await request(apiBase, token, method, path, body);
+      const result=await request(apiBase, token, method, path, body);
+      const feedback=feedbackFor(method,path,body||{});
+      if(feedback&&activeToken.current===token)window.dispatchEvent(new CustomEvent('solvia:feedback',{detail:feedback}));
+      return result;
     } catch (e) {
       if (e.status === 401 && activeToken.current === token) {
         clearPcSession();

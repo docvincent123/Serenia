@@ -8,12 +8,16 @@
 #include <string>
 #include <cstdlib>
 #include <fstream>
+#include <map>
+#include <cwchar>
 
 using Microsoft::WRL::Callback;
 using Microsoft::WRL::ComPtr;
 
 namespace {
 HWND g_window = nullptr;
+bool g_noticeVisible=false;
+constexpr UINT WorkflowNoticeMessage=WM_APP+23;
 ComPtr<ICoreWebView2Controller> g_controller;
 ComPtr<ICoreWebView2> g_webview;
 
@@ -54,6 +58,22 @@ void resizeWebView() {
 void fatal(const wchar_t* message) {
     MessageBoxW(g_window, message, L"SOLVIA", MB_OK | MB_ICONERROR);
     if (g_window) PostMessageW(g_window, WM_CLOSE, 0, 0);
+}
+
+void workflowNotice(const std::wstring& kind) {
+    static const std::map<std::wstring,std::wstring> titles={
+        {L"appointment.created",L"Новий запис"},{L"appointment.updated",L"Запис оновлено"},
+        {L"appointment.cancelled",L"Запис скасовано"},{L"appointment.no_show",L"Відмічено неявку"},
+        {L"patient.arrived",L"Пацієнт прибув"},{L"patient.called",L"Пацієнта запрошено до кабінету"},
+        {L"consultation.started",L"Консультацію розпочато"},{L"consultation.completed",L"Консультацію завершено"}};
+    auto found=titles.find(kind);if(found==titles.end())return;
+    NOTIFYICONDATAW data{};data.cbSize=sizeof(data);data.hWnd=g_window;data.uID=1;
+    data.uFlags=NIF_ICON|NIF_MESSAGE|NIF_TIP|NIF_INFO;data.uCallbackMessage=WorkflowNoticeMessage;
+    data.hIcon=LoadIconW(nullptr,IDI_INFORMATION);wcscpy_s(data.szTip,L"SOLVIA");
+    wcscpy_s(data.szInfoTitle,L"SOLVIA");
+    std::wstring body=found->second+L". Відкрийте SOLVIA для перегляду.";
+    wcsncpy_s(data.szInfo,body.c_str(),_TRUNCATE);data.dwInfoFlags=NIIF_INFO|NIIF_NOSOUND;
+    g_noticeVisible=Shell_NotifyIconW(g_noticeVisible?NIM_MODIFY:NIM_ADD,&data)!=FALSE;
 }
 
 std::wstring launchUrl() {
@@ -138,6 +158,7 @@ void createWebView(HWND hwnd) {
                                         if (FAILED(args->TryGetWebMessageAsString(&raw)) || !raw) return S_OK;
                                         std::wstring message(raw);
                                         CoTaskMemFree(raw);
+                                        if(message.rfind(L"workflow:",0)==0){workflowNotice(message.substr(9));return S_OK;}
                                         if (message == L"product-updates") {
                                             ShellExecuteW(g_window, L"open", L"https://github.com/docvincent123/Serenia/releases", nullptr, nullptr, SW_SHOWNORMAL);
                                             return S_OK;
@@ -265,6 +286,9 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
             break;
+        case WorkflowNoticeMessage:
+            if(lParam==NIN_BALLOONUSERCLICK||lParam==WM_LBUTTONUP){ShowWindow(hwnd,SW_RESTORE);SetForegroundWindow(hwnd);}
+            return 0;
         case WM_SIZE:
             resizeWebView();
             return 0;
@@ -275,6 +299,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             DestroyWindow(hwnd);
             return 0;
         case WM_DESTROY:
+            if(g_noticeVisible){NOTIFYICONDATAW data{};data.cbSize=sizeof(data);data.hWnd=hwnd;data.uID=1;Shell_NotifyIconW(NIM_DELETE,&data);g_noticeVisible=false;}
             g_webview.Reset();
             if (g_controller) {
                 g_controller->Close();
@@ -320,9 +345,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         0,
         wc.lpszClassName,
 #ifdef SOLVIA_SERVER_CONSOLE
-        L"SOLVIA Server Console 3.0.0 • QureMed",
+        L"SOLVIA Server Console 3.1.0 • QureMed",
 #else
-        L"SOLVIA 3.0.0 by QureMed • Центр психологічної реабілітації",
+        L"SOLVIA 3.1.0 by QureMed • Центр психологічної реабілітації",
 #endif
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,

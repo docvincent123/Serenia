@@ -131,21 +131,21 @@ jobs:
       - name: Install and open Windows client without local server
         shell: powershell
         timeout-minutes: 3
-        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-3.0.0-Windows-x64.exe
+        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-3.1.0-Windows-x64.exe
 
       - name: Install and open separate Server Console without local server
         shell: pwsh
-        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-3.0.0-Windows-x64.exe -Component console
+        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-3.1.0-Windows-x64.exe -Component console
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.0.0-Windows-x64-portable
+          name: SOLVIA-3.1.0-Windows-x64-portable
           path: out/SOLVIA/
           retention-days: 14
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.0.0-Setup-EXE
+          name: SOLVIA-3.1.0-Setup-EXE
           path: out/installer/*.exe
           if-no-files-found: error
           retention-days: 14
@@ -184,7 +184,7 @@ jobs:
         run: cmake -S . -B build-server -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/tmp/vcpkg/scripts/buildsystems/vcpkg.cmake -DBUILD_TESTING=ON
 
       - name: Build server
-        run: cmake --build build-server --target SolviaServer --parallel 2
+        run: cmake --build build-server --target SolviaServer SolviaLicenseTests --parallel 2
 
       - name: Run PostgreSQL privacy and workflow tests
         env:
@@ -244,12 +244,12 @@ jobs:
           sudo pg_lsclusters || true
 
       - name: Archive Linux package
-        run: tar -C out -czf out/SOLVIA-3.0.0-Linux-x64.tar.gz SOLVIA-Linux
+        run: tar -C out -czf out/SOLVIA-3.1.0-Linux-x64.tar.gz SOLVIA-Linux
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.0.0-Linux-x64-installer
-          path: out/SOLVIA-3.0.0-Linux-x64.tar.gz
+          name: SOLVIA-3.1.0-Linux-x64-installer
+          path: out/SOLVIA-3.1.0-Linux-x64.tar.gz
           if-no-files-found: error
           retention-days: 14
 

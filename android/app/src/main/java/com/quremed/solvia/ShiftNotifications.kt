@@ -66,7 +66,7 @@ object ShiftNotifications {
         if(!AppointmentReminders.allowed(c)) return
         channels(c)
         val expires = minOf(session.optLong("expires"), LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
-        if(settings.getBoolean("shift_notification", true)) {
+        if(settings.getBoolean("shift_notification", true) && !LiveShiftService.running) {
             val text = "Активних пацієнтів: $count" + if(next.isNotBlank()) " · прийом ${next.substring(11,16)}" else " · усі прийоми завершені"
             manager(c).notify(SHIFT_ID, Notification.Builder(c, SHIFT_CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
                 .setContentTitle("SOLVIA · активна зміна $today").setContentText(text).setContentIntent(open(c))

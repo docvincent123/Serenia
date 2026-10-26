@@ -54,6 +54,10 @@ class OfflineSyncJob : JobService() {
                     if(!snapshot.shift.optBoolean("open")) { AppointmentReminders.cancelScope(this,base,uid);ShiftNotifications.refresh(this,base,uid) }
                     else if(!cancelled.get() && store.session()?.optString("token")==auth) {
                         AppointmentReminders.refreshFromCache(this,base,uid)
+                        runCatching { WorkflowNotifications.receive(this,base,uid) { path ->
+                            if(cancelled.get() || store.session()?.optString("token")!=auth)throw SyncFailure(401,"Сесію змінено")
+                            get(base,auth,path)
+                        } }
                         AppointmentInbox.cacheMissingCards(store,snapshot.entries) { path ->
                             if(cancelled.get() || store.session()?.optString("token")!=auth) throw SyncFailure(401,"Сесію змінено")
                             get(base,auth,path)
@@ -77,7 +81,7 @@ class OfflineSyncJob : JobService() {
                             if(cancelled.get() || store.session()?.optString("token") != auth) break
                             send(base, auth, JSONObject(), "/api/staff/messages/${message.optLong("id")}/delivered")
                         }
-                        if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size)
+                        if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size, store, unread.maxOf { it.optLong("id") })
                         else StaffMessageNotifications.clear(this)
                     }
 

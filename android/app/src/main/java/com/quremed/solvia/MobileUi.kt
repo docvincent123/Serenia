@@ -14,15 +14,15 @@ import android.widget.TextView
 
 /** One native visual language for the psychologist's phone workspace. */
 object MobileUi {
-    val background = Color.rgb(16, 20, 27)
-    val ink = Color.rgb(242, 245, 248)
-    val muted = Color.rgb(172, 182, 193)
-    val accent = Color.rgb(246, 194, 44)
-    val onAccent = Color.rgb(24, 22, 16)
-    val soft = Color.rgb(65, 55, 25)
-    val border = Color.rgb(52, 64, 79)
-    val panel = Color.rgb(27, 34, 44)
-    val buttonInk = Color.rgb(233, 238, 244)
+    val background = Color.rgb(243,243,233)
+    val ink = Color.rgb(17,44,43)
+    val muted = Color.rgb(105,127,116)
+    val accent = Color.rgb(17,44,43)
+    val onAccent = Color.rgb(167,237,207)
+    val soft = Color.rgb(211,239,223)
+    val border = Color.rgb(219,228,215)
+    val panel = Color.rgb(255,255,252)
+    val buttonInk = Color.rgb(17,44,43)
     fun textScale(context: Context) = when(context.getSharedPreferences("solvia_settings", 0).getInt("text_size", 0)) { 1 -> 1.12f; 2 -> 1.25f; else -> 1f }
     fun dp(context: Context, n: Int) = (n * context.resources.displayMetrics.density).toInt()
     fun surface(context: Context, color: Int = panel, radius: Int = 16, outlined: Boolean = false) = GradientDrawable().apply {
@@ -36,8 +36,8 @@ object MobileUi {
         minHeight = dp(context, 52); minimumHeight = dp(context, 52); minWidth = 0; minimumWidth = 0
         setPadding(dp(context, 14), dp(context, 9), dp(context, 14), dp(context, 9))
         backgroundTintList = null; stateListAnimator = null; elevation = 0f
-        background = RippleDrawable(ColorStateList.valueOf(Color.argb(45, 246, 194, 44)),
-            surface(context, if(primary) accent else if(selected) soft else Color.rgb(44, 51, 62), 14, false), null)
+        background = RippleDrawable(ColorStateList.valueOf(Color.argb(45,72,128,95)),
+            surface(context, if(primary) accent else if(selected) soft else Color.rgb(255,255,252), 14, false), null)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(context, 8) }
         setOnClickListener { action() }
     }

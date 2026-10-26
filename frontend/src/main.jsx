@@ -12,6 +12,7 @@ import './reception.css';
 import './desktop-system.css';
 import './desktop-forms.css';
 import './monochrome.css';
+import './mint-workspace.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

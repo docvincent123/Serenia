@@ -65,6 +65,63 @@ class Scenario(unittest.TestCase):
         code, result=self.call(method,path,body,self.tokens.get(role))
         self.assertEqual(code,status,result)
         return result
+    def test_a0_live_workflow_events_and_tv(self):
+        def sql(statement):
+            return subprocess.check_output(['psql',self.database,'-X','-qAt','-v','ON_ERROR_STOP=1','-c',statement],text=True).strip()
+        day=dt.date.today().isoformat()
+        original_shift=self.api('admin','GET','/api/shift-day')
+        policy=self.api('admin','GET','/api/settings/workflow')
+        aid=patient=room=other=None;tv_device=None
+        self.api('admin','POST','/api/reception-access',{'access_date':day,'start_time':'00:00','enabled':True})
+        self.api('admin','PATCH','/api/settings/workflow',{'opening_time':'00:00','closing_time':'23:59','working_days':'1234567'})
+        try:
+            baseline=self.api('admin','GET','/api/workflow-events')
+            self.assertTrue(baseline['initial'])
+            self.api('admin','GET','/api/workflow-events?after=-1',status=400)
+            psy=self.api('psychologist','GET','/api/me')['id']
+            other=self.api('admin','POST','/api/users',{'name':'Я тестовий інший психолог','login':'workflow-other','password':'workflow-test-password','role':'psychologist'})['id']
+            _,auth=self.call('POST','/api/login',{'login':'workflow-other','password':'workflow-test-password','platform':'CI'})
+            room=self.api('admin','POST','/api/rooms',{'name':'Workflow integration room'})['id']
+            patient=self.api('admin','POST','/api/patients',{'name':'Тестовий Пацієнт Подій','phone':'+380000004444','dob':'1991-01-01','category':'Інше','psychologist_id':psy})['id']
+            minute=min(1410,dt.datetime.now().hour*60+dt.datetime.now().minute)
+            clock=lambda n:f'{n//60:02d}:{n%60:02d}'
+            booking={'psychologist_id':psy,'room_id':room,'patient_ids':[patient],'kind':'individual','start':day+'T'+clock(minute),'end':day+'T'+clock(minute+29)}
+            aid=self.api('admin','POST','/api/appointments',booking)['id']
+            cursor=baseline['cursor']
+            own=self.api('psychologist','GET',f'/api/workflow-events?after={cursor}')
+            self.assertTrue(any(e['kind']=='appointment.created' and e['appointment_id']==aid for e in own['events']))
+            self.assertEqual(self.call('GET',f'/api/workflow-events?after={cursor}',token=auth['token'])[1]['events'],[])
+            payload={'appointment_id':aid,'patient_id':patient}
+            after_created=own['cursor']
+            self.api('admin','POST','/api/tv/call',payload,status=409)
+            self.assertEqual(self.api('admin','GET',f'/api/workflow-events?after={after_created}')['events'],[],'Failed writes do not emit events')
+            self.api('admin','POST',f'/api/appointments/{aid}/arrival',{'patient_id':patient})
+            self.api('admin','POST',f'/api/appointments/{aid}/arrival',{'patient_id':patient})
+            self.api('admin','POST','/api/tv/call',payload)
+            pair=self.call('POST','/api/tv/pair',{})[1]
+            tv_device=self.api('admin','POST','/api/admin/tv-displays',{'code':pair['code'],'name':'Workflow TV','room_id':room,'message':'Test','page_seconds':6,'show_full_names':False,'enabled':True})['id']
+            feed=self.call('GET','/api/tv/schedule',token=pair['token'])[1]
+            self.assertEqual(next(e for e in feed['entries'] if e['appointment_id']==aid)['state'],'called')
+            self.api('psychologist','POST',f'/api/appointments/{aid}/start',{'patient_id':patient})
+            self.api('psychologist','POST','/api/consultations',{'patient_id':patient,'appointment_id':aid,'note':'PRIVATE_WORKFLOW_TEST_DO_NOT_LEAK'})
+            events=self.api('psychologist','GET',f'/api/workflow-events?after={cursor}')['events']
+            self.assertEqual([e['kind'] for e in events].count('patient.arrived'),1)
+            self.assertTrue(any(e['kind']=='consultation.completed' for e in events))
+            self.assertNotIn('PRIVATE_WORKFLOW_TEST_DO_NOT_LEAK',json.dumps(events))
+            director=self.api('director','GET',f'/api/workflow-events?after={cursor}')['events']
+            self.assertTrue(director)
+            self.assertTrue(all('patient_id' not in e and 'appointment_id' not in e for e in director))
+            self.assertFalse(any(e['appointment_id']==aid for e in self.call('GET','/api/tv/schedule',token=pair['token'])[1]['entries']))
+        finally:
+            if tv_device:self.api('admin','DELETE',f'/api/admin/tv-displays/{tv_device}',{})
+            if aid:sql(f'DELETE FROM consultations WHERE appointment_id={aid}; DELETE FROM appointments WHERE id={aid}')
+            if patient:sql(f'DELETE FROM patients WHERE id={patient}')
+            if room:sql(f'DELETE FROM rooms WHERE id={room}')
+            if other:sql(f'DELETE FROM audit WHERE user_id={other}; DELETE FROM users WHERE id={other}')
+            self.api('admin','PATCH','/api/settings/workflow',{k:v for k,v in policy.items() if k!='id'})
+            if not original_shift.get('open'):
+                sql("DELETE FROM reception_access WHERE access_date='"+day+"'; DELETE FROM shift_days WHERE shift_date='"+day+"'")
+
     def test_a_local_desktop_cors(self):
         for method in ('GET','OPTIONS'):
             for origin in ('solvia://app','https://app.solvia.invalid','https://untrusted.invalid'):

@@ -15,7 +15,7 @@ const server=createServer(async(req,res)=>{try{
   res.end(await readFile(path));
 }catch{res.writeHead(404).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
-const browser=await chromium.launch({headless:true});
+const browser=await chromium.launch({headless:true,...(process.env.SOLVIA_CHROMIUM_EXECUTABLE?{executablePath:process.env.SOLVIA_CHROMIUM_EXECUTABLE}:{})});
 try{
   const context=await browser.newContext({viewport:{width:1920,height:1080}}),page=await context.newPage();
   let paired=false,offline=false,revoked=false;const errors=[];
@@ -44,6 +44,14 @@ try{
     assert(last.y+last.height<=footer.y,'All rows must fit above the news ticker');
     assert(footer.y+footer.height<=viewport.height,'News ticker fits the TV viewport');
   }
+  await page.getByRole('button',{name:'Увімкнути звук',exact:true}).click();
+  await page.getByRole('button',{name:'Звук увімкнено',exact:true}).waitFor();
+  entries.push({...entries[1],appointment_id:99,patient_id:99,patient:'Новий тестовий пацієнт'});
+  await page.getByText('Новий запис у розкладі',{exact:true}).waitFor();
+  entries[1]={...entries[1],state:'waiting'};
+  await page.getByText('Пацієнт прибув',{exact:true}).waitFor();
+  entries[1]={...entries[1],state:'called',called_at:1792323001};
+  await page.locator('.tv-event-flash').getByText('Запрошуємо до кабінету',{exact:true}).waitFor();
   const before=await page.locator('.tv-row').first().textContent();
   await page.waitForFunction(text=>document.querySelector('.tv-row')?.textContent!==text,before);
   await mkdir('out/design',{recursive:true});await page.screenshot({path:'out/design/solvia-tv-720p.png'});

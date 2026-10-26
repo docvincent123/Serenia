@@ -28,7 +28,7 @@ export function navFor(role) {
 
 
 export const navigationGroups = [
-  ['overview', 'Огляд', ['dashboard']],
+  ['overview', 'Огляд', ['dashboard','module-directory']],
   ['appointments', 'Прийоми', ['shift-workspace', 'calendar', 'waiting-list', 'tv-calls']],
   ['patients', 'Пацієнти та супровід', ['patients', 'families', 'archive']],
   ['team', 'Команда та кабінети', ['team', 'rooms', 'supervisions', 'staff-messages']],

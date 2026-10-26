@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="SolviaTheme" parent="SolviaBase">
-        <item name="android:navigationBarColor">#0C0F13</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:navigationBarColor">#F3F3E9</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>
