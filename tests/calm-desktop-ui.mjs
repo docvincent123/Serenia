@@ -79,6 +79,8 @@ try{
   assert.equal(await page.getByLabel('Підключити центр із файла').count(),0,'Saved-connection login hides technical setup');
   for(const viewport of [{width:1440,height:900},{width:1024,height:600},{width:390,height:844}]){
     await page.setViewportSize(viewport);const card=await page.locator('.login-card').boundingBox();
+    const password=await page.locator('#login-password').boundingBox(),show=await page.getByRole('button',{name:'Показати',exact:true}).boundingBox();
+    assert(show.x>=password.x&&show.x+show.width<=password.x+password.width&&show.y>=password.y&&show.y+show.height<=password.y+password.height+1,'Password visibility control remains inside the field');
     assert(card.x>=0&&card.x+card.width<=viewport.width+1,'Login fits screen width');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
     await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).scrollIntoViewIfNeeded();

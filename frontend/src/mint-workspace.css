@@ -346,9 +346,9 @@
  .login-calm .field {margin-bottom:17px;}
  .login-calm .field>label,.login-calm .field>span {font-size:12px;color:#345449;font-weight:550;margin-bottom:8px;}
  .login-calm input:not([type=file]) {min-height:48px;background:#fffffc;border-color:#d0ddcf;border-radius:11px;padding:12px 14px;}
- .login-calm .password-control {position:relative;}
+ .login-calm .password-control {position:relative;display:block;}
  .login-calm .password-control input {padding-right:82px;}
- .login-calm .password-control>button {font-size:11px;color:#597968;background:transparent;border:0;}
+ .login-calm .password-control>button {position:absolute;top:0;right:8px;height:48px;padding:0 8px;font-size:11px;color:#597968;background:transparent;border:0;}
  .login-calm .login-submit {width:100%;min-height:48px;margin:6px 0 12px;font-size:14px;}
  .login-calm .server-toggle {font-size:12px;padding:9px 0;display:block;margin:0 auto;color:#5a7767;}
  .login-calm .login-connection {padding:18px;margin-top:12px;background:#fffffc;border:1px solid #dbe4d7;border-radius:13px;}
