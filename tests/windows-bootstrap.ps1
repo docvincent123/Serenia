@@ -8,21 +8,33 @@ $root = Join-Path $env:TEMP ('solvia-pg-' + [guid]::NewGuid())
 $data = Join-Path $root 'data'
 New-Item -ItemType Directory $root | Out-Null
 $started = $false
+$listener = New-Object System.Net.Sockets.TcpListener([Net.IPAddress]::Loopback,0)
+$listener.Start()
+$port = $listener.LocalEndpoint.Port.ToString()
+$listener.Stop()
 try {
     Invoke-SetupProcess (Join-Path $bin 'initdb.exe') @('-D',$data,'-U','postgres','--auth=trust','--encoding=UTF8','--locale=C') -Sensitive | Out-Null
     # pg_ctl starts a persistent child. Do not give that child redirected pipes.
-    $ctlArgs = @('-D',$data,'-l',(Join-Path $root 'postgres.log'),'-o','-h 127.0.0.1 -p 55439','-w','start')
+    $ctlArgs = @('-D',$data,'-l',(Join-Path $root 'postgres.log'),'-o',("-h 127.0.0.1 -p " + $port),'-w','start')
     $ctl = Start-Process $pg.FullName -ArgumentList (($ctlArgs | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join ' ') -PassThru -WindowStyle Hidden
-    if (-not $ctl.WaitForExit(60000) -or $ctl.ExitCode -ne 0) { throw 'Test PostgreSQL failed to start' }
+    # Retain a handle before the launcher exits; Windows PowerShell can otherwise lose ExitCode.
+    $null = $ctl.Handle
+    $exited = $ctl.WaitForExit(65000)
+    $ctl.Refresh()
+    if (-not $exited -or $ctl.ExitCode -ne 0) {
+        $log = Join-Path $root 'postgres.log'
+        if (Test-Path $log) { Get-Content $log -Tail 40 | Write-Host }
+        throw "Test PostgreSQL failed to start (exited=$exited, code=$($ctl.ExitCode), port=$port)"
+    }
     $started = $true
     $psql = Join-Path $bin 'psql.exe'
-    $argsPg = @('-X','-h','127.0.0.1','-p','55439','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1')
+    $argsPg = @('-X','-h','127.0.0.1','-p',$port,'-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1')
     Invoke-SetupProcess $psql ($argsPg + @('-c',"CREATE ROLE solvia LOGIN PASSWORD 'test-db-secret'")) -Sensitive | Out-Null
     Invoke-SetupProcess $psql ($argsPg + @('-c','CREATE DATABASE solvia OWNER solvia')) -Sensitive | Out-Null
     # Require the saved credentials on all subsequent connections.
     [IO.File]::WriteAllText((Join-Path $data 'pg_hba.conf'),"host all all 127.0.0.1/32 scram-sha-256`r`n")
     Invoke-SetupProcess $pg.FullName @('-D',$data,'reload') -Sensitive | Out-Null
-    $env:SOLVIA_DATABASE_URL='postgresql://solvia:test-db-secret@127.0.0.1:55439/solvia'
+    $env:SOLVIA_DATABASE_URL="postgresql://solvia:test-db-secret@127.0.0.1:$port/solvia"
     Test-SolviaDatabase $psql $env:SOLVIA_DATABASE_URL
     $env:SOLVIA_ADMIN_LOGIN='bootstrap_admin'
     $env:SOLVIA_ADMIN_NAME='Адміністратор Олена'
@@ -34,7 +46,7 @@ try {
     $env:PGPASSWORD='test-db-secret'
     $env:PGCLIENTENCODING='UTF8'
     # Compare hex in ASCII to avoid console output-codepage effects.
-    $actual = Invoke-SetupProcess $psql @('-X','-h','127.0.0.1','-p','55439','-U','solvia','-d','solvia','-tAc',"SELECT encode(convert_to(name,'UTF8'),'hex') FROM users WHERE login='bootstrap_admin'") -Sensitive
+    $actual = Invoke-SetupProcess $psql @('-X','-h','127.0.0.1','-p',$port,'-U','solvia','-d','solvia','-tAc',"SELECT encode(convert_to(name,'UTF8'),'hex') FROM users WHERE login='bootstrap_admin'") -Sensitive
     $expected = ([BitConverter]::ToString([Text.Encoding]::UTF8.GetBytes($env:SOLVIA_ADMIN_NAME))).Replace('-','').ToLowerInvariant()
     if ($actual -cne $expected) { throw 'Ukrainian administrator name was corrupted' }
     Write-Host 'Windows PostgreSQL bootstrap, Unicode and retry checks passed.'
