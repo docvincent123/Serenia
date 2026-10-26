@@ -715,7 +715,7 @@ function Dashboard({ api, role, onNavigate, access }) {
               <h2>{role==='admin'?'Що відбувається в центрі':'Робота команди'}</h2>
               <p>Показники за обраний період. Для деталей оберіть потрібний розділ.</p></div>
             <div className="focus-dashboard-actions">
-              <Button onClick={()=>onNavigate(role==='admin'?'shift-workspace':'workload')}>{role==='admin'?'Прийоми за зміну':'Навантаження'}</Button>
+              <Button onClick={()=>onNavigate(role==='admin'?'shift-workspace':'workload')}>{role==='admin'?'Перейти до прийомів':'Навантаження'}</Button>
               <Button variant="secondary" onClick={()=>onNavigate('module-directory')}>Усі розділи</Button>
             </div>
           </section>
