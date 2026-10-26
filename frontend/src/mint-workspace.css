@@ -303,7 +303,7 @@
  .sidebar .motion-sidebar-version {font-size:10px;}
  .sidebar .sidebar-actions .nav-item {font-size:12px;min-height:36px;}
  .app-shell .workspace-topbar {min-height:76px;gap:18px;padding-top:12px;padding-bottom:12px;}
- .workspace-topbar .topbar-context>.workspace-breadcrumb {display:none;}
+ .app-shell .workspace-topbar .topbar-context>.workspace-breadcrumb {display:none;}
  .workspace-topbar .topbar-context {order:2;margin-left:auto;min-width:0;flex:0;}
  .workspace-topbar .connection-pill {min-width:0;padding:0;border:0;background:transparent;}
  .workspace-topbar .connection-pill small {display:none;}
