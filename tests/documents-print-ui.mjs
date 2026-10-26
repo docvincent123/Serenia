@@ -50,7 +50,8 @@ try{
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
   await page.addInitScript(()=>{window.print=()=>{};});
-  await mkdir('out/design',{recursive:true});await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await mkdir('out/design',{recursive:true});await page.addInitScript(()=>localStorage.setItem('solvia_navigation','all'));
+  await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Пацієнти',exact:true}).click();
   await page.getByRole('button',{name:'Коваль Олена',exact:true}).click();
   await page.getByRole('navigation',{name:'Розділи картки'}).getByRole('button',{name:'Документи',exact:true}).click();

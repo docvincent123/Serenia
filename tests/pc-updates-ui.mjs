@@ -41,6 +41,7 @@ try {
   });
   let page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const base=`http://127.0.0.1:${server.address().port}`;
+  await page.addInitScript(()=>localStorage.setItem('solvia_navigation','all'));
   await page.goto(base);await page.getByPlaceholder('Ваш логін').fill('admin');await page.getByPlaceholder('Введіть пароль').fill('test-password');await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();
   await page.getByRole('button',{name:'Налаштування центру',exact:true}).click();
   assert.equal(await page.locator('.settings-nav').getByRole('button',{name:/Оновлення/}).count(),0);

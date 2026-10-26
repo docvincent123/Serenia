@@ -65,6 +65,7 @@ try{
     }
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
+  await page.addInitScript(()=>localStorage.setItem('solvia_navigation','all'));
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Пристрої',exact:true}).click();
   await page.getByRole('button',{name:'Проблемні записи · 1',exact:true}).click();

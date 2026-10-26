@@ -1,13 +1,13 @@
-# SOLVIA 2.4 — Linux-сервер і Windows-клієнти
+# SOLVIA 3.1 — Linux-сервер і нативні клієнти
 
 Пакет підтримує **Ubuntu 24.04 LTS x86_64 та elementary OS 8 на базі Ubuntu 24.04**. Для іншої версії Linux потрібна окрема перевірка сумісності. Docker, Node.js та компілятор на сервері не потрібні. Інтернет потрібен під час встановлення системних пакетів; щоденна робота відбувається в LAN.
 
 ## 1. Встановлення Linux-сервера
 
-У GitHub Actions відкрийте успішну збірку **SOLVIA • Desktop installer and PostgreSQL tests**, завантажте artifact **SOLVIA-2.4.0-Linux-x64-installer**, розпакуйте ZIP, потім:
+У GitHub Actions відкрийте успішну збірку **SOLVIA • Desktop installer and PostgreSQL tests**, завантажте artifact **SOLVIA-3.1.0-Linux-x64-installer**, розпакуйте ZIP, потім:
 
 ```bash
-tar -xzf SOLVIA-2.4.0-Linux-x64.tar.gz
+tar -xzf SOLVIA-3.1.0-Linux-x64.tar.gz
 cd SOLVIA-Linux
 sudo bash install.sh
 ```
@@ -28,7 +28,7 @@ sudo ufw allow from 192.168.1.0/24 to any port 8443 proto tcp
 
 ## 2. Windows-ПК
 
-Завантажте artifact **SOLVIA-2.4.0-Setup-EXE** тієї самої збірки. У майстрі виберіть **«Робоче місце — підключення до Linux-сервера»** (тип за замовчуванням) і введіть адресу HTTPS. На робочому ПК PostgreSQL і сервер не встановлюються.
+Завантажте artifact **SOLVIA-3.1.0-Setup-EXE** тієї самої збірки. У майстрі виберіть **«Робоче місце — підключення до Linux-сервера»** (тип за замовчуванням) і введіть адресу HTTPS. На робочому ПК PostgreSQL і сервер не встановлюються.
 
 1. На Linux скопіюйте **лише** `/etc/solvia/ca/QureMed-Local-CA.crt` на довірений носій. Приватний `ca.key` ніколи не переноситься на клієнт.
 2. На Windows у меню Пуск відкрийте **«Довірити сертифікат сервера SOLVIA»**.
@@ -180,7 +180,7 @@ Linux Admin відкриває `https://localhost:8443` з перевіркою 
 
 ## Окрема Linux-програма та керування сервером
 
-У цій гілці Linux-клієнт більше не запускає Chrome, Chromium, Firefox або браузерний app-mode. `solvia-admin-app` відкриває власне GTK-вікно з вбудованим WebKitGTK 4.1. Робочі екрани використовують спільний інтерфейс SOLVIA, тому біло-чорний дизайн і функції ролей збережені. Клієнт не запускає сервер автоматично й не потребує sudo.
+У цій гілці Linux-клієнт більше не запускає Chrome, Chromium, Firefox або браузерний app-mode. `solvia-admin-app` відкриває власне GTK-вікно з вбудованим WebKitGTK 4.1. Робочі екрани використовують спільний інтерфейс SOLVIA, тому м’ятний дизайн і функції ролей узгоджені. Клієнт не запускає сервер автоматично й не потребує sudo.
 
 Повний серверний пакет встановлюється як раніше:
 

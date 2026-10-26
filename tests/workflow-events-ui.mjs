@@ -48,6 +48,7 @@ try{
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
   await mkdir('out/design',{recursive:true});
+  await page.addInitScript(()=>localStorage.setItem('solvia_navigation','all'));
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole('button',{name:'Події та повідомлення',exact:true}).click();
   await page.getByText('Події оновлюються автоматично',{exact:true}).waitFor();

@@ -29,6 +29,7 @@ try{
     await route.fulfill({json:{}});
   });
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(()=>localStorage.setItem('solvia_navigation','all'));
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole('heading',{name:'Вхід до SOLVIA'}).waitFor();
   await page.getByTestId('login-server-status').filter({hasText:'Сервер недоступний. Зверніться до системного адміністратора.'}).waitFor({timeout:22000});

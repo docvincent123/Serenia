@@ -36,7 +36,8 @@ try{
     else if(path==='/api/account/password'){passwordPosts.push(req.postDataJSON());if(passwordPosts.length===1)return fulfill(403,{error:'Поточний пароль неправильний'});data={ok:true};}
     await fulfill(200,data);
   });
-  await mkdir('out/design',{recursive:true});const url=`http://127.0.0.1:${server.address().port}`;await page.goto(url);await page.getByLabel('Логін',{exact:true}).waitFor();assert.equal(await page.locator('html').getAttribute('data-lightweight'),'true','Linux starts in lightweight mode');await page.screenshot({path:'out/design/refined-login.png',fullPage:true});
+  await mkdir('out/design',{recursive:true});const url=`http://127.0.0.1:${server.address().port}`;await page.addInitScript(()=>localStorage.setItem('solvia_navigation','all'));
+  await page.goto(url);await page.getByLabel('Логін',{exact:true}).waitFor();assert.equal(await page.locator('html').getAttribute('data-lightweight'),'true','Linux starts in lightweight mode');await page.screenshot({path:'out/design/refined-login.png',fullPage:true});
   await page.getByLabel('Логін',{exact:true}).fill('reception');await page.getByLabel('Пароль',{exact:true}).fill('wrong');
   await page.getByRole('button',{name:'Показати',exact:true}).click();assert.equal(await page.getByLabel('Пароль',{exact:true}).getAttribute('type'),'text');await page.getByRole('button',{name:'Сховати',exact:true}).click();
   await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();await page.getByRole('alert').waitFor();

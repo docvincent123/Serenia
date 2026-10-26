@@ -92,6 +92,7 @@ try {
     } else if (path === '/api/logout') { await route.abort('timedout'); return; }
     await route.fulfill({ contentType:'application/json',body:JSON.stringify(data) });
   });
+  await page.addInitScript(()=>localStorage.setItem('solvia_navigation','all'));
   await page.goto(base); await page.getByRole('heading',{name:'Огляд центру',exact:true}).waitFor();
   const systemSettings = page.getByRole('button',{name:'Налаштування центру',exact:true});
   const exit = page.getByRole('button',{name:'Вийти',exact:true});
@@ -108,7 +109,7 @@ try {
   await accessDialog.waitFor({state:'hidden'});
   assert.equal(accessCalls,1);assert.equal(closeCalls,0,'Reception authorization must never close the clinical shift');
 
-  await page.getByRole('button',{name:'Написати психологу',exact:true}).click();
+  await page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Повідомлення',exact:true}).click();
   await page.getByRole('heading',{name:'Повідомлення психологам',exact:true}).waitFor();
   await page.getByRole('button',{name:/Тестовий психолог/}).click();
   await page.getByLabel('Куди надіслати',{exact:true}).selectOption('synthetic');

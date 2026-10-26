@@ -37,6 +37,7 @@ jobs:
           SOLVIA_PLAYWRIGHT_MODULE: /tmp/mint-tests/node_modules/playwright
         run: |
           node tests/desktop-system.mjs
+          node tests/calm-desktop-ui.mjs
           node tests/workflow-events-ui.mjs
           node tests/documents-print-ui.mjs
           node tests/tv-display-ui.mjs

@@ -288,3 +288,96 @@
  .daily-report thead {display:table-header-group;}
  .daily-report-footer {break-inside:avoid;}
 }
+
+/* Quiet desktop: essential navigation first, the complete directory one click away. */
+@media screen {
+ .sidebar .nav-section-caption {display:block;padding:12px 14px 10px;font-size:9px;font-weight:650;letter-spacing:.13em;color:#8daea0;}
+ .sidebar .nav-primary>.nav-item {margin:3px 0;min-height:44px;}
+ .sidebar .nav-current-section {margin-top:18px;border-top:1px solid #ffffff16;}
+ .sidebar .nav-density-toggle {display:flex;align-items:center;gap:11px;width:100%;padding:12px 14px;margin-top:16px;border:1px solid #ffffff22;border-radius:11px;background:transparent;color:#b1ccbc;font:inherit;font-size:12px;cursor:pointer;text-align:left;}
+ .nav-density-toggle>span {flex:1;}
+ .sidebar .nav-density-toggle:hover {background:#25443d;color:#f4f6ec;}
+ .sidebar .nav-icon svg,.sidebar-actions>button>svg {width:19px;height:19px;flex-shrink:0;stroke-width:1.65;}
+ .sidebar .sidebar-brand {padding-bottom:24px;margin-bottom:16px;}
+ .sidebar .sidebar-brand strong {font-size:21px;letter-spacing:.08em;}
+ .sidebar .motion-sidebar-version {font-size:10px;}
+ .sidebar .sidebar-actions .nav-item {font-size:12px;min-height:36px;}
+ .app-shell .workspace-topbar {min-height:76px;gap:18px;padding-top:12px;padding-bottom:12px;}
+ .workspace-topbar .topbar-context>.workspace-breadcrumb {display:none;}
+ .workspace-topbar .topbar-context {order:2;margin-left:auto;min-width:0;flex:0;}
+ .workspace-topbar .connection-pill {min-width:0;padding:0;border:0;background:transparent;}
+ .workspace-topbar .connection-pill small {display:none;}
+ .workspace-topbar .connection-pill strong {font-size:11px;white-space:nowrap;}
+ .workspace-topbar .global-search {order:0;width:min(100%,490px);max-width:490px;flex:1;}
+ .workspace-topbar .workflow-bell {order:3;}
+ .workspace-topbar .workspace-profile {order:4;gap:10px;border-left:1px solid var(--line);padding-left:18px;}
+ .workspace-profile>svg {display:none;}
+ .app-shell .shift-bar {min-height:36px;font-size:11px;gap:12px;padding-top:6px;padding-bottom:6px;}
+ .shift-bar .button {min-height:28px;padding:5px 11px;font-size:10px;}
+ .shift-bar .reception-access-status {display:none;}
+ .app-shell .page-head {margin-bottom:24px;}
+ .motion-overview .overview-kpis {margin-top:0;}
+ .motion-quick-strip {padding:0!important;}
+ .motion-quick-strip>summary {padding:17px 22px;font-size:13px;font-weight:600;color:#345449;cursor:pointer;}
+ .motion-quick-strip>.role-actions {padding:0 22px 20px;}
+ .login-screen.login-calm {min-height:100dvh;display:grid;grid-template-columns:minmax(300px,.85fr) minmax(440px,1.15fr);background:#f3f3e9;}
+ .login-calm .login-brand {display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;margin:24px 0 24px 24px;border-radius:24px;padding:clamp(32px,5vw,72px);min-height:520px;background:#112c2b;position:relative;overflow:hidden;}
+ .login-calm .login-brand:after {content:'';display:block;position:absolute;width:400px;height:400px;border:1px solid #a7edcf18;border-radius:50%;right:-230px;bottom:35px;pointer-events:none;}
+ .login-brand-wordmark {display:flex;align-items:center;gap:16px;color:#a7edcf;}
+ .login-brand-wordmark strong {color:#f4f6ec;font-size:25px;letter-spacing:.12em;}
+ .login-solvia-mark {display:grid;place-items:center;}
+ .login-calm .login-brand-copy {position:relative;z-index:1;margin:64px 0;max-width:400px;}
+ .login-calm .login-brand-copy .eyebrow {font-size:10px;letter-spacing:.12em;}
+ .login-calm .login-brand-copy h1 {font-size:clamp(28px,3vw,43px);font-weight:550;line-height:1.23;margin:19px 0 20px;letter-spacing:-.035em;}
+ .login-calm .login-brand-copy p {font-size:14px;line-height:1.8;max-width:280px;}
+ .login-brand-bottom {display:grid;gap:17px;color:#92b5a5;}
+ .login-brand-bottom small {font-size:11px;}
+ .login-brand-rule {display:block;width:42px;height:2px;background:#a7edcf;}
+ .login-calm .login-panel {display:flex;align-items:center;justify-content:center;background:transparent;padding:42px;}
+ .login-calm .login-card {width:100%;max-width:390px;margin:0;padding:0;border:0;background:transparent;box-shadow:none;border-radius:0;}
+ .login-calm .login-card>.product {display:none;}
+ .login-calm .login-copy {margin-bottom:25px;}
+ .login-calm .login-copy h2 {font-size:30px;font-weight:600;letter-spacing:-.035em;margin-bottom:8px;}
+ .login-calm .login-copy>small {display:none;}
+ .login-calm .login-copy>p {font-size:13px;line-height:1.7;max-width:320px;}
+ .login-calm .login-availability {padding:0 0 18px;border:0;background:transparent;font-size:12px;color:#587565;line-height:1.5;border-radius:0;display:flex;align-items:center;gap:8px;}
+ .login-calm .login-availability:before {content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;}
+ .login-calm .login-availability.error {color:#ab493a;}
+ .login-calm .field {margin-bottom:17px;}
+ .login-calm .field>label,.login-calm .field>span {font-size:12px;color:#345449;font-weight:550;margin-bottom:8px;}
+ .login-calm input:not([type=file]) {min-height:48px;background:#fffffc;border-color:#d0ddcf;border-radius:11px;padding:12px 14px;}
+ .login-calm .password-control {position:relative;}
+ .login-calm .password-control input {padding-right:82px;}
+ .login-calm .password-control>button {font-size:11px;color:#597968;background:transparent;border:0;}
+ .login-calm .login-submit {width:100%;min-height:48px;margin:6px 0 12px;font-size:14px;}
+ .login-calm .server-toggle {font-size:12px;padding:9px 0;display:block;margin:0 auto;color:#5a7767;}
+ .login-calm .login-connection {padding:18px;margin-top:12px;background:#fffffc;border:1px solid #dbe4d7;border-radius:13px;}
+ .login-calm .login-connection p {font-size:11px;line-height:1.7;color:#697f74;}
+ .login-calm .login-foot {margin-top:26px;text-align:center;font-size:10px;color:#8a9b90;}
+}
+@media screen and (max-width:1000px) {
+ .login-screen.login-calm {grid-template-columns:minmax(250px,.8fr) minmax(380px,1.2fr);}
+ .login-calm .login-brand {padding:35px;}
+ .login-calm .login-panel {padding:35px;}
+ .workspace-topbar .connection-pill.online strong {display:none;}
+ .workspace-topbar .workspace-profile>span:not(.avatar) {display:none;}
+}
+@media screen and (max-width:760px) {
+ .login-screen.login-calm {display:block;padding:30px 22px;min-height:100dvh;}
+ .login-calm .login-brand {display:none;}
+ .login-calm .login-panel {padding:15px 0;}
+ .login-calm .login-card {max-width:410px;}
+ .login-calm .login-card>.product {display:flex;margin-bottom:32px;}
+ .login-calm .product .product-mark {background:#112c2b;color:#a7edcf;}
+ .login-calm .product strong {font-size:17px;}
+ .login-calm .login-copy h2 {font-size:27px;}
+ .workspace-topbar .workspace-profile {padding-left:10px;}
+ .app-shell .workspace-topbar {gap:12px;min-height:64px;}
+ .workspace-topbar .connection-pill {display:none;}
+}
+@media screen and (min-width:761px) and (max-height:650px) {
+ .login-calm .login-brand {margin:14px 0 14px 14px;min-height:0;padding:30px;}
+ .login-calm .login-panel {padding:24px 36px;align-items:flex-start;}
+ .login-calm .login-copy {margin-bottom:17px;}
+ .login-calm .login-brand-copy {margin:40px 0;}
+}

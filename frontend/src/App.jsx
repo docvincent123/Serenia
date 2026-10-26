@@ -109,8 +109,9 @@ function AppIcon({ name, size = 18 }) {
   const paths = {
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     'waiting-list': <><rect x="3" y="4" width="12" height="17" rx="2"/><path d="M6 8h6M6 12h5M6 16h3"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/></>,
+    'tv-calls': <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M8 9h5M8 12h8"/></>,
+    chevron: <path d="m9 5 7 7-7 7"/>,
     documents: <><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></>,
-    preferences: <><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M18 3l1 1 2-2"/></>,
     'module-directory': <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
     dashboard: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></>,
@@ -365,10 +366,13 @@ async function request(base, token, method, path, body) {
   return data;
 }
 
-function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
+function WorkspaceNavigation({ navigation, page, locked, onNavigate, role }) {
   const active = page === 'patient-card' ? 'patients' : page;
   const groupFor = key => navigationGroups.find(([, , keys]) => keys.includes(key))?.[0];
   const [expanded, setExpanded] = useState(() => new Set(navigationGroups.map(([id]) => id)));
+  const [showAll,setShowAll]=useState(()=>localStorage.getItem('solvia_navigation')==='all');
+  const primary=new Set(({admin:['dashboard','shift-workspace','calendar','patients','staff-messages','module-directory'],reception:['shift-workspace','calendar','patients','waiting-list','module-directory'],psychologist:['calendar','patients','reports','module-directory'],director:['dashboard','workload','discharges','staff-messages','module-directory']})[role]||['module-directory']);
+  function toggleAll(){setShowAll(value=>{const next=!value;localStorage.setItem('solvia_navigation',next?'all':'simple');return next;});}
   useEffect(() => { setExpanded(current => new Set([...current, groupFor(active)])); }, [active]);
   function item(key, label) {
     return <button key={key} disabled={locked && key !== 'staff-messages'} aria-current={active === key ? 'page' : undefined}
@@ -376,8 +380,9 @@ function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
       <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
     </button>;
   }
-  return <nav aria-label="Робочі розділи" className={locked ? 'nav-locked' : ''}>
-    {navigationGroups.map(([id, label, keys]) => {
+  return <nav aria-label="Робочі розділи" className={`${locked ? 'nav-locked' : ''} ${showAll?'navigation-full':'navigation-simple'}`}>
+    {!showAll&&<div className="nav-primary"><span className="nav-section-caption">РОБОЧИЙ ПРОСТІР</span>{navigation.filter(([key])=>primary.has(key)&&key!=='module-directory').map(([key,label])=>item(key,label))}{navigation.filter(([key])=>key==='module-directory').map(([key,label])=>item(key,label))}{!primary.has(active)&&navigation.some(([key])=>key===active)&&<div className="nav-current-section"><span className="nav-section-caption">ВІДКРИТО ЗАРАЗ</span>{item(...navigation.find(([key])=>key===active))}</div>}</div>}
+    {showAll&&navigationGroups.map(([id, label, keys]) => {
       const items = navigation.filter(([key]) => keys.includes(key));
       if(!items.length) return null;
       if(items.length === 1) return <div className="nav-group single" key={id}>{item(...items[0])}</div>;
@@ -389,6 +394,7 @@ function WorkspaceNavigation({ navigation, page, locked, onNavigate }) {
         <div id={`nav-${id}`} className="nav-group-items" hidden={!expanded.has(id)}>{items.map(([key, text]) => item(key,text))}</div>
       </section>;
     })}
+    <button className="nav-density-toggle" aria-expanded={showAll} onClick={toggleAll}><AppIcon name={showAll?'close':'menu'} size={17}/><span>{showAll?'Спростити меню':'Більше розділів'}</span><AppIcon name="chevron" size={13}/></button>
   </nav>;
 }
 
@@ -570,26 +576,20 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
   }
 
   return (
-    <div className="login-screen login-refined">
+    <div className="login-screen login-refined login-calm">
       <section className="login-brand">
-        <div className="brand-orbit">
-          <img className="brand-logo" src="/solvia-icon.png" alt="SOLVIA" />
-        </div>
-        <div className="login-brand-copy">
-          <div className="eyebrow light">ПРОСТІР ЦЕНТРУ</div>
-          <h1>Менше рутини.<br />Більше уваги людині.</h1>
-          <p>Один простір для записів, консультацій і злагодженої роботи команди.</p><div className="login-capabilities"><span>01 · Прийоми та пацієнти</span><span>02 · Кабінети й команда</span><span>03 · Документи та рекомендації</span></div>
-        </div>
-
+        <div className="login-brand-wordmark"><span className="login-solvia-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></span><strong>SOLVIA</strong></div>
+        <div className="login-brand-copy"><span className="eyebrow light">ПРОСТІР ВАШОГО ЦЕНТРУ</span><h1>Злагоджена робота.<br/>Спокійний день.</h1><p>Пацієнти, прийоми й команда в одному місці.</p></div>
+        <div className="login-brand-bottom"><span className="login-brand-rule"/><small>З турботою про людей · QureMed</small></div>
       </section>
 
       <section className="login-panel">
         <form className="login-card" onSubmit={submit}>
           <div className="product">
-            <div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
+            <div className="product-mark login-mobile-mark"><AppIcon name="lock" size={22}/></div>
             <div>
-              <strong>SOLVIA</strong>
-              <span>by QureMed</span>
+              <strong>Вітаємо у SOLVIA</strong>
+              <span>Робочий простір центру</span>
             </div>
           </div>
 
@@ -598,7 +598,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
-          <div className={`alert ${availability.state === 'offline' ? 'error' : ''}`} role="status" aria-live="polite" data-testid="login-server-status">{availability.message}</div>
+          <div className={`alert login-availability ${availability.state === 'offline' ? 'error' : ''}`} role="status" aria-live="polite" data-testid="login-server-status">{availability.message}</div>
           {error && <div className="alert error" role="alert">{error}</div>}
 
           <Field label="Логін" full>
@@ -613,22 +613,22 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
           </Button>
 
-          <label className="field full">Підключити центр із файла
-            <input type="file" accept=".solvia,.json" disabled={checking||busy} onChange={e=>{importConnection(e.target.files?.[0]);e.target.value='';}} />
-          </label>
           <button type="button" className="server-toggle" onClick={() => setShowServer((v) => !v)}>
             {showServer ? 'Сховати підключення' : 'Підключення до центру'}
           </button>
 
           {showServer && (
-            <>
+            <section className="login-connection" aria-label="Налаштування підключення">
+              <label className="field full">Підключити центр із файла
+                <input type="file" accept=".solvia,.json" disabled={checking||busy} onChange={e=>{importConnection(e.target.files?.[0]);e.target.value='';}} />
+              </label>
               <Field label="Адреса сервера центру" hint="Linux-сервер: https://192.168.1.105:8443. Адресу покаже інсталятор сервера." full>
                 <input value={server} onChange={(e) => { setServer(e.target.value); setConnection(''); }} spellCheck="false" placeholder="https://192.168.1.105:8443" />
               </Field>
               <Button type="button" variant="secondary" onClick={checkConnection} disabled={checking}>{checking ? 'Перевіряємо…' : 'Перевірити та зберегти адресу'}</Button>
               <p>Перед підключенням установіть CA-сертифікат, отриманий від адміністратора вашого Linux-сервера.</p>
               {connection && <div className="alert" role="status">{connection}</div>}
-            </>
+            </section>
           )}
 
           <div className="login-foot">SOLVIA · QureMed</div>
@@ -699,7 +699,7 @@ function Dashboard({ api, role, onNavigate, access }) {
       {error && <div className="alert error">{error}</div>}
       {!stats ? <Spinner /> : (
         <>
-          <section className="motion-overview-hero"><div><span className="motion-hero-eyebrow">{role==='admin'?'АДМІНІСТРАТОР · УСІ РОЗДІЛИ':'КЕРІВНИК · РОБОТА КОМАНДИ'}</span><h2>Один простір.<br/>Уся команда.</h2><p>{role==='admin'?'Розклад, пацієнти, команда та керування центром.':'Показники, завантаження та підсумки супроводу.'}</p></div><div className="motion-hero-actions"><Button onClick={()=>onNavigate('module-directory')}>Усі розділи <span aria-hidden="true">↗</span></Button><Button variant="secondary" onClick={()=>onNavigate(role==='admin'?'calendar':'workload')}>{role==='admin'?'Перейти до календаря':'Навантаження команди'}</Button></div></section>
+
           <div className="overview-primary" aria-label="Основні показники">
             {[cards[1],cards[4],cards[6],cards[3]].map(([label,value,hint],i)=><article className="overview-kpi" key={label}><span className="overview-kpi-icon"><AppIcon name={['patients','calendar','reports','families'][i]} /></span><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></article>)}
           </div>
@@ -709,7 +709,7 @@ function Dashboard({ api, role, onNavigate, access }) {
               {role==='admin'?<><div className="overview-status-row"><span>Реєстратура</span><strong className={access?.allowed?'status-positive':'status-pending'}>{access?.allowed?'Доступ надано':'Очікує дозволу'}</strong></div><div className="overview-status-row"><span>База даних</span><strong>{system?.database?.name || 'Стан не завантажено'}</strong></div><div className="overview-status-row"><span>Резервна копія</span><strong>{!system?.backups?.length?'Немає даних':system.backups[0].status==='success'?system.backups[0].created?.slice(0,16).replace('T',' '):'Потребує перевірки'}</strong></div><button className="button secondary" onClick={()=>onNavigate('devices')}>Стан пристроїв</button></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
             </section>
           </div>
-          <div className="motion-quick-strip"><RoleActions role={role} onNavigate={onNavigate}/></div>
+          <details className="surface motion-quick-strip"><summary>Швидкі дії</summary><RoleActions role={role} onNavigate={onNavigate}/></details>
           <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
           <details className="surface motion-analysis-more"><summary>Структура звернень та джерела направлень</summary>
@@ -3555,7 +3555,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           <div><strong>SOLVIA</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · QureMed</small></div>
         </div>
 
-        <WorkspaceNavigation navigation={navigation.filter(([key]) => !['settings', 'preferences'].includes(key))} page={page} locked={locked} onNavigate={navigate} />
+        <WorkspaceNavigation role={user.role} navigation={navigation.filter(([key]) => !['settings', 'preferences'].includes(key))} page={page} locked={locked} onNavigate={navigate} />
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
@@ -3597,7 +3597,6 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
                 <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
               </div>
             </div>
-            {['admin','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
             <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
             <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
