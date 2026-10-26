@@ -20,6 +20,7 @@ import {navFor,navigationGroups} from './workspace-model.mjs';
 import {focusNavigation} from './focus-workspace.mjs';
 import {ModuleDirectory,PeriodActivity,DayTimeline} from './MotionWorkspace.jsx';
 import WorkflowEvents from './WorkflowEvents.jsx';
+import RecentCenterEvents from './RecentCenterEvents.jsx';
 import {feedbackFor} from './workflow-events.mjs';
 
 const roleLabels = {
@@ -735,6 +736,7 @@ function Dashboard({ api, role, onNavigate, access }) {
             </section>
           </div>
           <div className="motion-quick-strip"><RoleActions role={role} onNavigate={onNavigate}/></div>
+          {role==='admin'&&<RecentCenterEvents api={api}/>}
           <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
           <details className="surface motion-analysis-more"><summary>Структура звернень та джерела направлень</summary>
