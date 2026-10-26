@@ -37,6 +37,8 @@ jobs:
           SOLVIA_PLAYWRIGHT_MODULE: /tmp/mint-tests/node_modules/playwright
         run: |
           node tests/desktop-system.mjs
+          node tests/workflow-events-ui.mjs
+          node tests/tv-display-ui.mjs
           node tests/ui-regression.mjs
       - run: python3 tools/package-mint-ui.py
       - uses: actions/upload-artifact@v7

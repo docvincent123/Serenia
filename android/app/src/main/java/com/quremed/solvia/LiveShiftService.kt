@@ -57,7 +57,13 @@ class LiveShiftService : Service() {
                 val snapshot=AppointmentInbox.receive(store,session.optJSONObject("user")?.optString("shift_date"),::get)
                 if(!snapshot.shift.optBoolean("open")){stopSelf();return@scheduleWithFixedDelay}
                 AppointmentReminders.refreshFromCache(this,base,uid)
-                runCatching { WorkflowNotifications.receive(this,base,uid,::get) }
+                runCatching { WorkflowNotifications.receive(this,base,uid,::get) }.onFailure { if(it is SyncFailure&&it.status==401)throw it }
+                runCatching {
+                    val messages=get("/api/staff/messages") as JSONArray
+                    val unread=(0 until messages.length()).map { messages.getJSONObject(it) }.filter { it.isNull("read_at") }
+                    if(unread.isNotEmpty())StaffMessageNotifications.show(this,unread.size,store,unread.maxOf { it.optLong("id") })
+                    else StaffMessageNotifications.clear(this)
+                }.onFailure { if(it is SyncFailure&&it.status==401)throw it }
             }catch(error:Exception){
                 if(error is SyncFailure && error.status==401){store.revokeSession();AppointmentReminders.cancelScope(this,base,uid);ShiftNotifications.clear(this);stopSelf()}
                 // Other failures keep cached records and retry; scheduled reminders remain active.

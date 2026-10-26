@@ -182,15 +182,15 @@ function printStandaloneNode(node, title = 'SOLVIA Document') {
 <meta charset="utf-8">
 <title>${safeTitle}</title>
 <style>
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A4 portrait; margin: 14mm 16mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fff; color: #172f27; font-family: "Segoe UI", Arial, sans-serif; }
-  body { width: 210mm; min-height: 297mm; }
+  body { width: auto; }
   .consent-print, .discharge-print {
-    width: 210mm !important;
-    min-height: 297mm !important;
+    width: 100% !important;
+    min-height: 0 !important;
     margin: 0 !important;
-    padding: 14mm 16mm !important;
+    padding: 0 !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -286,9 +286,9 @@ function printStandaloneNode(node, title = 'SOLVIA Document') {
     border-radius: 3mm;
     background: #f8faf9 !important;
   }
-  .discharge-print section { margin-top: 5mm; break-inside: avoid; }
-  .discharge-print section h3 { margin: 0 0 1.5mm; color: #436a59; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; }
-  .discharge-print section p { margin: 0; white-space: pre-wrap; line-height: 1.5; font-size: 9.5pt; }
+  .discharge-print section { margin-top: 5mm; }
+  .discharge-print section h3 { break-after: avoid; margin: 0 0 1.5mm; color: #436a59; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; }
+  .discharge-print section p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; orphans: 3; widows: 3; line-height: 1.5; font-size: 9.5pt; }
   .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16mm; margin-top: 10mm; break-inside: avoid; }
   .signature-block { display: grid; gap: 2mm; }
   .signature-block strong { color: #526b60; font-size: 8pt; }
@@ -881,7 +881,7 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
                 <span>Учасники</span>
                 {(selected.patients||[]).map((p) => <strong key={p.id}>{p.name}</strong>)}
               </div>
-              <div className="motion-patient-actions">{(selected.patients||[]).map(p=><button className="button secondary" key={p.id} onClick={()=>openPatient(p.id)}>Картка пацієнта · {p.name}</button>)}</div.name}</button>)}</div>
+              <div className="motion-patient-actions">{(selected.patients||[]).map(p=><button className="button secondary" key={p.id} onClick={()=>openPatient(p.id)}>Картка пацієнта · {p.name}</button>)}</div>
               {canSchedule && ['draft','scheduled','confirmed'].includes(selected.status) && (
                 <div className="context-actions">
                   <Button variant="secondary" onClick={openEdit}>Перенести / змінити</Button>
@@ -3740,4 +3740,6 @@ export default function App() {
 
   if (!user) return <Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} />;
   if (appMode === 'server') return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
-  return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={dr
+  return <><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
+}
+

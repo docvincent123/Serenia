@@ -504,7 +504,8 @@ class MainActivity : Activity() {
             unread.filter { it.isNull("delivered_at") }.forEach { message ->
                 apiAsync("POST", "/api/staff/messages/${message.optLong("id")}/delivered", JSONObject(), onError = {}) {}
             }
-            if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size)
+            if(unread.isNotEmpty()) StaffMessageNotifications.show(this, unread.size, offlineStore(), unread.maxOf { it.optLong("id") })
+            else StaffMessageNotifications.clear(this)
         }
     }
 

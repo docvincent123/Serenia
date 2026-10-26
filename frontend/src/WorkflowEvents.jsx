@@ -6,13 +6,13 @@ export default function WorkflowEvents({api,user,apiBase,onNavigate}){
  function toast(title,kind='local'){const id=++counter.current;setToasts(old=>[...old.slice(-2),{id,title,kind}]);const timer=setTimeout(()=>{setToasts(old=>old.filter(t=>t.id!==id));timers.current.delete(timer);},6000);timers.current.add(timer);}
  useEffect(()=>{sound.current=new EventSound();const local=e=>{if(e.detail?.title){toast(e.detail.title);sound.current?.play();}};window.addEventListener('solvia:feedback',local);return()=>{window.removeEventListener('solvia:feedback',local);for(const t of timers.current)clearTimeout(t);timers.current.clear();sound.current?.close();};},[]);
  useEffect(()=>{let alive=true,timer,cursor=null;setHistory([]);setUnread(0);setStatus('Підключаємо події…');
-  async function poll(){let delay=5000;try{const data=await apiRef.current('GET',cursor===null?'/api/workflow-events':`/api/workflow-events?after=${cursor}`);if(!alive)return;const batch=incomingWorkflow(data,cursor,user.id);if(!batch){setStatus('Стрічка подій потребує оновлення сервера');return;}cursor=batch.cursor;setHistory(old=>mergeWorkflow(old,batch.events));setStatus('Події оновлюються автоматично');
+  async function poll(){let delay=5000;try{const data=await apiRef.current('GET',cursor===null?'/api/workflow-events':`/api/workflow-events?after=${cursor}`);if(!alive)return;const batch=incomingWorkflow(data,cursor,user.id);if(!batch){delay=30000;setStatus('Стрічка подій потребує оновлення сервера');return;}cursor=batch.cursor;setHistory(old=>mergeWorkflow(old,batch.events));setStatus('Події оновлюються автоматично');
    if(!batch.initial&&batch.events.length)window.dispatchEvent(new CustomEvent('solvia:workflow-updated',{detail:batch.events}));
    if(batch.alert.length){if(!openRef.current)setUnread(n=>n+batch.alert.length);const newest=batch.alert.at(-1);toast(batch.alert.length>1?`${eventTitles[newest.kind]} · ще ${batch.alert.length-1} подій`:eventTitles[newest.kind],'remote');sound.current?.play(newest.kind==='patient.called'?'call':'event');
     const bridge=window.webkit?.messageHandlers?.solviaEvents;
     try{if(bridge)bridge.postMessage(JSON.stringify({id:newest.id,kind:newest.kind}));else window.chrome?.webview?.postMessage('workflow:'+newest.kind);}catch{}
    }if(data.has_more)delay=250;
-  }catch(error){if(!alive)return;setStatus(error.status===404?'Потрібне оновлення сервера для подій':'Немає зв’язку зі стрічкою подій');if(error.status===404)return;}finally{if(alive)timer=setTimeout(poll,delay);}}
+  }catch(error){if(!alive)return;setStatus(error.status===404?'Потрібне оновлення сервера для подій':'Немає зв’язку зі стрічкою подій');if(error.status===404){delay=30000;return;}}finally{if(alive)timer=setTimeout(poll,delay);}}
   void poll();return()=>{alive=false;clearTimeout(timer);};
  },[user.id,apiBase]);
  useEffect(()=>{if(open)setUnread(0);},[open]);

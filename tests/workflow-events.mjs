@@ -10,6 +10,7 @@ assert.equal(incomingWorkflow({events:[created],cursor:7},null,3).alert.length,0
 assert.deepEqual(incomingWorkflow({events:[created,arrived],cursor:8},6,3).alert,[created],'The actor receives local feedback, not a second remote alert');
 assert.equal(incomingWorkflow({events:[created],cursor:7,initial:true},100,3).alert.length,0,'Restored databases reset the cursor without replaying sound');
 assert.equal(incomingWorkflow([],7,3),null);
+assert.equal(incomingWorkflow({events:[created],cursor:7},7,3).alert.length,0,'Repeated batches do not replay sound');
 assert.deepEqual(mergeWorkflow([created],[created,arrived]).map(e=>e.id),[8,7]);
 const row={appointment_id:1,patient_id:1,state:'scheduled',called_at:0};
 const snapshot=entries=>({date:'2026-10-26',entries});

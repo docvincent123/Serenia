@@ -24,7 +24,8 @@ export function mergeWorkflow(history,events){const unique=new Map(history.map(e
 export function incomingWorkflow(data,cursor,userId){
  if(!data||!Array.isArray(data.events)||!Number.isSafeInteger(data.cursor)||data.cursor<0)return null;
  const initial=cursor===null||data.initial===true;
- return {cursor:data.cursor,initial,events:data.events.filter(e=>e&&eventTitles[e.kind]),alert:initial?[]:data.events.filter(e=>e&&eventTitles[e.kind]&&Number(e.actor_id)!==Number(userId)&&e.kind!=='appointment.draft')};
+ const events=data.events.filter(e=>e&&eventTitles[e.kind]&&Number.isSafeInteger(e.id)&&e.id>0&&(initial||e.id>cursor));
+ return {cursor:data.cursor,initial,events,alert:initial?[]:events.filter(e=>Number(e.actor_id)!==Number(userId)&&e.kind!=='appointment.draft')};
 }
 export class EventSound {
  constructor(){this.context=null;}
