@@ -280,6 +280,8 @@
 @media print {
  @page {size:A4;margin:15mm;}
  .daily-report-brand {break-inside:avoid;}
+ .daily-report-metrics {grid-template-columns:repeat(4,minmax(0,1fr));}
+ .daily-report-date {margin-top:20px;}
  .daily-report h3 {break-after:avoid;}
  .daily-report .workspace-table {table-layout:fixed;width:100%;}
  .daily-report .workspace-table th,.daily-report .workspace-table td {overflow-wrap:anywhere;white-space:normal;}

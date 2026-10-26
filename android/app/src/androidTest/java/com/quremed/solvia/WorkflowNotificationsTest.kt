@@ -33,4 +33,27 @@ class WorkflowNotificationsTest {
         assertFalse(service.exported)
         assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,service.foregroundServiceType)
     }
+    @Test fun activeShiftServiceShowsAnOngoingNoticeAndStopsOnRequest() {
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS").use {
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(it).readBytes()
+        }
+        val prefs=context.getSharedPreferences("solvia_settings",0);val enabled=prefs.getBoolean("live_shift",true)
+        val base="https://127.0.0.1:1";val uid=987654L;val store=OfflineStore(context,base,uid)
+        val manager=context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        fun awaitState(condition:()->Boolean){val end=android.os.SystemClock.elapsedRealtime()+5000;while(!condition()&&android.os.SystemClock.elapsedRealtime()<end)Thread.sleep(50);assertTrue(condition())}
+        try {
+            prefs.edit().putBoolean("live_shift",true).commit()
+            store.saveSession(JSONObject().put("id",uid).put("role","psychologist"),"synthetic-service-test")
+            androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> LiveShiftService.start(activity,base,uid) }
+                awaitState { LiveShiftService.running&&manager.activeNotifications.any { it.id==209 } }
+                val notice=manager.activeNotifications.first { it.id==209 }.notification
+                assertTrue(notice.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0)
+                assertFalse(notice.extras.toString().contains("synthetic-service-test"))
+                LiveShiftService.stop(context)
+                awaitState { !LiveShiftService.running&&manager.activeNotifications.none { it.id==209 } }
+            }
+        } finally { LiveShiftService.stop(context);store.revokeSession();prefs.edit().putBoolean("live_shift",enabled).commit() }
+    }
+
 }
