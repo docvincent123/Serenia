@@ -329,3 +329,21 @@
   .focus-filter-toggle { width:100%; }
   .focus-visit-filters { display:flex;flex-direction:column;align-items:stretch; }
 }
+
+
+@media screen {
+  .focus-recent-events { margin:0 0 18px;padding:0;overflow:hidden; }
+  .focus-recent-toggle { display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;border:0;background:transparent;color:var(--ink);text-align:left;padding:16px 19px;cursor:pointer; }
+  .focus-recent-toggle>span:first-child { display:grid;gap:4px; }
+  .focus-recent-toggle strong { font-size:14px; }
+  .focus-recent-toggle small { color:var(--muted);font-size:12px; }
+  .focus-recent-toggle>span:last-child { font-size:21px;color:#477557; }
+  .focus-recent-list { padding:3px 19px 16px;border-top:1px solid var(--line); }
+  .focus-recent-list>p { color:var(--muted);font-size:13px; }
+  .focus-recent-row { display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line); }
+  .focus-recent-row:last-child { border-bottom:0; }
+  .focus-recent-mark { width:7px;height:7px;border-radius:50%;background:#77bd9e;flex-shrink:0; }
+  .focus-recent-row>div { display:flex;flex-direction:column;gap:3px;min-width:0; }
+  .focus-recent-row strong { font-size:13px;font-weight:600; }
+  .focus-recent-row small { font-size:11px;color:var(--muted);overflow-wrap:anywhere; }
+}
