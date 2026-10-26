@@ -53,8 +53,7 @@ try{
   async function open(label,title){
     const target=nav.getByRole('button',{name:label,exact:true,includeHidden:true});
     if(!await target.isVisible()){
-      const group=nav.locator('.nav-group').filter({has:target});
-      const toggle=group.locator('.nav-group-toggle');
+      const toggle=target.locator('xpath=ancestor::section[contains(@class,"nav-group")]/button[contains(@class,"nav-group-toggle")]');
       if(await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
     }
     await target.click();await page.getByRole('heading',{name:title,exact:true}).waitFor();
