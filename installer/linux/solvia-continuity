@@ -16,6 +16,7 @@ import time
 STATE = Path('/var/lib/solvia-continuity')
 CONFIG = Path('/etc/solvia/offsite.json')
 DATABASE = 'host=/var/run/postgresql port=55432 dbname=solvia user=solvia'
+os.environ.setdefault('PGOPTIONS','-c timezone=Europe/Kyiv')
 
 def run(args, **kw):
     return subprocess.run(args, check=True, text=True, capture_output=True, **kw).stdout.strip()
@@ -81,7 +82,7 @@ def send_pending():
         try:
             with archive.open('rb') as stream: digest=hashlib.file_digest(stream,'sha256').hexdigest()
             if digest!=job['sha256']:raise RuntimeError('Local archive checksum changed')
-            output=run(['restic','backup','--json','--tag','solvia','--',str(archive)],env=env,timeout=5400)
+            output=run(['restic','backup','--json','-o','sftp.args=-oBatchMode=yes -oStrictHostKeyChecking=yes','--tag','solvia','--',str(archive)],env=env,timeout=5400)
             summary=next(json.loads(line) for line in reversed(output.splitlines()) if json.loads(line).get('message_type')=='summary')
             if not summary.get('snapshot_id'):raise RuntimeError('Remote snapshot not confirmed')
             job.update(state='success',snapshot_id=summary['snapshot_id'],completed_at=int(time.time()))
@@ -125,7 +126,7 @@ def main():
         if args.action=='remote-check':
             env=configuration()
             if env is None:raise RuntimeError('Offsite is not configured')
-            run(['restic','check','--read-data'],env=env,timeout=7200);event('offsite_verify','','success','All encrypted repository data read and verified');return
+            run(['restic','check','--read-data','-o','sftp.args=-oBatchMode=yes -oStrictHostKeyChecking=yes'],env=env,timeout=7200);event('offsite_verify','','success','All encrypted repository data read and verified');return
         if (STATE/'nightly.pending').exists():
             archive,digest=snapshot();enqueue(archive,digest);(STATE/'nightly.pending').unlink()
         if args.action=='worker':shift_jobs()

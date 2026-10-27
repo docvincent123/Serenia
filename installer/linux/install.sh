@@ -127,8 +127,17 @@ try:
     existing=json.load(open(path))
 except (OSError,ValueError):
     existing={}
-if existing.get('version')==2 and existing.get('server_id')==server_id:
+from urllib.parse import urlsplit
+import ipaddress
+host=urlsplit(existing.get('https_url','')).hostname or ''
+try:
+    ipaddress.ip_address(host)
+    stable=False
+except ValueError:
+    stable=bool(host)
+if stable and existing.get('format')=='quremed.solvia.mobile' and existing.get('server_id',server_id)==server_id:
     data=existing
+    data.update(version=2,server_id=server_id)
 else:
     data={'format':'quremed.solvia.mobile','version':2,'server_id':server_id,'center':'SOLVIA',"preferred":"https",'api_url':f'https://{ip}:8443','https_url':f'https://{ip}:8443'}
 with open(path,'w',encoding='utf-8') as stream:json.dump(data,stream,ensure_ascii=False,indent=2)

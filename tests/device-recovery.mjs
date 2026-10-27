@@ -36,6 +36,9 @@ try{
     else if(path==='/api/users'){data=users;if(request.method()!=='GET')edits.push(request.postDataJSON());}
     else if(path==='/api/rooms')data=rooms;
     else if(path==='/api/rooms/2'&&request.method()==='PATCH'){await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Не вдалося зберегти демонстраційне приміщення'})});return;}
+    else if(path==='/api/patient-directory'){
+      const q=(url.searchParams.get('q')||'').toLowerCase();const items=[p,p2].filter(item=>[item.name,item.phone,item.patient_no,item.category,item.psychologist,item.family].some(v=>String(v||'').toLowerCase().includes(q)));data={items,total:items.length,page:1,page_size:25};
+    }
     else if(path==='/api/patients')data=url.searchParams.get('status')==='archived'?[{...p,status:'archived'}]:[p,p2];
     else if(path==='/api/patients/10')data={...p,courses:[],consultations:[],documents:[],referrals:[],discharges:[]};
     else if(path==='/api/families')data=[{id:1,name:'Родина Коваль'}];

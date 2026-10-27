@@ -2507,13 +2507,15 @@ function ServerMaintenance({ api, apiBase }) {
       </article>
       <article>
         <strong>Резервні копії</strong>
-        <p>Автоматично щодня о 02:00. Для ручної перевіреної копії:</p>
+        <p>Після кожної закритої зміни. О 00:00 за Києвом — копія й передавання на віддалений сервер; додаткова локальна копія о 02:00. Для ручного запуску:</p>
         <code>sudo solvia-admin backup</code>
         <p><code>sudo solvia-admin backups</code></p>
         <p><code>sudo solvia-admin verify-backup /path/backup.dump</code></p>
         <small>Кожна нова копія проходить справжнє відновлення в окрему тимчасову БД. Робочі дані не замінюються.</small>
         <small>{system?.backups?.[0] ? `Остання подія: ${system.backups[0].status} · ${String(system.backups[0].created || '').replace('T',' ')}` : 'Історії backup ще немає.'}</small>
-        <div className="backup-history">{system?.backups?.slice(0, 6).map(event => <div key={event.id}><span className={`badge ${event.status === 'success' ? 'forest' : 'rose'}`}>{event.status === 'success' ? 'Успішно' : 'Помилка'}</span><strong>{event.action === 'verify' ? 'Перевірка відновлення' : event.action === 'backup' ? 'Резервна копія' : 'Відновлення'}</strong><small>{event.created?.replace('T',' ')} · {event.details}</small></div>)}</div>
+        {Boolean(system?.backup_jobs?.length)&&<div className="backup-history"><strong>Копії змін</strong>{system.backup_jobs.slice(0,5).map(job=><p key={job.id}>Зміна {job.shift_date} · {({pending:'У черзі',running:'Створюється',success:'Копія перевірена',failed:'Помилка · буде повтор'})[job.state]||job.state}</p>)}</div>}
+        <small>Доступ до віддаленого сховища налаштовує адміністратор на серверному ПК. Невдале передавання повторюється автоматично.</small>
+        <div className="backup-history">{system?.backups?.slice(0, 6).map(event => <div key={event.id}><span className={`badge ${event.status === 'success' ? 'forest' : 'rose'}`}>{event.status === 'success' ? 'Успішно' : 'Помилка'}</span><strong>{event.action === 'verify' ? 'Перевірка відновлення' : event.action === 'backup' ? 'Резервна копія' : event.action === 'offsite' ? 'Передавання на віддалений сервер' : event.action === 'offsite_verify' ? 'Перевірка віддаленого сховища' : 'Відновлення'}</strong><small>{event.created?.replace('T',' ')} · {event.details}</small></div>)}</div>
       </article>
       <article>
         <strong>Діагностика / відновлення</strong>

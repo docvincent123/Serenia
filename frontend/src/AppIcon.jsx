@@ -34,4 +34,3 @@ export default function AppIcon({ name, size = 18 }) {
   };
   return <svg {...common}>{paths[name] || paths.dashboard}</svg>;
 }
-

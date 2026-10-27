@@ -33,6 +33,9 @@ try{
     else if(path==='/api/users'){data=users;if(request.method()!=='GET')edits.push(request.postDataJSON());}
     else if(path==='/api/rooms')data=rooms;
     else if(path==='/api/rooms/2'&&request.method()==='PATCH'){await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Не вдалося зберегти демонстраційне приміщення'})});return;}
+    else if(path==='/api/patient-directory'){
+      const q=(url.searchParams.get('q')||'').toLowerCase();const items=[p,p2].filter(item=>[item.name,item.phone,item.patient_no,item.category,item.psychologist,item.family].some(v=>String(v||'').toLowerCase().includes(q)));data={items,total:items.length,page:1,page_size:25};
+    }
     else if(path==='/api/patients')data=url.searchParams.get('status')==='archived'?[{...p,status:'archived'}]:[p,p2];
     else if(path==='/api/patients/10')data={...p,courses:[],consultations:[],documents:[],referrals:[],discharges:[]};
     else if(path==='/api/families')data=[{id:1,name:'Родина Коваль'}];
@@ -78,9 +81,9 @@ try{
   await page.getByRole('button',{name:'Відкрити розділ Кабінети',exact:true}).click();
   await page.getByRole('heading',{name:'Кабінети та кімнати',exact:true}).waitFor();
   await open('Пацієнти','Пацієнти');await page.locator('.patient-directory-table tbody tr').first().waitFor();assert.equal(await page.locator('.patient-directory-table tbody tr').count(),2);
-  await page.getByPlaceholder('Пошук за №, ПІБ, телефоном, категорією…').fill('Коваль');assert.equal(await page.locator('.patient-directory-table tbody tr').count(),1);
+  await page.getByPlaceholder('Пошук за №, ПІБ, телефоном, категорією…').fill('Коваль');await page.waitForFunction(()=>document.querySelectorAll('.patient-directory-table tbody tr').length===1);assert.equal(await page.locator('.patient-directory-table tbody tr').count(),1);
   await page.getByRole('button',{name:'Картки',exact:true}).click();assert.equal(await page.locator('.patient-list-card').count(),1);
-  await page.getByRole('button',{name:'Таблиця',exact:true}).click();await page.getByPlaceholder('Пошук за №, ПІБ, телефоном, категорією…').fill('');await capture('patient-directory');
+  await page.getByRole('button',{name:'Таблиця',exact:true}).click();await page.getByPlaceholder('Пошук за №, ПІБ, телефоном, категорією…').fill('');await page.waitForFunction(()=>document.querySelectorAll('.patient-directory-table tbody tr').length===2);await capture('patient-directory');
   await open('Архів','Архів пацієнтів');await page.locator('.patient-directory-table tbody tr').first().waitFor();await page.getByLabel('Пошук в архіві').fill('12345');assert.equal(await page.locator('.patient-directory-table tbody tr').count(),1);assert.equal(await page.locator('.directory-row-actions').getByRole('button',{name:'Записати',exact:true}).count(),0);await capture('archive');
   await open('Команда','Команда центру');await page.locator('.team-card').first().waitFor();await page.getByLabel('Роль працівника').selectOption('psychologist');assert.equal(await page.locator('.team-card').count(),1);await page.getByRole('button',{name:'Редагувати',exact:true}).click();await page.getByRole('dialog').getByLabel('ПІБ',{exact:true}).waitFor();
   page.once('dialog',d=>d.accept());await page.getByRole('dialog').getByRole('button',{name:'Закрити',exact:true}).click();await page.getByLabel('Роль працівника').selectOption('');await capture('team');

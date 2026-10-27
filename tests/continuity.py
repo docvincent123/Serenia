@@ -3,6 +3,9 @@ import hashlib
 import importlib.machinery
 import importlib.util
 import json
+import re
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -47,6 +50,24 @@ class Continuity(unittest.TestCase):
     def test_nightly_schedule_is_explicit_kyiv_midnight(self):
         timer=(Path(__file__).resolve().parents[1]/'installer/linux/solvia-nightly.timer').read_text()
         self.assertIn('OnCalendar=*-*-* 00:00:00 Europe/Kyiv',timer);self.assertIn('Persistent=true',timer)
+    def profile_generator(self):
+        source=(Path(__file__).resolve().parents[1]/'installer/linux/install.sh').read_text()
+        return re.search(r"<<'PYCONFIG'\n(.*?)\nPYCONFIG",source,re.S).group(1)
+    def test_profile_generation_pins_identity(self):
+        target=self.root/'center.solvia';identity='a'*64
+        subprocess.run([sys.executable,'-','192.168.1.50',str(target),identity],input=self.profile_generator(),text=True,check=True)
+        profile=json.loads(target.read_text())
+        self.assertEqual(profile['version'],2);self.assertEqual(profile['server_id'],identity)
+        self.assertEqual(profile['https_url'],'https://192.168.1.50:8443')
+    def test_upgrade_preserves_stable_dns_but_refreshes_literal_lan_ip(self):
+        target=self.root/'center.solvia';identity='a'*64
+        target.write_text(json.dumps({'format':'quremed.solvia.mobile','version':2,'server_id':identity,'https_url':'https://center.example.test'}))
+        subprocess.run([sys.executable,'-','192.168.1.99',str(target),identity],input=self.profile_generator(),text=True,check=True)
+        self.assertEqual(json.loads(target.read_text())['https_url'],'https://center.example.test')
+        target.write_text(json.dumps({'format':'quremed.solvia.mobile','version':2,'server_id':identity,'https_url':'https://192.168.1.20:8443'}))
+        subprocess.run([sys.executable,'-','192.168.1.99',str(target),identity],input=self.profile_generator(),text=True,check=True)
+        self.assertEqual(json.loads(target.read_text())['https_url'],'https://192.168.1.99:8443')
+
     def test_running_shift_recovered_only_after_archive_queued(self):
         statements=[]
         def query(statement,**kw):

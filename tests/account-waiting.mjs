@@ -12,6 +12,7 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,...(process.env.SOLVIA_CHROMIUM_EXECUTABLE?{executablePath:process.env.SOLVIA_CHROMIUM_EXECUTABLE,args:['--no-sandbox','--disable-dev-shm-usage']}:{})});
 try{
   const page=await browser.newPage({viewport:{width:1440,height:1000},locale:'uk-UA'});await page.emulateMedia({reducedMotion:'reduce'});await page.addInitScript(()=>Object.defineProperty(navigator,'platform',{get:()=> 'Linux x86_64'}));
+  await page.addInitScript(()=>localStorage.setItem('solvia_api',location.origin));
   const errors=[],passwordPosts=[],bookings=[],creations=[];let role='reception',authenticated=false,conflict=true;
   page.on('pageerror',e=>errors.push(e.message));
   const patient={id:10,name:'Олена Демонстраційна',patient_no:'12345',phone:'+380671234567',psychologist_id:3,psychologist:'Психолог Оксана',status:'active'};
@@ -42,8 +43,8 @@ try{
   await page.getByRole('button',{name:'Показати',exact:true}).click();assert.equal(await page.getByLabel('Пароль',{exact:true}).getAttribute('type'),'text');await page.getByRole('button',{name:'Сховати',exact:true}).click();
   await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();await page.getByRole('alert').waitFor();
   await page.getByLabel('Пароль',{exact:true}).fill('synthetic');
-  await page.getByRole('button',{name:'Підключення до центру',exact:true}).click();await page.getByRole('button',{name:'Перевірити та зберегти адресу',exact:true}).click();await page.getByRole('status').getByText(/Сервер SOLVIA/).waitFor();
-  await page.getByRole('button',{name:'Сховати підключення',exact:true}).click();await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();
+  assert.equal(await page.getByLabel('Адреса сервера центру',{exact:true}).count(),0,'Configured employees do not re-enter an API address');
+  await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();
   await page.getByRole('heading',{name:'Реєстратура',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Написати психологу',exact:true}).count(),0);assert.equal(await page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Повідомлення',exact:true}).count(),0);
   await page.getByRole('button',{name:'Мій профіль',exact:true}).click();await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
