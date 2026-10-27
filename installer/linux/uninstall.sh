@@ -5,13 +5,14 @@ set -Eeuo pipefail
 purge=false
 [[ ${1:-} != --purge-data ]] || purge=true
 
-systemctl disable --now solvia.service solvia-backup.timer solvia-certificate.timer solvia-network.timer solvia-network.service solvia-network-refresh.service 2>/dev/null || true
+systemctl disable --now solvia-nightly.timer solvia-shift-backup.timer solvia.service solvia-backup.timer solvia-certificate.timer solvia-network.timer solvia-network.service solvia-network-refresh.service 2>/dev/null || true
 rm -f /etc/systemd/system/solvia.service /etc/systemd/system/solvia-backup.service /etc/systemd/system/solvia-backup.timer \
       /etc/systemd/system/solvia-certificate.service /etc/systemd/system/solvia-certificate.timer
 rm -f /etc/systemd/system/solvia-network.service /etc/systemd/system/solvia-network-refresh.service /etc/systemd/system/solvia-network.timer
+rm -f /etc/systemd/system/solvia-nightly.service /etc/systemd/system/solvia-nightly.timer /etc/systemd/system/solvia-shift-backup.service /etc/systemd/system/solvia-shift-backup.timer
 systemctl daemon-reload
 
-rm -f /usr/local/sbin/solvia-admin /usr/local/sbin/solvia-updater /usr/local/bin/solvia-admin-app
+rm -f /usr/local/sbin/solvia-continuity /usr/local/sbin/solvia-admin /usr/local/sbin/solvia-updater /usr/local/bin/solvia-admin-app
 rm -f /usr/local/bin/solvia-server-control /usr/local/bin/solvia-server-app /usr/share/applications/solvia-server-console.desktop /usr/local/lib/solvia/solvia-linux-app.py
 rm -f /usr/share/applications/solvia-server.desktop
 rm -f /usr/share/applications/solvia-admin.desktop

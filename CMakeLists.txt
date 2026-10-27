@@ -105,3 +105,7 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME center_license COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/center-license.py $<TARGET_FILE:SolviaLicenseTests>)
 endif()
+
+if(BUILD_TESTING)
+  add_test(NAME continuity COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/continuity.py)
+endif()

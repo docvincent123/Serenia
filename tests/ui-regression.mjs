@@ -28,6 +28,7 @@ try {
   let dischargeRecord={id:1,patient_name:'Демонстраційний пацієнт',document_no:'2026-12345',date_from:'2026-10-01',date_to:'2026-10-15',author:'Тестовий психолог',revision:1,summary:'Підсумок супроводу',dynamics:'Динаміка',recommendations:'Попередня рекомендація',followup:'Подальший супровід'};
   let staffMessages = [], staffCalls = 0;
   let accessAllowed = true, accessCalls = 0;
+  let serviceMode='ready';
   let open = true, waiting = [], currentUser = { id:1,name:'Адміністратор · тест',role:'admin' };
   let draft = { version:0,payload:null }, draftOffline = false, loseConsultationResponse = true;
   const consultations = [];const progress=[];
@@ -39,7 +40,8 @@ try {
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
     let data = [];
-    if (path === '/api/me') data = currentUser;
+    if(path==='/api/client-status')data={mode:serviceMode,message:'Тестове оновлення сервера',expected_until:Math.floor(Date.now()/1000)+120};
+    else if (path === '/api/me') data = currentUser;
     else if(path==='/api/workflow-events') data={cursor:1,events:[{id:1,kind:'patient.arrived',actor_id:2,actor:'Черговий реєстратури',patient_name:'ЦЕ_ПРИВАТНЕ_ПІБ',created:'2026-10-15T09:00'}]};
     else if (path === '/api/login') data = { token:'synthetic-psychologist-token',user:currentUser };
     else if(path==='/api/search') {
@@ -107,6 +109,17 @@ try {
     await route.fulfill({ contentType:'application/json',body:JSON.stringify(data) });
   });
   await page.goto(base); await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  serviceMode='maintenance';
+  await page.reload();
+  const maintenance=page.getByRole('dialog',{name:'Сервер на оновленні',exact:true});
+  await maintenance.waitFor();
+  await page.screenshot({path:'out/design/server-maintenance.png',fullPage:true});
+  await maintenance.getByRole('button',{name:'Згорнути повідомлення',exact:true}).click();
+  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  serviceMode='ready';
+  await page.reload();
+  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  assert.equal(await page.getByRole('dialog',{name:'Сервер на оновленні',exact:true}).count(),0);
   const globalSearch=page.getByRole('textbox',{name:'Пошук у центрі',exact:true});
   await globalSearch.fill('late-global');
   await page.waitForRequest(req=>new URL(req.url()).pathname==='/api/search');
@@ -326,6 +339,22 @@ try {
   await systemSettings.click();
   await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
+  const fresh=await browser.newPage();
+  await fresh.route('**/api/**',async route=>route.fulfill({contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({ok:true,version:'3.1.0',server_id:'a'.repeat(64),mode:'ready'})}));
+  await fresh.goto(base);
+  await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).waitFor();
+  assert.equal(await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).isDisabled(),true,'New workstation requires its center file');
+  assert.equal(await fresh.getByLabel('Адреса сервера центру',{exact:true}).count(),0,'No manual API field in employee setup');
+  const connectionFile={format:'quremed.solvia.mobile',version:2,server_id:'b'.repeat(64),https_url:'https://synthetic-center.invalid',center:'Тестовий центр'};
+  const upload=async()=>fresh.locator('input[type=file]').first().setInputFiles({name:'center.solvia',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(connectionFile))});
+  await upload();await fresh.getByRole('alert').filter({hasText:'інший сервер'}).waitFor();
+  connectionFile.server_id='a'.repeat(64);await upload();
+  await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).waitFor({state:'visible'});
+  await fresh.waitForFunction(()=>localStorage.getItem('solvia_api')==='https://synthetic-center.invalid');
+  await fresh.reload();
+  await fresh.getByText('Замінити файл підключення',{exact:true}).waitFor();
+  assert.equal(await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).isEnabled(),true,'Imported connection persists after restart');
+  await fresh.screenshot({path:'out/design/connection-file-once.png',fullPage:true});await fresh.close();
   console.log('PASS: four role workspaces, daily reception access with persistent shift, shift-bound report date, short-screen actions, settings without reception authorization, waiting list, mobile layout, offline logout, encrypted drafts and consultation retry');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 

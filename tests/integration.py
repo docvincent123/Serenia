@@ -697,6 +697,7 @@ class Scenario(unittest.TestCase):
         self.assertTrue(self.api(admin,'GET','/api/shift-readiness')['ready'])
         closed=self.api(admin,'POST','/api/shift-day',{'action':'close'})
         self.assertTrue(closed['sessions_terminated'])
+        self.assertTrue(closed['backup_queued'])
         self.assertFalse(self.api(admin,'GET','/api/shift-day')['open'])
         self.api(psy,'GET','/api/me',status=401)
         self.api(rec,'GET','/api/me',status=401)
@@ -1217,5 +1218,27 @@ class Scenario(unittest.TestCase):
             if ids:
                 listing=','.join(map(str,ids))
                 sql(f'DELETE FROM waiting_list WHERE patient_id IN ({listing}); DELETE FROM patients WHERE id IN ({listing})')
+
+    def test_zz_service_maintenance_and_durable_shift_backup(self):
+        status=self.call('GET','/api/client-status')[1]
+        self.assertEqual(status['mode'],'ready')
+        self.assertNotIn('backups',status)
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        state=self.api('admin','POST','/api/admin/service-state',{'mode':'maintenance','message':'Synthetic update','expected_until':int(time.time())+120})
+        self.assertEqual(state['mode'],'maintenance')
+        try:
+            public=self.call('GET','/api/client-status')[1]
+            self.assertEqual(public['message'],'Synthetic update')
+            self.assertGreater(public['expected_until'],public['server_time'])
+            self.api('admin','POST','/api/rooms',{'name':'Must not write during maintenance'},status=503)
+            self.api('admin','GET','/api/patient-directory')
+            self.api('reception','POST','/api/admin/service-state',{'mode':'ready'},status=403)
+            self.api('admin','POST','/api/admin/service-state',{'mode':'wrong'},status=400)
+        finally:
+            self.api('admin','POST','/api/admin/service-state',{'mode':'ready'})
+        self.assertEqual(self.call('GET','/api/client-status')[1]['mode'],'ready')
+        # A prior full workflow closes a real shift; the backup queue must survive restart.
+        rows=subprocess.check_output(['psql',self.database,'-X','-qAt','-c','SELECT count(*) FROM shift_backup_jobs'],text=True)
+        self.assertGreater(int(rows),0)
 
 if __name__=='__main__': unittest.main()

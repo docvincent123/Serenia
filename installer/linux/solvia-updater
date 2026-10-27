@@ -114,6 +114,14 @@ echo 'Creating pre-update backup...'
 
 export SOLVIA_SERVER_IP
 SOLVIA_SERVER_IP=$(cat /etc/solvia/address)
+# Publish the maintenance window before either API process is restarted.
+# Existing installations without this additive table continue through their first upgrade.
+state_table=$(runuser -u solvia -- psql -X -qAt 'host=/var/run/postgresql port=55432 dbname=solvia user=solvia' -c "SELECT to_regclass('public.client_service_state')")
+if [[ -n $state_table ]]; then
+  runuser -u solvia -- psql -X 'host=/var/run/postgresql port=55432 dbname=solvia user=solvia' -v ON_ERROR_STOP=1 -c "UPDATE client_service_state SET mode='maintenance',message='Оновлюємо SOLVIA. Підключення відновиться автоматично.',expected_until=extract(epoch from now())::bigint+900 WHERE id=1"
+  # Let connected clients receive the state before restarting; no forms are discarded.
+  sleep 16
+fi
 echo 'Installing update...'
 bash "$package_dir/install.sh" </dev/null
 
@@ -121,5 +129,6 @@ new_version=$(tr -d '[:space:]' < /opt/solvia/VERSION)
 [[ $new_version == "$latest" ]] || { echo 'Installed version verification failed.' >&2; exit 1; }
 
 /usr/local/sbin/solvia-admin health
+runuser -u solvia -- psql -X 'host=/var/run/postgresql port=55432 dbname=solvia user=solvia' -v ON_ERROR_STOP=1 -c "UPDATE client_service_state SET mode='ready',message='',expected_until=0 WHERE id=1"
 echo "SOLVIA updated successfully to $new_version."
 

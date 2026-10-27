@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {navFor} from './workspace-model.mjs';
 import './center-home.css';
+import AppIcon from './AppIcon.jsx';
 
 const quickByRole={
  admin:[
@@ -16,18 +17,6 @@ const quickByRole={
   ['calendar','Календар','Вільні години й кабінети','calendar-days']
  ]
 };
-function ActionIcon({type}){
- const paths={
-  'calendar-check':<><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 10h18m-13 5 2 2 5-5"/></>,
-  'users':<><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></>,
-  'calendar-days':<><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 10h18m5 5h3m-3 3h5"/></>,
-  'users-round':<><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 21a7 7 0 0 1 14 0m0-6a6 6 0 0 1 6 6"/></>,
-  'user-round-plus':<><circle cx="9" cy="8" r="3"/><path d="M2 21v-2a7 7 0 0 1 14 0v2m3-16v8m-4-4h8"/></>,
-  'calendar-plus':<><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 10h18m-6-3v6m-3-3h6"/></>,
-  'clipboard-list':<><rect x="5" y="5" width="14" height="17" rx="2"/><path d="M9 3h6v4H9zM9 12h6m-6 4h6"/></>
- };
- return <svg viewBox="0 0 24 24" width="23" height="23" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[type]}</svg>;
-}
 const fmtDate=value=>value?new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'long'}).format(new Date(value+'T12:00:00')):'Сьогодні';
 function AdminServerStatus({api}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
@@ -87,7 +76,7 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
   {error&&<div role="alert" className="alert error">Не вдалося отримати дані з сервера: {error} <button type="button" className="button secondary" onClick={reload}>Повторити</button></div>}
   <section className="center-home-actions" aria-label="Основні дії">
    <div className="center-section-caption"><h2>Що потрібно зробити?</h2><span>Оберіть дію</span></div>
-   <div className="center-home-action-grid">{quickByRole[role].map(([key,title,subtitle,icon])=><button type="button" className="center-home-action" key={key} onClick={()=>act(key)}><span className="center-home-action-icon"><ActionIcon type={icon}/></span><span className="center-home-action-copy"><strong>{title}</strong><small>{subtitle}</small></span><span aria-hidden="true">›</span></button>)}</div>
+   <div className="center-home-action-grid">{quickByRole[role].map(([key,title,subtitle,icon])=><button type="button" className="center-home-action" key={key} onClick={()=>act(key)}><span className="center-home-action-icon"><AppIcon name={({"calendar-check":"shift-workspace","users":"patients","calendar-days":"calendar","users-round":"team","user-round-plus":"patients","calendar-plus":"calendar","clipboard-list":"shift-workspace"})[icon]} size={23}/></span><span className="center-home-action-copy"><strong>{title}</strong><small>{subtitle}</small></span><span aria-hidden="true">›</span></button>)}</div>
   </section>
   <section aria-label="Стан прийомів сьогодні" className="center-home-today">
    <div className="center-section-caption"><h2>Сьогодні</h2><button type="button" onClick={()=>onNavigate('shift-workspace')}>Відкрити прийоми <span aria-hidden="true">→</span></button></div>

@@ -1,0 +1,4 @@
+{
+  "repository": "sftp:solvia-backup@YOUR-VPS-DOMAIN:/srv/solvia-backups",
+  "password_file": "/etc/solvia/restic-password"
+}
