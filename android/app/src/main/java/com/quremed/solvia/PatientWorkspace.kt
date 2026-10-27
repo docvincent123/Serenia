@@ -111,6 +111,7 @@ class PatientWorkspace(
             "history" -> history(content, id)
             "discharges" -> discharges(content, id)
             "courses" -> { content.addView(text("Курс супроводу", 20f, true)); courses(content, id) }
+            "rehabilitation" -> rehabilitation(content, id)
             "referrals" -> { content.addView(text("Направлення", 20f, true)); referrals(content, id) }
             else -> summary(content, id)
         }
@@ -119,6 +120,7 @@ class PatientWorkspace(
         if (role == "psychologist") content.addView(button("Нова консультація") { consult(id, patient.optString("name")) })
         content.addView(text("Супровід", 18f, true))
         content.addView(button("Курс супроводу") { selected = "courses"; render() })
+        content.addView(button("План реабілітації") { selected = "rehabilitation"; render() })
         content.addView(button("Направлення") { selected = "referrals"; render() })
         val details = box().apply { visibility = View.GONE }
         content.addView(button("Контакти й дані пацієнта") { details.visibility = if(details.visibility == View.VISIBLE) View.GONE else View.VISIBLE })
@@ -265,6 +267,98 @@ class PatientWorkspace(
             section(row, "Мета курсу", entry.optString("reason")); section(row, "Підсумок", entry.optString("outcome"))
             content.addView(row)
         }
+    }
+    /** Native psychologist plan. Only the server authorizes clinical data and edits. */
+    private fun rehabilitation(content: LinearLayout, id: Long) {
+        content.addView(text("Індивідуальний план реабілітації", 21f, true))
+        content.addView(button("До картки") { selected = "summary"; render() })
+        val active = patient.optJSONArray("courses")?.let { courses ->
+            (0 until courses.length()).map { courses.getJSONObject(it) }.firstOrNull { it.optString("status") == "active" }
+        }
+        if(active != null) {
+            content.addView(text("Курс №" + active.optInt("course_no"), 14f, true))
+            content.addView(button("+ Нова ціль") {
+                form("Нова ціль") { fields, submit ->
+                    val title = input("Конкретна ціль")
+                    val measurement = input("Як оцінюємо прогрес")
+                    val baseline = input("Початковий стан")
+                    val target = input("Очікуваний результат")
+                    val deadline = date("Контрольна дата", LocalDate.now().plusMonths(1).toString())
+                    listOf(title, measurement, baseline, target, deadline).forEach { fields.addView(it) }
+                    submit { done ->
+                        api.call("POST", "/api/patients/" + id + "/rehab-goals", JSONObject()
+                            .put("title", title.text.toString()).put("measurement", measurement.text.toString())
+                            .put("baseline", baseline.text.toString()).put("target_value", target.text.toString())
+                            .put("target_date", deadline.text.toString()),
+                            { done(true); open(id, "rehabilitation") }, { error(it); done(false) })
+                    }
+                }
+            })
+        } else content.addView(text("Немає активного курсу. Його відкриває реєстратура або адміністратор."))
+        val list = box()
+        list.addView(text("Завантажуємо цілі…"))
+        content.addView(list)
+        api.call("GET", "/api/patients/" + id + "/rehab-goals", success = { response ->
+            list.removeAllViews()
+            val goals = response as JSONArray
+            if(goals.length() == 0) { empty(list, "Цілей поки немає"); return@call }
+            val sections = mutableListOf<DocumentSection>()
+            for(i in 0 until goals.length()) {
+                val goal = goals.getJSONObject(i)
+                val stateNames = mapOf("planned" to "Заплановано", "in_progress" to "У роботі",
+                    "achieved" to "Досягнуто", "paused" to "Призупинено")
+                val status = stateNames[goal.optString("state")] ?: goal.optString("state")
+                val goalTitle = goal.optString("title")
+                val summary = "Курс №" + goal.optInt("course_no") + " · " + status + "\n" +
+                    "Початок: " + goal.optString("baseline") + "\nМета: " + goal.optString("target_value") + "\n" +
+                    "Зараз: " + goal.optString("progress_value") + "\nКонтроль: " + goal.optString("target_date")
+                val card = box()
+                card.addView(text(goalTitle, 18f, true)); card.addView(text(summary))
+                card.addView(text("Відповідальний: " + goal.optString("owner_name"), 13f))
+                sections.add(DocumentSection(goalTitle, summary))
+                val updates = goal.optJSONArray("updates")
+                if(updates != null && updates.length()>0) {
+                    card.addView(button("Історія змін (" + updates.length() + ")") {
+                        val details = buildString {
+                            for(j in 0 until updates.length()) {
+                                val line = updates.getJSONObject(j)
+                                append(line.optString("created")).append(" · ")
+                                    .append(line.optString("author_name")).append("\n")
+                                    .append(line.optString("note")).append("\n")
+                                    .append(line.optString("progress_value")).append("\n\n")
+                            }
+                        }
+                        AlertDialog.Builder(activity).setTitle("Історія цілі").setMessage(details)
+                            .setPositiveButton("Закрити", null).show()
+                    })
+                }
+                if(active != null && goal.optLong("course_id") == active.optLong("id")) {
+                    card.addView(button("Зафіксувати прогрес") {
+                        form("Прогрес цілі") { fields, submit ->
+                            val values = listOf("planned", "in_progress", "achieved", "paused")
+                            val statusInput = select(values.map { stateNames[it] ?: it })
+                            statusInput.setSelection(values.indexOf(goal.optString("state")).coerceAtLeast(0))
+                            val current = input("Поточний результат", goal.optString("progress_value"))
+                            val note = input("Пояснення зміни", lines = 3)
+                            listOf(statusInput, current, note).forEach { fields.addView(it) }
+                            submit { done ->
+                                api.call("PATCH", "/api/rehab-goals/" + goal.getLong("id"), JSONObject()
+                                    .put("revision", goal.getInt("revision"))
+                                    .put("state", values[statusInput.selectedItemPosition])
+                                    .put("progress_value", current.text.toString()).put("note", note.text.toString()),
+                                    { done(true); open(id, "rehabilitation") }, { error(it); done(false) })
+                            }
+                        }
+                    })
+                }
+                list.addView(card)
+            }
+            list.addView(button("Переглянути PDF плану") { document("Індивідуальний план реабілітації", sections) })
+        }, failure = { message ->
+            list.removeAllViews()
+            list.addView(text("Немає зв’язку для завантаження плану: " + message))
+            list.addView(button("Повторити") { selected = "rehabilitation"; render() })
+        })
     }
     private fun referrals(content: LinearLayout, id: Long) {
         content.addView(button("Додати направлення") {
