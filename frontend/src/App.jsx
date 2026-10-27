@@ -1530,14 +1530,19 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
           </div>
         </div>
         {(isPsychologist || isAdmin || isReception) && (
-          <div className="page-actions">
-            {isPsychologist && <Button variant="secondary" onClick={assignAssessment}>Призначити анкету</Button>}
+          <div className="page-actions patient-minimal-actions">
             {isPsychologist && card.status === 'active' && <Button onClick={openConsultation}>+ Консультація</Button>}
-            {(isAdmin || isReception) && <Button variant="secondary" onClick={openPatientEdit}>Редагувати профіль</Button>}
-            {isAdmin && <Button variant="secondary" onClick={() => setDialog('admin-note')}>+ Службова нотатка</Button>}
-            {(isAdmin || isPsychologist) && <Button variant="secondary" onClick={() => setDialog('discharge')}>Сформувати виписку</Button>}
-            {canManageCourse && activeCourse && <Button variant="secondary" onClick={() => setDialog('archive-course')}>Завершити курс</Button>}
+            {(isAdmin || isReception) && <Button onClick={openPatientEdit}>Редагувати дані</Button>}
             {canManageCourse && !activeCourse && <Button onClick={() => setDialog('new-course')}>+ Новий курс</Button>}
+            {(isPsychologist || isAdmin || (canManageCourse && activeCourse)) && <details className="patient-secondary-actions">
+              <summary>Додаткові дії</summary>
+              <div>
+                {isPsychologist && <Button variant="secondary" onClick={assignAssessment}>Призначити анкету</Button>}
+                {isAdmin && <Button variant="secondary" onClick={() => setDialog('admin-note')}>Службова нотатка</Button>}
+                {(isAdmin || isPsychologist) && <Button variant="secondary" onClick={() => setDialog('discharge')}>Сформувати виписку</Button>}
+                {canManageCourse && activeCourse && <Button variant="secondary" onClick={() => setDialog('archive-course')}>Завершити курс</Button>}
+              </div>
+            </details>}
           </div>
         )}
       </div>
