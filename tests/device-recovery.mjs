@@ -66,9 +66,8 @@ try{
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
-  const adminGroup=page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Адміністрування',exact:true});
-   if(await adminGroup.getAttribute('aria-expanded')==='false')await adminGroup.click();
-   await page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Пристрої',exact:true}).click();
+  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Відкрити розділ Пристрої',exact:true}).click();
   await page.getByRole('button',{name:'Проблемні записи · 1',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Проблемні записи телефона'});
   await dialog.getByRole('button').filter({hasText:'Коваль Олена'}).click();
