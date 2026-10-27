@@ -200,6 +200,28 @@ class PatientWorkspace(
             val refused = CheckBox(activity).apply { text = "Зафіксувати відмову від підписання" }
             val signature = SignatureView(activity)
             listOf(name, body, signer, refused).forEach { fields.addView(it) }
+
+            fields.addView(button("Шаблон центру") {
+                api.call("GET", "/api/document-templates", success = { response ->
+                    val available = response as JSONArray
+                    if(available.length() == 0) {
+                        AlertDialog.Builder(activity).setMessage("У центрі ще немає активних шаблонів.")
+                            .setPositiveButton("Добре", null).show()
+                    } else {
+                        val titles = (0 until available.length()).map { available.getJSONObject(it).optString("title") }.toTypedArray()
+                        AlertDialog.Builder(activity).setTitle("Оберіть шаблон").setItems(titles) { _, position ->
+                            val template = available.getJSONObject(position)
+                            val textValue = template.optString("content")
+                                .replace("{{patient_name}}", patient.optString("name"))
+                                .replace("{{patient_no}}", patient.optString("patient_no"))
+                                .replace("{{today}}", LocalDate.now().toString())
+                            type.setSelection(documentKinds.indexOf("other"))
+                            name.post { name.setText(template.optString("title")); body.setText(textValue) }
+                        }.setNegativeButton("Скасувати", null).show()
+                    }
+                }, failure = { error(it) })
+            })
+
             fields.addView(text("Підпис пальцем або стилусом", 14f, true))
             fields.addView(signature, LinearLayout.LayoutParams(-1, dp(180)))
             fields.addView(button("Очистити підпис") { signature.clear() })
