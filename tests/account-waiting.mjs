@@ -23,6 +23,7 @@ try{
     else if(path==='/api/me'){if(!authenticated)return fulfill(401,{error:'Необхідний вхід'});data={id:2,name:'Наталія Демонстраційна',role,login:'reception'};}
     else if(path==='/api/health')data={ok:true,version:'2.5.0',platform:'Linux'};
     else if(path==='/api/shift-day')data={open:true,shift_date:'2026-10-16'};
+    else if(path==='/api/workday/home')data={date:'2026-10-16',counts:{waiting:0,arrived:0,completed:0},active_patients:1,waiting_list:1,next:[]};
     else if(path==='/api/reception-access')data={allowed:true,enabled:true,access_date:'2026-10-16',starts_at:'2026-10-16T08:00'};
     else if(path==='/api/meta')data={rooms:[{id:2,name:'Кабінет 101',active:true},{id:4,name:'Закритий кабінет',active:false}],psychologists:[{id:3,name:'Психолог Оксана'}],workflow:{default_duration_minutes:60}};
     else if(path==='/api/patients')data=[patient];
@@ -43,7 +44,7 @@ try{
   await page.getByLabel('Пароль',{exact:true}).fill('synthetic');
   await page.getByRole('button',{name:'Підключення до центру',exact:true}).click();await page.getByRole('button',{name:'Перевірити та зберегти адресу',exact:true}).click();await page.getByRole('status').getByText(/Сервер SOLVIA/).waitFor();
   await page.getByRole('button',{name:'Сховати підключення',exact:true}).click();await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();
-  await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Реєстратура',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Написати психологу',exact:true}).count(),0);assert.equal(await page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Повідомлення',exact:true}).count(),0);
   await page.getByRole('button',{name:'Мій профіль',exact:true}).click();await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
   assert.equal(await page.locator('.account-identity h2').textContent(),'Наталія Демонстраційна');const lightweight=page.getByRole('checkbox',{name:/Полегшений режим/});assert.equal(await lightweight.isChecked(),true);await lightweight.uncheck();assert.equal(await page.evaluate(()=>JSON.parse(localStorage.solvia_preferences).lightweight),false);assert.equal(await page.locator('html').getAttribute('data-lightweight'),'false');await lightweight.check();assert.equal(await page.locator('html').getAttribute('data-lightweight'),'true');await page.getByRole('checkbox',{name:/Зменшити анімації/}).check();assert.equal(await page.evaluate(()=>JSON.parse(localStorage.solvia_preferences).reducedMotion),true);
@@ -51,7 +52,7 @@ try{
   await page.getByLabel('Повторіть новий пароль',{exact:true}).fill('new');await page.getByRole('button',{name:'Змінити пароль',exact:true}).click();await page.getByRole('alert').getByText('Поточний пароль неправильний',{exact:true}).waitFor();
   assert.equal(await page.getByLabel('Новий пароль',{exact:true}).inputValue(),'new');
   await page.setViewportSize({width:1024,height:600});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);await page.screenshot({path:'out/design/refined-profile-short.png',fullPage:true});await page.setViewportSize({width:1440,height:1000});
-  await page.getByRole('button',{name:'Лист очікування',exact:true}).click();await page.getByRole('button',{name:patient.name,exact:true}).waitFor();
+  await page.locator('.focus-navigation').getByRole('button',{name:'Головна',exact:true}).click();await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();await page.getByRole('button',{name:'Відкрити розділ Лист очікування',exact:true}).click();await page.getByRole('button',{name:patient.name,exact:true}).waitFor();
   await page.getByLabel('Пошук у листі очікування',{exact:true}).fill('неіснуючий');await page.getByRole('heading',{name:'Нічого не знайдено'}).waitFor();await page.getByLabel('Пошук у листі очікування',{exact:true}).fill('12345');assert.equal(await page.locator('.waiting-card').count(),1);await page.screenshot({path:'out/design/refined-waiting-list.png',fullPage:true});
   await page.getByRole('button',{name:'+ Додати в очікування',exact:true}).click();let dialog=page.getByRole('dialog',{name:'Нове очікування'});await dialog.waitFor();assert.equal(await page.locator('.dialog-backdrop').evaluate(el=>getComputedStyle(el).backdropFilter),'none','Lightweight Linux dialogs avoid backdrop repaint');await dialog.getByLabel('Знайти пацієнта',{exact:true}).fill('12345');await dialog.getByLabel('Пацієнт',{exact:true}).selectOption('10');
   await dialog.getByLabel('З дати',{exact:true}).fill('2026-10-20');await dialog.getByLabel('До дати',{exact:true}).fill('2026-10-23');await dialog.getByLabel('Не раніше',{exact:true}).fill('18:00');await dialog.getByLabel('Не пізніше',{exact:true}).fill('09:00');await dialog.getByRole('button',{name:'Додати в очікування',exact:true}).click();await dialog.getByRole('alert').getByText(/Перевірте діапазон/).waitFor();assert.equal(creations.length,0);
