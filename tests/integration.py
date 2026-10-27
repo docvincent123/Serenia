@@ -1141,6 +1141,18 @@ class Scenario(unittest.TestCase):
     def test_y_lean_workday_home_authorization(self):
         """Home needs one request and never leaks clinical notes."""
         self.api('admin','POST','/api/shift-day',{'action':'open'})
+        # Earlier shift-close tests correctly terminate staff sessions.
+        # Recreate synthetic sessions before checking cross-role permissions.
+        staff=self.api('admin','GET','/api/users')
+        for role in ('reception','psychologist','director'):
+            uid=next(x['id'] for x in staff if x['login']==role)
+            self.api('admin','DELETE',f'/api/users/{uid}/sessions')
+            code,auth=self.call('POST','/api/login',{
+                'login':role,'password':self.passwords[role],
+                'platform':'CI-workday','device_id':'ci-workday-'+role
+            })
+            self.assertEqual(code,200,auth)
+            self.tokens[role]=auth['token']
         for role in ('admin','reception'):
             result=self.api(role,'GET','/api/workday/home')
             self.assertEqual(result['date'],dt.date.today().isoformat())
