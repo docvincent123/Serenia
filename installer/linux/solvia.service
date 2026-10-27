@@ -10,6 +10,7 @@ Type=simple
 User=solvia
 Group=solvia
 EnvironmentFile=/etc/solvia/server.env
+Environment="TZ=Europe/Kyiv" "PGOPTIONS=-c timezone=Europe/Kyiv"
 WorkingDirectory=/opt/solvia
 ExecStart=/opt/solvia/SolviaServer --host ${SOLVIA_HOST} --port 8443 --ui /opt/solvia/ui --cert /etc/solvia/tls/server.crt --key /etc/solvia/tls/server.key
 Restart=on-failure

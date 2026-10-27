@@ -18,7 +18,7 @@ cd "$package"
 sha256sum --check SHA256SUMS
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 iproute2 xdg-utils libnss3-tools desktop-file-utils
+apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 iproute2 xdg-utils libnss3-tools desktop-file-utils restic openssh-client
 libraries=$(ldd ./SolviaServer)
 printf '%s\n' "$libraries"
 if grep -q 'not found' <<< "$libraries"; then echo 'Відсутні бібліотеки сервера'; exit 1; fi
@@ -90,6 +90,7 @@ chown root:solvia /etc/solvia/server.env
 chown root:root /etc/solvia/address
 install -m 0755 solvia-admin /usr/local/sbin/solvia-admin
 install -m 0755 solvia-updater /usr/local/sbin/solvia-updater
+install -m 0755 solvia-continuity /usr/local/sbin/solvia-continuity
 install -d -m 0755 /usr/local/lib/solvia
 install -m 0644 solvia-linux-app.py /usr/local/lib/solvia/solvia-linux-app.py
 rm -rf /usr/local/lib/solvia/ui
@@ -112,25 +113,35 @@ update-ca-certificates >/dev/null
 update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 install -m 0644 ./*.service ./*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now solvia.service solvia-http.service solvia-certificate.timer solvia-backup.timer solvia-network.timer
+systemctl enable --now solvia.service solvia-http.service solvia-certificate.timer solvia-backup.timer solvia-nightly.timer solvia-shift-backup.timer solvia-network.timer
 systemctl restart solvia.service solvia-http.service
 /usr/local/sbin/solvia-admin health
 
 mobile_config=/usr/local/share/solvia/SOLVIA-Mobile.solvia
-python3 - "$ip" "$mobile_config" <<'PY'
+server_id=$(runuser -u solvia -- psql -X "$SOLVIA_DATABASE_URL" -Atc "SELECT server_id FROM installation_identity WHERE id=1")
+python3 - "$ip" "$mobile_config" "$server_id" <<'PYCONFIG'
 import json,sys
-ip,path=sys.argv[1:3]
-data={
-  "format":"quremed.solvia.mobile",
-  "version":1,
-  "center":"SOLVIA",
-  "preferred":"https",
-  "api_url":f"https://{ip}:8443",
-  "https_url":f"https://{ip}:8443",
-}
-with open(path,"w",encoding="utf-8") as f:
-    json.dump(data,f,ensure_ascii=False,indent=2)
-PY
+ip,path,server_id=sys.argv[1:4]
+# Retain an operator-provisioned stable HTTPS/DNS profile across upgrades.
+try:
+    existing=json.load(open(path))
+except (OSError,ValueError):
+    existing={}
+from urllib.parse import urlsplit
+import ipaddress
+host=urlsplit(existing.get('https_url','')).hostname or ''
+try:
+    ipaddress.ip_address(host)
+    stable=False
+except ValueError:
+    stable=bool(host)
+if stable and existing.get('format')=='quremed.solvia.mobile' and existing.get('server_id',server_id)==server_id:
+    data=existing
+    data.update(version=2,server_id=server_id)
+else:
+    data={'format':'quremed.solvia.mobile','version':2,'server_id':server_id,'center':'SOLVIA',"preferred":"https",'api_url':f'https://{ip}:8443','https_url':f'https://{ip}:8443'}
+with open(path,'w',encoding='utf-8') as stream:json.dump(data,stream,ensure_ascii=False,indent=2)
+PYCONFIG
 chmod 0644 "$mobile_config"
 
 printf '\nSOLVIA готова: https://%s:8443\n' "$ip"

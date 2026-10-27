@@ -716,3 +716,28 @@ CREATE TABLE IF NOT EXISTS center_document_templates (
  updated TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_center_document_templates_active ON center_document_templates(active,title);
+
+
+-- Lightweight workday roll-ups: only operational dates, no medical content.
+CREATE INDEX IF NOT EXISTS idx_appointments_workday ON appointments ((substr(start,1,10)),status,start);
+
+-- Durable post-shift backup queue: enqueued in the same transaction as closure.
+CREATE TABLE IF NOT EXISTS shift_backup_jobs (
+ id BIGSERIAL PRIMARY KEY,
+ shift_date TEXT NOT NULL,
+ closed_at TEXT NOT NULL,
+ state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','running','success','failed')),
+ attempts INTEGER NOT NULL DEFAULT 0,
+ archive_path TEXT NOT NULL DEFAULT '',
+ last_error TEXT NOT NULL DEFAULT '',
+ updated TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_shift_backup_pending ON shift_backup_jobs(state,id);
+CREATE TABLE IF NOT EXISTS client_service_state (
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ mode TEXT NOT NULL DEFAULT 'ready' CHECK(mode IN ('ready','maintenance')),
+ message TEXT NOT NULL DEFAULT '',
+ expected_until BIGINT NOT NULL DEFAULT 0,
+ updated TEXT NOT NULL DEFAULT ''
+);
+INSERT INTO client_service_state(id) VALUES(1) ON CONFLICT(id) DO NOTHING;

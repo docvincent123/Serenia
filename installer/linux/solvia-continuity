@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Verified local snapshots, durable shift jobs, encrypted offsite retry.
+Only this root service reads the offsite repository/password; never the HTTP API.
+"""
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+
+STATE = Path('/var/lib/solvia-continuity')
+CONFIG = Path('/etc/solvia/offsite.json')
+DATABASE = 'host=/var/run/postgresql port=55432 dbname=solvia user=solvia'
+os.environ.setdefault('PGOPTIONS','-c timezone=Europe/Kyiv')
+
+def run(args, **kw):
+    return subprocess.run(args, check=True, text=True, capture_output=True, **kw).stdout.strip()
+
+def sql(statement, **values):
+    command = ['runuser','-u','solvia','--','psql','-X',DATABASE,'-qAt','-v','ON_ERROR_STOP=1']
+    for key,value in values.items(): command += ['-v',f'{key}={value}']
+    return run(command,input=statement)
+
+def event(action, path, status, details):
+    sql("INSERT INTO backup_events(user_id,action,path,status,details,created) VALUES(NULL, :'action', :'path', :'status', :'details', to_char(clock_timestamp(),'YYYY-MM-DD\"T\"HH24:MI:SSOF'));", action=action,path=path,status=status,details=details[:500])
+
+def write_json(path, value):
+    temp=path.with_suffix('.partial')
+    with open(temp,'w',encoding='utf8') as stream:
+        json.dump(value,stream);stream.flush();os.fsync(stream.fileno())
+    os.chmod(temp,0o600);os.replace(temp,path)
+    fd=os.open(str(path.parent),os.O_DIRECTORY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
+
+def snapshot():
+    output=run(['/usr/local/sbin/solvia-admin','backup'])
+    archive=Path(output.splitlines()[-1]).resolve()
+    if archive.parent!=Path('/var/backups/solvia') or not archive.is_file() or archive.suffix!='.dump':
+        raise RuntimeError('Verified backup path is invalid')
+    with archive.open('rb') as stream: digest=hashlib.file_digest(stream,'sha256').hexdigest()
+    return archive,digest
+
+def enqueue(archive,digest):
+    entry=STATE/(archive.name+'.json')
+    if not entry.exists(): write_json(entry,{'archive':str(archive),'sha256':digest,'attempts':0,'retry_at':0,'state':'pending'})
+
+def configuration():
+    if not CONFIG.exists(): return None
+    if CONFIG.stat().st_mode & 0o077: raise RuntimeError('offsite.json must have mode 0600')
+    data=json.loads(CONFIG.read_text())
+    repo=data.get('repository','');password=Path(data.get('password_file',''))
+    if not re.fullmatch(r'sftp:[A-Za-z0-9_.-]+@[A-Za-z0-9.-]+:/[A-Za-z0-9_./-]+',repo):
+        raise RuntimeError('Use sftp:user@host:/absolute/repository')
+    if not password.is_absolute() or not password.is_file() or password.stat().st_mode & 0o077:
+        raise RuntimeError('Restic password file must be absolute and mode 0600')
+    env=os.environ.copy();env.update(RESTIC_REPOSITORY=repo,RESTIC_PASSWORD_FILE=str(password),RESTIC_CACHE_DIR=str(STATE/'cache'))
+    # The system SSH configuration must pin the VPS host key. Never accept a new key automatically.
+    return env
+
+def send_pending():
+    entries=[p for p in sorted(STATE.glob('*.json')) if json.loads(p.read_text()).get('state')=='pending']
+    if not entries:return
+    try: env=configuration()
+    except Exception:
+        event('offsite','','failed','Invalid offsite configuration; local copies retained');return
+    if env is None:
+        # Rate-limit the diagnostic while retaining every pending archive.
+        marker=STATE/'unconfigured'
+        if not marker.exists() or time.time()-marker.stat().st_mtime>86400:
+            event('offsite','','failed','Offsite repository not configured; local copies retained');marker.touch()
+        return
+    for path in entries:
+        job=json.loads(path.read_text())
+        if job.get('retry_at',0)>time.time():continue
+        archive=Path(job['archive'])
+        try:
+            with archive.open('rb') as stream: digest=hashlib.file_digest(stream,'sha256').hexdigest()
+            if digest!=job['sha256']:raise RuntimeError('Local archive checksum changed')
+            output=run(['restic','backup','--json','-o','sftp.args=-oBatchMode=yes -oStrictHostKeyChecking=yes','--tag','solvia','--',str(archive)],env=env,timeout=5400)
+            summary=next(json.loads(line) for line in reversed(output.splitlines()) if json.loads(line).get('message_type')=='summary')
+            if not summary.get('snapshot_id'):raise RuntimeError('Remote snapshot not confirmed')
+            job.update(state='success',snapshot_id=summary['snapshot_id'],completed_at=int(time.time()))
+            write_json(path,job);event('offsite',str(archive),'success','Encrypted remote snapshot '+summary['snapshot_id'])
+        except Exception:
+            job.update(attempts=job.get('attempts',0)+1,retry_at=int(time.time())+600)
+            write_json(path,job);event('offsite',str(archive),'failed','Transfer failed; retained locally and queued for retry')
+
+def shift_jobs():
+    # The OS flock prevents two workers. A running job after service interruption is retried.
+    raw=sql("SELECT coalesce(json_agg(j),'[]'::json) FROM (SELECT id,archive_path FROM shift_backup_jobs WHERE state IN ('pending','running','failed') AND (attempts=0 OR updated<now()-interval '10 minutes') ORDER BY id LIMIT 20) j;")
+    for job in json.loads(raw):
+        sql("UPDATE shift_backup_jobs SET state='running',attempts=attempts+1,updated=now() WHERE id=:'id';",id=job['id'])
+        try:
+            # One verified copy may be retried after a crash; a duplicate is safer than skipping a shift.
+            archive,digest=snapshot();enqueue(archive,digest)
+            sql("UPDATE shift_backup_jobs SET state='success',archive_path=:'path',last_error='',updated=now() WHERE id=:'id';",id=job['id'],path=archive)
+        except Exception:
+            sql("UPDATE shift_backup_jobs SET state='failed',last_error='Backup failed; retry scheduled',updated=now() WHERE id=:'id';",id=job['id'])
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['nightly','worker','remote-check','preflight']);parser.add_argument('--url');parser.add_argument('--server-id');args=parser.parse_args()
+    if args.action=='preflight':
+        import urllib.request
+        from urllib.parse import urlsplit
+        parts=urlsplit(args.url or '')
+        if parts.scheme!='https' or not parts.hostname or parts.username or parts.password or parts.path not in ('','/') or parts.query or parts.fragment:raise RuntimeError('HTTPS origin required')
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self,*a,**k):return None
+        opener=urllib.request.build_opener(NoRedirect())
+        with opener.open(args.url.rstrip('/')+'/api/health',timeout=15) as response: health=json.load(response)
+        if not health.get('ok') or not re.fullmatch('[a-f0-9]{64}',args.server_id or '') or health.get('server_id')!=args.server_id:raise RuntimeError('Target identity mismatch; cutover blocked')
+        print('TLS and restored server identity verified. Data completeness and source fencing still required.');return
+    if os.geteuid()!=0:raise RuntimeError('Run with sudo')
+    STATE.mkdir(mode=0o700,parents=True,exist_ok=True);os.chmod(STATE,0o700)
+    # Persist the nightly request even when a shift worker currently holds the lock.
+    if args.action=='nightly':write_json(STATE/'nightly.pending',{'requested_at':int(time.time())})
+    with open(STATE/'worker.lock','w') as lock:
+        try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:return
+        if args.action=='remote-check':
+            env=configuration()
+            if env is None:raise RuntimeError('Offsite is not configured')
+            run(['restic','check','--read-data','-o','sftp.args=-oBatchMode=yes -oStrictHostKeyChecking=yes'],env=env,timeout=7200);event('offsite_verify','','success','All encrypted repository data read and verified');return
+        if (STATE/'nightly.pending').exists():
+            archive,digest=snapshot();enqueue(archive,digest);(STATE/'nightly.pending').unlink()
+        if args.action=='worker':shift_jobs()
+        send_pending()
+
+if __name__=='__main__':
+    try:main()
+    except Exception as error:
+        # Avoid writing credentials or server-supplied strings into logs.
+        print('SOLVIA continuity failed: '+type(error).__name__,file=sys.stderr);sys.exit(1)

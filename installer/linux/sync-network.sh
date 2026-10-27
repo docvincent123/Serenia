@@ -20,6 +20,21 @@ if [[ $old != "$ip" ]]; then
   python3 - "$ip" /usr/local/share/solvia/SOLVIA-Mobile.solvia <<'PY'
 import json,sys
 ip,path=sys.argv[1:3]
+try:
+    previous=json.load(open(path))
+except (OSError,ValueError):
+    previous={}
+# A configured DNS/VPS endpoint is not overwritten by LAN DHCP refresh.
+from urllib.parse import urlsplit
+host=urlsplit(previous.get('https_url','')).hostname or ''
+import ipaddress
+try:
+    ipaddress.ip_address(host)
+    stable=False
+except ValueError:
+    stable=bool(host)
+if stable:
+    sys.exit(0)
 data={
   "format":"quremed.solvia.mobile",
   "version":1,
@@ -28,6 +43,8 @@ data={
   "api_url":f"https://{ip}:8443",
   "https_url":f"https://{ip}:8443",
 }
+if previous.get('version')==2 and previous.get('server_id'):
+    data['version']=2;data['server_id']=previous['server_id']
 with open(path,"w",encoding="utf-8") as f:
     json.dump(data,f,ensure_ascii=False,indent=2)
 PY
@@ -45,6 +62,10 @@ if [[ ${1:-} != --no-restart ]] && systemctl is-enabled --quiet solvia.service; 
     systemctl start solvia.service
   fi
   if systemctl is-enabled --quiet solvia-http.service; then
-    systemctl restart solvia-http.service
+    if [[ $before != "$after" || $old != "$ip" ]]; then
+      systemctl restart solvia-http.service
+    elif ! systemctl is-active --quiet solvia-http.service; then
+      systemctl start solvia-http.service
+    fi
   fi
 fi

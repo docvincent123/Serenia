@@ -9,6 +9,7 @@ Type=simple
 User=solvia
 Group=solvia
 EnvironmentFile=/etc/solvia/server.env
+Environment="TZ=Europe/Kyiv" "PGOPTIONS=-c timezone=Europe/Kyiv"
 WorkingDirectory=/opt/solvia
 ExecStartPre=/bin/sleep 2
 ExecStart=/opt/solvia/SolviaServer --host 127.0.0.1 --port 8765 --ui /opt/solvia/ui

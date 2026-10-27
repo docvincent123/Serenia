@@ -1,0 +1,77 @@
+/* SOLVIA Center — quiet, role-focused desktop experience. */
+.center-home{max-width:1320px;margin-inline:auto;display:grid;gap:24px}
+.center-home-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.center-home-intro h1{font-size:clamp(27px,2.8vw,36px);letter-spacing:-.045em;line-height:1.16;margin:7px 0}
+.center-home-intro p{font-size:13px;color:var(--muted,#66756c);margin:0}
+.center-home-intro>.button{white-space:nowrap}
+.center-section-caption{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:11px}
+.center-section-caption h2{font-size:18px;line-height:1.35;margin:0;letter-spacing:-.025em}
+.center-section-caption>span{font-size:12px;color:var(--muted,#667)}
+.center-section-caption>button,.center-home-more{border:0;background:transparent;cursor:pointer;color:var(--ink,#282a22);font-weight:650;font-size:12px;padding:8px;border-radius:8px}
+.center-section-caption>button:hover,.center-home-more:hover{background:#fff4d2}
+.center-home-action-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.center-home-action{display:flex;align-items:flex-start;gap:12px;min-width:0;text-align:left;background:#fff;border:1px solid var(--line,#e6e5d8);border-radius:16px;padding:16px 13px;min-height:117px;cursor:pointer;color:var(--ink,#2d322d)}
+.center-home-action:hover{border-color:#dbb848;background:#fffdf6;box-shadow:0 4px 18px rgba(41,35,7,.06)}
+.center-home-action:focus-visible,.center-home-visit:focus-visible,.center-home-more:focus-visible{outline:3px solid #d59f17;outline-offset:2px}
+.center-home-action-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;background:#fff6d8;color:#7d5d13;border-radius:10px}
+.center-home-action-copy{display:grid;flex:1;gap:6px;min-width:0}
+.center-home-action-copy strong{font-size:13px;line-height:1.45}
+.center-home-action-copy small{font-size:11px;font-weight:400;line-height:1.5;color:var(--muted,#65736c)}
+.center-home-action>span:last-child{font-size:20px;color:#a5aca3}
+.center-home-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.center-home-metric{background:#fff;border:1px solid var(--line,#e6e5d8);border-radius:14px;padding:16px 20px;display:flex;flex-direction:column;gap:5px}
+.center-home-metric span{font-size:12px;color:var(--muted,#65736c)}
+.center-home-metric strong{font-size:30px;line-height:1.3;font-variant-numeric:tabular-nums;color:var(--ink,#27362e)}
+.center-home-metric small{font-size:11px;color:var(--muted,#65736c)}
+.center-home-upcoming{background:#fff;border:1px solid var(--line,#e6e5d8);border-radius:16px;padding:20px;min-width:0}
+.center-home-visits{display:grid}
+.center-home-visit{display:flex;width:100%;align-items:center;gap:14px;min-width:0;min-height:66px;background:#fff;color:var(--ink,#27362e);border:0;border-top:1px solid #f0eee8;text-align:left;padding:10px 6px;cursor:pointer}
+.center-home-visit:hover{background:#fffcf1}
+.center-home-visit time{font-weight:800;font-size:16px;min-width:52px;font-variant-numeric:tabular-nums}
+.center-home-visit-person{display:grid;flex:1;min-width:0;gap:4px}
+.center-home-visit-person strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.center-home-visit-person small{font-size:11px;color:var(--muted,#65736c);line-height:1.45;overflow-wrap:anywhere}
+.center-home-visit-state{display:inline-flex;padding:5px 8px;border-radius:9px;background:#f6f2e3;color:#775a12;font-size:11px;white-space:nowrap}
+.center-home-visit-state.arrived{background:#e8f4ed;color:#246844}
+.center-home-visit>span:last-child{font-size:20px;color:#89948b}
+.center-home-empty{padding:22px 6px;color:var(--muted,#65736c);font-size:13px}
+.center-home-footer{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12px;color:var(--muted,#65736c)}
+.center-home-extras{margin-top:-13px;border:1px solid var(--line,#e6e5d8);border-radius:12px;background:#fff;padding:12px 16px}
+.center-home-extras summary{cursor:pointer;font-size:12px;font-weight:650;color:#566c5d}
+.center-home-extras>div{display:flex;flex-wrap:wrap;gap:7px;padding-top:12px}
+.center-home-extras button{background:#f9f9f6;border:1px solid #e7e6df;border-radius:8px;padding:8px 11px;font-size:12px;cursor:pointer}
+.center-home-extras button:hover{background:#fff4ce}
+.patient-registration-full{grid-template-columns:minmax(0,1fr)!important}
+.patient-registration-full>.surface{grid-column:1/-1;min-width:0}
+.patient-registration-full .profile-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:32px}
+.patient-registration-full .profile-list>div{min-width:0;align-items:center;gap:12px}
+.patient-registration-full .profile-list dt{font-size:12px}
+.patient-registration-full .profile-list dd{font-size:13px;overflow-wrap:anywhere}
+@media(max-width:1100px){.center-home-action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.center-home-action-grid{grid-template-columns:1fr}.center-home-action{min-height:75px}.center-home-metrics{gap:8px}.center-home-metric{padding:13px}.center-home-metric strong{font-size:25px}.center-home-upcoming{padding:14px}.center-home-visit{gap:7px}.center-home-visit-state{display:none}.center-home{gap:20px}.patient-registration-full .profile-list{grid-template-columns:1fr}}
+
+/* Patient card: keep frequent action visible, secondary actions one tap away. */
+.patient-minimal-actions{align-items:center;flex-wrap:wrap;gap:8px}
+.patient-secondary-actions{position:relative;z-index:5}
+.patient-secondary-actions summary{list-style:none;display:flex;align-items:center;justify-content:center;border:1px solid var(--line,#ddd);border-radius:10px;cursor:pointer;min-height:39px;padding:7px 13px;background:#fff;font-size:12px;font-weight:650}
+.patient-secondary-actions summary::-webkit-details-marker{display:none}
+.patient-secondary-actions summary::after{content:"⌄";margin-left:10px;color:#7d806e}
+.patient-secondary-actions[open] summary{background:#fff6d9;border-color:#eac865}
+.patient-secondary-actions>div{position:absolute;z-index:10;right:0;top:calc(100% + 7px);min-width:215px;display:grid;gap:6px;border:1px solid #e4e4d9;border-radius:12px;background:#fff;padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.12)}
+.patient-secondary-actions .button{justify-content:flex-start;width:100%;text-align:left;white-space:normal}
+@media(max-width:760px){.patient-secondary-actions>div{right:auto;left:0;min-width:min(245px,calc(100vw - 40px))}}
+
+.center-server-status{margin-top:-12px}
+.center-server-status>p{padding:10px 2px;font-size:12px}
+.center-server-status>div.center-server-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:12px 0;gap:10px}
+.center-server-facts>div{display:grid;gap:5px;padding:11px 14px;border-radius:10px;background:#f7f8f4}
+.center-server-facts span{font-size:11px;color:#65736c}
+.center-server-facts strong{font-size:12px;color:#2b4135;overflow-wrap:anywhere}
+@media(max-width:760px){.center-server-status>div.center-server-facts{grid-template-columns:1fr}}
+.directory-pagination { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; margin-top:20px; }
+.patient-directory-toolbar { display:grid!important; grid-template-columns:minmax(220px,1fr) 180px auto auto; gap:12px; align-items:center; }
+.patient-directory-toolbar .search-box { width:100%; min-width:0; }
+.patient-directory-toolbar .search-box input { width:100%; min-width:0; border:0; background:transparent; box-shadow:none; }
+.patient-directory-toolbar select { width:100%; min-width:0; }
+@media(max-width:1100px) { .patient-directory-toolbar { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } }
+@media(max-width:600px) { .patient-directory-toolbar { grid-template-columns:minmax(0,1fr); } .directory-pagination { justify-content:center; } }

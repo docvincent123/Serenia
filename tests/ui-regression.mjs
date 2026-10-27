@@ -28,6 +28,7 @@ try {
   let dischargeRecord={id:1,patient_name:'Демонстраційний пацієнт',document_no:'2026-12345',date_from:'2026-10-01',date_to:'2026-10-15',author:'Тестовий психолог',revision:1,summary:'Підсумок супроводу',dynamics:'Динаміка',recommendations:'Попередня рекомендація',followup:'Подальший супровід'};
   let staffMessages = [], staffCalls = 0;
   let accessAllowed = true, accessCalls = 0;
+  let serviceMode='ready';
   let open = true, waiting = [], currentUser = { id:1,name:'Адміністратор · тест',role:'admin' };
   let draft = { version:0,payload:null }, draftOffline = false, loseConsultationResponse = true;
   const consultations = [];const progress=[];
@@ -39,15 +40,22 @@ try {
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url()), path = url.pathname, method = route.request().method();
     let data = [];
-    if (path === '/api/me') data = currentUser;
+    if(path==='/api/client-status')data={mode:serviceMode,message:'Тестове оновлення сервера',expected_until:Math.floor(Date.now()/1000)+120};
+    else if (path === '/api/me') data = currentUser;
     else if(path==='/api/workflow-events') data={cursor:1,events:[{id:1,kind:'patient.arrived',actor_id:2,actor:'Черговий реєстратури',patient_name:'ЦЕ_ПРИВАТНЕ_ПІБ',created:'2026-10-15T09:00'}]};
     else if (path === '/api/login') data = { token:'synthetic-psychologist-token',user:currentUser };
+    else if(path==='/api/search') {
+      const q=url.searchParams.get('q');
+      if(q==='late-global')await new Promise(resolve=>setTimeout(resolve,900));
+      data={patients:[{...patient,name:q==='late-global'?'Застарілий глобальний результат':'Актуальний глобальний результат'}],families:[],rooms:[],users:[]};
+    }
     else if (path === '/api/health') data = { ok:true,version:'2.3.0',platform:'linux' };
     else if (path === '/api/shift-day') { if(method === 'POST' && route.request().postDataJSON().action === 'close') { closeCalls++; open = false; } data = { open,shift_date:'2026-10-02' }; }
     else if(path === '/api/reception-access') {if(method==='POST'){accessCalls++;accessAllowed=route.request().postDataJSON().enabled!==false;}data={access_date:'2026-10-15',starts_at:'2026-10-15T08:00',enabled:accessAllowed,allowed:accessAllowed};}
     else if(path==='/api/discharges') data=[dischargeRecord];
     else if(path==='/api/discharges/1/history') data=[];
     else if(path==='/api/discharges/1'&&method==='PATCH') {const body=route.request().postDataJSON();assert.equal(body.revision,1);assert.equal(body.reason,'Уточнення рекомендацій');dischargePatchCalls++;dischargeRecord={...dischargeRecord,...body,revision:2};data=dischargeRecord;}
+    else if(path === '/api/workday/home')data={date:'2026-10-02',counts:{waiting:2,arrived:0,completed:1},active_patients:18,waiting_list:0,next:[{appointment_id:7,patient_id:10,patient:'Тестовий пацієнт',patient_no:'12345',start:'2026-10-02T09:00',end:'2026-10-02T10:00',psychologist:'Тестовий психолог',room:'Кабінет 1',arrived_at:''}]};
     else if (path === '/api/stats') data = { total_patients: 24,active_patients:18,archived_patients:6,new_patients:4,consultations:42,avg_duration_minutes:60,active_courses:18,completed_courses:6,signed_documents:24,outgoing_referrals:3,supervisions_completed:2,load:[] };
     else if(path === '/api/shift-readiness') data=readiness;
     else if(path === '/api/shift-reports') { if(method === 'POST') { reportCalls++; const body=route.request().postDataJSON(); assert.equal(body.shift_date,'2026-10-02','Report must use active shift date, not device calendar date'); data={id:1,consultations_count:3}; } }
@@ -59,6 +67,13 @@ try {
     else if (path === '/api/meta') data = { rooms:[{id:2,name:'Кабінет 1'}],psychologists:[{id:3,name:'Тестовий психолог'}],categories:['Інше'],workflow:{default_duration_minutes:60} };
     else if (path === '/api/shift-workspace') data = [{...visit}, {...visit,appointment_id:8,patient_id:11,patient:'Учасник групи · завершено',completed_at:'2026-10-02T09:50',kind:'group'}, {...visit,appointment_id:8,patient_id:12,patient:'Учасник групи · очікує',kind:'group'}];
     else if (path === '/api/appointments/7/arrival' && method === 'POST') { ++arrivalCalls; visit.arrived_at='2026-10-02T08:55'; data={ok:true}; }
+    else if (path === '/api/patient-directory') {
+      const q=url.searchParams.get('q'), page=Number(url.searchParams.get('page'));
+      if(q==='network-failure') { await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Тестова втрата зв’язку'})});return; }
+      if(q==='late-result') await new Promise(resolve=>setTimeout(resolve,900));
+      const p=q==='late-result'?{...patient,name:'Застаріла відповідь'}:patient;
+      data={items:[p],total:q?1:26,page,page_size:25};
+    }
     else if (path === '/api/patients') data = [patient];
     else if (path === '/api/patients/10') data = { ...patient,courses:[],documents:[],referrals:[],discharges:[],assessments:[],consultations };
     else if(path==='/api/patients/10/progress') {
@@ -93,15 +108,32 @@ try {
     } else if (path === '/api/logout') { await route.abort('timedout'); return; }
     await route.fulfill({ contentType:'application/json',body:JSON.stringify(data) });
   });
-  await page.goto(base); await page.getByRole('heading',{name:'Огляд центру',exact:true}).waitFor();
-  assert.equal(await page.locator('.focus-nav-primary').getByRole('button',{name:'Прийоми за зміну',exact:true}).count(),1,'Shift operations are always one click away');
-  assert.equal(await page.getByRole('button',{name:'Прийоми',exact:true}).getAttribute('aria-expanded'),'false','Secondary groups start collapsed');
-  assert.equal(await page.getByRole('button',{name:'Усі розділи',exact:true}).count() > 0,true,'Every authorized module stays discoverable');
-  await page.getByRole('button',{name:/Останні робочі події/}).click();
-  await page.locator('.focus-recent-row').first().waitFor();
-  assert.equal(await page.locator('.focus-recent-row').count(),1);
-  assert.equal(await page.locator('.focus-recent-row').getByText('ЦЕ_ПРИВАТНЕ_ПІБ').count(),0,'No patient names in dashboard activity feed');
-  await page.getByRole('button',{name:/Останні робочі події/}).click();
+  await page.goto(base); await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  serviceMode='maintenance';
+  await page.reload();
+  const maintenance=page.getByRole('dialog',{name:'Сервер на оновленні',exact:true});
+  await maintenance.waitFor();
+  await page.screenshot({path:'out/design/server-maintenance.png',fullPage:true});
+  await maintenance.getByRole('button',{name:'Згорнути повідомлення',exact:true}).click();
+  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  serviceMode='ready';
+  await page.reload();
+  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  assert.equal(await page.getByRole('dialog',{name:'Сервер на оновленні',exact:true}).count(),0);
+  const globalSearch=page.getByRole('textbox',{name:'Пошук у центрі',exact:true});
+  await globalSearch.fill('late-global');
+  await page.waitForRequest(req=>new URL(req.url()).pathname==='/api/search');
+  await globalSearch.fill('fresh-global');
+  await page.getByText('Актуальний глобальний результат',{exact:true}).waitFor();
+  await page.waitForTimeout(1000);
+  assert.equal(await page.getByText('Застарілий глобальний результат',{exact:true}).count(),0,'Global search ignores old responses');
+  await globalSearch.fill('');
+  await page.locator('.search-popover').waitFor({state:'hidden'});
+  assert.equal(await page.locator('.focus-nav-primary').getByRole('button',{name:'Прийоми',exact:true}).count(),1,'Shift operations are always one click away');
+  assert.equal(await page.locator('.focus-nav-primary button').count(),4,'Minimal desktop navigation');
+  assert.equal(await page.getByRole('button',{name:'Інші функції центру',exact:true}).count(),1,'Other functions stay discoverable');
+  assert.equal(await page.locator('.center-home').getByText('ЦЕ_ПРИВАТНЕ_ПІБ').count(),0,'Home is not a clinical or audit feed');
+  assert.equal(await page.locator('.center-home-metric').count(),3,'Daily status is compact');
   const systemSettings = page.getByRole('button',{name:'Налаштування центру',exact:true});
   const exit = page.getByRole('button',{name:'Вийти',exact:true});
   for (const target of [systemSettings, exit]) {
@@ -117,7 +149,8 @@ try {
   await accessDialog.waitFor({state:'hidden'});
   assert.equal(accessCalls,1);assert.equal(closeCalls,0,'Reception authorization must never close the clinical shift');
 
-  await page.getByRole('button',{name:'Написати психологу',exact:true}).click();
+  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Відкрити розділ Повідомлення',exact:true}).click();
   await page.getByRole('heading',{name:'Повідомлення психологам',exact:true}).waitFor();
   await page.getByRole('button',{name:/Тестовий психолог/}).click();
   await page.getByLabel('Куди надіслати',{exact:true}).selectOption('synthetic');
@@ -157,8 +190,7 @@ try {
   // Settings remain accessible even with the shift closed.
   open = false; await page.goto(base); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   open = true; await page.reload();
-  if(await page.getByRole('button',{name:'Прийоми',exact:true}).getAttribute('aria-expanded')==='false') await page.getByRole('button',{name:'Прийоми',exact:true}).click();
-  await page.getByRole('button',{name:'Прийоми за зміну',exact:true}).click();
+  await page.locator('.focus-navigation').getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
   await page.locator('.shift-visit').first().waitFor();
   assert.equal(await page.locator('.shift-visit').count(),2,'Completed group participant must not remain active');
@@ -180,7 +212,9 @@ try {
   await page.getByRole('button',{name:'Відкрити картку пацієнта',exact:true}).click();
   await page.getByRole('button',{name:'← До списку',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
-  await page.getByRole('button',{name:'Лист очікування',exact:true}).click();
+  await page.locator('.focus-navigation').getByRole('button',{name:'Головна',exact:true}).click();
+  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Відкрити розділ Лист очікування',exact:true}).click();
   await page.getByRole('button',{name:'+ Додати в очікування',exact:true}).click();
   const dialog = page.getByRole('dialog',{name:'Нове очікування'});
   await dialog.locator('select').first().selectOption('10');
@@ -200,7 +234,22 @@ try {
   await page.locator('input[autocomplete="username"]').fill('synthetic-psychologist');
   await page.locator('input[autocomplete="current-password"]').fill('synthetic-password-long');
   await page.locator('.login-submit').click();
-  await page.getByRole('button',{name:'Мої пацієнти',exact:true}).click();
+  await page.locator('.focus-navigation').getByRole('button',{name:'Пацієнти',exact:true}).click();
+  await page.getByText('Знайдено: 26',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Наступна',exact:true}).click();
+  await page.getByText('Сторінка 2 з 2',{exact:true}).waitFor();
+  const directorySearch=page.getByRole('textbox',{name:'Пошук пацієнтів',exact:true});
+  await directorySearch.fill('network-failure');
+  await page.getByRole('alert').filter({hasText:'Тестова втрата зв’язку'}).waitFor();
+  assert.equal(await page.locator('.patient-list-card').count(),0,'Failed search cannot leave actionable stale patients');
+  await directorySearch.fill('late-result');
+  await page.waitForRequest(req=>req.url().includes('/api/patient-directory?')&&new URL(req.url()).searchParams.get('q')==='late-result');
+  await directorySearch.fill('Тестовий');
+  await page.getByText('Знайдено: 1',{exact:true}).waitFor();
+  await page.waitForTimeout(1000);
+  assert.equal(await page.getByText('Застаріла відповідь',{exact:true}).count(),0,'Old network response cannot replace current search');
+  await page.getByText('Сторінка 1 з 1',{exact:true}).waitFor();
+  await page.screenshot({path:'out/design/desktop-patient-directory.png',fullPage:true});
   await page.locator('.patient-list-card').first().click();
   await page.getByRole('button',{name:'+ Консультація',exact:true}).click();
   let consultationDialog = page.getByRole('dialog',{name:'Підсумок консультації',exact:true});
@@ -244,14 +293,15 @@ try {
   await page.getByRole('button',{name:'Зберегти оцінку',exact:true}).click();
   await page.locator('.progress-entry').getByText('Синтетична оцінка виконання',{exact:true}).waitFor();
   await page.screenshot({path:'out/design/desktop-progress.png',fullPage:true});
-  await page.getByRole('button',{name:'Звіт за зміну',exact:true}).click();
+  await page.locator('.focus-navigation').getByRole('button',{name:'Звіти',exact:true}).click();
   await page.getByLabel('Підсумок роботи за зміну',{exact:true}).fill('Підсумок зміни, що тривала після опівночі');
   await page.getByRole('button',{name:'Зберегти звіт за зміну',exact:true}).click();
   await page.getByText('Звіт за зміну збережено.',{exact:false}).waitFor();
   assert.equal(reportCalls,1);
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
-  if(await page.getByRole('button',{name:'Адміністрування',exact:true}).getAttribute('aria-expanded')==='false') await page.getByRole('button',{name:'Адміністрування',exact:true}).click();
-  await page.getByRole('button',{name:'Пристрої',exact:true}).click();
+  await page.locator('.focus-navigation').getByRole('button',{name:'Головна',exact:true}).click();
+  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Відкрити розділ Пристрої',exact:true}).click();
   await page.getByRole('heading',{name:'Стан телефонів',exact:true}).waitFor();
   await page.getByText('○ Поточний стан невідомий',{exact:true}).waitFor();
   await page.screenshot({path:'out/design/desktop-device-health.png',fullPage:true});
@@ -262,7 +312,7 @@ try {
     assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Center administration must not be in other role menus');
     if(role === 'director') assert.equal(await page.getByRole('button',{name:'Пацієнти',exact:true}).count(),0,'Director must not get patient navigation');
     if(role === 'reception') {
-      await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
+      await page.getByRole('heading',{name:'Реєстратура',exact:true}).waitFor();
       assert.equal(await page.getByRole('button',{name:'+ Консультація',exact:true}).count(),0);
     }
     await page.screenshot({path:`out/design/desktop-${role}.png`,fullPage:true});
@@ -289,6 +339,22 @@ try {
   await systemSettings.click();
   await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
+  const fresh=await browser.newPage();
+  await fresh.route('**/api/**',async route=>route.fulfill({contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({ok:true,version:'3.1.0',server_id:'a'.repeat(64),mode:'ready'})}));
+  await fresh.goto(base);
+  await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).waitFor();
+  assert.equal(await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).isDisabled(),true,'New workstation requires its center file');
+  assert.equal(await fresh.getByLabel('Адреса сервера центру',{exact:true}).count(),0,'No manual API field in employee setup');
+  const connectionFile={format:'quremed.solvia.mobile',version:2,server_id:'b'.repeat(64),https_url:'https://synthetic-center.invalid',center:'Тестовий центр'};
+  const upload=async()=>fresh.locator('input[type=file]').first().setInputFiles({name:'center.solvia',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(connectionFile))});
+  await upload();await fresh.getByRole('alert').filter({hasText:'інший сервер'}).waitFor();
+  connectionFile.server_id='a'.repeat(64);await upload();
+  await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).waitFor({state:'visible'});
+  await fresh.waitForFunction(()=>localStorage.getItem('solvia_api')==='https://synthetic-center.invalid');
+  await fresh.reload();
+  await fresh.getByText('Замінити файл підключення',{exact:true}).waitFor();
+  assert.equal(await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).isEnabled(),true,'Imported connection persists after restart');
+  await fresh.screenshot({path:'out/design/connection-file-once.png',fullPage:true});await fresh.close();
   console.log('PASS: four role workspaces, daily reception access with persistent shift, shift-bound report date, short-screen actions, settings without reception authorization, waiting list, mobile layout, offline logout, encrypted drafts and consultation retry');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 

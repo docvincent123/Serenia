@@ -28,10 +28,14 @@ try{
     else if(path==='/api/shift-day')data={open:true,shift_date:'2026-10-15',opened_by_name:'Коваль Андрій'};
     else if(path==='/api/reception-access')data={access_date:'2026-10-15',starts_at:'2026-10-15T08:00',allowed:true,enabled:true};
     else if(path==='/api/stats')data=stats;
+    else if(path==='/api/workday/home')data={date:'2026-10-15',counts:{waiting:2,arrived:1,completed:1},active_patients:32,waiting_list:4,next:[{appointment_id:7,patient_id:10,patient:p.name,patient_no:p.patient_no,start:'2026-10-15T09:00',end:'2026-10-15T10:00',psychologist:p.psychologist,room:'Кабінет 101',arrived_at:''}]};
     else if(path==='/api/meta')data=meta;
     else if(path==='/api/users'){data=users;if(request.method()!=='GET')edits.push(request.postDataJSON());}
     else if(path==='/api/rooms')data=rooms;
     else if(path==='/api/rooms/2'&&request.method()==='PATCH'){await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Не вдалося зберегти демонстраційне приміщення'})});return;}
+    else if(path==='/api/patient-directory'){
+      const q=(url.searchParams.get('q')||'').toLowerCase();const items=[p,p2].filter(item=>[item.name,item.phone,item.patient_no,item.category,item.psychologist,item.family].some(v=>String(v||'').toLowerCase().includes(q)));data={items,total:items.length,page:1,page_size:25};
+    }
     else if(path==='/api/patients')data=url.searchParams.get('status')==='archived'?[{...p,status:'archived'}]:[p,p2];
     else if(path==='/api/patients/10')data={...p,courses:[],consultations:[],documents:[],referrals:[],discharges:[]};
     else if(path==='/api/families')data=[{id:1,name:'Родина Коваль'}];
@@ -51,19 +55,22 @@ try{
   });
   const nav=page.getByRole('navigation',{name:'Робочі розділи'});
   async function open(label,title){
-    const target=nav.getByRole('button',{name:label,exact:true,includeHidden:true});
-    if(!await target.isVisible()){
-      const toggle=target.locator('xpath=ancestor::section[contains(@class,"nav-group")]/button[contains(@class,"nav-group-toggle")]');
-      if(await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
+    const target=nav.getByRole('button',{name:label,exact:true});
+    if(await target.count()) await target.click();
+    else {
+      await nav.getByRole('button',{name:'Головна',exact:true}).click();
+      await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+      await page.getByRole('button',{name:`Відкрити розділ ${label}`,exact:true}).click();
     }
-    await target.click();await page.getByRole('heading',{name:title,exact:true}).waitFor();
+    await page.getByRole('heading',{name:title,exact:true}).waitFor();
   }
   async function capture(name){await page.evaluate(()=>{const pane=document.querySelector('.workspace');if(pane)pane.scrollTop=0;});await page.screenshot({path:`out/design/full-${name}.png`,fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`No page-wide overflow: ${name}`);}
   await mkdir('out/design',{recursive:true});await page.goto(`http://127.0.0.1:${server.address().port}`);
-  await page.locator('.overview-kpi').first().waitFor();assert.equal(await page.locator('.overview-kpi').count(),4);
-  await page.locator('.overview-more summary').click();assert.equal(await page.locator('.overview-secondary>div').count(),12);await page.locator('.overview-more summary').click();
+  await page.locator('.center-home-action').first().waitFor();assert.equal(await page.locator('.center-home-action').count(),4);
+  assert.equal(await nav.getByRole('button').count(),4,'The main admin navigation is deliberately short');
+  assert.equal(await page.locator('.center-home-metric').count(),3);
   await capture('admin-overview');
-  await nav.getByRole('button',{name:'Усі розділи',exact:true}).click();
+  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
   await page.getByRole('heading',{name:'Усі розділи',exact:true}).waitFor();
   assert.equal(await page.locator('.motion-module-card').count(),19,'All existing administrator modules, TV calls and profile');
   for (const [key,title] of navFor('admin')) assert.equal(await page.getByRole('button',{name:`Відкрити розділ ${title}`,exact:true}).count(),1,`Admin module: ${key}`);
@@ -74,9 +81,9 @@ try{
   await page.getByRole('button',{name:'Відкрити розділ Кабінети',exact:true}).click();
   await page.getByRole('heading',{name:'Кабінети та кімнати',exact:true}).waitFor();
   await open('Пацієнти','Пацієнти');await page.locator('.patient-directory-table tbody tr').first().waitFor();assert.equal(await page.locator('.patient-directory-table tbody tr').count(),2);
-  await page.getByPlaceholder('Пошук за №, ПІБ, телефоном, категорією…').fill('Коваль');assert.equal(await page.locator('.patient-directory-table tbody tr').count(),1);
+  await page.getByPlaceholder('Пошук за №, ПІБ, телефоном, категорією…').fill('Коваль');await page.waitForFunction(()=>document.querySelectorAll('.patient-directory-table tbody tr').length===1);assert.equal(await page.locator('.patient-directory-table tbody tr').count(),1);
   await page.getByRole('button',{name:'Картки',exact:true}).click();assert.equal(await page.locator('.patient-list-card').count(),1);
-  await page.getByRole('button',{name:'Таблиця',exact:true}).click();await page.getByPlaceholder('Пошук за №, ПІБ, телефоном, категорією…').fill('');await capture('patient-directory');
+  await page.getByRole('button',{name:'Таблиця',exact:true}).click();await page.getByPlaceholder('Пошук за №, ПІБ, телефоном, категорією…').fill('');await page.waitForFunction(()=>document.querySelectorAll('.patient-directory-table tbody tr').length===2);await capture('patient-directory');
   await open('Архів','Архів пацієнтів');await page.locator('.patient-directory-table tbody tr').first().waitFor();await page.getByLabel('Пошук в архіві').fill('12345');assert.equal(await page.locator('.patient-directory-table tbody tr').count(),1);assert.equal(await page.locator('.directory-row-actions').getByRole('button',{name:'Записати',exact:true}).count(),0);await capture('archive');
   await open('Команда','Команда центру');await page.locator('.team-card').first().waitFor();await page.getByLabel('Роль працівника').selectOption('psychologist');assert.equal(await page.locator('.team-card').count(),1);await page.getByRole('button',{name:'Редагувати',exact:true}).click();await page.getByRole('dialog').getByLabel('ПІБ',{exact:true}).waitFor();
   page.once('dialog',d=>d.accept());await page.getByRole('dialog').getByRole('button',{name:'Закрити',exact:true}).click();await page.getByLabel('Роль працівника').selectOption('');await capture('team');
@@ -99,7 +106,7 @@ try{
   await page.getByRole('button',{name:'Налаштування центру',exact:true}).click();await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();await capture('settings');
   await page.setViewportSize({width:1024,height:600});for(const label of ['Налаштування центру','Вийти']){const box=await page.getByRole('button',{name:label,exact:true}).boundingBox();assert(box&&box.y>=0&&box.y+box.height<=600,`Short-screen account action: ${label}`);}await capture('short-desktop');
   role='director';await page.setViewportSize({width:1440,height:1000});await page.reload();await page.locator('.overview-kpi').first().waitFor();assert.equal(await nav.getByRole('button',{name:'Пацієнти',exact:true}).count(),0);assert.equal(await nav.getByRole('button',{name:'Кабінети',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0);await capture('director-overview');
-  role='reception';await page.reload();await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();await page.locator('.shift-visit').first().click();await capture('reception');
+  role='reception';await page.reload();await page.getByRole('heading',{name:'Реєстратура',exact:true}).waitFor();await nav.getByRole('button',{name:'Прийоми',exact:true}).click();await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();await page.locator('.shift-visit').first().click();await capture('reception');
   await page.getByRole('button',{name:'Підсумок дня',exact:true}).click();
   const report=page.getByRole('dialog',{name:'Підсумок дня',exact:true});
   await report.locator('.daily-report-metrics').waitFor();
@@ -118,5 +125,5 @@ try{
   await report.getByRole('button',{name:'Закрити',exact:true}).click();
   assert.equal(await report.count(),0,'Read-only date selection never triggers discard confirmation');
   assert.deepEqual(errors,[]);assert.deepEqual(edits,[],'Visual navigation must not mutate user data');
-  console.log('PASS: role menus preserved, overview hierarchy, table/card directories, archive restrictions, staff/room filters, exact room editor, calendar, analytics, documents, settings and short desktop layouts');
+  console.log('PASS: lean role menus, center home with overview, table/card directories, archive restrictions, staff/room filters, exact room editor, calendar, analytics, documents, settings and short desktop layouts');
 }finally{await browser.close();await new Promise(r=>server.close(r));}

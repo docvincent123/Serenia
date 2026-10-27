@@ -32,12 +32,13 @@ class MobileUpdates(private val activity: Activity, private val server: () -> St
     private var downloading = false
     private var lastCheck = 0L
     private var pendingInstall: JSONObject? = null
+    private var progress: AlertDialog?=null
     private fun message(text: String) = Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
-    fun close() { io.shutdownNow() }
+    fun close() { progress?.dismiss();progress=null;io.shutdownNow() }
     fun check(manual: Boolean = false) {
         if(checking || downloading || token().isBlank() || server().isBlank()) return
         val now = System.currentTimeMillis()
-        if(!manual && (now-lastCheck < 15*60*1000 || !canPrompt())) return
+        if(!manual && (now-lastCheck < 60*1000 || !canPrompt())) return
         checking = true; lastCheck = now
         val base = server(); val auth = token()
         io.execute {
@@ -60,7 +61,7 @@ class MobileUpdates(private val activity: Activity, private val server: () -> St
                     val key = "$base|${info.getInt("version_code")}"
                     if(!manual && (now-prefs.getLong(key,0) < 24*60*60*1000L || !canPrompt())) return@runOnUiThread
                     prefs.edit().putLong(key,now).apply()
-                    AlertDialog.Builder(activity).setTitle("Доступне оновлення SOLVIA")
+                    AlertDialog.Builder(activity).setTitle("Потрібно оновити SOLVIA")
                         .setMessage("Версія ${info.getString("version_name")}\n\n${info.optString("release_notes")}\n\nДані та адреса сервера зберігаються.")
                         .setNegativeButton("Пізніше",null).setPositiveButton("Оновити") { _,_ -> download(base,auth,info) }.show()
                 }
@@ -74,7 +75,11 @@ class MobileUpdates(private val activity: Activity, private val server: () -> St
     private fun download(base: String, auth: String, info: JSONObject) {
         if(downloading) return
         if(!canPrompt()) { message("Закрийте форму консультації перед оновленням"); return }
-        downloading=true; message("Завантажуємо оновлення…")
+        downloading=true
+        val body=android.widget.LinearLayout(activity).apply { orientation=android.widget.LinearLayout.VERTICAL;gravity=android.view.Gravity.CENTER;setPadding(32,24,32,24) }
+        body.addView(android.widget.ProgressBar(activity))
+        body.addView(MobileUi.label(activity,"Завантажуємо й перевіряємо підпис пакета. Встановлення підтвердить Android.",16f))
+        progress=AlertDialog.Builder(activity).setTitle("Програма оновлюється").setView(body).setCancelable(false).create();progress?.show()
         io.execute {
             val dir = File(activity.cacheDir,"updates").apply { mkdirs() }; val part=File(dir,"candidate.part")
             try {
@@ -93,11 +98,11 @@ class MobileUpdates(private val activity: Activity, private val server: () -> St
                 verifyArchive(activity,part,info.getInt("version_code"))
                 val apk=File(dir,"candidate.apk"); if(apk.exists()) check(apk.delete()); check(part.renameTo(apk))
                 activity.runOnUiThread {
-                    downloading=false
+                    downloading=false;progress?.dismiss();progress=null
                     if(activity.isDestroyed || server()!=base || token()!=auth) return@runOnUiThread
                     pendingInstall=info; install()
                 }
-            } catch(e: Exception) { part.delete(); activity.runOnUiThread { downloading=false; if(!activity.isDestroyed) message(e.message ?: "Оновлення не встановлено") } }
+            } catch(e: Exception) { part.delete(); activity.runOnUiThread { downloading=false;progress?.dismiss();progress=null; if(!activity.isDestroyed) message(e.message ?: "Оновлення не встановлено") } }
         }
     }
     fun resume() { if(pendingInstall!=null && activity.packageManager.canRequestPackageInstalls()) install() }

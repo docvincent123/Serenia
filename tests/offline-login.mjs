@@ -18,6 +18,7 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,...(process.env.SOLVIA_CHROMIUM_EXECUTABLE?{executablePath:process.env.SOLVIA_CHROMIUM_EXECUTABLE,args:['--no-sandbox','--disable-dev-shm-usage']}:{})});
 try{
   const page=await browser.newPage();let online=false,loginCalls=0;
+  await page.addInitScript(()=>localStorage.setItem('solvia_api',location.origin));
   await page.route('**/api/**',async route=>{
     if(!online){await route.abort('connectionrefused');return;}
     const path=new URL(route.request().url()).pathname;

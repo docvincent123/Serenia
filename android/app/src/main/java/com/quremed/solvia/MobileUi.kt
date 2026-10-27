@@ -31,7 +31,7 @@ object MobileUi {
     }
     fun button(context: Context, label: String, primary: Boolean = false, selected: Boolean = false, action: () -> Unit): Button = Button(context).apply {
         text = label; isAllCaps = false; textSize = 15f * textScale(context); gravity = Gravity.CENTER
-        setTypeface(typeface, Typeface.BOLD)
+        typeface = Typeface.create("sans-serif",Typeface.BOLD)
         setTextColor(if(primary) onAccent else buttonInk)
         minHeight = dp(context, 52); minimumHeight = dp(context, 52); minWidth = 0; minimumWidth = 0
         setPadding(dp(context, 14), dp(context, 9), dp(context, 14), dp(context, 9))
@@ -48,11 +48,11 @@ object MobileUi {
     }
     fun label(context: Context, value: String, size: Float = 14f, bold: Boolean = false): TextView = TextView(context).apply {
         text = value; textSize = size * textScale(context); setTextColor(ink); setPadding(0, dp(context, 5), 0, dp(context, 7))
-        if(bold) setTypeface(typeface, Typeface.BOLD)
+        typeface = Typeface.create("sans-serif",if(bold) Typeface.BOLD else Typeface.NORMAL)
     }
     fun input(field: EditText) {
         field.setSelectAllOnFocus(field.context.getSharedPreferences("solvia_settings", 0).getBoolean("select_all", false))
-        field.setTextColor(ink); field.setHintTextColor(muted); field.textSize = 16f * textScale(field.context)
+        field.typeface=Typeface.create("sans-serif",Typeface.NORMAL);field.setTextColor(ink); field.setHintTextColor(muted); field.textSize = 16f * textScale(field.context)
         field.setPadding(dp(field.context, 14), dp(field.context, 13), dp(field.context, 14), dp(field.context, 13))
         field.background = surface(field.context, background, 12, true)
         field.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(field.context, 10) }

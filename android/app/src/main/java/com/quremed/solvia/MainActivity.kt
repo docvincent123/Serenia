@@ -54,6 +54,12 @@ class MainActivity : Activity() {
     private val line = MobileUi.border
 
     private val updates by lazy { MobileUpdates(this, { server }, { token }, { consultationWindow == null && !isFinishing && !isDestroyed }) }
+    private val serviceStatus by lazy { ServiceStatusMonitor(this,{server}) { base ->
+        val result=requestAt(base,"GET","/api/client-status",authToken="") as JSONObject
+        val expected=prefs.getString("server_id:$base", "").orEmpty()
+        require(expected.isBlank() || result.optString("server_id")==expected) { "Інший сервер SOLVIA" }
+        result
+    } }
     private var server = ""
     private var token = ""
     private var role = ""
@@ -103,15 +109,15 @@ class MainActivity : Activity() {
     }
     private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
     private fun offlineStore() = OfflineStore(this, server, userId)
-    override fun onResume() { super.onResume(); updates.resume(); syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick); syncHandler.removeCallbacks(appointmentTick); syncHandler.post(appointmentTick) }
-    override fun onPause() { syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(appointmentTick); super.onPause() }
+    override fun onResume() { super.onResume(); serviceStatus.resume();updates.resume(); syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick); syncHandler.removeCallbacks(appointmentTick); syncHandler.post(appointmentTick) }
+    override fun onPause() { serviceStatus.pause();syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(appointmentTick); super.onPause() }
     override fun onDestroy() {
         syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(appointmentTick); syncHandler.removeCallbacks(draftSyncTick)
         networkCallback?.let { runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(it) } }
         consultationWindow?.dismiss(); consultationWindow = null
         pdfPreview?.close(); pdfPreview = null
         sideMenu?.dismiss(); sideMenu = null
-        updates.close(); io.shutdown(); cacheIo.shutdown(); appointmentIo.shutdown(); super.onDestroy()
+        serviceStatus.close();updates.close(); io.shutdown(); cacheIo.shutdown(); appointmentIo.shutdown(); super.onDestroy()
     }
     private fun unavailable(error: Exception) = error is java.io.IOException && error !is javax.net.ssl.SSLException
     private fun updateConnectionStatus() {
@@ -383,7 +389,7 @@ class MainActivity : Activity() {
                 workspaceTitle = this
                 text = "SOLVIA"; textSize = 18f; setTextColor(MobileUi.onAccent)
                 maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(dp(12), 0, 0, 0); setTypeface(typeface, Typeface.BOLD)
+                setPadding(dp(12), 0, 0, 0); typeface = Typeface.create("sans-serif", Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, -2, 1f))
             statusView = TextView(this).apply {
                 textSize = 12f; gravity = Gravity.CENTER; maxLines = 1
@@ -681,13 +687,14 @@ class MainActivity : Activity() {
         text = value
         textSize = size * MobileUi.textScale(this@MainActivity)
         setTextColor(ink)
-        setTypeface(typeface, Typeface.BOLD)
+        typeface = Typeface.create("sans-serif", Typeface.BOLD)
         setPadding(0, dp(8), 0, dp(10))
     }
 
     private fun caption(value: String): TextView = TextView(this).apply {
         text = value
-        textSize = 13f * MobileUi.textScale(this@MainActivity)
+        textSize = 14f * MobileUi.textScale(this@MainActivity)
+        typeface = Typeface.create("sans-serif",Typeface.NORMAL)
         setTextColor(muted)
         setPadding(0, 0, 0, dp(12))
     }
@@ -811,6 +818,7 @@ class MainActivity : Activity() {
         if (code !in 200..299) {
             val message = (parsed as? JSONObject)?.optString("error")?.takeIf { it.isNotBlank() }
                 ?: "Помилка сервера $code"
+            if(code==503)runOnUiThread { serviceStatus.check() }
             throw ApiError(code, message)
         }
         return parsed
@@ -1013,7 +1021,7 @@ class MainActivity : Activity() {
         val body = root()
         body.addView(logo())
         body.addView(title("Підключення до SOLVIA", 27f))
-        body.addView(caption("Найпростіше — відкрити файл SOLVIA-Mobile.solvia, створений серверним ПК. Адреса підтягнеться автоматично; профіль із DNS-іменем працює після зміни IP."))
+        body.addView(caption("Один раз відкрийте файл центру, створений на серверному ПК. Після перезапуску й оновлення підключення зберігається автоматично."))
 
         val importCard = card()
         importCard.background = rounded(forestSoft, 17, line)
@@ -1023,38 +1031,6 @@ class MainActivity : Activity() {
         body.addView(importCard)
         body.addView(spacer(14))
 
-        body.addView(title("Або введіть адресу вручну", 18f))
-        body.addView(caption("Локально можна ввести 192.168.1.100 або http://192.168.1.100:8765. Для захищеного LAN/VPS використовуйте https://192.168.1.100:8443 або HTTPS-домен."))
-        val address = edit("192.168.1.100").apply {
-            setText(server)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        }
-        body.addView(address)
-        body.addView(spacer(8))
-        body.addView(primary("Перевірити та підключитися") {
-            val previous = server
-            try {
-                val candidate = normalize(address.text.toString())
-                io.execute {
-                    try {
-                        val health = requestAt(candidate, "GET", "/api/health") as JSONObject
-                        require(health.optBoolean("ok")) { "Сервер не готовий" }
-                        rememberServer(candidate)
-                        runOnUiThread {
-                            Toast.makeText(this, "Підключено · SOLVIA " + health.optString("version", "—"), Toast.LENGTH_LONG).show()
-                            loginScreen()
-                        }
-                    } catch (e: Exception) {
-                        server = previous
-                        runOnUiThread { showError(e.message ?: "Немає зв’язку із сервером") }
-                    }
-                }
-            } catch (e: Exception) {
-                showError(e.message ?: "Вкажіть коректну адресу сервера")
-            }
-        })
-        body.addView(spacer(10))
-        body.addView(caption("HTTPS рекомендований. HTTP дозволяється тільки для приватної локальної IP-мережі центру; для VPS/інтернету застосунок приймає лише HTTPS."))
         mount(scroll(body))
     }
 
@@ -1087,7 +1063,7 @@ class MainActivity : Activity() {
     }
 
     private fun loginScreen() {
-        backAction = { setupScreen() }
+        backAction = null
         val body = root().apply {
             setPadding(dp(24), dp(36), dp(24), dp(24))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(bg, Color.rgb(233,240,226)))
@@ -1142,10 +1118,6 @@ class MainActivity : Activity() {
             if(action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) { submit?.performClick(); true } else false
         }
         form.addView(submit); body.addView(form)
-        body.addView(caption("Налаштувати підключення").apply {
-            gravity = Gravity.CENTER; setPadding(dp(8), dp(12), dp(8), dp(12)); minHeight = dp(48)
-            setOnClickListener { setupScreen() }
-        })
         body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}").apply { gravity = Gravity.CENTER })
         mount(scroll(body))
     }

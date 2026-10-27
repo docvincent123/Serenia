@@ -36,6 +36,9 @@ try{
     else if(path==='/api/users'){data=users;if(request.method()!=='GET')edits.push(request.postDataJSON());}
     else if(path==='/api/rooms')data=rooms;
     else if(path==='/api/rooms/2'&&request.method()==='PATCH'){await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Не вдалося зберегти демонстраційне приміщення'})});return;}
+    else if(path==='/api/patient-directory'){
+      const q=(url.searchParams.get('q')||'').toLowerCase();const items=[p,p2].filter(item=>[item.name,item.phone,item.patient_no,item.category,item.psychologist,item.family].some(v=>String(v||'').toLowerCase().includes(q)));data={items,total:items.length,page:1,page_size:25};
+    }
     else if(path==='/api/patients')data=url.searchParams.get('status')==='archived'?[{...p,status:'archived'}]:[p,p2];
     else if(path==='/api/patients/10')data={...p,courses:[],consultations:[],documents:[],referrals:[],discharges:[]};
     else if(path==='/api/families')data=[{id:1,name:'Родина Коваль'}];
@@ -66,9 +69,8 @@ try{
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
-  const adminGroup=page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Адміністрування',exact:true});
-   if(await adminGroup.getAttribute('aria-expanded')==='false')await adminGroup.click();
-   await page.getByRole('navigation',{name:'Робочі розділи'}).getByRole('button',{name:'Пристрої',exact:true}).click();
+  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Відкрити розділ Пристрої',exact:true}).click();
   await page.getByRole('button',{name:'Проблемні записи · 1',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Проблемні записи телефона'});
   await dialog.getByRole('button').filter({hasText:'Коваль Олена'}).click();

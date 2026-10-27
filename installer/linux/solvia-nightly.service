@@ -1,0 +1,9 @@
+[Unit]
+Description=SOLVIA verified encrypted offsite snapshot
+After=network-online.target postgresql@16-solvia.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/solvia-continuity nightly
+UMask=0077
+TimeoutStartSec=2h

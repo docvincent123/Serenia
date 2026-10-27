@@ -1,0 +1,8 @@
+[Unit]
+Description=SOLVIA shift backup queue and offsite retry
+After=postgresql@16-solvia.service network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/solvia-continuity worker
+UMask=0077
+TimeoutStartSec=2h

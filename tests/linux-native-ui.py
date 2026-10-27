@@ -11,6 +11,7 @@ import socket
 import subprocess
 import tempfile
 import threading
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import gi
 
@@ -50,6 +51,12 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-', ignore_cleanup_er
     offline_socket.bind(('127.0.0.1', 0))  # Reserved but not listening: real connection refusal.
     phase = 'login'
     trusted_origin = 'https://localhost:8443'
+    with urllib.request.urlopen(trusted_origin+'/api/health', timeout=10) as response:
+        server_health=json.load(response)
+    connection_profile={'format':'quremed.solvia.mobile','version':2,
+                        'server_id':server_health['server_id'],'center':'Native test center',
+                        'https_url':trusted_origin,'api_url':trusted_origin}
+    provisioned=False
     busy = False
     printed = False
     app = None
@@ -114,13 +121,31 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-', ignore_cleanup_er
             return False
         busy = True
         def rendered(view, result, _):
-            global busy, phase
+            global busy, phase, provisioned
             busy = False
             try:
                 text = view.evaluate_javascript_finish(result).to_string()
                 if 'Вхід до SOLVIA' not in text:
                     return
                 assert view.get_uri().startswith('solvia://app/')
+                if phase == 'login' and not provisioned:
+                    # A genuinely new native workstation must import its center file.
+                    # Exercise the same DOM change event as the native file picker.
+                    provisioned=True
+                    script="""(()=>{
+                      const input=document.querySelector('.login-card input[type=file]');
+                      if(!input)throw new Error('Center profile input is missing');
+                      const transfer=new DataTransfer();
+                      transfer.items.add(new File([PROFILE],'Native-Center.solvia',{type:'application/json'}));
+                      input.files=transfer.files;
+                      input.dispatchEvent(new Event('change',{bubbles:true}));
+                      return true;
+                    })()""".replace('PROFILE',json.dumps(json.dumps(connection_profile)))
+                    def imported(widget, result, _):
+                        try: widget.evaluate_javascript_finish(result)
+                        except Exception as error: failed('Profile import failed: '+str(error))
+                    view.evaluate_javascript(script, -1, None, None, None, imported, None)
+                    return
                 if phase == 'login' and 'Сервер доступний. Можна увійти.' in text:
                     phase = 'print'
                     view.evaluate_javascript('window.print()', -1, None, None, None, None, None)
@@ -151,6 +176,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-', ignore_cleanup_er
             except subprocess.TimeoutExpired: console_process.terminate(); console_process.wait(timeout=5)
         offline_socket.close()
         server.shutdown()
+    assert provisioned, 'First native workstation must import its profile'
     assert phase == 'done', (phase, failures)
     assert not failures, failures
 print('PASS: real GTK/WebKit window, local React login, trusted HTTPS API, offline recovery, strict TLS and separate Server Console sharing native storage')
