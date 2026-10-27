@@ -655,7 +655,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
 function RoleActions({ role, onNavigate }) {
   const actions = role === 'admin'
     ? [['shift-workspace','Сьогоднішні прийоми','Прибуття та робота реєстратури'], ['patients','Картки пацієнтів','Історія та курси супроводу'], ['team','Працівники і доступ','Команда центру'], ['calendar','Календар','Психологи та кабінети']]
-    : [['workload','Навантаження','Зайнятість спеціалістів'], ['supervisions','Супервізії','Професійна підтримка команди'], ['discharges','Виписки','Підсумки та рекомендації'], ['dashboard','Показники центру','Огляд за період']];
+    : [['workload','Навантаження','Зайнятість спеціалістів'], ['supervisions','Супервізії','Професійна підтримка команди'], ['discharges','Виписки','Підсумки та рекомендації'], ['staff-messages','Повідомлення','Зв’язок із командою']];
   return <section className="role-actions" aria-label="Швидкі дії">{actions.map(([page,title,description]) =>
     <button key={page} onClick={() => onNavigate(page)}><span className="role-action-icon"><AppIcon name={page} /></span><span><strong>{title}</strong><small>{description}</small></span><span aria-hidden="true">↗</span></button>)}</section>;
 }
@@ -722,6 +722,7 @@ function Dashboard({ api, role, onNavigate, access }) {
               <Button variant="secondary" onClick={()=>onNavigate('module-directory')}>Усі розділи</Button>
             </div>
           </section>
+          <div className="motion-quick-strip"><RoleActions role={role} onNavigate={onNavigate}/></div>
           <div className="overview-primary" aria-label="Основні показники">
             {[cards[1],cards[4],cards[6],cards[3]].map(([label,value,hint],i)=><article className="overview-kpi" key={label}><span className="overview-kpi-icon"><AppIcon name={['patients','calendar','reports','families'][i]} /></span><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></article>)}
           </div>
@@ -737,7 +738,6 @@ function Dashboard({ api, role, onNavigate, access }) {
                 </details></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
             </section>
           </div>
-          <div className="motion-quick-strip"><RoleActions role={role} onNavigate={onNavigate}/></div>
           {role==='admin'&&<RecentCenterEvents api={api}/>}
           <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
