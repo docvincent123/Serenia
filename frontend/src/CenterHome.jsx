@@ -29,6 +29,27 @@ function ActionIcon({type}){
  return <svg viewBox="0 0 24 24" width="23" height="23" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[type]}</svg>;
 }
 const fmtDate=value=>value?new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'long'}).format(new Date(value+'T12:00:00')):'Сьогодні';
+function AdminServerStatus({api}){
+ const [data,setData]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
+ async function load(){
+  setLoading(true);
+  try{setData(await api('GET','/api/admin/system'));setError('');}
+  catch(e){setError(e.message);}
+  finally{setLoading(false);}
+ }
+ return <details className="center-home-extras center-server-status" onToggle={e=>{if(e.currentTarget.open&&!data&&!loading)void load();}}>
+  <summary>Сервер і резервні копії</summary>
+  {error&&<p role="alert">Помилка отримання стану: {error} <button type="button" className="button secondary" onClick={load}>Повторити</button></p>}
+  {loading&&<p>Перевіряємо стан сервера…</p>}
+  {data&&<div className="center-server-facts">
+   <div><span>PostgreSQL</span><strong>{data.database?.name||'Невідомо'} · {data.database?.size||'—'}</strong></div>
+   <div><span>Остання резервна операція</span><strong>{data.backups?.[0]?.created?.replace('T',' ').slice(0,16)||'Немає даних'}</strong></div>
+   <div><span>Результат</span><strong>{data.backups?.[0]?.status==='success'?'Успішно':'Потребує перевірки'}</strong></div>
+  </div>}
+  <button className="button secondary" type="button" disabled={loading} onClick={load}>Оновити стан</button>
+ </details>;
+}
+
 export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpenPatient}){
  const [snapshot,setSnapshot]=useState(null),[error,setError]=useState(''),[refreshing,setRefreshing]=useState(false);
  const reload=useCallback(async()=>{
@@ -83,5 +104,6 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
    <button type="button" className="center-home-more" onClick={()=>onNavigate('module-directory')}>Інші функції центру <span aria-hidden="true">→</span></button>
   </div>
   {!!extras.length&&<details className="center-home-extras"><summary>Швидкий доступ до додаткових інструментів</summary><div>{extras.map(([key,label])=><button key={key} type="button" onClick={()=>onNavigate(key)}>{label}</button>)}</div></details>}
+ {role==='admin'&&<AdminServerStatus api={api}/>}
  </div>;
 }
