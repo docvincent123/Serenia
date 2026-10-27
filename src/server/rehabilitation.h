@@ -30,7 +30,7 @@ J rehabilitation(DB&db,const J&u,const httplib::Request&r,const J&b){
         return {{"id",id},{"revision",1}};
     }
     if(std::regex_match(path,std::regex("/api/rehab-goals/[0-9]+"))){
-        int id=std::stoi(path.substr(16));
+        int id=std::stoi(path.substr(17));
         auto rows=db.query("SELECT g.*,c.status course_status,c.psychologist_id course_psychologist_id FROM rehabilitation_goals g JOIN patient_courses c ON c.id=g.course_id WHERE g.id=?",{id});
         check(!rows.empty(),"Ціль не знайдено",404);
         auto goal=rows[0];
