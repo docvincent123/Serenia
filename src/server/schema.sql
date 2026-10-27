@@ -672,3 +672,35 @@ CREATE TABLE IF NOT EXISTS tv_calls(
 -- Stable across address changes; included in backups and connection profiles.
 CREATE TABLE IF NOT EXISTS installation_identity(id INTEGER PRIMARY KEY CHECK(id=1), server_id TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS center_license(id INTEGER PRIMARY KEY CHECK(id=1), envelope TEXT NOT NULL);
+
+
+-- SOLVIA Rehabilitation: course-linked goals, revision-safe updates and audit trail.
+-- These rows are clinical. Never expose them in reception or TV projections.
+CREATE TABLE IF NOT EXISTS rehabilitation_goals (
+ id BIGSERIAL PRIMARY KEY,
+ patient_id BIGINT NOT NULL REFERENCES patients(id),
+ course_id BIGINT NOT NULL REFERENCES patient_courses(id),
+ owner_id BIGINT NOT NULL REFERENCES users(id),
+ title TEXT NOT NULL,
+ measurement TEXT NOT NULL DEFAULT '',
+ baseline TEXT NOT NULL DEFAULT '',
+ target_value TEXT NOT NULL DEFAULT '',
+ target_date TEXT NOT NULL DEFAULT '',
+ state TEXT NOT NULL DEFAULT 'planned' CHECK(state IN ('planned','in_progress','achieved','paused')),
+ progress_value TEXT NOT NULL DEFAULT '',
+ created_by BIGINT NOT NULL REFERENCES users(id),
+ created TEXT NOT NULL,
+ updated TEXT NOT NULL,
+ revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>0)
+);
+CREATE INDEX IF NOT EXISTS idx_rehab_goals_patient ON rehabilitation_goals(patient_id,course_id,id);
+CREATE TABLE IF NOT EXISTS rehabilitation_goal_updates (
+ id BIGSERIAL PRIMARY KEY,
+ goal_id BIGINT NOT NULL REFERENCES rehabilitation_goals(id),
+ state TEXT NOT NULL CHECK(state IN ('planned','in_progress','achieved','paused')),
+ progress_value TEXT NOT NULL DEFAULT '',
+ note TEXT NOT NULL,
+ author_id BIGINT NOT NULL REFERENCES users(id),
+ created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rehab_updates_goal ON rehabilitation_goal_updates(goal_id,id DESC);
