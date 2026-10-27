@@ -17,6 +17,7 @@ import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
+import DocumentTemplateSettings from './DocumentTemplateSettings.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
 import {focusNavigation} from './focus-workspace.mjs';
 import {ModuleDirectory,PeriodActivity,DayTimeline} from './MotionWorkspace.jsx';
@@ -1164,6 +1165,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
     signature_data: ''
   });
   const [documentPreview, setDocumentPreview] = useState(null);
+  const [centerDocumentTemplates,setCenterDocumentTemplates] = useState([]);
   const [referralForm, setReferralForm] = useState({ destination_type: 'Психіатр', destination_name: '', reason: '', status: 'recommended' });
   const [courseForm, setCourseForm] = useState({ started_at: localDate(), reason: '' });
   const [courseClose, setCourseClose] = useState({ ended_at: localDate(), outcome: '' });
@@ -1410,6 +1412,8 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
 
 
   function openDocumentDialog(type = 'informed_consent') {
+    setCenterDocumentTemplates([]);
+    void api('GET','/api/document-templates').then(setCenterDocumentTemplates).catch(()=>{});
     const template = documentTemplates[type] || documentTemplates.other;
     setDocumentForm({
       document_type: type,
@@ -1784,6 +1788,18 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
       {dialog === 'document' && canManageDocuments && (
         <Dialog title="Документ / згода" subtitle={card.name} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveDocument}>
+            {!!centerDocumentTemplates.length && <Field label="Шаблон центру" full>
+              <select defaultValue="" onChange={(e)=>{
+                const selected=centerDocumentTemplates.find(t=>String(t.id)===e.target.value);
+                if(!selected)return;
+                const values={patient_name:card.name,patient_no:card.patient_no||'',today:localDate()};
+                const expanded=selected.content.replace(/{{s*(patient_name|patient_no|today)s*}}/g,(_,key)=>values[key]||'');
+                setDocumentForm(current=>({...current,document_type:'other',title:selected.title,content:expanded,signature_data:''}));
+              }}>
+                <option value="">Вибрати шаблон</option>
+                {centerDocumentTemplates.map(t=><option value={t.id} key={t.id}>{t.title}</option>)}
+              </select>
+            </Field>}
             <Field label="Тип документа">
               <select value={documentForm.document_type} onChange={(e) => changeDocumentType(e.target.value)}>
                 <option value="informed_consent">Інформована згода</option>
@@ -2853,6 +2869,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
             </section>
           )}
 
+          {activeSection === 'documents' && <DocumentTemplateSettings api={api} />}
           {activeSection === 'connection' && (
             <section className="surface settings-panel">
               <div className="section-head">
