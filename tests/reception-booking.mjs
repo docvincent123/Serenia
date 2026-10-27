@@ -24,6 +24,7 @@ try{
     if(path==='/api/me')data={id:2,name:'Реєстратура · демонстрація',role:'reception'};
     else if(path==='/api/health')data={ok:true,version:'2.5.0'};
     else if(path==='/api/shift-day')data={open:true,shift_date:'2026-10-14'};
+    else if(path==='/api/workday/home')data={date:'2026-10-15',counts:{waiting:1,arrived:0,completed:0},active_patients:3,waiting_list:0,next:[]};
     else if(path==='/api/reception-access')data={access_date:'2026-10-15',starts_at:'2026-10-15T08:00',enabled:true,allowed:true};
     else if(path==='/api/meta')data={rooms:[{id:2,name:'Кабінет 1'}],psychologists:[{id:4,name:'Психолог Максим'},{id:3,name:'Психолог Оксана'}],categories:['Інше'],workflow:{opening_time:'08:00',closing_time:'20:00',default_duration_minutes:60,working_days:'1234567'}};
     else if(path==='/api/patients'&&method==='GET')data=patients;
@@ -41,6 +42,8 @@ try{
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await page.getByRole('heading',{name:'Реєстратура',exact:true}).waitFor();
+  await page.locator('.focus-navigation').getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
   await page.getByRole('button',{name:'+ Записати на прийом',exact:true}).click();
   let dialog=page.getByRole('dialog',{name:'Запис на консультацію',exact:true});
@@ -111,7 +114,7 @@ try{
   await page.screenshot({path:'out/design/reception-new-patient-booking.png',fullPage:true});
   await dialog.getByRole('button',{name:'Скасувати',exact:true}).click();
   await dialog.waitFor({state:'hidden'});
-  await page.getByRole('button',{name:'Прийоми за зміну',exact:true}).click();
+  await page.locator('.focus-navigation').getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
   await page.setViewportSize({width:1440,height:1000});
   await page.screenshot({path:'out/design/reception-workspace.png',fullPage:true});
