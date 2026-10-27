@@ -1061,4 +1061,63 @@ class Scenario(unittest.TestCase):
         # Clean synthetic future fixture so it cannot influence later shift checks.
         self.api('admin','PATCH',f'/api/appointments/{future}',{'status':'cancelled','cancellation_reason':'Recovery test complete'})
 
+    def test_z_rehabilitation_goal_workflow(self):
+        """Only assigned psychologists can edit; history and revisions are preserved."""
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        psychologist=self.api('psychologist','GET','/api/me')['id']
+        patient=self.api('admin','POST','/api/patients',{
+            'name':'Synthetic Rehabilitation Patient','phone':'+380000009771',
+            'dob':'1993-06-01','category':'Інше','psychologist_id':psychologist
+        })['id']
+        endpoint=f'/api/patients/{patient}/rehab-goals'
+        self.assertEqual(self.api('psychologist','GET',endpoint),[])
+        self.api('reception','GET',endpoint,status=403)
+        self.api('director','GET',endpoint,status=403)
+        self.api('admin','POST',endpoint,{'title':'Forbidden administration entry'},status=403)
+        created=self.api('psychologist','POST',endpoint,{
+            'title':'Restore daily activities','measurement':'Functional interview',
+            'baseline':'Needs support','target_value':'Independent daily routine',
+            'target_date':(dt.date.today()+dt.timedelta(days=30)).isoformat()
+        })
+        goal_id=created['id']
+        result=self.api('psychologist','GET',endpoint)
+        self.assertEqual(len(result),1)
+        self.assertEqual(result[0]['title'],'Restore daily activities')
+        self.assertEqual(result[0]['revision'],1)
+        self.assertEqual(len(result[0]['updates']),1)
+        self.assertEqual(len(self.api('admin','GET',endpoint)),1)
+        # Access remains scoped to the currently assigned psychologist.
+        self.api('admin','POST','/api/users',{
+            'name':'Rehab outsider','login':'rehab-outsider-ci',
+            'password':'synthetic-test','role':'psychologist'
+        })
+        code,session=self.call('POST','/api/login',{
+            'login':'rehab-outsider-ci','password':'synthetic-test','platform':'CI'
+        })
+        self.assertEqual(code,200,session)
+        self.assertEqual(self.call('GET',endpoint,token=session['token'])[0],403)
+        self.assertEqual(self.call('PATCH',f'/api/rehab-goals/{goal_id}',{
+            'revision':1,'state':'achieved','note':'Unauthorized','progress_value':'Ready'
+        },session['token'])[0],403)
+        self.api('psychologist','PATCH',f'/api/rehab-goals/{goal_id}',{
+            'revision':1,'state':'in_progress','progress_value':'Improving',
+            'note':'Weekly specialist review'
+        })
+        self.api('psychologist','PATCH',f'/api/rehab-goals/{goal_id}',{
+            'revision':1,'state':'achieved','progress_value':'Completed',
+            'note':'Stale update'
+        },status=409)
+        updated=self.api('psychologist','GET',endpoint)[0]
+        self.assertEqual(updated['revision'],2)
+        self.assertEqual(updated['updates'][0]['note'],'Weekly specialist review')
+        self.assertEqual(len(updated['updates']),2)
+        course=self.api('admin','GET',f'/api/patients/{patient}')['courses'][0]
+        self.api('admin','PATCH',f'/api/courses/{course["id"]}',{
+            'status':'completed','ended_at':dt.date.today().isoformat(),'outcome':'Test ended'
+        })
+        self.api('psychologist','PATCH',f'/api/rehab-goals/{goal_id}',{
+            'revision':2,'state':'achieved','progress_value':'Completed','note':'After course'
+        },status=409)
+        self.assertEqual(len(self.api('admin','GET',endpoint)),1)
+
 if __name__=='__main__': unittest.main()
