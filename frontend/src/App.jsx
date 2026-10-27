@@ -16,6 +16,8 @@ import ShiftWorkspace from './ShiftWorkspace.jsx';
 import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
+import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
+import DocumentTemplateSettings from './DocumentTemplateSettings.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
 import {focusNavigation} from './focus-workspace.mjs';
 import {ModuleDirectory,PeriodActivity,DayTimeline} from './MotionWorkspace.jsx';
@@ -652,8 +654,8 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
 
 function RoleActions({ role, onNavigate }) {
   const actions = role === 'admin'
-    ? [['shift-workspace','Прийняти пацієнта','Прибуття та перебіг прийомів'], ['team','Керувати командою','Працівники та доступ'], ['rooms','Кабінети центру','Приміщення та розклад']]
-    : [['workload','Переглянути навантаження','Зайнятість спеціалістів'], ['supervisions','Планувати супервізії','Професійна підтримка команди'], ['discharges','Переглянути виписки','Підсумки та рекомендації']];
+    ? [['shift-workspace','Сьогоднішні прийоми','Прибуття та робота реєстратури'], ['patients','Картки пацієнтів','Історія та курси супроводу'], ['team','Працівники і доступ','Команда центру'], ['calendar','Календар','Психологи та кабінети']]
+    : [['workload','Навантаження','Зайнятість спеціалістів'], ['supervisions','Супервізії','Професійна підтримка команди'], ['discharges','Виписки','Підсумки та рекомендації'], ['staff-messages','Повідомлення','Зв’язок із командою']];
   return <section className="role-actions" aria-label="Швидкі дії">{actions.map(([page,title,description]) =>
     <button key={page} onClick={() => onNavigate(page)}><span className="role-action-icon"><AppIcon name={page} /></span><span><strong>{title}</strong><small>{description}</small></span><span aria-hidden="true">↗</span></button>)}</section>;
 }
@@ -720,6 +722,7 @@ function Dashboard({ api, role, onNavigate, access }) {
               <Button variant="secondary" onClick={()=>onNavigate('module-directory')}>Усі розділи</Button>
             </div>
           </section>
+          <div className="motion-quick-strip"><RoleActions role={role} onNavigate={onNavigate}/></div>
           <div className="overview-primary" aria-label="Основні показники">
             {[cards[1],cards[4],cards[6],cards[3]].map(([label,value,hint],i)=><article className="overview-kpi" key={label}><span className="overview-kpi-icon"><AppIcon name={['patients','calendar','reports','families'][i]} /></span><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></article>)}
           </div>
@@ -735,7 +738,6 @@ function Dashboard({ api, role, onNavigate, access }) {
                 </details></>:<><button className="overview-section-link" onClick={()=>onNavigate('discharges')}><AppIcon name="documents"/><span><strong>Виписки</strong><small>Перевірка підсумків і рекомендацій</small></span><span>→</span></button><button className="overview-section-link" onClick={()=>onNavigate('supervisions')}><AppIcon name="supervisions"/><span><strong>Супервізії</strong><small>Планування та підтримка спеціалістів</small></span><span>→</span></button></>}
             </section>
           </div>
-          <div className="motion-quick-strip"><RoleActions role={role} onNavigate={onNavigate}/></div>
           {role==='admin'&&<RecentCenterEvents api={api}/>}
           <details className="surface overview-more"><summary>Усі показники за період</summary><div className="overview-secondary">{cards.map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value ?? '—'}</strong><small>{hint}</small></div>)}</div></details>
 
@@ -1163,6 +1165,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
     signature_data: ''
   });
   const [documentPreview, setDocumentPreview] = useState(null);
+  const [centerDocumentTemplates,setCenterDocumentTemplates] = useState([]);
   const [referralForm, setReferralForm] = useState({ destination_type: 'Психіатр', destination_name: '', reason: '', status: 'recommended' });
   const [courseForm, setCourseForm] = useState({ started_at: localDate(), reason: '' });
   const [courseClose, setCourseClose] = useState({ ended_at: localDate(), outcome: '' });
@@ -1409,6 +1412,8 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
 
 
   function openDocumentDialog(type = 'informed_consent') {
+    setCenterDocumentTemplates([]);
+    void api('GET','/api/document-templates').then(setCenterDocumentTemplates).catch(()=>{});
     const template = documentTemplates[type] || documentTemplates.other;
     setDocumentForm({
       document_type: type,
@@ -1595,6 +1600,8 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
         </section>
       </div>
 
+      {cardSection === 'overview' && <PatientJourney card={card} canReadClinical={canReadConsultations} />}
+      {canReadConsultations && cardSection === 'followup' && <RehabilitationPlan api={api} patientId={patientId} patientName={card.name} patientNumber={card.patient_no} activeCourse={activeCourse} role={role} onPrint={printStandaloneNode} />}
       {canReadConsultations && cardSection === 'followup' && <PatientProgress api={api} patientId={patientId} canWrite={isPsychologist} history={card.consultations||[]} />}
       <section className="surface" hidden={cardSection !== 'followup'}>
         <div className="section-head">
@@ -1781,6 +1788,18 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
       {dialog === 'document' && canManageDocuments && (
         <Dialog title="Документ / згода" subtitle={card.name} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveDocument}>
+            {!!centerDocumentTemplates.length && <Field label="Шаблон центру" full>
+              <select defaultValue="" onChange={(e)=>{
+                const selected=centerDocumentTemplates.find(t=>String(t.id)===e.target.value);
+                if(!selected)return;
+                const values={patient_name:card.name,patient_no:card.patient_no||'',today:localDate()};
+                const expanded=selected.content.replace(/{{\s*(patient_name|patient_no|today)\s*}}/g,(_,key)=>values[key]||'');
+                setDocumentForm(current=>({...current,document_type:'other',title:selected.title,content:expanded,signature_data:''}));
+              }}>
+                <option value="">Вибрати шаблон</option>
+                {centerDocumentTemplates.map(t=><option value={t.id} key={t.id}>{t.title}</option>)}
+              </select>
+            </Field>}
             <Field label="Тип документа">
               <select value={documentForm.document_type} onChange={(e) => changeDocumentType(e.target.value)}>
                 <option value="informed_consent">Інформована згода</option>
@@ -2850,6 +2869,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
             </section>
           )}
 
+          {activeSection === 'documents' && <DocumentTemplateSettings api={api} />}
           {activeSection === 'connection' && (
             <section className="surface settings-panel">
               <div className="section-head">
