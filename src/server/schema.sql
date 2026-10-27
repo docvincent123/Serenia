@@ -716,3 +716,7 @@ CREATE TABLE IF NOT EXISTS center_document_templates (
  updated TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_center_document_templates_active ON center_document_templates(active,title);
+
+
+-- Lightweight workday roll-ups: only operational dates, no medical content.
+CREATE INDEX IF NOT EXISTS idx_appointments_workday ON appointments ((substr(start,1,10)),status,start);
