@@ -1793,7 +1793,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
                 const selected=centerDocumentTemplates.find(t=>String(t.id)===e.target.value);
                 if(!selected)return;
                 const values={patient_name:card.name,patient_no:card.patient_no||'',today:localDate()};
-                const expanded=selected.content.replace(/{{s*(patient_name|patient_no|today)s*}}/g,(_,key)=>values[key]||'');
+                const expanded=selected.content.replace(/{{\s*(patient_name|patient_no|today)\s*}}/g,(_,key)=>values[key]||'');
                 setDocumentForm(current=>({...current,document_type:'other',title:selected.title,content:expanded,signature_data:''}));
               }}>
                 <option value="">Вибрати шаблон</option>
