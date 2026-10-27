@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useState} from 'react';
+import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {navFor} from './workspace-model.mjs';
 import './center-home.css';
 
@@ -52,21 +52,23 @@ function AdminServerStatus({api}){
 
 export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpenPatient}){
  const [snapshot,setSnapshot]=useState(null),[error,setError]=useState(''),[refreshing,setRefreshing]=useState(false);
+ const apiRef=useRef(api),sequence=useRef(0);apiRef.current=api;
  const reload=useCallback(async()=>{
+  const request=++sequence.current;
   setRefreshing(true);
   try{
-   const data=await api('GET','/api/workday/home');
+   const data=await apiRef.current('GET','/api/workday/home');
    if(!data?.counts||!Array.isArray(data.next))throw new Error('Некоректна відповідь сервера для головного екрана.');
-   setSnapshot(data);setError('');
-  }catch(e){setError(e.message);}
-  finally{setRefreshing(false);}
- },[api]);
+   if(request===sequence.current){setSnapshot(data);setError('');}
+  }catch(e){if(request===sequence.current)setError(e.message);}
+  finally{if(request===sequence.current)setRefreshing(false);}
+ },[]);
  useEffect(()=>{
   void reload();
   const timer=setInterval(()=>{if(!document.hidden)void reload();},30000);
   const changed=()=>{if(!document.hidden)void reload();};
   window.addEventListener('solvia:workflow-updated',changed);
-  return()=>{clearInterval(timer);window.removeEventListener('solvia:workflow-updated',changed);};
+  return()=>{++sequence.current;clearInterval(timer);window.removeEventListener('solvia:workflow-updated',changed);};
  },[reload]);
  const numbers=snapshot?.counts||{};
  const stats=[
@@ -93,7 +95,8 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
   </section>
   <section className="center-home-upcoming" aria-label="Найближчі прийоми">
    <div className="center-section-caption"><h2>Найближчі прийоми</h2><span>До 6 записів на сьогодні</span></div>
-   {!snapshot&&!error?<div className="center-home-empty">Завантажуємо записи…</div>:
+   {!snapshot&&error?<div className="center-home-empty">Записи недоступні. Повторіть завантаження після відновлення зв’язку.</div>:
+    !snapshot?<div className="center-home-empty">Завантажуємо записи…</div>:
     !snapshot?.next?.length?<div className="center-home-empty">Немає незавершених прийомів на сьогодні.</div>:
     <div className="center-home-visits">{snapshot.next.map(v=><button key={v.appointment_id+':'+v.patient_id} type="button" className="center-home-visit" onClick={()=>onOpenPatient(v.patient_id)}>
      <time>{v.start?.slice(11,16)||'—'}</time><span className="center-home-visit-person"><strong>{v.patient}</strong><small>№{v.patient_no} · {v.psychologist} · {v.room}</small></span>

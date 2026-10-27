@@ -42,6 +42,11 @@ try {
     if (path === '/api/me') data = currentUser;
     else if(path==='/api/workflow-events') data={cursor:1,events:[{id:1,kind:'patient.arrived',actor_id:2,actor:'Черговий реєстратури',patient_name:'ЦЕ_ПРИВАТНЕ_ПІБ',created:'2026-10-15T09:00'}]};
     else if (path === '/api/login') data = { token:'synthetic-psychologist-token',user:currentUser };
+    else if(path==='/api/search') {
+      const q=url.searchParams.get('q');
+      if(q==='late-global')await new Promise(resolve=>setTimeout(resolve,900));
+      data={patients:[{...patient,name:q==='late-global'?'Застарілий глобальний результат':'Актуальний глобальний результат'}],families:[],rooms:[],users:[]};
+    }
     else if (path === '/api/health') data = { ok:true,version:'2.3.0',platform:'linux' };
     else if (path === '/api/shift-day') { if(method === 'POST' && route.request().postDataJSON().action === 'close') { closeCalls++; open = false; } data = { open,shift_date:'2026-10-02' }; }
     else if(path === '/api/reception-access') {if(method==='POST'){accessCalls++;accessAllowed=route.request().postDataJSON().enabled!==false;}data={access_date:'2026-10-15',starts_at:'2026-10-15T08:00',enabled:accessAllowed,allowed:accessAllowed};}
@@ -60,6 +65,13 @@ try {
     else if (path === '/api/meta') data = { rooms:[{id:2,name:'Кабінет 1'}],psychologists:[{id:3,name:'Тестовий психолог'}],categories:['Інше'],workflow:{default_duration_minutes:60} };
     else if (path === '/api/shift-workspace') data = [{...visit}, {...visit,appointment_id:8,patient_id:11,patient:'Учасник групи · завершено',completed_at:'2026-10-02T09:50',kind:'group'}, {...visit,appointment_id:8,patient_id:12,patient:'Учасник групи · очікує',kind:'group'}];
     else if (path === '/api/appointments/7/arrival' && method === 'POST') { ++arrivalCalls; visit.arrived_at='2026-10-02T08:55'; data={ok:true}; }
+    else if (path === '/api/patient-directory') {
+      const q=url.searchParams.get('q'), page=Number(url.searchParams.get('page'));
+      if(q==='network-failure') { await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Тестова втрата зв’язку'})});return; }
+      if(q==='late-result') await new Promise(resolve=>setTimeout(resolve,900));
+      const p=q==='late-result'?{...patient,name:'Застаріла відповідь'}:patient;
+      data={items:[p],total:q?1:26,page,page_size:25};
+    }
     else if (path === '/api/patients') data = [patient];
     else if (path === '/api/patients/10') data = { ...patient,courses:[],documents:[],referrals:[],discharges:[],assessments:[],consultations };
     else if(path==='/api/patients/10/progress') {
@@ -95,6 +107,15 @@ try {
     await route.fulfill({ contentType:'application/json',body:JSON.stringify(data) });
   });
   await page.goto(base); await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  const globalSearch=page.getByRole('textbox',{name:'Пошук у центрі',exact:true});
+  await globalSearch.fill('late-global');
+  await page.waitForRequest(req=>new URL(req.url()).pathname==='/api/search');
+  await globalSearch.fill('fresh-global');
+  await page.getByText('Актуальний глобальний результат',{exact:true}).waitFor();
+  await page.waitForTimeout(1000);
+  assert.equal(await page.getByText('Застарілий глобальний результат',{exact:true}).count(),0,'Global search ignores old responses');
+  await globalSearch.fill('');
+  await page.locator('.search-popover').waitFor({state:'hidden'});
   assert.equal(await page.locator('.focus-nav-primary').getByRole('button',{name:'Прийоми',exact:true}).count(),1,'Shift operations are always one click away');
   assert.equal(await page.locator('.focus-nav-primary button').count(),4,'Minimal desktop navigation');
   assert.equal(await page.getByRole('button',{name:'Інші функції центру',exact:true}).count(),1,'Other functions stay discoverable');
@@ -201,6 +222,21 @@ try {
   await page.locator('input[autocomplete="current-password"]').fill('synthetic-password-long');
   await page.locator('.login-submit').click();
   await page.locator('.focus-navigation').getByRole('button',{name:'Пацієнти',exact:true}).click();
+  await page.getByText('Знайдено: 26',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Наступна',exact:true}).click();
+  await page.getByText('Сторінка 2 з 2',{exact:true}).waitFor();
+  const directorySearch=page.getByRole('textbox',{name:'Пошук пацієнтів',exact:true});
+  await directorySearch.fill('network-failure');
+  await page.getByRole('alert').filter({hasText:'Тестова втрата зв’язку'}).waitFor();
+  assert.equal(await page.locator('.patient-list-card').count(),0,'Failed search cannot leave actionable stale patients');
+  await directorySearch.fill('late-result');
+  await page.waitForRequest(req=>req.url().includes('/api/patient-directory?')&&new URL(req.url()).searchParams.get('q')==='late-result');
+  await directorySearch.fill('Тестовий');
+  await page.getByText('Знайдено: 1',{exact:true}).waitFor();
+  await page.waitForTimeout(1000);
+  assert.equal(await page.getByText('Застаріла відповідь',{exact:true}).count(),0,'Old network response cannot replace current search');
+  await page.getByText('Сторінка 1 з 1',{exact:true}).waitFor();
+  await page.screenshot({path:'out/design/desktop-patient-directory.png',fullPage:true});
   await page.locator('.patient-list-card').first().click();
   await page.getByRole('button',{name:'+ Консультація',exact:true}).click();
   let consultationDialog = page.getByRole('dialog',{name:'Підсумок консультації',exact:true});

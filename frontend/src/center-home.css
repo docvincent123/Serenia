@@ -68,3 +68,10 @@
 .center-server-facts span{font-size:11px;color:#65736c}
 .center-server-facts strong{font-size:12px;color:#2b4135;overflow-wrap:anywhere}
 @media(max-width:760px){.center-server-status>div.center-server-facts{grid-template-columns:1fr}}
+.directory-pagination { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; margin-top:20px; }
+.patient-directory-toolbar { display:grid!important; grid-template-columns:minmax(220px,1fr) 180px auto auto; gap:12px; align-items:center; }
+.patient-directory-toolbar .search-box { width:100%; min-width:0; }
+.patient-directory-toolbar .search-box input { width:100%; min-width:0; border:0; background:transparent; box-shadow:none; }
+.patient-directory-toolbar select { width:100%; min-width:0; }
+@media(max-width:1100px) { .patient-directory-toolbar { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } }
+@media(max-width:600px) { .patient-directory-toolbar { grid-template-columns:minmax(0,1fr); } .directory-pagination { justify-content:center; } }

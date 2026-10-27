@@ -16,6 +16,7 @@ import ShiftWorkspace from './ShiftWorkspace.jsx';
 import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
+import usePatientDirectory from './usePatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
 import CenterHome from './CenterHome.jsx';
 import DocumentTemplateSettings from './DocumentTemplateSettings.jsx';
@@ -917,11 +918,12 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
 }
 
 function Patients({ api, role, openPatient, onBook, createRequest, onCreateRequestConsumed }) {
-  const [patients, setPatients] = useState([]);
   const [families, setFamilies] = useState([]);
   const [meta, setMeta] = useState({ psychologists: [], categories: [] });
   const [view,setView]=useState(role==='psychologist'?'cards':'table');
   const [search, setSearch] = useState('');
+  const [page,setPage]=useState(1),[status,setStatus]=useState('current');
+  const directory=usePatientDirectory(api,{search,page,status});
   const [dialog, setDialog] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
@@ -948,10 +950,9 @@ function Patients({ api, role, openPatient, onBook, createRequest, onCreateReque
   async function load() {
     setError('');
     try {
-      const tasks = [api('GET', '/api/patients'), api('GET', '/api/meta')];
+      const tasks = [api('GET', '/api/meta')];
       if (canCreate) tasks.push(api('GET', '/api/families'));
-      const [p, m, f = []] = await Promise.all(tasks);
-      setPatients(p);
+      const [m, f = []] = await Promise.all(tasks);
       setMeta(m);
       setFamilies(f);
     } catch (e) {
@@ -961,11 +962,6 @@ function Patients({ api, role, openPatient, onBook, createRequest, onCreateReque
 
   useEffect(() => { load(); }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return patients;
-    return patients.filter((p) => [p.patient_no, p.name, p.phone, p.category, p.psychologist, p.family].some((v) => String(v || '').toLowerCase().includes(q)));
-  }, [patients, search]);
 
   function openCreate() {
     setForm({
@@ -1014,7 +1010,8 @@ function Patients({ api, role, openPatient, onBook, createRequest, onCreateReque
         admin_note: form.admin_note
       });
       setDialog(false);
-      await load();
+      setSearch('');setPage(1);setStatus('current');
+      directory.reload();
       if(bookAfter)onBook({patientId:created.id,date:registrationDate});
     } catch (e) {
       setError(e.message);
@@ -1030,20 +1027,26 @@ function Patients({ api, role, openPatient, onBook, createRequest, onCreateReque
         actions={canCreate && <Button onClick={openCreate}>+ Додати пацієнта</Button>}
       />
 
-      {error && <div className="alert error">{error}</div>}
+      {(error||directory.error) && <div role="alert" className="alert error">{error||directory.error} <Button variant="secondary" onClick={()=>{load();directory.reload();}}>Повторити</Button></div>}
 
       <section className="surface">
-        <div className="toolbar">
+        <div className="toolbar patient-directory-toolbar">
           <div className="search-box">
             <span><AppIcon name="search" /></span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук за №, ПІБ, телефоном, категорією…" />
+            <input value={search} aria-label="Пошук пацієнтів" onChange={(e) => {setSearch(e.target.value);setPage(1);}} placeholder="Пошук за №, ПІБ, телефоном, категорією…" />
           </div>
-          <span className="directory-total">Знайдено: {filtered.length}</span><ViewSwitch value={view} onChange={setView} />
+          <select aria-label="Статус пацієнтів" value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}><option value="current">Поточні пацієнти</option><option value="active">Активні</option><option value="completed">Курс завершено</option><option value="archived">Архів</option></select>
+          <span className="directory-total" role="status">{directory.loading?'Завантаження…':`Знайдено: ${directory.total}`}</span><ViewSwitch value={view} onChange={setView} />
         </div>
 
-        {!filtered.length ? <Empty title="Нічого не знайдено" text="Спробуйте змінити запит або створіть нового пацієнта." /> : (
-          <PatientDirectory rows={filtered} view={view} onOpen={openPatient} onBook={canCreate?onBook:null} />
+        {directory.loading ? <p role="status">Шукаємо пацієнтів…</p> : directory.error ? null : !directory.items.length ? <Empty title="Нічого не знайдено" text="Спробуйте змінити запит або створіть нового пацієнта." /> : (
+          <PatientDirectory rows={directory.items} view={view} onOpen={openPatient} onBook={canCreate?onBook:null} archived={status==='archived'} />
         )}
+        <nav className="directory-pagination" aria-label="Сторінки реєстру">
+          <Button variant="secondary" disabled={directory.loading||page<=1} onClick={()=>setPage(n=>n-1)}>Попередня</Button>
+          <span>Сторінка {page} з {Math.max(1,Math.ceil(directory.total/25))}</span>
+          <Button variant="secondary" disabled={directory.loading||page*25>=directory.total} onClick={()=>setPage(n=>n+1)}>Наступна</Button>
+        </nav>
       </section>
 
       {dialog && (
@@ -2921,16 +2924,22 @@ function GlobalSearch({ api, onPatient, onNavigate }) {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [error,setError]=useState('');
+  const apiRef=useRef(api);apiRef.current=api;
 
   useEffect(() => {
-    if (query.trim().length < 2) { setResult(null); return; }
+    let current=true;
+    setResult(null);setError('');setBusy(false);
+    if (query.trim().length < 2) return;
     const timer = setTimeout(async () => {
       setBusy(true);
-      try { setResult(await api('GET', `/api/search?q=${encodeURIComponent(query.trim())}`)); }
-      catch { setResult(null); }
-      finally { setBusy(false); }
+      try {
+        const data=await apiRef.current('GET', `/api/search?q=${encodeURIComponent(query.trim())}`);
+        if(current)setResult(data);
+      } catch (e) { if(current)setError(e.message); }
+      finally { if(current)setBusy(false); }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => { current=false;clearTimeout(timer); };
   }, [query]);
 
   const total = result ? Object.values(result).reduce((n, arr) => n + (arr?.length || 0), 0) : 0;
@@ -2938,9 +2947,10 @@ function GlobalSearch({ api, onPatient, onNavigate }) {
     <div className="global-search-wrap">
       <div className="global-search">
         <span><AppIcon name="search" /></span>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Пошук пацієнта, сім’ї, працівника, кабінету…" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Пошук у центрі" placeholder="Пошук пацієнта, сім’ї, працівника, кабінету…" />
         {busy && <small>Пошук…</small>}
       </div>
+      {error && <div className="search-popover" role="alert">Не вдалося виконати пошук: {error}</div>}
       {result && (
         <div className="search-popover">
           <div className="search-popover-head"><strong>Результати</strong><span>{total}</span></div>

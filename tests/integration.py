@@ -1146,7 +1146,7 @@ class Scenario(unittest.TestCase):
         staff=self.api('admin','GET','/api/users')
         for role in ('reception','psychologist','director'):
             uid=next(x['id'] for x in staff if x['login']==role)
-            self.api('admin','DELETE',f'/api/users/{uid}/sessions')
+            self.api('admin','DELETE',f'/api/users/{uid}/sessions',{})
             code,auth=self.call('POST','/api/login',{
                 'login':role,'password':self.passwords[role],
                 'platform':'CI-workday','device_id':'ci-workday-'+role
@@ -1169,5 +1169,53 @@ class Scenario(unittest.TestCase):
             self.assertNotIn('risk_flags',result)
         self.api('psychologist','GET','/api/workday/home',status=403)
         self.api('director','GET','/api/workday/home',status=403)
+
+    def test_z_patient_directory_search_and_summary_counts(self):
+        """Real SQL pagination, literal searches, role scope and dashboard totals."""
+        def sql(statement):
+            return subprocess.check_output(['psql',self.database,'-X','-qAt','-v','ON_ERROR_STOP=1','-c',statement],text=True).strip()
+        psy=self.api('psychologist','GET','/api/me')['id']
+        admin=self.api('admin','GET','/api/me')['id']
+        marker='DirectorySynthetic'
+        ids=[]
+        try:
+            for i in range(28):
+                ids.append(int(sql(f"INSERT INTO patients(name,phone,dob,category,psychologist_id,created,admin_note) VALUES('{marker} {i:02d}','+380 (50) 123-45-67','1990-01-01','Інше',{psy},'2026-01-01T00:00','PRIVATE_DIRECTORY_NOTE') RETURNING id")))
+            endpoint='/api/patient-directory?q='+marker
+            first=self.api('reception','GET',endpoint)
+            second=self.api('reception','GET',endpoint+'&page=2')
+            self.assertEqual(first['total'],28)
+            self.assertEqual(len(first['items']),25)
+            self.assertEqual(len(second['items']),3)
+            self.assertFalse(set(p['id'] for p in first['items']) & set(p['id'] for p in second['items']))
+            self.assertEqual([p['id'] for p in first['items']+second['items']],list(reversed(ids)))
+            self.assertNotIn('PRIVATE_DIRECTORY_NOTE',json.dumps(first))
+            own=self.api('psychologist','GET',endpoint)
+            self.assertEqual(own['total'],28)
+            sql(f"UPDATE patients SET psychologist_id={admin} WHERE id={ids[0]}")
+            self.assertEqual(self.api('psychologist','GET',endpoint)['total'],27)
+            self.assertEqual(self.api('admin','GET',endpoint)['total'],28)
+            phone=self.api('admin','GET','/api/patient-directory?q=0501234567&page_size=100')
+            self.assertTrue(set(ids).issubset({p['id'] for p in phone['items']}))
+            sql(f"UPDATE patients SET name='DirectoryLiteral % _' WHERE id={ids[1]}")
+            literal=self.api('reception','GET','/api/patient-directory?q='+urllib.parse.quote('% _'))
+            self.assertEqual([p['id'] for p in literal['items']],[ids[1]])
+            for query in ('page=0','page=-1','page=99999999999999999999','page_size=101','status=invalid','q='+('x'*301)):
+                self.api('admin','GET','/api/patient-directory?'+query,status=400)
+            self.api('director','GET','/api/patient-directory',status=403)
+            self.assertEqual(self.call('GET','/api/patient-directory')[0],401)
+            sql(f"UPDATE patients SET status='archived' WHERE id={ids[2]}")
+            archive=self.api('admin','GET',endpoint+'&status=archived')
+            self.assertEqual([p['id'] for p in archive['items']],[ids[2]])
+            day=dt.date.today().isoformat()
+            for pid,state in zip(ids[3:7],('waiting','offered','booked','cancelled')):
+                sql(f"INSERT INTO waiting_list(patient_id,psychologist_id,date_from,date_to,status,created_by,created,updated) VALUES({pid},{psy},'{day}','{day}','{state}',{admin},'{day}','{day}')")
+            summary=self.api('admin','GET','/api/workday/home')
+            self.assertEqual(summary['active_patients'],int(sql("SELECT count(*) FROM patients WHERE status='active'")))
+            self.assertEqual(summary['waiting_list'],int(sql("SELECT count(*) FROM waiting_list WHERE status IN ('waiting','offered')")))
+        finally:
+            if ids:
+                listing=','.join(map(str,ids))
+                sql(f'DELETE FROM waiting_list WHERE patient_id IN ({listing}); DELETE FROM patients WHERE id IN ({listing})')
 
 if __name__=='__main__': unittest.main()

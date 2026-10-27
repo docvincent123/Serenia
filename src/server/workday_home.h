@@ -18,8 +18,8 @@ J workdayHome(DB&db,const J&u,const httplib::Request&r){
   "AND a.status IN ('scheduled','confirmed') AND t.visit_status='' "
   "AND NOT EXISTS (SELECT 1 FROM consultations c WHERE c.appointment_id=a.id AND c.patient_id=t.patient_id) "
   "ORDER BY CASE WHEN a.start>=? THEN 0 ELSE 1 END,a.start,p.name LIMIT 6",{day,now().substr(0,16)});
- const auto patients=db.query("SELECT count(*) n FROM patients WHERE status IN ('waiting','offered')")[0]["n"];
- const auto waiting=db.query("SELECT count(*) n FROM waiting_list WHERE status='active'")[0]["n"];
+ const auto patients=db.query("SELECT count(*) n FROM patients WHERE status='active'")[0]["n"];
+ const auto waiting=db.query("SELECT count(*) n FROM waiting_list WHERE status IN ('waiting','offered')")[0]["n"];
  // One audit record per explicit patient-card access, not every dashboard poll.
  return {{"date",day},{"counts",counts},{"active_patients",patients},
    {"waiting_list",waiting},{"next",next}};
