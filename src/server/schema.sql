@@ -704,3 +704,15 @@ CREATE TABLE IF NOT EXISTS rehabilitation_goal_updates (
  created TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_rehab_updates_goal ON rehabilitation_goal_updates(goal_id,id DESC);
+
+
+-- Centre-authored reusable text templates; patient documents keep their own immutable text snapshots.
+CREATE TABLE IF NOT EXISTS center_document_templates (
+ id BIGSERIAL PRIMARY KEY,
+ title TEXT NOT NULL,
+ content TEXT NOT NULL,
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_by BIGINT NOT NULL REFERENCES users(id),
+ updated TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_center_document_templates_active ON center_document_templates(active,title);
