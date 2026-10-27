@@ -17,6 +17,7 @@ import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
+import CenterHome from './CenterHome.jsx';
 import DocumentTemplateSettings from './DocumentTemplateSettings.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
 import {focusNavigation} from './focus-workspace.mjs';
@@ -371,43 +372,29 @@ async function request(base, token, method, path, body) {
 
 function WorkspaceNavigation({ navigation, role, page, locked, onNavigate }) {
   const active = page === 'patient-card' ? 'patients' : page;
-  const { primary, secondary, directory } = focusNavigation(role, navigation);
-  const groupFor = key => navigationGroups.find(([, , keys]) => keys.includes(key))?.[0];
-  const [expanded, setExpanded] = useState(() => new Set());
-  useEffect(() => {
-    const group = groupFor(active);
-    if (group) setExpanded(current => new Set([...current, group]));
-  }, [active]);
-  function item(key, label) {
-    return <button key={key} disabled={locked && key !== 'staff-messages'} aria-current={active === key ? 'page' : undefined}
-      className={`nav-item ${active === key ? 'active' : ''}`} onClick={() => onNavigate(key)}>
-      <span className="nav-icon"><AppIcon name={key} /></span><span>{label}</span>
-    </button>;
-  }
-  return <nav aria-label="Робочі розділи" className={`focus-navigation ${locked ? 'nav-locked' : ''}`}>
-    <div className="focus-nav-primary" aria-label="Основні робочі дії">
-      <span className="focus-nav-caption">Головне</span>
-      {primary.map(([key, label]) => item(key, label))}
+  // The sidebar contains only four day-to-day destinations. Other allowed
+  // features are discoverable from the home page, never removed from the API.
+  const preferred = role === 'admin'
+    ? [['dashboard','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти']]
+    : role === 'reception'
+    ? [['reception-home','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти']]
+    : role === 'director'
+    ? [['dashboard','Головна'],['workload','Навантаження'],['discharges','Виписки']]
+    : [['calendar','Мої прийоми'],['patients','Пацієнти'],['reports','Звіти']];
+  const available=new Set(navigation.map(([key])=>key));
+  return <nav aria-label="Робочі розділи" className={`focus-navigation solvia-minimal-navigation ${locked ? 'nav-locked' : ''}`}>
+    <div className="focus-nav-primary" aria-label="Головна навігація">
+      {preferred.filter(([key])=>available.has(key)).map(([key,label])=><button key={key}
+        type="button" disabled={locked && key !== 'staff-messages'} aria-current={active===key?'page':undefined}
+        className={`nav-item ${active===key?'active':''}`} onClick={()=>onNavigate(key)}>
+        <span className="nav-icon"><AppIcon name={key==='reception-home'?'dashboard':key}/></span><span>{label}</span>
+      </button>)}
     </div>
-    {secondary.length > 0 && <span className="focus-nav-caption">Інші розділи</span>}
-    {navigationGroups.map(([id, label, keys]) => {
-      const items = secondary.filter(([key]) => keys.includes(key));
-      if (!items.length) return null;
-      if (items.length === 1) return <div className="nav-group single" key={id}>{item(...items[0])}</div>;
-      return <section className="nav-group" key={id}>
-        <button className="nav-group-toggle" aria-expanded={expanded.has(id)} aria-controls={`nav-${id}`}
-          onClick={() => setExpanded(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; })}>
-          <span>{label}</span><span aria-hidden="true">{expanded.has(id) ? '−' : '+'}</span>
-        </button>
-        <div id={`nav-${id}`} className="nav-group-items" hidden={!expanded.has(id)}>{items.map(([key, text]) => item(key,text))}</div>
-      </section>;
-    })}
-    {directory && <div className="focus-nav-directory">{item(...directory)}</div>}
   </nav>;
 }
 
 function defaultPage(role) {
-  return role === 'admin' || role === 'director' ? 'dashboard' : role === 'reception' ? 'shift-workspace' : 'calendar';
+  return role === 'admin' || role === 'director' ? 'dashboard' : role === 'reception' ? 'reception-home' : 'calendar';
 }
 
 function displayStatus(value) {
@@ -1561,7 +1548,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
         {[[ 'overview','Огляд' ], ...(canReadConsultations ? [['records','Записи']] : []), ['documents','Документи'], ['followup','Супровід']].map(([key,label]) =>
           <button key={key} aria-pressed={cardSection === key} className={cardSection === key ? 'active' : ''} onClick={() => setCardSection(key)}>{label}</button>)}
       </nav>
-      <div className="patient-card-grid" hidden={cardSection !== 'overview'}>
+      <div className="patient-card-grid patient-registration-full" hidden={cardSection !== 'overview'}>
         <section className="surface">
           <div className="section-head compact">
             <div>
@@ -1583,21 +1570,6 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
           </dl>
         </section>
 
-        <section className="surface">
-          <div className="section-head compact">
-            <div>
-              <div className="eyebrow">ПРИВАТНІСТЬ</div>
-              <h2>{isPsychologist ? 'Доступ психолога' : isAdmin ? 'Контроль адміністратора' : 'Захищений розділ'}</h2>
-            </div>
-          </div>
-          <div className={`privacy-card ${canReadConsultations ? 'allowed' : 'locked'}`}>
-            <div className="privacy-icon"><AppIcon name={canReadConsultations ? "check" : "lock"} size={22} /></div>
-            <div>
-              <strong>{isPsychologist ? 'Приватні записи доступні' : isAdmin ? 'Записи доступні для контролю' : 'Нотатки психолога приховані'}</strong>
-              <p>{isPsychologist ? 'Ви бачите записи лише цього пацієнта, який закріплений за вашим профілем.' : isAdmin ? 'Адміністратор має доступ до записів психологів у режимі перегляду. Зміни вносить тільки психолог.' : 'Реєстратура та керівник центру не отримують текст консультацій.'}</p>
-            </div>
-          </div>
-        </section>
       </div>
 
       {cardSection === 'overview' && <PatientJourney card={card} canReadClinical={canReadConsultations} />}
@@ -3514,7 +3486,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [accessDialog,setAccessDialog]=useState(false);
   const [messageTarget,setMessageTarget]=useState(null);
   const [health, setHealth] = useState({ online: true, version: '' });
-  const navigation = [['module-directory','Усі розділи'],...navFor(user.role), ...(['admin','reception','psychologist'].includes(user.role)?[['tv-calls','TV-виклики']]:[]), ['preferences', 'Налаштування профілю']];
+  const navigation = [['module-directory','Усі розділи'],...(user.role==='reception'?[['reception-home','Головна']]:[]),...navFor(user.role), ...(['admin','reception','psychologist'].includes(user.role)?[['tv-calls','TV-виклики']]:[]), ['preferences', 'Налаштування профілю']];
   const [menuOpen, setMenuOpen] = useState(false);
   const [compactNav, setCompactNav] = useState(() => window.matchMedia('(max-width:760px)').matches);
   useEffect(() => {
@@ -3563,6 +3535,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'module-directory') return <ModuleDirectory role={user.role} onNavigate={navigate} Icon={AppIcon}/>;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
+    if (page === 'dashboard' && user.role==='admin') return <CenterHome api={api} role="admin" onNavigate={navigate} onRegister={()=>registerPatient()} onBook={()=>startBooking({})} onOpenPatient={openPatient}/>;
+    if (page === 'reception-home' && user.role==='reception') return <CenterHome api={api} role="reception" onNavigate={navigate} onRegister={()=>registerPatient()} onBook={()=>startBooking({})} onOpenPatient={openPatient}/>;
     if (page === 'dashboard') return <Dashboard api={api} role={user.role} onNavigate={navigate} access={receptionAccess} />;
     if (page === 'tv-calls') return <TvCallPanel api={api} />;
     if (page === 'calendar') return <Calendar key={`${bookingVersion}:${calendarFocus||''}`} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={calendarFocus||bookingResult?.date} />;
@@ -3644,7 +3618,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
                 <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
               </div>
             </div>
-            {['admin','director'].includes(user.role) && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Написати психологу</Button>}
+            {user.role==='director' && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Повідомлення</Button>}
             {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
             <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
             <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
