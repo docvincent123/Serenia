@@ -49,3 +49,14 @@
 .patient-registration-full .profile-list dd{font-size:13px;overflow-wrap:anywhere}
 @media(max-width:1100px){.center-home-action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.center-home-action-grid{grid-template-columns:1fr}.center-home-action{min-height:75px}.center-home-metrics{gap:8px}.center-home-metric{padding:13px}.center-home-metric strong{font-size:25px}.center-home-upcoming{padding:14px}.center-home-visit{gap:7px}.center-home-visit-state{display:none}.center-home{gap:20px}.patient-registration-full .profile-list{grid-template-columns:1fr}}
+
+/* Patient card: keep frequent action visible, secondary actions one tap away. */
+.patient-minimal-actions{align-items:center;flex-wrap:wrap;gap:8px}
+.patient-secondary-actions{position:relative;z-index:5}
+.patient-secondary-actions summary{list-style:none;display:flex;align-items:center;justify-content:center;border:1px solid var(--line,#ddd);border-radius:10px;cursor:pointer;min-height:39px;padding:7px 13px;background:#fff;font-size:12px;font-weight:650}
+.patient-secondary-actions summary::-webkit-details-marker{display:none}
+.patient-secondary-actions summary::after{content:"⌄";margin-left:10px;color:#7d806e}
+.patient-secondary-actions[open] summary{background:#fff6d9;border-color:#eac865}
+.patient-secondary-actions>div{position:absolute;z-index:10;right:0;top:calc(100% + 7px);min-width:215px;display:grid;gap:6px;border:1px solid #e4e4d9;border-radius:12px;background:#fff;padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.12)}
+.patient-secondary-actions .button{justify-content:flex-start;width:100%;text-align:left;white-space:normal}
+@media(max-width:760px){.patient-secondary-actions>div{right:auto;left:0;min-width:min(245px,calc(100vw - 40px))}}
