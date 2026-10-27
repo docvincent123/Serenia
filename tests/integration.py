@@ -1120,4 +1120,22 @@ class Scenario(unittest.TestCase):
         },status=409)
         self.assertEqual(len(self.api('admin','GET',endpoint)),1)
 
+    def test_zz_centre_document_templates(self):
+        """The administrator owns templates; inactive forms disappear from staff lists."""
+        created=self.api('admin','POST','/api/document-templates',{
+            'title':'Synthetic rehab consent',
+            'content':'Patient {{patient_name}}, record {{patient_no}}, date {{today}}'
+        })
+        endpoint=f'/api/document-templates/{created["id"]}'
+        self.assertTrue(any(t['id']==created['id'] for t in self.api('psychologist','GET','/api/document-templates')))
+        self.api('reception','POST','/api/document-templates',{
+            'title':'Unauthorized','content':'Should not save'
+        },status=403)
+        self.api('psychologist','PATCH',endpoint,{'active':False},status=403)
+        self.api('admin','PATCH',endpoint,{'active':False})
+        self.assertFalse(any(t['id']==created['id'] for t in self.api('psychologist','GET','/api/document-templates')))
+        self.assertTrue(any(t['id']==created['id'] for t in self.api('admin','GET','/api/document-templates')))
+        self.api('admin','PATCH',endpoint,{'title':'Updated synthetic consent','content':'Final reviewed form','active':True})
+        self.assertTrue(any(t['title']=='Updated synthetic consent' for t in self.api('reception','GET','/api/document-templates')))
+
 if __name__=='__main__': unittest.main()
