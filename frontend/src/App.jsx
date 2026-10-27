@@ -16,6 +16,7 @@ import ShiftWorkspace from './ShiftWorkspace.jsx';
 import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
+import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
 import {navFor,navigationGroups} from './workspace-model.mjs';
 import {focusNavigation} from './focus-workspace.mjs';
 import {ModuleDirectory,PeriodActivity,DayTimeline} from './MotionWorkspace.jsx';
@@ -652,8 +653,8 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
 
 function RoleActions({ role, onNavigate }) {
   const actions = role === 'admin'
-    ? [['shift-workspace','Прийняти пацієнта','Прибуття та перебіг прийомів'], ['team','Керувати командою','Працівники та доступ'], ['rooms','Кабінети центру','Приміщення та розклад']]
-    : [['workload','Переглянути навантаження','Зайнятість спеціалістів'], ['supervisions','Планувати супервізії','Професійна підтримка команди'], ['discharges','Переглянути виписки','Підсумки та рекомендації']];
+    ? [['shift-workspace','Сьогоднішні прийоми','Прибуття та робота реєстратури'], ['patients','Картки пацієнтів','Історія та курси супроводу'], ['team','Працівники і доступ','Команда центру'], ['calendar','Календар','Психологи та кабінети']]
+    : [['workload','Навантаження','Зайнятість спеціалістів'], ['supervisions','Супервізії','Професійна підтримка команди'], ['discharges','Виписки','Підсумки та рекомендації'], ['dashboard','Показники центру','Огляд за період']];
   return <section className="role-actions" aria-label="Швидкі дії">{actions.map(([page,title,description]) =>
     <button key={page} onClick={() => onNavigate(page)}><span className="role-action-icon"><AppIcon name={page} /></span><span><strong>{title}</strong><small>{description}</small></span><span aria-hidden="true">↗</span></button>)}</section>;
 }
@@ -1595,6 +1596,8 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
         </section>
       </div>
 
+      {cardSection === 'overview' && <PatientJourney card={card} canReadClinical={canReadConsultations} />}
+      {canReadConsultations && cardSection === 'followup' && <RehabilitationPlan api={api} patientId={patientId} patientName={card.name} patientNumber={card.patient_no} activeCourse={activeCourse} role={role} onPrint={printStandaloneNode} />}
       {canReadConsultations && cardSection === 'followup' && <PatientProgress api={api} patientId={patientId} canWrite={isPsychologist} history={card.consultations||[]} />}
       <section className="surface" hidden={cardSection !== 'followup'}>
         <div className="section-head">
