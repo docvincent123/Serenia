@@ -99,7 +99,7 @@ static std::string tableForInsert(const std::string&sql){
     return std::regex_search(sql,m,r)?m[1].str():"";
 }
 static bool hasSerialId(const std::string&table){
-    static const std::vector<std::string> tables={"users","families","patients","rooms","appointments","consultations","shift_reports","assessments","audit","outbox","admin_notes","discharge_summaries","backup_events","patient_courses","patient_referrals","patient_documents","supervisions","waiting_list","consultation_addenda","patient_progress"};
+    static const std::vector<std::string> tables={"users","families","patients","rooms","appointments","consultations","shift_reports","assessments","audit","outbox","admin_notes","discharge_summaries","backup_events","patient_courses","patient_referrals","patient_documents","supervisions","waiting_list","consultation_addenda","patient_progress","rehabilitation_goals","rehabilitation_goal_updates","center_document_templates"};
     return std::find(tables.begin(),tables.end(),table)!=tables.end();
 }
 static std::string arg(const J&v){
