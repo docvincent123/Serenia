@@ -1138,4 +1138,24 @@ class Scenario(unittest.TestCase):
         self.api('admin','PATCH',endpoint,{'title':'Updated synthetic consent','content':'Final reviewed form','active':True})
         self.assertTrue(any(t['title']=='Updated synthetic consent' for t in self.api('reception','GET','/api/document-templates')))
 
+    def test_y_lean_workday_home_authorization(self):
+        """Home needs one request and never leaks clinical notes."""
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        for role in ('admin','reception'):
+            result=self.api(role,'GET','/api/workday/home')
+            self.assertEqual(result['date'],dt.date.today().isoformat())
+            self.assertIn('waiting',result['counts'])
+            self.assertIn('arrived',result['counts'])
+            self.assertIn('completed',result['counts'])
+            self.assertIn('active_patients',result)
+            self.assertIn('waiting_list',result)
+            self.assertIsInstance(result['next'],list)
+            self.assertLessEqual(len(result['next']),6)
+            for item in result['next']:
+                self.assertTrue(set(item).issubset({'appointment_id','start','end','patient_id','patient','patient_no','psychologist','room','arrived_at'}))
+            self.assertNotIn('consultations',result)
+            self.assertNotIn('risk_flags',result)
+        self.api('psychologist','GET','/api/workday/home',status=403)
+        self.api('director','GET','/api/workday/home',status=403)
+
 if __name__=='__main__': unittest.main()
