@@ -120,7 +120,15 @@ try {
   await page.reload();
   await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog',{name:'Сервер на оновленні',exact:true}).count(),0);
+  const studioHeader=page.locator('.studio-header');
+  const shiftStatus=page.locator('.shift-bar').first();
   const studioTabs=page.getByRole('navigation',{name:'Вкладки робочого простору',exact:true});
+  assert.equal(await page.locator('.workspace-topbar').count(),0,'Removed the redundant lower search/status toolbar');
+  assert.equal(await studioHeader.locator('.global-search-wrap').count(),1,'Global search is in the top studio header');
+  assert.equal(await studioHeader.locator('.workflow-bell').count(),1,'Notification bell is in the top studio header');
+  assert.equal(await page.locator('.connection-pill').count(),0,'Connected status badge does not clutter the screen');
+  const [headerRect,shiftRect,tabsRect]=await Promise.all([studioHeader.boundingBox(),shiftStatus.boundingBox(),studioTabs.boundingBox()]);
+  assert(headerRect && shiftRect && tabsRect && headerRect.y+headerRect.height<=shiftRect.y+2 && shiftRect.y+shiftRect.height<=tabsRect.y+2,'Shift status is between top search header and navigation tabs');
   await studioTabs.getByRole('button',{name:'Відкрити вкладку Календар',exact:true}).click();
   await page.getByRole('heading',{name:'Календар центру',exact:true}).waitFor();
   assert.equal(await studioTabs.getByRole('button',{name:'Відкрити вкладку Календар',exact:true}).getAttribute('aria-current'),'page');
