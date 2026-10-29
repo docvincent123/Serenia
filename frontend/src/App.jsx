@@ -3433,6 +3433,9 @@ function ReceptionAccess({ api, onChanged, onClose, access }) {
 
 function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
+  // Track in-app navigation (window.history.back() could leave the desktop app).
+  const pageHistory=useRef([]);
+  const [historyDepth,setHistoryDepth]=useState(0);
   useEffect(() => { document.querySelector('.workspace')?.scrollTo(0, 0); window.scrollTo(0, 0); }, [page]);
   const [bookingIntent,setBookingIntent]=useState(null);
   const [bookingResult,setBookingResult]=useState(null);
@@ -3466,8 +3469,28 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }, [compactNav, menuOpen]);
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
 
-  function openPatient(id) { if(page !== 'patient-card') setPatientOrigin(page); setPatientId(id); setPage('patient-card'); setMenuOpen(false); }
-  function navigate(target) { if(target !== 'staff-messages') setMessageTarget(null); setPatientId(null); setPage(target); setMenuOpen(false); }
+  function rememberPage() {
+    pageHistory.current.push({page,patientId});
+    if(pageHistory.current.length>25)pageHistory.current.shift();
+    setHistoryDepth(pageHistory.current.length);
+  }
+  function openPatient(id) {
+    if(page !== 'patient-card'){setPatientOrigin(page);rememberPage();}
+    setPatientId(id);setPage('patient-card');setMenuOpen(false);
+  }
+  function navigate(target) {
+    if(target!==page)rememberPage();
+    if(target!=='staff-messages')setMessageTarget(null);
+    setPatientId(null);setPage(target);setMenuOpen(false);
+  }
+  function goBack() {
+    const previous=pageHistory.current.pop();
+    if(!previous)return;
+    setHistoryDepth(pageHistory.current.length);
+    setPatientId(previous.patientId);
+    setPage(previous.page);
+    setMenuOpen(false);
+  }
 
   async function loadShift() {
     try {
@@ -3495,7 +3518,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }, [apiBase]);
 
   const content = (() => {
-    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
+    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={goBack} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'module-directory') return <ModuleDirectory role={user.role} onNavigate={navigate} Icon={AppIcon}/>;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
@@ -3577,7 +3600,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           </div>
         )}
         {!shift?.open && user.role==='admin' && <div className="shift-bar"><span>Надайте доступ для початку роботи центру</span><Button onClick={()=>setAccessDialog(true)}>Надати доступ</Button></div>}
-        <StudioWorkspace navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} section="tabs"/>
+        {historyDepth>0 && <div className="studio-back-row"><button type="button" className="studio-back-button" onClick={goBack} aria-label="Назад до попереднього розділу"><span aria-hidden="true">←</span> Назад</button></div>}
         {!locked && <ReminderBar api={api} role={user.role} />}
         {bookingIntent && !locked && <AppointmentBooking api={api} initial={bookingIntent} Modal={Dialog} onClose={()=>setBookingIntent(null)} onSaved={booked} onCreatePatient={date=>registerPatient(date,true)} />}
         {dailyReport && !locked && <DailyReport api={api} Modal={Dialog} initialDate={receptionAccess?.access_date || localDate()} onClose={()=>setDailyReport(false)} />}
