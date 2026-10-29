@@ -87,7 +87,7 @@ try{
   assert.equal(await page.locator('.psy-roster-status.busy').count(),1);
   assert.equal(await page.locator('.psy-roster-status.waiting').count(),1);
   await page.getByRole('button',{name:'+ Додати до зміни',exact:true}).click();
-  await page.getByRole('button',{name:'Зняти зі зміни',exact:true}).first().waitFor();
+  await page.locator('.psy-roster-status.available').waitFor();
   assert.equal(await page.locator('.psy-roster-status.available').count(),1,'Newly assigned psychologist becomes available');
   await capture('psychologist-shift-board');
   await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
