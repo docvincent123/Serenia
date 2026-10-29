@@ -33,8 +33,12 @@ jobs:
           if ldd build/native-linux/solvia-native | grep -Ei 'webkit|chromium|electron|webengine'; then
             echo 'Native executable unexpectedly depends on web rendering'; exit 1
           fi
+      - name: Create installable SOLVIA Native Debian package
+        run: bash native/linux/package-deb.sh
       - uses: actions/upload-artifact@v4
         with:
           name: solvia-native-linux-x64
-          path: build/native-linux/solvia-native
+          path: |
+            build/native-linux/solvia-native
+            build/native-linux/solvia-native_*.deb
           retention-days: 7
