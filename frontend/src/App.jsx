@@ -21,6 +21,8 @@ import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import usePatientDirectory from './usePatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
 import CenterHome from './CenterHome.jsx';
+import HandoverBoard from './HandoverBoard.jsx';
+import ServerReadiness from './ServerReadiness.jsx';
 import AppIcon from './AppIcon.jsx';
 import {ServiceStatus,ServiceControls} from './ServiceStatus.jsx';
 import DocumentTemplateSettings from './DocumentTemplateSettings.jsx';
@@ -2521,7 +2523,7 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
     <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
     <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['tv','TV-табло'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
     {error&&<div className="alert error">{error}</div>}
-    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><section className="surface"><h2>Обслуговування сервера</h2><ServiceControls api={api}/><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
+    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><ServerReadiness api={api}/><section className="surface"><h2>Обслуговування сервера</h2><ServiceControls api={api}/><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
     {page==='settings'&&<Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} technical />}
     {page==='pc'&&<DesktopReleaseSettings api={api} />}
     {page==='mobile'&&<MobileReleaseSettings api={api} />}
@@ -3499,6 +3501,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'module-directory') return <ModuleDirectory role={user.role} onNavigate={navigate} Icon={AppIcon}/>;
+    if (page === 'handover' && ['admin','reception'].includes(user.role)) return <HandoverBoard api={api}/>;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
     if (page === 'dashboard' && user.role==='admin') return <CenterHome api={api} role="admin" onNavigate={navigate} onRegister={()=>registerPatient()} onBook={()=>startBooking({})} onOpenPatient={openPatient}/>;
     if (page === 'reception-home' && user.role==='reception') return <CenterHome api={api} role="reception" onNavigate={navigate} onRegister={()=>registerPatient()} onBook={()=>startBooking({})} onOpenPatient={openPatient}/>;
