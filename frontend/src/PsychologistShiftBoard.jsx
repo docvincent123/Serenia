@@ -18,7 +18,7 @@ export default function PsychologistShiftBoard({api,role}){
   try{await apiRef.current('POST','/api/shift-psychologists',{psychologist_id:Number(person.id),on_shift:!person.on_shift});await refresh();window.dispatchEvent(new Event('solvia:workflow-updated'));}
   catch(e){setError(e.message);}finally{setBusyId(null);}
  }
- const list=data?.psychologists||[];
+ const list=[...(data?.psychologists||[])].sort((a,b)=>Number(b.on_shift)-Number(a.on_shift)||['busy','waiting','available','off_shift'].indexOf(a.status)-['busy','waiting','available','off_shift'].indexOf(b.status)||String(a.name).localeCompare(String(b.name),'uk'));
  const active=list.filter(p=>p.on_shift);
  const counts={busy:active.filter(p=>p.status==='busy').length,waiting:active.filter(p=>p.status==='waiting').length,available:active.filter(p=>p.status==='available').length};
  return <section className="psy-roster">
