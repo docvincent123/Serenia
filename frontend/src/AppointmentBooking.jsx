@@ -10,6 +10,7 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
   const [meta,setMeta]=useState(null),[patients,setPatients]=useState([]),[loading,setLoading]=useState(true);
   const [form,setForm]=useState({date:initial.date,patient_ids:[],psychologist_id:'',room_id:'',start:'',duration:60,kind:'individual',status:'scheduled',note:''});
   const [query,setQuery]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [roster,setRoster]=useState(null);
   const [slots,setSlots]=useState(null),[slotError,setSlotError]=useState(''),[refresh,setRefresh]=useState(0),[retryLoad,setRetryLoad]=useState(0);
   const saving=useRef(false),search=useRef(null),receipt=useRef(null);
   const [patientPage,setPatientPage]=useState(1);
@@ -30,6 +31,14 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
     }
     load();return()=>{alive=false;};
   },[api,initial,editing,retryLoad]);
+  useEffect(()=>{
+    if(!form.date){setRoster(null);return;}
+    let alive=true;
+    setRoster(null);
+    api('GET',`/api/shift-psychologists?date=${form.date}`).then(value=>{if(alive)setRoster(value?.psychologists?value:null);})
+      .catch(()=>{if(alive)setRoster(null);});
+    return()=>{alive=false;};
+  },[api,form.date]);
   useEffect(()=>{if(!loading&&!editing&&!form.patient_ids.length)search.current?.focus();},[loading,editing,form.patient_ids.length]);
   useEffect(()=>{
     let alive=true;setSlots(null);setSlotError('');
@@ -40,6 +49,10 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
     },150);
     return()=>{alive=false;clearTimeout(timer);};
   },[api,meta,form.date,form.psychologist_id,form.room_id,form.duration,refresh,editing,initial.appointmentId]);
+  const rosterApplies=Boolean(roster?.shift_open && roster?.configured && roster?.date===form.date);
+  const onShiftIds=new Set((roster?.psychologists||[]).filter(p=>p.on_shift).map(p=>Number(p.id)));
+  const eligiblePsychologists=rosterApplies?(meta?.psychologists||[]).filter(p=>onShiftIds.has(Number(p.id))):meta?.psychologists||[];
+  const psychologistOffShift=rosterApplies&&Boolean(form.psychologist_id)&&!onShiftIds.has(Number(form.psychologist_id));
   const selected=patients.filter(p=>form.patient_ids.includes(Number(p.id)));
   const multi=form.kind==='group'||form.kind==='family';
   const results=directory.items;
@@ -61,6 +74,7 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
   function changeKind(kind){setForm(current=>({...current,kind,patient_ids:['group','family'].includes(kind)?current.patient_ids:current.patient_ids.slice(0,1)}));}
   async function save(e){
     e.preventDefault();if(saving.current)return;
+    if(psychologistOffShift){setError('Цей психолог не працює в обраній зміні. Попросіть адміністратора змінити склад зміни або оберіть іншого пацієнта.');return;}
     const problem=bookingProblem(form,meta?.workflow);
     if(problem){setError(problem);return;}
     saving.current=true;setBusy(true);setError('');
@@ -86,7 +100,8 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
             {directory.total>8&&<div className="booking-hint" aria-label="Сторінки пошуку пацієнтів"><button className="booking-text-action" type="button" disabled={directory.loading||patientPage<=1} onClick={()=>setPatientPage(p=>p-1)}>Попередні</button> <span>Сторінка {patientPage} з {Math.ceil(directory.total/8)}</span> <button className="booking-text-action" type="button" disabled={directory.loading||patientPage*8>=directory.total} onClick={()=>setPatientPage(p=>p+1)}>Наступні</button></div>}
             {multi&&<p className="booking-hint">Оберіть учасників кнопками. Усі мають бути призначені одному психологу.</p>}
           </>}
-          <label className="booking-field booking-assignment"><span>Психолог</span><select aria-label="Психолог" value={form.psychologist_id} disabled={busy||Boolean(selected.length)} required onChange={e=>setForm({...form,psychologist_id:e.target.value})}><option value="">Спочатку оберіть пацієнта</option>{meta.psychologists.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          <label className="booking-field booking-assignment"><span>Психолог</span><select aria-label="Психолог" value={form.psychologist_id} disabled={busy||Boolean(selected.length)} required onChange={e=>setForm({...form,psychologist_id:e.target.value})}><option value="">Спочатку оберіть пацієнта</option>{eligiblePsychologists.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}{psychologistOffShift&&<option value={form.psychologist_id} disabled>{psychologist?.name || 'Психолог'} (поза зміною)</option>}</select></label>
+          {rosterApplies&&<p className="booking-hint" role="status">{psychologistOffShift?'Призначений у картці психолог зараз поза зміною. Запис заблоковано.':'У списку тільки психологи, затверджені адміністратором на цю зміну.'}</p>}
         </section>
         <section className="booking-section"><header><span className="booking-step">2</span><h3>Коли й де</h3></header>
           <div className="booking-fields"><label className="booking-field"><span>Дата консультації</span><input type="date" required value={form.date} disabled={busy} onChange={e=>setForm({...form,date:e.target.value})}/></label><label className="booking-field"><span>Кабінет</span><select aria-label="Кабінет" required value={form.room_id} disabled={busy} onChange={e=>setForm({...form,room_id:e.target.value})}><option value="">Оберіть кабінет</option>{meta.rooms.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label></div>
@@ -97,7 +112,7 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
         <details className="booking-extra"><summary>Додатково: статус і примітка</summary><label className="booking-field"><span>Статус запису</span><select aria-label="Статус запису" value={form.status} disabled={busy} onChange={e=>setForm({...form,status:e.target.value})}><option value="scheduled">Заплановано</option><option value="confirmed">Підтверджено</option><option value="draft">Чернетка</option></select></label><label className="booking-field"><span>Примітка до запису</span><textarea rows={2} maxLength={500} value={form.note} disabled={busy} onChange={e=>setForm({...form,note:e.target.value})}/></label></details></div>
         <aside className="booking-summary" aria-label="Підсумок запису"><span className="eyebrow">ВАШ ЗАПИС</span><h3>{selected.length?selected.map(p=>p.name).join(', '):'Оберіть пацієнта'}</h3><p>{kindLabels[form.kind]} консультація</p><dl><div><dt>Дата</dt><dd>{dayLabel(form.date)}</dd></div><div><dt>Час</dt><dd>{form.start || '—'} — {end || '—'}</dd></div><div><dt>Тривалість</dt><dd>{form.duration || '—'} хв</dd></div><div><dt>Психолог</dt><dd>{psychologist?.name || '—'}</dd></div><div><dt>Кабінет</dt><dd>{room?.name || '—'}</dd></div></dl><small>Години роботи: {meta.workflow?.opening_time || '08:00'}–{meta.workflow?.closing_time || '20:00'}</small></aside>
       </div>}
-      <div className="booking-footer"><span>{end?`До ${end} · ${form.duration} хв`:'Оберіть час прийому'}</span><button type="button" className="button secondary" disabled={busy} onClick={onClose}>Скасувати</button><button type="submit" className="button primary" disabled={loading||busy||!meta||!form.patient_ids.length}>{busy?'Зберігаємо…':editing?'Зберегти перенесення':multi?'Записати учасників':'Записати пацієнта'}</button></div>
+      <div className="booking-footer"><span>{end?`До ${end} · ${form.duration} хв`:'Оберіть час прийому'}</span><button type="button" className="button secondary" disabled={busy} onClick={onClose}>Скасувати</button><button type="submit" className="button primary" disabled={loading||busy||!meta||!form.patient_ids.length||psychologistOffShift}>{busy?'Зберігаємо…':editing?'Зберегти перенесення':multi?'Записати учасників':'Записати пацієнта'}</button></div>
     </form>
   </Modal>;
 }
