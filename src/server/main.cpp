@@ -365,7 +365,7 @@ if(path=="/api/reception-access"){
         db.query("INSERT INTO shift_days(shift_date,opened_by,opened_at,closed_by,closed_at) VALUES(?,?,?,NULL,NULL) ON CONFLICT(shift_date) DO UPDATE SET opened_by=EXCLUDED.opened_by,opened_at=EXCLUDED.opened_at,closed_by=NULL,closed_at=NULL",{today,u["id"],now()});
     audit(db,u,enabled?"grant_access":"revoke_access","reception_access",0);return {{"ok",true}};
 }
-bool receptionWrite=path=="/api/tv/call"||path=="/api/patients"||path.rfind("/api/patients/",0)==0||path=="/api/families"||path.rfind("/api/families/",0)==0||path=="/api/appointments"||path.rfind("/api/appointments/",0)==0||path=="/api/waiting-list"||path.rfind("/api/waiting-list/",0)==0;
+bool receptionWrite=path=="/api/tv/call"||path=="/api/patients"||path.rfind("/api/patients/",0)==0||path=="/api/families"||path.rfind("/api/families/",0)==0||path=="/api/appointments"||path.rfind("/api/appointments/",0)==0||path=="/api/waiting-list"||path.rfind("/api/waiting-list/",0)==0||path=="/api/operations/handover"||path.rfind("/api/operations/handover/",0)==0;
 if(u["role"]=="reception"&&method!="GET"&&receptionWrite){
     auto access=db.query("SELECT access_date FROM reception_access WHERE access_date=? AND enabled=TRUE AND starts_at<=?",{now().substr(0,10),now().substr(0,16)});
     check(!access.empty(),"Адміністратор має надати доступ реєстратурі на сьогодні",423);
