@@ -1265,6 +1265,8 @@ class Scenario(unittest.TestCase):
         """Handover survives retries and forbids access to unrelated roles."""
         system=self.api('admin','GET','/api/admin/system')
         self.assertIn('host_resources',system)
+        self.assertGreaterEqual(system['api_timing']['successful_requests'],0)
+        self.assertGreaterEqual(system['api_timing']['max_wait_ms'],0)
         resources=system['host_resources']
         self.assertIn(resources['platform'],('linux','windows','other'))
         if resources.get('disk_available'):
