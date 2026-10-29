@@ -35,7 +35,9 @@ Backend лишається чинним SolviaServer + PostgreSQL на окре�
 sudo apt update
 sudo apt install -y cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-svg-dev \
     qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-    qml6-module-qtquick-window qml6-module-qtqml-workerscript libqt6svg6
+    qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models \
+            qml6-module-qtquick-templates qml6-module-qtquick-shapes \
+            qml6-module-qtqml-workerscript libqt6svg6
 cmake -S native/linux -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native-linux --parallel 2
 ./build/native-linux/solvia-native
