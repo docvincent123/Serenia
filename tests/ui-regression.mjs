@@ -121,6 +121,7 @@ try {
   await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog',{name:'Сервер на оновленні',exact:true}).count(),0);
   const studioHeader=page.locator('.studio-header');
+  assert.equal(await studioHeader.locator('img.studio-mark[src="/solvia-icon.png"]').count(),1,'The supplied SOLVIA logo appears in the desktop header');
   const shiftStatus=page.locator('.shift-bar').first();
   assert.equal(await page.locator('.studio-tabs').count(),0,'Tabs removed');
   assert.equal(await page.locator('.workspace-topbar').count(),0,'Old toolbar removed');
