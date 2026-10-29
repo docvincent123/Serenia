@@ -3,6 +3,7 @@ import React from 'react';
 export default function AppIcon({ name, size = 18 }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
   const paths = {
+    handover: <><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 9h10M7 13h6M7 17h5M16 15l2 2 3-3"/></>,
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     'waiting-list': <><rect x="3" y="4" width="12" height="17" rx="2"/><path d="M6 8h6M6 12h5M6 16h3"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/></>,
     documents: <><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></>,
