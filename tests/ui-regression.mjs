@@ -140,6 +140,19 @@ try {
   assert.equal(await page.getByRole('button',{name:'Інші функції центру',exact:true}).count(),1,'Other functions stay discoverable');
   assert.equal(await page.locator('.center-home').getByText('ЦЕ_ПРИВАТНЕ_ПІБ').count(),0,'Home is not a clinical or audit feed');
   assert.equal(await page.locator('.center-home-metric').count(),3,'Daily status is compact');
+  assert.equal(await page.locator('.center-home-action').count(),4,'Four clear quick actions for staff');
+  assert.equal(await page.locator('.center-home-intro .center-home-primary').count(),1,'One primary command');
+  await page.locator('.center-home-visit').first().waitFor();
+  await page.locator('.center-home-sync').getByText(/Оновлено о/).waitFor();
+  await page.route('**/api/workday/home',route=>route.abort('failed'));
+  await page.getByRole('button',{name:'Оновити дані головної сторінки'}).click();
+  await page.locator('.center-home .alert.error').waitFor();
+  assert.equal(await page.locator('.center-home-visit').count(),0,'No stale appointments during disconnection');
+  await page.unroute('**/api/workday/home');
+  await page.getByRole('button',{name:'Оновити дані головної сторінки'}).click();
+  await page.locator('.center-home-visit').first().waitFor();
+  assert.equal(await page.locator('.center-home .alert.error').count(),0,'Appointments refresh when server returns');
+
   const systemSettings = page.getByRole('button',{name:'Налаштування центру',exact:true});
   const exit = page.getByRole('button',{name:'Вийти',exact:true});
   for (const target of [systemSettings, exit]) {
