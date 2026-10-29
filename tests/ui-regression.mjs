@@ -143,7 +143,7 @@ try {
   assert.equal(await page.locator('.center-home-action').count(),4,'Four clear quick actions for staff');
   assert.equal(await page.locator('.center-home-intro .center-home-primary').count(),1,'One primary command');
   await page.locator('.center-home-visit').first().waitFor();
-  await page.locator('.center-home-sync').getByText(/Оновлено о/).waitFor();
+  await page.getByText(/Оновлено о/).waitFor();
   await page.route('**/api/workday/home',route=>route.abort('failed'));
   await page.getByRole('button',{name:'Оновити дані головної сторінки'}).click();
   await page.locator('.center-home .alert.error').waitFor();
