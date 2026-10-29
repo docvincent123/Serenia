@@ -751,3 +751,16 @@ CREATE TABLE IF NOT EXISTS appointment_requests (
  created TEXT NOT NULL,
  PRIMARY KEY(user_id,client_key)
 );
+
+-- Administrative staffing is separate from Android login/session presence.
+-- Legacy shifts remain in compatibility mode until roster is explicitly set.
+ALTER TABLE shift_days ADD COLUMN IF NOT EXISTS psychologist_roster_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS psychologist_shift_roster (
+  shift_date TEXT NOT NULL REFERENCES shift_days(shift_date),
+  psychologist_id BIGINT NOT NULL REFERENCES users(id),
+  assigned_by BIGINT NOT NULL REFERENCES users(id),
+  assigned_at TEXT NOT NULL,
+  removed_at TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(shift_date, psychologist_id)
+);
+CREATE INDEX IF NOT EXISTS idx_psychologist_roster_active ON psychologist_shift_roster(shift_date, removed_at);
