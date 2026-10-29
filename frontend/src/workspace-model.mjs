@@ -3,6 +3,7 @@ export function navFor(role) {
     return [
       ['dashboard', 'Огляд центру'],
       ['shift-workspace', 'Прийоми за зміну'],
+      ['handover', 'Передача зміни'],
       ['calendar', 'Календар'],
       ['waiting-list', 'Лист очікування'],
       ['patients', 'Пацієнти'],
@@ -20,7 +21,7 @@ export function navFor(role) {
       ['audit', 'Журнал дій']
     ];
   }
-  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
+  if (role === 'reception') return [['shift-workspace', 'Прийоми за зміну'], ['handover', 'Передача зміни'], ['calendar', 'Календар'], ['waiting-list', 'Лист очікування'], ['patients', 'Пацієнти'], ['families', 'Сім’ї'], ['archive', 'Архів']];
   if (role === 'psychologist') return [['calendar', 'Мій календар'], ['patients', 'Мої пацієнти'], ['reports', 'Звіт за зміну'], ['supervisions', 'Мої супервізії']];
   if (role === 'director') return [['dashboard', 'Огляд центру'], ['workload', 'Навантаження'], ['supervisions', 'Супервізії'], ['discharges', 'Виписки'], ['staff-messages', 'Повідомлення']];
   return [];
@@ -29,7 +30,7 @@ export function navFor(role) {
 
 export const navigationGroups = [
   ['overview', 'Огляд', ['dashboard','module-directory']],
-  ['appointments', 'Прийоми', ['shift-workspace', 'calendar', 'waiting-list', 'tv-calls']],
+  ['appointments', 'Прийоми', ['shift-workspace', 'handover', 'calendar', 'waiting-list', 'tv-calls']],
   ['patients', 'Пацієнти та супровід', ['patients', 'families', 'archive']],
   ['team', 'Команда та кабінети', ['team', 'rooms', 'supervisions', 'staff-messages']],
   ['reports', 'Звіти та аналітика', ['reports', 'workload', 'discharges']],
