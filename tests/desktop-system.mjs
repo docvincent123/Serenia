@@ -92,7 +92,7 @@ try{
   await page.locator('.handover-item').getByText('Перевірити підготовку кабінету',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Позначити виконаним',exact:true}).click();
   await page.getByText('Незавершених справ немає.',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
   await page.getByRole('heading',{name:'Усі розділи',exact:true}).waitFor();
   await page.getByLabel('Знайти розділ').fill('кабінет');
   await page.getByRole('button',{name:'Відкрити розділ Кабінети',exact:true}).waitFor();
