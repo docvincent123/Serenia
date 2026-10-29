@@ -46,6 +46,8 @@ void ApiBridge::clearSession() {
     patients_.clear(); appointments_.clear(); roster_.clear();
     psychologists_.clear(); rooms_.clear();
     rosterSupported_ = false;
+    rosterConfigured_ = false;
+    rosterDate_.clear();
     emit stateChanged();
     emit dataChanged();
 }
@@ -250,6 +252,9 @@ void ApiBridge::getRoster(int generation) {
     request("GET", "/api/shift-psychologists", {}, [this,generation](const QJsonValue &v){
         if (generation != refreshGeneration_) return;
         rosterSupported_ = v.isObject();
+        rosterConfigured_ = v.toObject().value("configured").toBool(false)
+            && v.toObject().value("shift_open").toBool(false);
+        rosterDate_ = v.toObject().value("date").toString();
         roster_ = v.toObject().value("psychologists").toArray().toVariantList();
         emit dataChanged();
     }, true);
@@ -298,6 +303,34 @@ void ApiBridge::searchPatients(const QString &text) {
         emit dataChanged();
     }, true);
 }
+QVariantList ApiBridge::bookingPsychologists() const {
+    if (!rosterSupported_ || !rosterConfigured_ ||
+        rosterDate_ != QDate::currentDate().toString(Qt::ISODate))
+        return psychologists_;
+    QVariantList filtered;
+    for (const auto &candidate : psychologists_) {
+        const int id = candidate.toMap().value("id").toInt();
+        for (const auto &entry : roster_) {
+            const auto person = entry.toMap();
+            if (person.value("id").toInt() == id && person.value("on_shift").toBool()) {
+                filtered.append(candidate);
+                break;
+            }
+        }
+    }
+    return filtered;
+}
+bool ApiBridge::psychologistBookable(int id, const QString &date) const {
+    if (id<=0) return false;
+    if (!rosterSupported_ || !rosterConfigured_ ||
+        rosterDate_!=date || date!=QDate::currentDate().toString(Qt::ISODate))
+        return true;
+    for (const auto &item : roster_) {
+        const auto p=item.toMap();
+        if (p.value("id").toInt()==id && p.value("on_shift").toBool()) return true;
+    }
+    return false;
+}
 bool ApiBridge::canWrite() const { return role_ == "admin" || role_ == "reception"; }
 bool ApiBridge::requireStaffRole() const {
     if (canWrite()) return true;
@@ -337,6 +370,8 @@ void ApiBridge::assignPsychologist(int id,bool onShift) {
 void ApiBridge::book(int patientId,int psychologistId,int roomId,const QString &date,
                      const QString &start,const QString &end,const QString &kind) {
     if (!requireStaffRole()) return;
+    if (!psychologistBookable(psychologistId,date))
+        return issue("Психолог не включений до поточної зміни.");
     if (patientId<=0||psychologistId<=0||roomId<=0||date.isEmpty()||start>=end)
         return issue("Оберіть пацієнта, психолога, кабінет і коректний час.");
     request("POST","/api/appointments",{{"patient_ids",QJsonArray{patientId}},
