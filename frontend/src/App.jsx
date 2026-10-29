@@ -1,4 +1,5 @@
 import {request} from './request.mjs';
+import StudioWorkspace from './StudioWorkspace.jsx';
 import TvSettings,{TvCallPanel} from './TvSettings.jsx';
 import './tv-control.css';
 import pkg from '../package.json';
@@ -326,7 +327,7 @@ function WorkspaceNavigation({ navigation, role, page, locked, onNavigate }) {
     <div className="focus-nav-primary" aria-label="Головна навігація">
       {preferred.filter(([key])=>available.has(key)).map(([key,label])=><button key={key}
         type="button" disabled={locked && key !== 'staff-messages'} aria-current={active===key?'page':undefined}
-        className={`nav-item ${active===key?'active':''}`} onClick={()=>onNavigate(key)}>
+        className={`nav-item ${active===key?'active':''}`} aria-label={label} title={label} onClick={()=>onNavigate(key)}>
         <span className="nav-icon"><AppIcon name={key==='reception-home'?'dashboard':key}/></span><span>{label}</span>
       </button>)}
     </div>
@@ -3519,7 +3520,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const locked = user.role === 'admin' ? false : shift && (!shift.open || (user.role === 'reception' && !receptionAccess?.allowed));
 
   return (
-    <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`} data-role={user.role}>
+    <div className={`app-shell studio-shell ${menuOpen ? 'menu-open' : ''}`} data-role={user.role}>
       {menuOpen && <button className="nav-scrim" aria-label="Закрити меню" onClick={() => setMenuOpen(false)} />}
       <aside className="sidebar" id="workspace-navigation" inert={compactNav && !menuOpen} aria-hidden={compactNav && !menuOpen ? true : undefined} onKeyDown={e => {
         if(e.key === 'Escape') { e.preventDefault(); setMenuOpen(false); }
@@ -3536,12 +3537,13 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         </div>
 
         <WorkspaceNavigation navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} />
+        <button type="button" className="studio-rail-directory" title="Усі функції центру" aria-label="Усі функції центру" disabled={locked} onClick={()=>navigate('module-directory')}><AppIcon name="module-directory" size={20}/></button>
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
-          {user.role === 'admin' && <button aria-label="Налаштування центру" className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span className="desktop-label">Налаштування центру</span><span className="mobile-label" aria-hidden="true">Система</span></button>}
-          <button aria-label="Налаштування профілю" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Налаштування профілю</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
-          <button className="nav-item" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
+          {user.role === 'admin' && <button aria-label="Налаштування центру" title="Налаштування центру" className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span className="desktop-label">Налаштування центру</span><span className="mobile-label" aria-hidden="true">Система</span></button>}
+          <button aria-label="Налаштування профілю" title="Налаштування профілю" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Налаштування профілю</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
+          <button className="nav-item" aria-label="Вийти" title="Вийти" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
         </div>
         <div className="sidebar-support">
           <div className="sidebar-support-head">
@@ -3557,6 +3559,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       </aside>
 
       <main className="workspace" data-page={page}>
+        <StudioWorkspace navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate}/>
         <header className="mobile-app-header"><button className="mobile-menu-button" aria-label="Відкрити меню" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}><AppIcon name="menu" /><span>Меню</span></button><strong>{activePageLabel}</strong></header>
         {shift?.open && (
           <div className="shift-bar">

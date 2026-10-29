@@ -120,6 +120,12 @@ try {
   await page.reload();
   await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog',{name:'Сервер на оновленні',exact:true}).count(),0);
+  const studioTabs=page.getByRole('navigation',{name:'Вкладки робочого простору',exact:true});
+  await studioTabs.getByRole('button',{name:'Відкрити вкладку Календар',exact:true}).click();
+  await page.getByRole('heading',{name:'Календар центру',exact:true}).waitFor();
+  assert.equal(await studioTabs.getByRole('button',{name:'Відкрити вкладку Календар',exact:true}).getAttribute('aria-current'),'page');
+  await studioTabs.getByRole('button',{name:'Відкрити вкладку Головна',exact:true}).click();
+  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
   const globalSearch=page.getByRole('textbox',{name:'Пошук у центрі',exact:true});
   await globalSearch.fill('late-global');
   await page.waitForRequest(req=>new URL(req.url()).pathname==='/api/search');
@@ -310,7 +316,7 @@ try {
     await page.reload();
     await page.getByRole('button',{name:'Налаштування профілю',exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Center administration must not be in other role menus');
-    if(role === 'director') assert.equal(await page.getByRole('button',{name:'Пацієнти',exact:true}).count(),0,'Director must not get patient navigation');
+    if(role === 'director') {assert.equal(await page.getByRole('button',{name:'Пацієнти',exact:true}).count(),0,'Director must not get patient navigation');assert.equal(await page.getByRole('button',{name:'Відкрити вкладку Пацієнти',exact:true}).count(),0,'Director must not get a clinical workspace tab');}
     if(role === 'reception') {
       await page.getByRole('heading',{name:'Реєстратура',exact:true}).waitFor();
       assert.equal(await page.getByRole('button',{name:'+ Консультація',exact:true}).count(),0);
