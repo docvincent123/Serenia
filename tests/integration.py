@@ -1261,6 +1261,15 @@ class Scenario(unittest.TestCase):
                 listing=','.join(map(str,ids))
                 sql(f'DELETE FROM waiting_list WHERE patient_id IN ({listing}); DELETE FROM patients WHERE id IN ({listing})')
 
+    def test_zy_admin_host_diagnostics_are_role_restricted(self):
+        system=self.api('admin','GET','/api/admin/system')
+        self.assertIn('host_resources',system)
+        self.assertIn('api_timing',system)
+        self.assertGreaterEqual(system['api_timing']['successful_requests'],0)
+        self.assertGreaterEqual(system['api_timing']['max_wait_ms'],0)
+        self.api('reception','GET','/api/admin/system',status=403)
+        self.api('psychologist','GET','/api/admin/system',status=403)
+
     def test_zz_service_maintenance_and_durable_shift_backup(self):
         status=self.call('GET','/api/client-status')[1]
         self.assertEqual(status['mode'],'ready')

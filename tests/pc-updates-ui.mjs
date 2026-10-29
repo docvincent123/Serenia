@@ -48,6 +48,8 @@ try {
   await page.goto(base+'/?mode=server');
   await page.setViewportSize({width:1024,height:600});
   await page.getByText('SOLVIA Server Console 3.1.0',{exact:true}).waitFor();
+  assert.equal(await page.locator('.service-status-overlay').count(),0,'Server Console never shows the workstation maintenance overlay');
+  assert.equal(await page.locator('.service-status-pill').count(),0,'Server Console does not show a workstation update pill');
   await page.getByRole('heading',{name:'Сервер центру 3.1.0',exact:true}).waitFor();
   await page.getByRole('button',{name:'Оновлення ПК',exact:true}).click();
   await page.getByLabel('Версія оновлення ПК').waitFor();

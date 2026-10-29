@@ -21,6 +21,7 @@ import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import usePatientDirectory from './usePatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
 import CenterHome from './CenterHome.jsx';
+import ServerReadiness from './ServerReadiness.jsx';
 import AppIcon from './AppIcon.jsx';
 import {ServiceStatus,ServiceControls} from './ServiceStatus.jsx';
 import DocumentTemplateSettings from './DocumentTemplateSettings.jsx';
@@ -2521,7 +2522,7 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
     <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
     <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['tv','TV-табло'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
     {error&&<div className="alert error">{error}</div>}
-    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><section className="surface"><h2>Обслуговування сервера</h2><ServiceControls api={api}/><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
+    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><ServerReadiness api={api}/><section className="surface"><h2>Обслуговування сервера</h2><ServiceControls api={api}/><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
     {page==='settings'&&<Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} technical />}
     {page==='pc'&&<DesktopReleaseSettings api={api} />}
     {page==='mobile'&&<MobileReleaseSettings api={api} />}
@@ -3433,6 +3434,9 @@ function ReceptionAccess({ api, onChanged, onClose, access }) {
 
 function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   const [page, setPage] = useState(defaultPage(user.role));
+  // Track in-app navigation (window.history.back() could leave the desktop app).
+  const pageHistory=useRef([]);
+  const [historyDepth,setHistoryDepth]=useState(0);
   useEffect(() => { document.querySelector('.workspace')?.scrollTo(0, 0); window.scrollTo(0, 0); }, [page]);
   const [bookingIntent,setBookingIntent]=useState(null);
   const [bookingResult,setBookingResult]=useState(null);
@@ -3443,7 +3447,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   function registerPatient(date,bookAfter=false){setBookingIntent(null);setCreateRequest({key:Date.now(),date:date || receptionAccess?.access_date || localDate(),bookAfter});navigate('patients');}
   function booked(result){setBookingIntent(null);setBookingResult(result);setCalendarFocus(result.date);setBookingVersion(v=>v+1);}
   const [patientId, setPatientId] = useState(null);
-  const [patientOrigin, setPatientOrigin] = useState('patients');
+
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [receptionAccess,setReceptionAccess]=useState(null);
@@ -3465,10 +3469,29 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     else document.querySelector('.mobile-menu-button')?.focus();
   }, [compactNav, menuOpen]);
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
-  const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
-  function openPatient(id) { if(page !== 'patient-card') setPatientOrigin(page); setPatientId(id); setPage('patient-card'); setMenuOpen(false); }
-  function navigate(target) { if(target !== 'staff-messages') setMessageTarget(null); setPatientId(null); setPage(target); setMenuOpen(false); }
+  function rememberPage() {
+    pageHistory.current.push({page,patientId});
+    if(pageHistory.current.length>25)pageHistory.current.shift();
+    setHistoryDepth(pageHistory.current.length);
+  }
+  function openPatient(id) {
+    if(page !== 'patient-card')rememberPage();
+    setPatientId(id);setPage('patient-card');setMenuOpen(false);
+  }
+  function navigate(target) {
+    if(target!==page)rememberPage();
+    if(target!=='staff-messages')setMessageTarget(null);
+    setPatientId(null);setPage(target);setMenuOpen(false);
+  }
+  function goBack() {
+    const previous=pageHistory.current.pop();
+    if(!previous)return;
+    setHistoryDepth(pageHistory.current.length);
+    setPatientId(previous.patientId);
+    setPage(previous.page);
+    setMenuOpen(false);
+  }
 
   async function loadShift() {
     try {
@@ -3496,7 +3519,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }, [apiBase]);
 
   const content = (() => {
-    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={() => navigate(patientOrigin)} draftSession={draftSession} />;
+    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={goBack} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'module-directory') return <ModuleDirectory role={user.role} onNavigate={navigate} Icon={AppIcon}/>;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
@@ -3564,7 +3587,10 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       </aside>
 
       <main className="workspace" data-page={page}>
-        <StudioWorkspace navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate}/>
+        <StudioWorkspace headerTools={!locked ? <>
+          {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
+          <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
+        </> : null}/>
         <header className="mobile-app-header"><button className="mobile-menu-button" aria-label="Відкрити меню" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}><AppIcon name="menu" /><span>Меню</span></button><strong>{activePageLabel}</strong></header>
         {shift?.open && (
           <div className="shift-bar">
@@ -3575,22 +3601,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           </div>
         )}
         {!shift?.open && user.role==='admin' && <div className="shift-bar"><span>Надайте доступ для початку роботи центру</span><Button onClick={()=>setAccessDialog(true)}>Надати доступ</Button></div>}
-        {!locked && <>
-          <ReminderBar api={api} role={user.role} />
-          <div className="workspace-topbar">
-            <div className="topbar-context">
-              <div className="workspace-breadcrumb"><small>{roleLabels[user.role]}</small><strong>{activePageLabel}</strong></div>
-              <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase}>
-                <span className="connection-led" />
-                <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
-              </div>
-            </div>
-            {user.role==='director' && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Повідомлення</Button>}
-            {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
-            <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
-            <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
-          </div>
-        </>}
+        {historyDepth>0 && <div className="studio-back-row"><button type="button" className="studio-back-button" onClick={goBack} aria-label="Назад до попереднього розділу"><span aria-hidden="true">←</span> Назад</button></div>}
+        {!locked && <ReminderBar api={api} role={user.role} />}
         {bookingIntent && !locked && <AppointmentBooking api={api} initial={bookingIntent} Modal={Dialog} onClose={()=>setBookingIntent(null)} onSaved={booked} onCreatePatient={date=>registerPatient(date,true)} />}
         {dailyReport && !locked && <DailyReport api={api} Modal={Dialog} initialDate={receptionAccess?.access_date || localDate()} onClose={()=>setDailyReport(false)} />}
         {accessDialog && <ReceptionAccess api={api} access={receptionAccess} onChanged={loadShift} onClose={()=>setAccessDialog(false)} />}
@@ -3728,8 +3740,8 @@ export default function App() {
     return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
   }
 
-  if (!user) return <><ServiceStatus base={apiBase} enabled={Boolean(localStorage.getItem('solvia_api'))}/><Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} /></>;
-  if (appMode === 'server') return <><ServiceStatus base={apiBase} enabled={true}/><DesktopUpdateNotice api={api} base={apiBase} token={token} /><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
+  if (!user) return <>{appMode !== 'server' && <ServiceStatus base={apiBase} enabled={Boolean(localStorage.getItem('solvia_api'))}/>}<Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} /></>;
+  if (appMode === 'server') return <><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
   return <><ServiceStatus base={apiBase} enabled={true}/><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
 }
 

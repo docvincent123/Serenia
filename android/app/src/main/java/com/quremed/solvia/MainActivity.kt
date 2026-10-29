@@ -677,9 +677,9 @@ class MainActivity : Activity() {
     }
 
     private fun logo(size: Int = 82): ImageView = ImageView(this).apply {
-        setImageResource(R.drawable.solvia_badge)
+        setImageResource(R.drawable.solvia_icon)
         adjustViewBounds = true
-        scaleType = ImageView.ScaleType.CENTER_CROP
+        scaleType = ImageView.ScaleType.FIT_CENTER
         layoutParams = LinearLayout.LayoutParams(dp(size), dp(size)).apply { bottomMargin = dp(12) }
     }
 
