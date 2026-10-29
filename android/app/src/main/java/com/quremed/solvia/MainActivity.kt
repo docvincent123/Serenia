@@ -996,6 +996,13 @@ class MainActivity : Activity() {
                     else httpsSource.ifBlank { json.optString("api_url").ifBlank { httpSource } }
                 val candidate = configAddress(firstSource)
                 if(version == 2) require(candidate.startsWith("https://")) { "Профіль центру потребує HTTPS" }
+                // MDM policy is authoritative for work-managed devices.
+                val managed = ManagedCenterConfig.read(this@MainActivity)
+                if (managed != null) {
+                    require(candidate == managed.httpsUrl && expectedId == managed.serverId) {
+                        "Цей службовий телефон закріплено за іншим сервером. Використайте корпоративні налаштування адміністратора."
+                    }
+                }
 
                 try {
                     val health = requestAt(candidate, "GET", "/api/health", authToken = "") as JSONObject
