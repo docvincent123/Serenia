@@ -16,7 +16,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-svg-dev \
             qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qml6-module-qtquick-window qml6-module-qtqml-workerscript qt6-svg-plugins
+            qml6-module-qtquick-window qml6-module-qtqml-workerscript libqt6svg6
       - name: Build native program
         run: |
           cmake -S native/linux -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
