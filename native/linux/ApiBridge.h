@@ -19,6 +19,8 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(bool connected READ connected NOTIFY stateChanged)
     Q_PROPERTY(bool working READ working NOTIFY stateChanged)
     Q_PROPERTY(bool rosterSupported READ rosterSupported NOTIFY dataChanged)
+    Q_PROPERTY(bool rosterConfigured READ rosterConfigured NOTIFY dataChanged)
+    Q_PROPERTY(QVariantList bookingPsychologists READ bookingPsychologists NOTIFY dataChanged)
     Q_PROPERTY(QVariantMap system READ system NOTIFY dataChanged)
     Q_PROPERTY(QVariantMap shift READ shift NOTIFY dataChanged)
     Q_PROPERTY(QVariantMap overview READ overview NOTIFY dataChanged)
@@ -40,6 +42,8 @@ public:
     bool connected() const { return connected_; }
     bool working() const { return working_; }
     bool rosterSupported() const { return rosterSupported_; }
+    bool rosterConfigured() const { return rosterConfigured_; }
+    QVariantList bookingPsychologists() const;
     QVariantMap system() const { return system_; }
     QVariantMap shift() const { return shift_; }
     QVariantMap overview() const { return overview_; }
@@ -55,6 +59,7 @@ public:
     Q_INVOKABLE void logout();
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void checkServer();
+    Q_INVOKABLE bool psychologistBookable(int id, const QString &date) const;
     Q_INVOKABLE void searchPatients(const QString &text);
     Q_INVOKABLE void markArrived(int appointmentId, int patientId);
     Q_INVOKABLE void setShift(bool open);
@@ -87,7 +92,8 @@ private:
     bool requireStaffRole() const;
     QNetworkAccessManager network_;
     QString origin_, pinnedId_, token_, role_, name_, error_, notice_, lastRefresh_;
-    bool connected_ = false, working_ = false, rosterSupported_ = false;
+    bool connected_ = false, working_ = false, rosterSupported_ = false, rosterConfigured_ = false;
+    QString rosterDate_;
     QVariantMap shift_, overview_, system_;
     QVariantList visits_, patients_, appointments_, roster_, psychologists_, rooms_;
     int sessionGeneration_ = 0, refreshGeneration_ = 0, patientGeneration_ = 0;
