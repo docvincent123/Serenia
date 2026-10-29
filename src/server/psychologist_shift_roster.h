@@ -32,6 +32,7 @@ J psychologistShiftRoster(DB&db,const J&u,const httplib::Request&r,const J&b){
     const bool configured=!activeRows.empty()&&activeRows[0]["psychologist_roster_enabled"].get<bool>();
     J items=db.query("SELECT u.id,u.name,(p.psychologist_id IS NOT NULL AND p.removed_at='') on_shift FROM users u LEFT JOIN psychologist_shift_roster p ON p.psychologist_id=u.id AND p.shift_date=? WHERE u.role='psychologist' AND u.active=TRUE ORDER BY u.name",{day});
     for(auto &person:items){
+        if(activeRows.empty())person["on_shift"]=false;
         const int id=person["id"].get<int>();
         person["status"]="off_shift";
         person["busy_count"]=0;person["waiting_count"]=0;person["upcoming_count"]=0;
