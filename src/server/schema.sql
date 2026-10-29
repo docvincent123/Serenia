@@ -751,3 +751,20 @@ CREATE TABLE IF NOT EXISTS appointment_requests (
  created TEXT NOT NULL,
  PRIMARY KEY(user_id,client_key)
 );
+
+-- Operational handover is not a clinical record. Tasks remain visible across shifts;
+-- completed tasks are retained for accountability and are never hard-deleted by UI.
+CREATE TABLE IF NOT EXISTS shift_handover (
+  id BIGSERIAL PRIMARY KEY,
+  shift_date TEXT NOT NULL,
+  summary TEXT NOT NULL CHECK(char_length(summary) BETWEEN 1 AND 300),
+  priority TEXT NOT NULL CHECK(priority IN ('normal','important','urgent')),
+  state TEXT NOT NULL DEFAULT 'open' CHECK(state IN ('open','resolved')),
+  created_by BIGINT NOT NULL REFERENCES users(id),
+  client_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  resolved_by BIGINT REFERENCES users(id),
+  resolved_at TEXT,
+  UNIQUE(created_by,client_key)
+);
+CREATE INDEX IF NOT EXISTS idx_shift_handover_active ON shift_handover(state,id DESC);
