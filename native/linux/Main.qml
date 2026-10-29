@@ -454,10 +454,10 @@ ApplicationWindow {
                                 Text { text:api.serverUrl; color:root.muted; font.pixelSize:13 },
                                 Text { text:"Стан HTTPS: "+(api.connected?"підключено":"немає з'єднання"); color:root.ink },
                                 Text { text: "PostgreSQL: " + (api.system.database ? (api.system.database.name || "—") : "—");
-                                       color: root.ink; font.pixelSize:13 }
+                                       color: root.ink; font.pixelSize:13 },
                                 Text { text: "Диск: " + (api.system.host_resources && api.system.host_resources.disk_available
                                              ? Math.round(api.system.host_resources.disk_used_percent) + "% зайнято" : "немає даних");
-                                       color:root.muted; font.pixelSize:12 }
+                                       color:root.muted; font.pixelSize:12 },
                                 SolviaButton { text:"Перевірити HTTPS"; onClicked:api.checkServer() }
                             ]
                         }
