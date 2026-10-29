@@ -13,6 +13,7 @@ ApplicationWindow {
     color: "#f5f5f2"
     property string page: "Головна"
     property int bookingPatientId: 0
+    property int bookingAssignedPsychId: 0
     readonly property color ink: "#23282b"
     readonly property color muted: "#758080"
     readonly property color gold: "#b78b19"
@@ -26,6 +27,7 @@ ApplicationWindow {
     }
     function beginBooking(patient) {
         bookingPatientId = Number(patient.id)
+        bookingAssignedPsychId = Number(patient.psychologist_id)
         bookingName.text = patient.name || "Пацієнт"
         bookingPsych.currentIndex = bookingPsych.indexOfValue(Number(patient.psychologist_id))
         bookingDialog.open()
@@ -331,6 +333,7 @@ ApplicationWindow {
                                         SolviaButton { text:"Записати"; visible:api.role!=="director"
                                             onClicked: {
                                                 root.bookingPatientId=Number(modelData.patient_id);
+                                                root.bookingAssignedPsychId=Number(modelData.psychologist_id);
                                                 bookingName.text=modelData.patient||"Пацієнт";
                                                 bookingPsych.currentIndex=bookingPsych.indexOfValue(Number(modelData.psychologist_id));
                                                 bookingDialog.open();
@@ -488,7 +491,12 @@ ApplicationWindow {
             width:parent.width; spacing:10
             Text { id:bookingName; font.bold:true; color:root.ink; font.pixelSize:15 }
             Text { text:"Психолог"; color:root.muted; font.pixelSize:12 }
-            ComboBox { id:bookingPsych; Layout.fillWidth:true; model:api.psychologists; textRole:"name"; valueRole:"id" }
+            ComboBox { id:bookingPsych; Layout.fillWidth:true
+                model:bookingDate.text===root.today ? api.bookingPsychologists : api.psychologists
+                textRole:"name"; valueRole:"id" }
+            Text { visible:root.bookingAssignedPsychId>0 && bookingDate.text===root.today && !api.psychologistBookable(root.bookingAssignedPsychId,bookingDate.text)
+                   Layout.fillWidth:true; wrapMode:Text.WordWrap; color:"#a05b23"; font.pixelSize:12
+                   text:"Закріплений за пацієнтом психолог не на зміні. Попросіть адміністратора переглянути призначення." }
             Text { text:"Кабінет"; color:root.muted; font.pixelSize:12 }
             ComboBox { id:bookingRoom; Layout.fillWidth:true; model:api.rooms; textRole:"name"; valueRole:"id" }
             Text { text:"Тип прийому"; color:root.muted; font.pixelSize:12 }
@@ -510,7 +518,7 @@ ApplicationWindow {
                 Layout.fillWidth:true
                 SolviaButton { text:"Скасувати"; onClicked:bookingDialog.close() }
                 Item { Layout.fillWidth:true }
-                SolviaButton { primary:true; text:"Записати"; onClicked: api.book(root.bookingPatientId,Number(bookingPsych.currentValue),
+                SolviaButton { primary:true; text:"Записати"; enabled:bookingPsych.currentIndex>=0 && bookingRoom.currentIndex>=0 && api.psychologistBookable(root.bookingAssignedPsychId,bookingDate.text); onClicked: api.book(root.bookingPatientId,Number(bookingPsych.currentValue),
                     Number(bookingRoom.currentValue),bookingDate.text,bookingStart.text,bookingEnd.text,
                     ["individual","child","crisis"][bookingKind.currentIndex]) }
             }
