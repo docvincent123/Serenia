@@ -1,0 +1,96 @@
+/* Login is a real employee sign-in form; the product illustration is decorative. */
+@media screen {
+ .login-screen.studio-login {display:grid;grid-template-columns:minmax(0,1.1fr) minmax(360px,.9fr);background:#f4f3f0;min-height:100dvh;}
+ .studio-login .login-brand {background:#f4f3f0;color:#25272b;box-shadow:none;margin:0;border-radius:0;padding:46px clamp(28px,4.2vw,72px);min-height:100dvh;justify-content:center;}
+ .studio-login .login-brand::after {display:none;}
+ .studio-login .brand-orbit {background:#fff;border:1px solid #e5e2d8;width:62px;height:62px;min-height:62px;padding:9px;margin-bottom:30px;border-radius:18px;filter:none;box-shadow:0 5px 12px #29282104;}
+ .studio-login .brand-orbit::after {display:none;}
+ .studio-login .brand-logo {width:44px;height:44px;object-fit:contain;}
+ .studio-login .login-brand-copy {max-width:650px;}
+ .studio-login .login-brand-copy .eyebrow {color:#8b7441;font-size:10px;letter-spacing:.17em;}
+ .studio-login .login-brand-copy h1 {color:#25272b;font-size:clamp(34px,3.8vw,58px);font-weight:650;line-height:1.1;letter-spacing:-.055em;margin:15px 0 20px;max-width:none;}
+ .studio-login .login-brand-copy>p {color:#74777c;font-size:14px;line-height:1.75;max-width:430px;}
+ .studio-login .login-capabilities {display:flex;flex-wrap:wrap;gap:8px;color:#737474;font-size:10px;margin-top:22px;}
+ .studio-login .login-capabilities>span {padding:7px 10px;border:1px solid #e4e1d8;border-radius:20px;background:#faf9f6;}
+ .studio-login .login-panel {background:#fbfaf8;border-left:1px solid #e5e3de;padding:38px clamp(24px,4vw,64px);overflow:visible;}
+ .studio-login .login-card {width:100%;max-width:440px;padding:32px;background:#fff;border:1px solid #e8e5de;border-radius:22px;box-shadow:0 12px 50px #28282905;backdrop-filter:none;}
+ .studio-login .product {margin-bottom:32px;}
+ .studio-login .product-mark {background:#f8f6ef;filter:none;}
+ .studio-login .product strong {color:#25272b;font-size:17px;letter-spacing:.12em;}
+ .studio-login-label {display:block;font-size:9px;letter-spacing:.15em;color:#858077;margin-bottom:10px;}
+ .studio-login .login-copy h2 {color:#25272b;font-size:29px;letter-spacing:-.04em;line-height:1.2;}
+ .studio-login .login-copy small {font-size:10px;color:#8a8985;}
+ .studio-login .login-copy p {font-size:13px;color:#787b81;line-height:1.65;margin:14px 0 22px;}
+ .studio-login .alert {border-radius:11px;background:#f7f7f3;color:#62685f;border:1px solid #e8e8de;font-size:11px;line-height:1.6;}
+ .studio-login .alert.error {background:#fff4f1;color:#923f36;border-color:#eed4cc;}
+ .studio-login :is(.field>label,.field>span) {font-size:12px;color:#53575c;font-weight:600;}
+ .studio-login input:not([type=file]) {background:#fafaf8;color:#25272b;border:1px solid #e2e1db;border-radius:10px;min-height:46px;box-shadow:none;}
+ .studio-login input:focus {border-color:#ab914e;box-shadow:0 0 0 3px #dec27724;outline:none;}
+ .studio-login .password-control {position:relative;}
+ .studio-login .password-control input {width:100%;padding-right:82px;}
+ .studio-login .password-control button {position:absolute;right:7px;top:50%;transform:translateY(-50%);border:0;background:transparent;min-height:30px;padding:5px 9px;color:#737579;font-size:11px;border-radius:6px;}
+ .studio-login .login-submit {background:#25272b!important;color:#fff!important;min-height:46px;border:1px solid #25272b;border-radius:12px;font-size:13px;box-shadow:none;}
+ .studio-login .login-submit:hover {background:#111318!important;}
+ .studio-login .login-foot {padding-top:20px;border-top:1px solid #efeee9;margin-top:24px;color:#92928c;font-size:10px;letter-spacing:.07em;}
+ .studio-login .connection-recovery {font-size:11px;color:#777b80;}
+ .studio-login input[type=file] {max-width:100%;font-size:11px;}
+ .studio-login :is(button,summary,input):focus-visible {outline:2px solid #a88932;outline-offset:3px;}
+ .login-product-scene {margin-top:30px;border:1px solid #e0ded7;border-radius:14px;background:#fff;box-shadow:0 14px 45px #25272b08;overflow:hidden;transform:perspective(1000px) rotateY(-5deg) rotateX(2deg);transform-origin:left center;}
+ .login-scene-header {display:flex;gap:14px;align-items:center;border-bottom:1px solid #efeee8;padding:13px 17px;font-size:9px;}
+ .login-scene-header strong {letter-spacing:.13em;color:#272a30;}
+ .login-scene-header>span {font-size:7px;color:#a29e95;letter-spacing:.1em;}
+ .login-scene-header>i {width:5px;height:5px;border-radius:50%;background:#90a48c;margin-left:auto;}
+ .login-scene-body {display:grid;grid-template-columns:42px minmax(0,1fr);min-height:180px;}
+ .login-scene-rail {display:flex;flex-direction:column;align-items:center;gap:20px;padding:20px 8px;border-right:1px solid #eeece5;background:#faf9f6;color:#a3a097;}
+ .login-scene-rail>svg {width:13px;height:13px;}
+ .login-scene-rail>svg:first-child {color:#ac8621;}
+ .login-scene-content {padding:22px;min-width:0;}
+ .login-scene-eyebrow {font-size:6px;letter-spacing:.1em;color:#99958b;display:block;}
+ .login-scene-content>strong {display:block;font-size:17px;letter-spacing:-.04em;margin:9px 0 18px;color:#2c3035;}
+ .studio-login .login-product-scene strong {color:#2c3035;}
+ .login-scene-tiles {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;}
+ .login-scene-tiles>span {display:flex;align-items:center;gap:7px;border:1px solid #e8e5dc;background:#fcfbf7;border-radius:7px;font-size:8px;padding:11px 8px;color:#6b675c;}
+ .login-scene-tiles svg {width:12px;height:12px;color:#a88932;flex:none;}
+ .login-scene-visit {display:flex;align-items:center;gap:9px;border:1px solid #eae8e0;border-radius:7px;padding:11px;margin-top:13px;}
+ .login-scene-visit>i {width:6px;height:6px;background:#d2b65f;border-radius:50%;}
+ .login-scene-visit>span {display:grid;gap:4px;flex:1;}
+ .login-scene-visit b {font-size:8px;font-weight:600;color:#65655e;}
+ .login-scene-visit small {font-size:7px;color:#9e9b92;}
+ .login-scene-visit>svg {width:13px;height:13px;color:#9c988a;}
+ @media(prefers-reduced-motion:no-preference) {
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .studio-login .login-card {animation:solvia-login-reveal .65s ease-out both;}
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .studio-login .brand-orbit {animation:solvia-login-reveal .7s ease-out both;}
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .studio-login .login-brand-copy {animation:solvia-login-reveal .8s .08s ease-out both;}
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .login-product-scene {animation:solvia-scene-arrive 1s .1s ease-out both;}
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .login-scene-tiles>span {animation:solvia-login-reveal .55s .35s ease-out both;}
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .login-scene-tiles>span:nth-child(2) {animation-delay:.48s;}
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .login-scene-tiles>span:nth-child(3) {animation-delay:.61s;}
+ }
+ @keyframes solvia-login-reveal {from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
+ @keyframes solvia-scene-arrive {from{opacity:0;transform:perspective(1000px) rotateY(-12deg) rotateX(5deg) translateY(22px)}to{opacity:1;transform:perspective(1000px) rotateY(-5deg) rotateX(2deg) translateY(0)}}
+ @media(max-width:980px) {
+  .login-screen.studio-login {grid-template-columns:minmax(0,1fr) minmax(340px,1fr);}
+  .studio-login .login-brand {padding:32px 24px;}
+  .studio-login .login-panel {padding:28px 20px;}
+  .studio-login .login-card {padding:26px;}
+  .login-scene-content {padding:16px;}
+  .login-scene-tiles {gap:5px;}
+  .login-scene-tiles>span {padding:9px 5px;font-size:7px;}
+ }
+ @media(min-width:701px) and (max-height:760px) {
+  .studio-login .login-brand {padding-block:26px;}
+  .studio-login .brand-orbit {margin-bottom:18px;}
+  .studio-login .login-brand-copy h1 {font-size:clamp(32px,3.5vw,44px);}
+  .studio-login .login-panel {padding-block:22px;}
+  .studio-login .login-card {padding:24px;}
+  .studio-login .product {margin-bottom:20px;}
+  .login-product-scene {margin-top:20px;}
+  .login-scene-content {padding:16px;}
+ }
+ @media(max-width:700px) {
+  .login-screen.studio-login {display:block;}
+  .studio-login .login-brand {display:none;}
+  .studio-login .login-panel {min-height:100dvh;border:0;padding:24px 16px;box-sizing:border-box;}
+  .studio-login .login-card {padding:26px 22px;width:min(100%,430px);}
+ }
+}

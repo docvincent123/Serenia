@@ -514,7 +514,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
   }
 
   return (
-    <div className="login-screen login-refined">
+    <div className="login-screen login-refined studio-login">
       <section className="login-brand">
         <div className="brand-orbit">
           <img className="brand-logo" src="/solvia-icon.png" alt="SOLVIA" />
@@ -523,6 +523,10 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
           <div className="eyebrow light">ПРОСТІР ЦЕНТРУ</div>
           <h1>Менше рутини.<br />Більше уваги людині.</h1>
           <p>Один простір для записів, консультацій і злагодженої роботи команди.</p><div className="login-capabilities"><span>01 · Прийоми та пацієнти</span><span>02 · Кабінети й команда</span><span>03 · Документи та рекомендації</span></div>
+          <div className="login-product-scene" aria-hidden="true">
+            <div className="login-scene-header"><strong>SOLVIA</strong><span>РОБОЧИЙ ПРОСТІР</span><i/></div>
+            <div className="login-scene-body"><div className="login-scene-rail"><AppIcon name="dashboard"/><AppIcon name="patients"/><AppIcon name="calendar"/><AppIcon name="reports"/></div><div className="login-scene-content"><span className="login-scene-eyebrow">КОЖНА ЗУСТРІЧ МАЄ ЗНАЧЕННЯ</span><strong>Усе починається з людини.</strong><div className="login-scene-tiles"><span><AppIcon name="patients"/>Пацієнти</span><span><AppIcon name="calendar"/>Календар</span><span><AppIcon name="team"/>Команда</span></div><div className="login-scene-visit"><i/><span><b>Місце для кожної зустрічі</b><small>Від першого запису — до супроводу</small></span><AppIcon name="calendar"/></div></div></div>
+          </div>
         </div>
 
       </section>
@@ -538,6 +542,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
           </div>
 
           <div className="login-copy">
+            <span className="studio-login-label">ВАШ РОБОЧИЙ ПРОСТІР</span>
             <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA"}</h2><small>Версія {pkg.version}</small>
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>

@@ -41,6 +41,7 @@ jobs:
           node tests/documents-print-ui.mjs
           node tests/tv-display-ui.mjs
           node tests/ui-regression.mjs
+          node tests/login-studio.mjs
           node tests/reception-booking.mjs
           node tests/calendar-reliability.mjs
           node tests/request.mjs

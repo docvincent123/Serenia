@@ -30,6 +30,11 @@
  .studio-shell .center-home-upcoming {background:#fff;}
  .studio-shell .page-head {margin-bottom:22px;}
  .studio-shell .studio-chrome :is(button):focus-visible,.studio-rail-directory:focus-visible {outline:3px solid #a18437;outline-offset:2px;}
+ @media(prefers-reduced-motion:no-preference) {
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .studio-tabs>button,
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .studio-directory-button,
+  html:not([data-reduced-motion=true]):not([data-lightweight=true]) .studio-shell .sidebar .nav-item {transition:background-color .16s ease,color .16s ease;}
+ }
  @media(min-width:761px) {
   .app-shell.studio-shell {grid-template-columns:76px minmax(0,1fr);}
   .studio-shell .sidebar {width:76px;min-width:0;padding:17px 9px 14px;align-items:center;box-sizing:border-box;}

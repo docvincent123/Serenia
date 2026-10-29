@@ -2,7 +2,7 @@ name: SOLVIA • Desktop installer and PostgreSQL tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/rehab-center-readiness]
   pull_request:
   workflow_dispatch:
   workflow_call:
@@ -278,6 +278,7 @@ jobs:
           node tests/pc-updates-ui.mjs
           node tests/offline-login.mjs
           node tests/ui-regression.mjs
+          node tests/login-studio.mjs
           node tests/motion-workspace.mjs
           node tests/reception-booking.mjs
           node tests/calendar-reliability.mjs

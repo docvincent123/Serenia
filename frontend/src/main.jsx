@@ -15,6 +15,7 @@ import './monochrome.css';
 import './mint-workspace.css';
 import './light-workspace.css';
 import './studio-workspace.css';
+import './studio-login.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
