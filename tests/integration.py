@@ -122,6 +122,48 @@ class Scenario(unittest.TestCase):
             if not original_shift.get('open'):
                 sql("DELETE FROM reception_access WHERE access_date='"+day+"'; DELETE FROM shift_days WHERE shift_date='"+day+"'")
 
+    def test_a1_booking_receipt_and_rescheduling_slots(self):
+        """A lost booking acknowledgement can be replayed without duplicate work."""
+        def sql(statement):
+            return subprocess.check_output(['psql',self.database,'-X','-qAt','-v','ON_ERROR_STOP=1','-c',statement],text=True).strip()
+        policy=self.api('admin','GET','/api/settings/workflow')
+        original_shift=self.api('admin','GET','/api/shift-day')
+        psy=self.api('psychologist','GET','/api/me')['id']
+        room=patient=aid=None
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        self.api('admin','PATCH','/api/settings/workflow',{'opening_time':'08:00','closing_time':'20:00','working_days':'1234567'})
+        try:
+            room=self.api('admin','POST','/api/rooms',{'name':'Booking receipt synthetic room'})['id']
+            patient=self.api('admin','POST','/api/patients',{'name':'Booking receipt synthetic patient','phone':'+380000006677','dob':'1992-01-01','category':'Інше','psychologist_id':psy})['id']
+            day=(dt.date.today()+dt.timedelta(days=7)).isoformat()
+            body={'psychologist_id':psy,'room_id':room,'patient_ids':[patient],'kind':'individual','start':day+'T09:00','end':day+'T10:00','client_key':'synthetic-booking-receipt-1'}
+            aid=self.api('admin','POST','/api/appointments',body)['id']
+            repeated=self.api('admin','POST','/api/appointments',body)
+            self.assertEqual(repeated,{'id':aid,'already_saved':True})
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                results=list(pool.map(lambda _:self.call('POST','/api/appointments',body,self.tokens['admin']),range(2)))
+            self.assertTrue(all(code==200 and result['id']==aid for code,result in results))
+            self.assertEqual(int(sql(f"SELECT count(*) FROM audit WHERE entity='appointment' AND event='save' AND entity_id={aid}")),1)
+            self.assertEqual(int(sql(f"SELECT count(*) FROM appointment_requests WHERE appointment_id={aid}")),1)
+            self.api('admin','POST','/api/appointments',{**body,'note':'changed after acknowledgement'},status=409)
+            self.api('admin','POST','/api/appointments',{**body,'client_key':'bad'},status=400)
+            self.api('psychologist','POST','/api/appointments',body,status=403)
+            url=f'/api/slots?date={day}&psychologist_id={psy}&room_id={room}'
+            self.assertNotIn('09:00',self.api('admin','GET',url))
+            self.assertIn('09:00',self.api('admin','GET',url+f'&exclude_appointment_id={aid}'))
+            for invalid in ('0','-1','1x','99999999999999999999'):
+                self.api('admin','GET',url+'&exclude_appointment_id='+invalid,status=400)
+            self.api('admin','GET',url+'&exclude_appointment_id=999999999',status=404)
+            sql(f"UPDATE appointments SET status='completed' WHERE id={aid}")
+            self.api('admin','GET',url+f'&exclude_appointment_id={aid}',status=409)
+        finally:
+            if aid:sql(f'DELETE FROM appointments WHERE id={aid}')
+            if patient:sql(f'DELETE FROM patients WHERE id={patient}')
+            if room:sql(f'DELETE FROM rooms WHERE id={room}')
+            self.api('admin','PATCH','/api/settings/workflow',{k:v for k,v in policy.items() if k!='id'})
+            if not original_shift.get('open'):
+                sql("DELETE FROM shift_days WHERE shift_date='"+dt.date.today().isoformat()+"'")
+
     def test_a_local_desktop_cors(self):
         for method in ('GET','OPTIONS'):
             for origin in ('solvia://app','https://app.solvia.invalid','https://untrusted.invalid'):

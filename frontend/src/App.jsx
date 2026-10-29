@@ -1,3 +1,4 @@
+import {request} from './request.mjs';
 import TvSettings,{TvCallPanel} from './TvSettings.jsx';
 import './tv-control.css';
 import pkg from '../package.json';
@@ -307,36 +308,7 @@ function deviceIdentity() {
 }
 
 
-async function request(base, token, method, path, body) {
-  const headers = { Accept: 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  let response;
-  try {
-    response = await fetch(`${cleanBase(base)}${path}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(15000)
-    });
-  } catch {
-    throw Object.assign(new Error('Немає зв’язку із сервером. Перевірте адресу Linux/Windows-сервера, мережу центру та довіру до його CA-сертифіката.'), { status: 0 });
-  }
-
-  const text = await response.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = {};
-  }
-
-  if (!response.ok) {
-    throw Object.assign(new Error(data.error || `Помилка сервера ${response.status}`), { status: response.status });
-  }
-  return data;
-}
 
 function WorkspaceNavigation({ navigation, role, page, locked, onNavigate }) {
   const active = page === 'patient-card' ? 'patients' : page;
@@ -736,11 +708,11 @@ function Calendar({ api, role, openPatient, onBook, initialDate }) {
   const visibleAppointments=useMemo(()=>appointments.filter(a=>!psychologistFilter||String(a.psychologist_id)===psychologistFilter),[appointments,psychologistFilter]);
 
   async function load(targetDate = date,silent=false) {
-    const request=++generation.current;if(!silent)setLoading(true);setError('');
+    const request=++generation.current;if(!silent){setLoading(true);setAppointments([]);setSelected(null);}setError('');
     try {
       const [result,meta]=await Promise.all([api('GET', `/api/appointments?date=${targetDate}`),api('GET','/api/meta').catch(()=>({psychologists:[]}))]);
       if(request===generation.current){setAppointments(result);setPsychologists(role==='psychologist'?[]:(meta.psychologists||[]));setSelected(previous=>previous?result.find(item=>item.id===previous.id)||null:null);}
-    } catch(e){if(request===generation.current)setError(e.message);}
+    } catch(e){if(request===generation.current){setError(e.message);setAppointments([]);setSelected(null);}}
     finally{if(request===generation.current)setLoading(false);}
   }
 

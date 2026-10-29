@@ -10,6 +10,7 @@ find_package(httplib CONFIG REQUIRED)
 find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL REQUIRED)
 
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/server/schema.sql")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/server/schema.sql" SOLVIA_SCHEMA)
 # Keep each raw literal below MSVC C2026 limits as the schema grows.
 string(REPLACE "\n" "\n)SOLVIA\"\nR\"SOLVIA(" SOLVIA_SCHEMA "${SOLVIA_SCHEMA}")

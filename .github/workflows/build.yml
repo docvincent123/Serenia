@@ -58,6 +58,7 @@ jobs:
           node tests/shift-workspace.mjs
           node tests/backup-status.mjs
           node tests/booking.mjs
+          node tests/request.mjs
 
       - name: Build React interface
         shell: pwsh
@@ -208,6 +209,7 @@ jobs:
           node tests/drafts.mjs
           node tests/backup-status.mjs
           node tests/booking.mjs
+          node tests/request.mjs
 
       - name: Stage Linux server installer
         run: |
@@ -278,6 +280,7 @@ jobs:
           node tests/ui-regression.mjs
           node tests/motion-workspace.mjs
           node tests/reception-booking.mjs
+          node tests/calendar-reliability.mjs
           node tests/desktop-system.mjs
           node tests/device-recovery.mjs
           node tests/account-waiting.mjs

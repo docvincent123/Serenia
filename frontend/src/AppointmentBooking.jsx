@@ -1,5 +1,6 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {addMinutes, bookingProblem, matchesPatient} from './booking.mjs';
+import React, {useEffect, useRef, useState} from 'react';
+import {addMinutes, bookingProblem} from './booking.mjs';
+import usePatientDirectory from './usePatientDirectory.jsx';
 
 const kindLabels={individual:'Індивідуальна',family:'Сімейна',child:'Дитяча',crisis:'Кризова',group:'Групова'};
 const dayLabel=date=> date ? new Date(`${date}T12:00:00`).toLocaleDateString('uk-UA',{day:'numeric',month:'long',year:'numeric'}) : 'Оберіть дату';
@@ -10,19 +11,20 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
   const [form,setForm]=useState({date:initial.date,patient_ids:[],psychologist_id:'',room_id:'',start:'',duration:60,kind:'individual',status:'scheduled',note:''});
   const [query,setQuery]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [slots,setSlots]=useState(null),[slotError,setSlotError]=useState(''),[refresh,setRefresh]=useState(0),[retryLoad,setRetryLoad]=useState(0);
-  const saving=useRef(false),search=useRef(null);
+  const saving=useRef(false),search=useRef(null),receipt=useRef(null);
+  const [patientPage,setPatientPage]=useState(1);
+  const directory=usePatientDirectory(api,{search:query,page:patientPage,status:'active',pageSize:8,enabled:!editing&&!loading});
   useEffect(()=>{
     let alive=true;
     async function load(){
       setLoading(true);setError('');
       try {
-        const [m,p,appointments]=await Promise.all([api('GET','/api/meta'),api('GET','/api/patients'),editing?api('GET',`/api/appointments?date=${initial.date}`):Promise.resolve([])]);
+        const [m,selected,appointments]=await Promise.all([api('GET','/api/meta'),initial.patientId?api('GET',`/api/patients/${initial.patientId}`):Promise.resolve(null),editing?api('GET',`/api/appointments?date=${initial.date}`):Promise.resolve([])]);
         const appointment=editing?appointments.find(x=>Number(x.id)===Number(initial.appointmentId)):null;
         if(editing&&!appointment)throw new Error('Прийом не знайдено. Оновіть робочий список.');
-        const selected=initial.patientId?p.find(x=>Number(x.id)===Number(initial.patientId)):null;
-        if(initial.patientId&&!selected)throw new Error('Пацієнта не знайдено. Оновіть список пацієнтів.');
+        if(initial.patientId&&Number(selected?.id)!==Number(initial.patientId))throw new Error('Пацієнта не знайдено. Оновіть список пацієнтів.');
         if(!alive)return;
-        setMeta(m);setPatients(p);
+        setMeta(m);setPatients(appointment?appointment.patients.map(p=>({...p,psychologist_id:appointment.psychologist_id})):selected?[selected]:[]);
         setForm({date:initial.date,patient_ids:appointment?appointment.patients.map(x=>Number(x.id)):selected?[Number(selected.id)]:[],psychologist_id:String(appointment?.psychologist_id || selected?.psychologist_id || (m.psychologists?.some(p=>String(p.id)===String(initial.psychologistId))?initial.psychologistId:'')),room_id:String(appointment?.room_id || m.rooms?.[0]?.id || ''),start:appointment?.start?.slice(11,16) || initial.start || m.workflow?.opening_time || '08:00',duration:appointment?Math.round((new Date(appointment.end)-new Date(appointment.start))/60000):m.workflow?.default_duration_minutes || 60,kind:appointment?.kind || 'individual',status:appointment?.status || 'scheduled',note:appointment?.note || ''});
       }catch(e){if(alive)setError(e.message);}finally{if(alive)setLoading(false);}
     }
@@ -33,19 +35,20 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
     let alive=true;setSlots(null);setSlotError('');
     if(!meta||!form.date||!form.psychologist_id||!form.room_id||form.duration<15||form.duration>240)return;
     const timer=setTimeout(async()=>{
-      try{const result=await api('GET',`/api/slots?date=${form.date}&psychologist_id=${form.psychologist_id}&room_id=${form.room_id}&duration_minutes=${form.duration}`);if(alive)setSlots(result);}
+      try{const result=await api('GET',`/api/slots?date=${form.date}&psychologist_id=${form.psychologist_id}&room_id=${form.room_id}&duration_minutes=${form.duration}${editing?'&exclude_appointment_id='+initial.appointmentId:''}`);if(alive)setSlots(result);}
       catch(e){if(alive)setSlotError(e.message);}
     },150);
     return()=>{alive=false;clearTimeout(timer);};
-  },[api,meta,form.date,form.psychologist_id,form.room_id,form.duration,refresh]);
+  },[api,meta,form.date,form.psychologist_id,form.room_id,form.duration,refresh,editing,initial.appointmentId]);
   const selected=patients.filter(p=>form.patient_ids.includes(Number(p.id)));
   const multi=form.kind==='group'||form.kind==='family';
-  const results=useMemo(()=>patients.filter(p=>p.status!=='archived'&&matchesPatient(p,query)).slice(0,8),[patients,query]);
+  const results=directory.items;
   const psychologist=meta?.psychologists?.find(p=>Number(p.id)===Number(form.psychologist_id));
   const room=meta?.rooms?.find(r=>Number(r.id)===Number(form.room_id));
   const end=addMinutes(form.start,form.duration);
   function choose(patient){
     const id=Number(patient.id);
+    setPatients(current=>current.some(p=>Number(p.id)===id)?current:[...current,patient]);
     setForm(current=>{
       const removing=current.patient_ids.includes(id);
       if(!removing&&multi&&current.patient_ids.length&&Number(patient.psychologist_id)!==Number(current.psychologist_id))return current;
@@ -53,7 +56,7 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
       return {...current,patient_ids:ids,psychologist_id:ids.length?String(patient.psychologist_id):''};
     });
     setError('');
-    if(!multi)setQuery('');
+    if(!multi){setQuery('');setPatientPage(1);}
   }
   function changeKind(kind){setForm(current=>({...current,kind,patient_ids:['group','family'].includes(kind)?current.patient_ids:current.patient_ids.slice(0,1)}));}
   async function save(e){
@@ -63,6 +66,7 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
     saving.current=true;setBusy(true);setError('');
     try{
       const body={psychologist_id:Number(form.psychologist_id),room_id:Number(form.room_id),patient_ids:form.patient_ids,start:`${form.date}T${form.start}`,end:`${form.date}T${end}`,kind:form.kind,status:form.status,note:form.note};
+      if(!editing){const fingerprint=JSON.stringify(body);if(receipt.current?.fingerprint!==fingerprint)receipt.current={fingerprint,key:globalThis.crypto?.randomUUID?.()||`booking-${Date.now()}-${Math.random().toString(16).slice(2)}`};body.client_key=receipt.current.key;}
       const result=await api(editing?'PATCH':'POST',editing?`/api/appointments/${initial.appointmentId}`:'/api/appointments',body);
       onSaved({id:result.id || initial.appointmentId,date:form.date,start:form.start,patient:selected.map(p=>p.name).join(', '),editing});
     }catch(e){setError(e.message);setRefresh(x=>x+1);}finally{saving.current=false;setBusy(false);}
@@ -75,8 +79,11 @@ export default function AppointmentBooking({api, initial, Modal, onClose, onSave
           <header><span className="booking-step">1</span><h3>{multi?'Пацієнти':'Пацієнт'}</h3><select className="booking-type-select" aria-label="Тип консультації" value={form.kind} disabled={busy||editing} onChange={e=>changeKind(e.target.value)}>{Object.entries(kindLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>{!editing&&onCreatePatient&&<button type="button" className="booking-text-action" onClick={()=>onCreatePatient(form.date)}>+ Новий пацієнт</button>}</header>
           {!!selected.length&&<div className="booking-selected">{selected.map(p=><div key={p.id}><span><strong>{p.name}</strong><small>№ {p.patient_no || '—'} · {p.phone || 'Телефон не вказано'}</small></span>{!editing&&<button type="button" aria-label={`Прибрати ${p.name}`} disabled={busy} onClick={()=>choose(p)}>×</button>}</div>)}</div>}
           {editing?<p className="booking-hint">Учасники цього прийому зберігаються.</p>:<>
-            {(multi||!selected.length||query)&&<label className="booking-field"><span>Знайти пацієнта</span><input ref={search} type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Прізвище, номер картки або телефон" disabled={busy}/></label>}
-            {(multi||!selected.length||query)&&<div className="booking-patient-results" role="group" aria-label="Знайдені пацієнти">{results.map(p=>{const checked=form.patient_ids.includes(Number(p.id));const other=multi&&selected.length>0&&Number(p.psychologist_id)!==Number(form.psychologist_id);return <button type="button" key={p.id} disabled={busy||Boolean(other)} aria-pressed={checked} onClick={()=>choose(p)}><span className={`booking-check ${checked?'checked':''}`} aria-hidden="true">{checked?'✓':'+'}</span><span><strong>{p.name}</strong><small>№ {p.patient_no || '—'} · {p.phone || '—'} · {other?'Інший психолог':p.psychologist || 'Психолог призначений у картці'}</small></span></button>;})}{!results.length&&<p className="booking-hint">Пацієнта не знайдено. Перевірте пошук або зареєструйте нового.</p>}</div>}
+            {(multi||!selected.length||query)&&<label className="booking-field"><span>Знайти пацієнта</span><input ref={search} type="search" value={query} onChange={e=>{setQuery(e.target.value);setPatientPage(1);}} placeholder="Прізвище, номер картки або телефон" disabled={busy}/></label>}
+            {(multi||!selected.length||query)&&<div className="booking-patient-results" role="group" aria-label="Знайдені пацієнти">{results.map(p=>{const checked=form.patient_ids.includes(Number(p.id));const other=multi&&selected.length>0&&Number(p.psychologist_id)!==Number(form.psychologist_id);return <button type="button" key={p.id} disabled={busy||Boolean(other)} aria-pressed={checked} onClick={()=>choose(p)}><span className={`booking-check ${checked?'checked':''}`} aria-hidden="true">{checked?'✓':'+'}</span><span><strong>{p.name}</strong><small>№ {p.patient_no || '—'} · {p.phone || '—'} · {other?'Інший психолог':p.psychologist || 'Психолог призначений у картці'}</small></span></button>;})}{!directory.loading&&!directory.error&&!results.length&&<p className="booking-hint">Пацієнта не знайдено. Перевірте пошук або зареєструйте нового.</p>}</div>}
+            {directory.loading&&<p role="status">Шукаємо пацієнтів…</p>}
+            {directory.error&&<div className="alert error" role="alert">{directory.error} <button type="button" className="booking-text-action" onClick={directory.reload}>Повторити пошук</button></div>}
+            {directory.total>8&&<div className="booking-hint" aria-label="Сторінки пошуку пацієнтів"><button className="booking-text-action" type="button" disabled={directory.loading||patientPage<=1} onClick={()=>setPatientPage(p=>p-1)}>Попередні</button> <span>Сторінка {patientPage} з {Math.ceil(directory.total/8)}</span> <button className="booking-text-action" type="button" disabled={directory.loading||patientPage*8>=directory.total} onClick={()=>setPatientPage(p=>p+1)}>Наступні</button></div>}
             {multi&&<p className="booking-hint">Оберіть учасників кнопками. Усі мають бути призначені одному психологу.</p>}
           </>}
           <label className="booking-field booking-assignment"><span>Психолог</span><select aria-label="Психолог" value={form.psychologist_id} disabled={busy||Boolean(selected.length)} required onChange={e=>setForm({...form,psychologist_id:e.target.value})}><option value="">Спочатку оберіть пацієнта</option>{meta.psychologists.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>

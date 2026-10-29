@@ -741,3 +741,13 @@ CREATE TABLE IF NOT EXISTS client_service_state (
  updated TEXT NOT NULL DEFAULT ''
 );
 INSERT INTO client_service_state(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
+
+-- Receipt for an acknowledged or retried booking; scoped to the author.
+CREATE TABLE IF NOT EXISTS appointment_requests (
+ user_id BIGINT NOT NULL REFERENCES users(id),
+ client_key TEXT NOT NULL,
+ appointment_id BIGINT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+ fingerprint TEXT NOT NULL,
+ created TEXT NOT NULL,
+ PRIMARY KEY(user_id,client_key)
+);

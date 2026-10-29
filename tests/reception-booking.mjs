@@ -1,3 +1,4 @@
+import {matchesPatient} from '../frontend/src/booking.mjs';
 // Exercise the shipped React bundle: reception booking, conflicts, group transfer and registration.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -17,7 +18,7 @@ try{
   const patients=[{id:10,name:'Олена Демонстраційна',patient_no:'12345',phone:'+380671234567',psychologist_id:3,psychologist:'Психолог Оксана',category:'Інше',status:'active'}, {id:11,name:'Петро Демонстраційний',patient_no:'23456',phone:'+380681234567',psychologist_id:3,psychologist:'Психолог Оксана',category:'Інше',status:'active'}, {id:12,name:'Інший психолог',patient_no:'34567',phone:'+380691234567',psychologist_id:4,status:'active'}];
   const visit={appointment_id:7,patient_id:10,patient:patients[0].name,patient_no:'12345',psychologist_id:3,psychologist:'Психолог Оксана',room:'Кабінет 1',status:'scheduled',kind:'group',start:'2026-10-15T09:00',end:'2026-10-15T10:00'};
   const appointment={...visit,id:7,room_id:2,patients:patients.slice(0,2)};
-  let posts=[],patches=[],slotDurations=[],firstConflict=true,holdSave=false,releaseSave;
+  let directoryQueries=[],posts=[],patches=[],slotDurations=[],firstConflict=true,holdSave=false,releaseSave;
   await page.addInitScript(()=>sessionStorage.setItem('solvia_token','synthetic-reception'));
   await page.route('**/api/**',async route=>{
     const req=route.request(),url=new URL(req.url()),path=url.pathname,method=req.method();let data=[];
@@ -27,6 +28,8 @@ try{
     else if(path==='/api/workday/home')data={date:'2026-10-15',counts:{waiting:1,arrived:0,completed:0},active_patients:3,waiting_list:0,next:[]};
     else if(path==='/api/reception-access')data={access_date:'2026-10-15',starts_at:'2026-10-15T08:00',enabled:true,allowed:true};
     else if(path==='/api/meta')data={rooms:[{id:2,name:'Кабінет 1'}],psychologists:[{id:4,name:'Психолог Максим'},{id:3,name:'Психолог Оксана'}],categories:['Інше'],workflow:{opening_time:'08:00',closing_time:'20:00',default_duration_minutes:60,working_days:'1234567'}};
+    else if(path==='/api/patient-directory'){directoryQueries.push(url.searchParams);const list=patients.filter(p=>matchesPatient(p,url.searchParams.get('q')||''));const size=Number(url.searchParams.get('page_size'));const page=Number(url.searchParams.get('page'));data={items:list.slice((page-1)*size,page*size),total:list.length,page,page_size:size};}
+    else if(/^\/api\/patients\/\d+$/.test(path)&&method==='GET')data=patients.find(p=>p.id===Number(path.split('/').pop()));
     else if(path==='/api/patients'&&method==='GET')data=patients;
     else if(path==='/api/patients'&&method==='POST'){const p={...req.postDataJSON(),id:13,patient_no:'45678',psychologist:'Психолог Оксана',status:'active'};patients.push(p);data={id:13};}
     else if(path==='/api/families')data=[];
@@ -72,6 +75,8 @@ try{
   await page.locator('.booking-success').getByText(/14:35/).waitFor();
   assert.equal(posts[1].psychologist_id,3);assert.equal(posts[1].end,'2026-10-20T15:20');
   assert(slotDurations.includes('45'));
+  assert.equal(posts[0].client_key,posts[1].client_key,'Retry retains the booking receipt key');
+  assert(directoryQueries.length>0&&directoryQueries.every(q=>q.get('page_size')==='8'),'Booking uses bounded patient search');
   assert.equal(await page.getByRole('heading',{name:'Календар центру',exact:true}).count(),0,'Booking must not navigate to calendar');
   // Transfer the exact selected group appointment, retaining every participant.
   await page.locator('.shift-visit').first().click();
