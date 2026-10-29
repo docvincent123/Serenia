@@ -26,7 +26,14 @@ J shiftHandover(DB&db,const J&u,const httplib::Request&r,const J&body){
         const auto shift=db.query("SELECT shift_date FROM shift_days WHERE closed_at IS NULL ORDER BY opened_at DESC LIMIT 1");
         check(!shift.empty(),"Зміна не відкрита",423);
         const auto inserted=db.query("INSERT INTO shift_handover(shift_date,summary,priority,created_by,client_key,created_at) "
-            "VALUES(?,?,?,?,?,?) RETURNING id",{shift[0]["shift_date"],summary,priority,u["id"],key,now()});
+            "VALUES(?,?,?,?,?,?) ON CONFLICT(created_by,client_key) DO NOTHING RETURNING id",{shift[0]["shift_date"],summary,priority,u["id"],key,now()});
+        if(inserted.empty()){
+            // Another API process committed this receipt between SELECT and INSERT.
+            const auto concurrent=db.query("SELECT id,summary,priority FROM shift_handover WHERE created_by=? AND client_key=?",{u["id"],key});
+            check(!concurrent.empty(),"Завдання вже передано; оновіть перелік",409);
+            check(concurrent[0]["summary"]==summary&&concurrent[0]["priority"]==priority,"Ключ запису вже використано для іншого завдання",409);
+            return {{"id",concurrent[0]["id"]},{"replayed",true}};
+        }
         const int id=inserted[0]["id"].get<int>();
         audit(db,u,"create","shift_handover",id);
         return {{"id",id},{"replayed",false}};
