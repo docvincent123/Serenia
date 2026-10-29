@@ -3465,7 +3465,6 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     else document.querySelector('.mobile-menu-button')?.focus();
   }, [compactNav, menuOpen]);
   const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
-  const connectionKind = /^https:\/\//i.test(apiBase || '') && !/127\.0\.0\.1|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(apiBase || '') ? 'VPS' : 'LOCAL';
 
   function openPatient(id) { if(page !== 'patient-card') setPatientOrigin(page); setPatientId(id); setPage('patient-card'); setMenuOpen(false); }
   function navigate(target) { if(target !== 'staff-messages') setMessageTarget(null); setPatientId(null); setPage(target); setMenuOpen(false); }
@@ -3564,7 +3563,10 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       </aside>
 
       <main className="workspace" data-page={page}>
-        <StudioWorkspace navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate}/>
+        <StudioWorkspace navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} section="header" headerTools={!locked ? <>
+          {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
+          <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
+        </> : null}/>
         <header className="mobile-app-header"><button className="mobile-menu-button" aria-label="Відкрити меню" aria-expanded={menuOpen} onClick={() => setMenuOpen(v => !v)}><AppIcon name="menu" /><span>Меню</span></button><strong>{activePageLabel}</strong></header>
         {shift?.open && (
           <div className="shift-bar">
@@ -3575,22 +3577,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           </div>
         )}
         {!shift?.open && user.role==='admin' && <div className="shift-bar"><span>Надайте доступ для початку роботи центру</span><Button onClick={()=>setAccessDialog(true)}>Надати доступ</Button></div>}
-        {!locked && <>
-          <ReminderBar api={api} role={user.role} />
-          <div className="workspace-topbar">
-            <div className="topbar-context">
-              <div className="workspace-breadcrumb"><small>{roleLabels[user.role]}</small><strong>{activePageLabel}</strong></div>
-              <div className={`connection-pill ${health.online ? 'online' : 'offline'}`} title={apiBase}>
-                <span className="connection-led" />
-                <div><strong>{health.online ? 'Підключено' : 'Немає зв’язку'}</strong><small>{connectionKind === 'VPS' ? 'Віддалений центр' : 'Сервер центру'}</small></div>
-              </div>
-            </div>
-            {user.role==='director' && <Button variant="secondary" onClick={()=>navigate('staff-messages')}>Повідомлення</Button>}
-            {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
-            <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
-            <button className="workspace-profile" aria-label="Мій профіль" onClick={()=>navigate('preferences')}><span className="avatar">{user.name.slice(0,1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></span><AppIcon name="preferences"/></button>
-          </div>
-        </>}
+        <StudioWorkspace navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} section="tabs"/>
+        {!locked && <ReminderBar api={api} role={user.role} />}
         {bookingIntent && !locked && <AppointmentBooking api={api} initial={bookingIntent} Modal={Dialog} onClose={()=>setBookingIntent(null)} onSaved={booked} onCreatePatient={date=>registerPatient(date,true)} />}
         {dailyReport && !locked && <DailyReport api={api} Modal={Dialog} initialDate={receptionAccess?.access_date || localDate()} onClose={()=>setDailyReport(false)} />}
         {accessDialog && <ReceptionAccess api={api} access={receptionAccess} onChanged={loadShift} onClose={()=>setAccessDialog(false)} />}
