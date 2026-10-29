@@ -3739,8 +3739,8 @@ export default function App() {
     return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
   }
 
-  if (!user) return <><ServiceStatus base={apiBase} enabled={Boolean(localStorage.getItem('solvia_api'))}/><Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} /></>;
-  if (appMode === 'server') return <><ServiceStatus base={apiBase} enabled={true}/><DesktopUpdateNotice api={api} base={apiBase} token={token} /><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
+  if (!user) return <>{appMode !== 'server' && <ServiceStatus base={apiBase} enabled={Boolean(localStorage.getItem('solvia_api'))}/>}<Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} /></>;
+  if (appMode === 'server') return <><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
   return <><ServiceStatus base={apiBase} enabled={true}/><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
 }
 
