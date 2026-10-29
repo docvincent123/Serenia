@@ -3446,7 +3446,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   function registerPatient(date,bookAfter=false){setBookingIntent(null);setCreateRequest({key:Date.now(),date:date || receptionAccess?.access_date || localDate(),bookAfter});navigate('patients');}
   function booked(result){setBookingIntent(null);setBookingResult(result);setCalendarFocus(result.date);setBookingVersion(v=>v+1);}
   const [patientId, setPatientId] = useState(null);
-  const [patientOrigin, setPatientOrigin] = useState('patients');
+
   const [shift, setShift] = useState(null);
   const [shiftError, setShiftError] = useState('');
   const [receptionAccess,setReceptionAccess]=useState(null);
@@ -3475,7 +3475,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     setHistoryDepth(pageHistory.current.length);
   }
   function openPatient(id) {
-    if(page !== 'patient-card'){setPatientOrigin(page);rememberPage();}
+    if(page !== 'patient-card')rememberPage();
     setPatientId(id);setPage('patient-card');setMenuOpen(false);
   }
   function navigate(target) {
@@ -3586,7 +3586,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       </aside>
 
       <main className="workspace" data-page={page}>
-        <StudioWorkspace navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} section="header" headerTools={!locked ? <>
+        <StudioWorkspace headerTools={!locked ? <>
           {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
         </> : null}/>
