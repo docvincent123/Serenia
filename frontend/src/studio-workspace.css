@@ -21,7 +21,9 @@
  .studio-shell .shift-bar {margin:12px 24px 0;border:1px solid #e8e5da;border-radius:12px;padding:7px 12px;}
  .studio-shell .workspace-topbar {margin:12px 24px 0;border:1px solid #e3e2de;border-radius:14px;padding:9px 14px;min-height:56px;}
  .studio-shell .workspace-inner {background:#fff;margin:18px 24px 28px;padding:28px;border:1px solid #e1e0dc;border-radius:20px;min-height:calc(100vh - 260px);width:calc(100% - 48px);min-width:0;box-sizing:border-box;}
- .studio-shell .center-home-intro {padding-top:4px;}
+ .studio-shell .center-home-intro {padding:20px 24px;background:linear-gradient(110deg,#fffdf4,#fff 68%);border-left:4px solid #e9bd34;}
+ .studio-shell .center-home-action.is-highlight {background:#fff8e7;border-color:#e6d294;}
+ .studio-shell .center-home-action:focus-visible,.studio-shell .center-home-intro button:focus-visible {outline:3px solid #ad862a;outline-offset:3px;}
  .studio-shell .center-home-intro h1 {font-size:clamp(27px,2.8vw,38px);}
  .studio-shell .center-home-action,.studio-shell .center-home-metric,.studio-shell .center-home-upcoming {box-shadow:none;}
  .studio-shell .center-home-action {background:#fcfcfa;}
@@ -62,6 +64,7 @@
   .studio-directory-button {padding:8px 12px;font-size:11px;}
   .studio-tabs>button {padding:9px 12px;font-size:12px;}
   .studio-shell .workspace-inner {padding:18px 14px;margin:12px 10px 24px;border-radius:16px;width:calc(100% - 20px);}
+  .studio-shell .center-home-intro {padding:17px;}
   .studio-shell .workspace-topbar,.studio-shell .shift-bar {margin-inline:10px;}
   .studio-shell .sidebar .studio-rail-directory {margin:10px;}
  }
