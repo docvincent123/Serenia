@@ -72,7 +72,7 @@ try{
   await capture('admin-overview');
   await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
   await page.getByRole('heading',{name:'Усі розділи',exact:true}).waitFor();
-  assert.equal(await page.locator('.motion-module-card').count(),19,'All existing administrator modules, TV calls and profile');
+  assert.equal(await page.locator('.motion-module-card').count(),20,'Administrator modules including operational handover');
   for (const [key,title] of navFor('admin')) assert.equal(await page.getByRole('button',{name:`Відкрити розділ ${title}`,exact:true}).count(),1,`Admin module: ${key}`);
   await page.locator('.motion-role-map summary').click();assert.equal(await page.locator('.motion-role-map-grid article').count(),4);
   await capture('all-admin-modules');
