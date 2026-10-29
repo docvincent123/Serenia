@@ -1,0 +1,44 @@
+name: SOLVIA Native Qt Linux
+on:
+  pull_request:
+    paths:
+      - 'native/linux/**'
+      - '.github/workflows/native-qt-linux.yml'
+  workflow_dispatch:
+jobs:
+  qt-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Qt 6 compiler and QML runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-svg-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models \
+            qml6-module-qtquick-templates qml6-module-qtquick-shapes \
+            qml6-module-qtqml-workerscript libqt6svg6
+      - name: Build native program
+        run: |
+          cmake -S native/linux -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/native-linux --parallel 2
+      - name: Launch real Qt QML window without display (smoke test)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: timeout 15s build/native-linux/solvia-native --smoke
+      - name: Check no WebKit or Chrome dependency is linked
+        run: |
+          if ldd build/native-linux/solvia-native | grep -Ei 'webkit|chromium|electron|webengine'; then
+            echo 'Native executable unexpectedly depends on web rendering'; exit 1
+          fi
+      - name: Create installable SOLVIA Native Debian package
+        run: bash native/linux/package-deb.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solvia-native-linux-x64
+          path: |
+            build/native-linux/solvia-native
+            build/native-linux/solvia-native_*.deb
+          retention-days: 7

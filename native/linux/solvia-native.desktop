@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=SOLVIA Native
+GenericName=Нативне робоче місце SOLVIA
+Comment=Реабілітаційний центр · Qt 6, без WebKit
+Exec=/usr/local/bin/solvia-native
+Icon=solvia-admin
+Terminal=false
+Categories=Office;MedicalSoftware;
+StartupNotify=true
+StartupWMClass=SOLVIA
+Keywords=SOLVIA;реєстратура;пацієнти;психологи;реабілітація;
