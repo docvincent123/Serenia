@@ -26,6 +26,8 @@ export default function ServerReadiness({api}){
    <article><small>Оперативна пам’ять</small><strong>{res.memory_available?gib(res.memory_total_bytes):'Немає даних'}</strong><span>{res.memory_available?`${gib(res.memory_free_bytes)} фізично вільно`:'Показник недоступний на цій ОС'}</span></article>
    <article><small>Навантаження / 1 хв</small><strong>{typeof res.load_1min==='number'?res.load_1min.toFixed(2):'Немає даних'}</strong><span>Середня черга Linux, не відсоток CPU</span></article>
    <article><small>PostgreSQL</small><strong>{data.database?.name||'—'}</strong><span>{data.database?.size||'—'} · {data.database?.version||'Версія невідома'}</span></article>
+   <article><small>Черга API від запуску</small><strong>{data.api_timing?.max_wait_ms ?? '—'} мс</strong><span>Макс. очікування · {data.api_timing?.successful_requests??0} успішних запитів у цьому процесі</span></article>
+   <article><small>Обробка API від запуску</small><strong>{data.api_timing?.max_processing_ms ?? '—'} мс</strong><span>Макс. час обробки успішного запиту; не p95</span></article>
   </div>
   <div className="server-readiness-warnings" role="status">
    {diskWarning&&<p className="server-warning">Диск заповнений щонайменше на 90%. Перевірте простір на сервері.</p>}
