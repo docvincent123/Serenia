@@ -268,10 +268,10 @@ ApplicationWindow {
                         Text { text:"Найважливіше на цю зміну"; font.pixelSize:13; color:root.muted }
                         RowLayout {
                             Layout.fillWidth:true; spacing:12
-                            MetricTile { Layout.fillWidth:true; figure:String(api.overview.counts?.waiting ?? "—"); heading:"Очікують прийому" }
-                            MetricTile { Layout.fillWidth:true; figure:String(api.overview.counts?.arrived ?? "—"); heading:"Прибули" }
-                            MetricTile { Layout.fillWidth:true; figure:String(api.overview.counts?.completed ?? "—"); heading:"Завершені прийоми" }
-                            MetricTile { Layout.fillWidth:true; figure:String(api.overview.active_patients ?? "—"); heading:"Активні пацієнти" }
+                            MetricTile { Layout.fillWidth:true; figure:String((api.overview.counts ? api.overview.counts.waiting : "—")); heading:"Очікують прийому" }
+                            MetricTile { Layout.fillWidth:true; figure:String((api.overview.counts ? api.overview.counts.arrived : "—")); heading:"Прибули" }
+                            MetricTile { Layout.fillWidth:true; figure:String((api.overview.counts ? api.overview.counts.completed : "—")); heading:"Завершені прийоми" }
+                            MetricTile { Layout.fillWidth:true; figure:String((api.overview.active_patients !== undefined ? api.overview.active_patients : "—")); heading:"Активні пацієнти" }
                         }
                         RowLayout {
                             spacing:12; Layout.fillWidth:true
@@ -453,7 +453,12 @@ ApplicationWindow {
                                 Text { text:"Сервер SOLVIA"; font.pixelSize:18; color:root.ink; font.bold:true },
                                 Text { text:api.serverUrl; color:root.muted; font.pixelSize:13 },
                                 Text { text:"Стан HTTPS: "+(api.connected?"підключено":"немає з'єднання"); color:root.ink },
-                                SolviaButton { text:"Перевірити API"; onClicked:api.configureServer(api.serverUrl) }
+                                Text { text: "PostgreSQL: " + (api.system.database ? (api.system.database.name || "—") : "—");
+                                       color: root.ink; font.pixelSize:13 }
+                                Text { text: "Диск: " + (api.system.host_resources && api.system.host_resources.disk_available
+                                             ? Math.round(api.system.host_resources.disk_used_percent) + "% зайнято" : "немає даних");
+                                       color:root.muted; font.pixelSize:12 }
+                                SolviaButton { text:"Перевірити HTTPS"; onClicked:api.checkServer() }
                             ]
                         }
                     }
