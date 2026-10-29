@@ -46,6 +46,21 @@ cmake --build build/native-linux --parallel 2
 Або `bash native/linux/build-native.sh`. Для тесту без екрану:
 `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ./build/native-linux/solvia-native --smoke`.
 
+### Звичайний Linux-інсталятор (.deb)
+
+Після успішної GitHub Actions збірки **SOLVIA Native Qt Linux** завантажте artifact
+`solvia-native-linux-x64`. У ZIP є перевірений виконуваний файл і
+`solvia-native_3.2.0~preview1_amd64.deb`.
+
+```bash
+sudo apt install ./solvia-native_3.2.0~preview1_amd64.deb
+```
+
+Це встановлює тільки нативний клієнт з іконкою SOLVIA. Ubuntu автоматично
+дозавантажить його Qt/QML залежності. Для Ubuntu 24.04 amd64; інші дистрибутиви
+потрібно перевіряти окремо. Пакет має внутрішній preview-статус і не є
+виробничим релізом. Класичний GTK-клієнт не видаляється.
+
 Інсталяція **лише клієнта**:
 ```bash
 sudo bash native/linux/install-native-client.sh
