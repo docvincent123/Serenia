@@ -83,6 +83,7 @@ try{
   await capture('all-admin-modules');
   await page.getByRole('button',{name:'Відкрити розділ Психологи на зміні',exact:true}).click();
   await page.getByRole('heading',{name:'Психологи на зміні',exact:true}).waitFor();
+  await page.locator('.psy-roster-card').first().waitFor();
   assert.equal(await page.locator('.psy-roster-card').count(),3,'All psychologists are visible without private patient data');
   assert.equal(await page.locator('.psy-roster-status.busy').count(),1);
   assert.equal(await page.locator('.psy-roster-status.waiting').count(),1);
