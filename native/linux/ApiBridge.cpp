@@ -13,6 +13,7 @@
 #include <QTime>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QUuid>
 
 ApiBridge::ApiBridge(QObject *parent) : QObject(parent) {
     QSettings settings;
@@ -21,6 +22,7 @@ ApiBridge::ApiBridge(QObject *parent) : QObject(parent) {
 }
 
 void ApiBridge::issue(const QString &message) {
+    working_ = false;
     error_ = message;
     notice_.clear();
     emit stateChanged();
@@ -40,7 +42,7 @@ void ApiBridge::clearSession() {
     name_.clear();
     role_.clear();
     working_ = false;
-    shift_.clear(); overview_.clear(); visits_.clear();
+    shift_.clear(); overview_.clear(); system_.clear(); visits_.clear();
     patients_.clear(); appointments_.clear(); roster_.clear();
     psychologists_.clear(); rooms_.clear();
     rosterSupported_ = false;
@@ -190,8 +192,6 @@ void ApiBridge::login(const QString &username, const QString &password) {
             refresh();
         });
     });
-    // Failure paths are signaled by issue(), not by callbacks.
-    connect(this, &ApiBridge::stateChanged, this, [](){}, Qt::SingleShotConnection);
 }
 
 void ApiBridge::logout() {
@@ -254,6 +254,23 @@ void ApiBridge::getRoster(int generation) {
         emit dataChanged();
     }, true);
 }
+void ApiBridge::getSystem(int generation) {
+    request("GET", "/api/admin/system", {}, [this,generation](const QJsonValue &v){
+        if (generation != refreshGeneration_) return;
+        system_ = v.toObject().toVariantMap();
+        emit dataChanged();
+    }, true);
+}
+void ApiBridge::checkServer() {
+    request("GET","/api/health",{},[this](const QJsonValue &v){
+        const auto health=v.toObject();
+        if (!health.value("ok").toBool() || health.value("server_id").toString()!=pinnedId_) {
+            issue("Сервер не підтвердив відомий ідентифікатор SOLVIA.");
+            return;
+        }
+        notify("HTTPS-з'єднання та сервер перевірено.");
+    });
+}
 void ApiBridge::refresh() {
     if (!authenticated()) return;
     const int generation = ++refreshGeneration_;
@@ -266,6 +283,7 @@ void ApiBridge::refresh() {
     }
     getAppointments(generation);
     getRoster(generation);
+    if (role_ == "admin") getSystem(generation);
     lastRefresh_ = QTime::currentTime().toString("HH:mm:ss");
     emit stateChanged();
 }
