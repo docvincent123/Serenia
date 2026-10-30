@@ -520,7 +520,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
   return (
     <div className="login-screen login-refined studio-login">
       <section className="login-brand">
-        <div className="login-brand-signature"><img src="/solvia-icon.png" alt=""/><strong>SOLVIA</strong><span>by QureMed</span></div>
+        <div className="login-brand-signature"><img src="/solvia-icon.png" alt=""/><strong>SOLVIA</strong><span>by LemvoriLab</span></div>
         <div className="login-brand-copy">
           <div className="eyebrow light">ДЛЯ КОМАНДИ РЕАБІЛІТАЦІЙНОГО ЦЕНТРУ</div>
           <h1>Менше рутини.<br/><span>Більше уваги людині.</span></h1>
@@ -546,7 +546,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             <div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
             <div>
               <strong>SOLVIA</strong>
-              <span>by QureMed</span>
+              <span>by LemvoriLab</span>
             </div>
           </div>
 
@@ -591,7 +591,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             </>
           )}
 
-          <div className="login-foot"><span>SOLVIA · QureMed</span><span>Версія {pkg.version}</span></div>
+          <div className="login-foot"><span>SOLVIA · LemvoriLab</span><span>Версія {pkg.version}</span></div>
         </form>
       </section>
     </div>
@@ -1532,7 +1532,7 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
             <div><dt>Звідки звернувся</dt><dd>{card.referral_source || 'Не вказано'}</dd></div>
             <div><dt>Деталі направлення</dt><dd>{card.referral_source_details || '—'}</dd></div>
             <div><dt>Стать</dt><dd>{card.sex || '—'}</dd></div>
-            <div><dt>Статус</dt><dd>{card.status || 'active'}</dd></div>
+            <div><dt>Статус</dt><dd>{displayStatus(card.status || 'active')}</dd></div>
           </dl>
         </section>
 
@@ -1792,7 +1792,7 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
             <footer>
               <span>{documentPreview.center_name_snapshot || documentPreview.center?.center_name || 'SOLVIA Center'}</span>
               <span>{[documentPreview.center_phone_snapshot || documentPreview.center?.phone, documentPreview.center_email_snapshot || documentPreview.center?.email].filter(Boolean).join(' · ')}</span>
-              <span>{documentPreview.center?.document_footer || 'SOLVIA by QureMed'}</span>
+              <span>{documentPreview.center?.document_footer || 'SOLVIA by LemvoriLab'}</span>
             </footer>
           </article>
           <div className="form-actions no-print"><Button variant="ghost" onClick={() => { setDialog(''); setDocumentPreview(null); }}>Закрити</Button><Button onClick={printDocument}>Друк / Зберегти PDF</Button></div>
@@ -2584,7 +2584,7 @@ function AccountSettings({ api, apiBase, onLogout, user }) {
           <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" disabled={busy} value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field></div>
           <Button type="submit" disabled={busy}>{busy ? 'Змінюємо пароль…' : 'Змінити пароль'}</Button>
         </form></section>
-        <section className="surface account-section account-version"><header><h2>Про SOLVIA {pkg.version}</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><a href="mailto:quremedindastriessupport@gmail.com">Підтримка QureMed</a></div><small>Оновлення встановлює адміністратор центру.</small></section>
+        <section className="surface account-section account-version"><header><h2>Про SOLVIA {pkg.version}</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><span>Зверніться до адміністратора центру</span></div><small>Оновлення встановлює адміністратор центру.</small></section>
       </div>
     </div>
   </>;
@@ -2803,7 +2803,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
                 <Field label="Local API URL" full hint="Постійне DNS-ім’я, наприклад https://solvia.center.example:8443. DNS має працювати в мережі центру, а сертифікат — відповідати імені.">
                   <input value={form.local_api_url} onChange={(e) => setForm({ ...form, local_api_url: e.target.value })} placeholder={apiBase || 'https://192.168.1.100:8443'} />
                 </Field>
-                <Field label="Назва VPS"><input value={form.vps_name} onChange={(e) => setForm({ ...form, vps_name: e.target.value })} placeholder="Напр. QureMed Cloud 1" /></Field>
+                <Field label="Назва VPS"><input value={form.vps_name} onChange={(e) => setForm({ ...form, vps_name: e.target.value })} placeholder="Напр. LemvoriLab Cloud 1" /></Field>
                 <Field label="VPS API URL" hint="Тільки HTTPS">
                   <input value={form.vps_api_url} onChange={(e) => setForm({ ...form, vps_api_url: e.target.value })} placeholder="https://solvia.example.com" />
                 </Field>
@@ -3534,7 +3534,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       }}>
         <div className="sidebar-brand">
           <div className="product-mark inverse motion-brand-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></div>
-          <div><strong>SOLVIA</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · QureMed</small></div>
+          <div><strong>SOLVIA</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · LemvoriLab</small></div>
         </div>
 
         <WorkspaceNavigation navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} />
@@ -3549,9 +3549,9 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         <div className="sidebar-support">
           <div className="sidebar-support-head">
             <span className="support-dot" />
-            <div><strong>QureMed Industries</strong><small>Підтримка центру</small></div>
+            <div><strong>LemvoriLab</strong><small>Підтримка центру</small></div>
           </div>
-          <a href="mailto:quremedindastriessupport@gmail.com">quremedindastriessupport@gmail.com</a>
+          <span className="sidebar-support-contact">Зверніться до адміністратора центру</span>
         </div>
         <div className="user-card">
           <div className="avatar inverse">{user.name.slice(0, 1).toUpperCase()}</div>

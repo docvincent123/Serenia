@@ -5,7 +5,7 @@ set -Eeuo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 build=${SOLVIA_NATIVE_BUILD_DIR:-"$root/build/native-linux"}
 binary="$build/solvia-native"
-version=${SOLVIA_NATIVE_VERSION:-3.2.0~preview1}
+version=${SOLVIA_NATIVE_VERSION:-3.2.0~preview2}
 [[ -x $binary ]] || { echo "Спочатку зберіть $binary" >&2; exit 1; }
 command -v dpkg-deb >/dev/null || { echo "Потрібен dpkg-deb" >&2; exit 1; }
 stage=$(mktemp -d)
@@ -22,7 +22,7 @@ Version: $version
 Architecture: amd64
 Section: office
 Priority: optional
-Maintainer: QureMed Industries
+Maintainer: LemvoriLab
 Depends: libqt6network6t64, libqt6quick6, libqt6quickcontrols2-6, libqt6svg6, qml6-module-qtqml, qml6-module-qtqml-models, qml6-module-qtqml-workerscript, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtquick-shapes
 Description: SOLVIA native Linux client for rehabilitation center staff
  Qt Quick/QML workplace application connecting to an existing SOLVIA HTTPS

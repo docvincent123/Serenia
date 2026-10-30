@@ -17,6 +17,15 @@
 
 ApiBridge::ApiBridge(QObject *parent) : QObject(parent) {
     QSettings settings;
+    // Company rename must retain the center URL and pinned identity on upgrade.
+    if (!settings.contains("server/url")) {
+        QSettings legacy(QStringLiteral("QureMed"), QStringLiteral("SOLVIA"));
+        if (legacy.contains("server/url")) {
+            settings.setValue("server/url", legacy.value("server/url"));
+            settings.setValue("server/identity", legacy.value("server/identity"));
+            settings.sync();
+        }
+    }
     origin_ = settings.value("server/url", "https://localhost:8443").toString();
     pinnedId_ = settings.value("server/identity").toString();
 }

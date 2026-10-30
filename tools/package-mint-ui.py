@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory() as tmp:
     shutil.copy2(root/'tools/update-mint-ui.py',package/'update-ui.py')
     shutil.copy2(root/'docs/LINUX-MINT-DESIGN.md',package/'README.md')
     checks={str(p.relative_to(package)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(package.rglob('*')) if p.is_file()}
-    (package/'manifest.json').write_text(json.dumps({'requires_version':'3.1.0','sha256':checks},indent=2)+'\n')
-    target=out/'SOLVIA-3.1.0-Linux-Motion-Workspace.tar.gz'
+    (package/'manifest.json').write_text(json.dumps({'requires_version':'3.1.1','sha256':checks},indent=2)+'\n')
+    target=out/'SOLVIA-3.1.1-Linux-Motion-Workspace.tar.gz'
     with tarfile.open(target,'w:gz') as archive:archive.add(package,arcname=package.name)
 print(target)

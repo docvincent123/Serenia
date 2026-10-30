@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 try {
     $picker = New-Object System.Windows.Forms.OpenFileDialog
-    $picker.Title = 'Оберіть QureMed-Local-CA.crt із вашого Linux-сервера'
+    $picker.Title = 'Оберіть CA-сертифікат SOLVIA (.crt) із сервера центру'
     $picker.Filter = 'Сертифікат CA (*.crt;*.cer)|*.crt;*.cer'
     if ($picker.ShowDialog() -ne 'OK') { exit 0 }
     $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($picker.FileName)

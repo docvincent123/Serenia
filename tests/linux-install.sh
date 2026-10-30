@@ -37,7 +37,8 @@ sudo -u nobody test -r /usr/local/share/ca-certificates/quremed-solvia-local-ca.
 test "$(sudo -u postgres psql -X -p 55432 -Atc 'SHOW listen_addresses')" = ''
 sudo test "$(sudo stat -c %a /etc/solvia/ca/ca.key)" = 600
 sudo test "$(sudo stat -c %a /etc/solvia/tls/server.key)" = 640
-sudo cp /etc/solvia/ca/QureMed-Local-CA.crt /tmp/solvia-ci-ca.crt
+sudo cmp /etc/solvia/ca/QureMed-Local-CA.crt /etc/solvia/ca/LemvoriLab-Local-CA.crt
+sudo cp /etc/solvia/ca/LemvoriLab-Local-CA.crt /tmp/solvia-ci-ca.crt
 sudo chmod 644 /tmp/solvia-ci-ca.crt
 python3 - <<'PY'
 import json, ssl, os, urllib.request

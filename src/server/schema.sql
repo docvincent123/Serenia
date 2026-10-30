@@ -784,3 +784,14 @@ CREATE INDEX IF NOT EXISTS idx_psychologist_roster_active ON psychologist_shift_
 -- Bounded patient visit and family directories avoid scans of the full registry.
 CREATE INDEX IF NOT EXISTS idx_attendees_patient_appointments ON attendees(patient_id,appointment_id);
 CREATE INDEX IF NOT EXISTS idx_patients_family_directory ON patients(family_id,id DESC);
+
+-- Author-scoped receipts make rehabilitation saves safe after a lost response.
+CREATE TABLE IF NOT EXISTS rehabilitation_requests (
+  user_id BIGINT NOT NULL REFERENCES users(id),
+  client_key TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  response TEXT NOT NULL,
+  goal_id BIGINT NOT NULL REFERENCES rehabilitation_goals(id) ON DELETE CASCADE,
+  created TEXT NOT NULL,
+  PRIMARY KEY(user_id,client_key)
+);

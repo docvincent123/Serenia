@@ -495,7 +495,7 @@ class MainActivity : Activity() {
         }
         panel.addView(scroll(rows), LinearLayout.LayoutParams(-1, 0, 1f))
         panel.addView(TextView(this).apply {
-            text = "QureMed Industries"; textSize = 13f; setTextColor(muted)
+            text = "LemvoriLab\nЗверніться до адміністратора центру"; textSize = 13f; setTextColor(muted)
             gravity = Gravity.CENTER; setPadding(dp(16), dp(14), dp(16), dp(24))
         }, LinearLayout.LayoutParams(-1, -2))
         sideMenu = popup
@@ -1071,6 +1071,7 @@ class MainActivity : Activity() {
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         brand.addView(logo(88))
         brand.addView(title("SOLVIA", 34f).apply { letterSpacing = 0.12f; gravity = Gravity.CENTER })
+        brand.addView(caption("by LemvoriLab").apply { gravity = Gravity.CENTER; textSize = 13f })
         brand.addView(caption("Кабінет психолога").apply { gravity = Gravity.CENTER; textSize = 15f })
         body.addView(brand); body.addView(spacer(22))
         val form = card(); form.addView(title("Вхід до центру", 22f))

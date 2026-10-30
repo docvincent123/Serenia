@@ -63,7 +63,7 @@ def run(on_ready=None):
             self.console = console
             self.window = None
             self.origin = ''
-            self.window = Gtk.ApplicationWindow(application=application, title='SOLVIA Server Console 3.1.0' if console else 'SOLVIA 3.1.0')
+            self.window = Gtk.ApplicationWindow(application=application, title='SOLVIA Server Console 3.1.1' if console else 'SOLVIA 3.1.1')
             display = Gdk.Display.get_default()
             monitor = display.get_primary_monitor() or display.get_monitor(0)
             area = monitor.get_workarea()
@@ -84,7 +84,7 @@ def run(on_ready=None):
                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             self.window.set_wmclass('SOLVIAServerConsole' if console else 'SOLVIAAdmin', 'SOLVIAAdmin')
             self.window.set_icon_name('solvia-admin')
-            header = Gtk.HeaderBar(title='SOLVIA Server Console 3.1.0' if console else 'SOLVIA 3.1.0', show_close_button=True)
+            header = Gtk.HeaderBar(title='SOLVIA Server Console 3.1.1' if console else 'SOLVIA 3.1.1', show_close_button=True)
             self.window.set_titlebar(header)
             self.spinner = Gtk.Spinner()
             header.pack_start(self.spinner)

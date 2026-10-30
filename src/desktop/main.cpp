@@ -345,9 +345,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         0,
         wc.lpszClassName,
 #ifdef SOLVIA_SERVER_CONSOLE
-        L"SOLVIA Server Console 3.1.0 • QureMed",
+        L"SOLVIA Server Console 3.1.1 • LemvoriLab",
 #else
-        L"SOLVIA 3.1.0 by QureMed • Центр психологічної реабілітації",
+        L"SOLVIA 3.1.1 by LemvoriLab • Центр психологічної реабілітації",
 #endif
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,

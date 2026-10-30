@@ -8,7 +8,7 @@
 
 int main(int argc, char **argv) {
     QGuiApplication app(argc, argv);
-    app.setOrganizationName("QureMed");
+    app.setOrganizationName("LemvoriLab");
     app.setApplicationName("SOLVIA");
     app.setWindowIcon(QIcon(":/brand.svg"));
     QQuickStyle::setStyle("Basic");

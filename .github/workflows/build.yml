@@ -132,21 +132,21 @@ jobs:
       - name: Install and open Windows client without local server
         shell: powershell
         timeout-minutes: 3
-        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-3.1.0-Windows-x64.exe
+        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-3.1.1-Windows-x64.exe
 
       - name: Install and open separate Server Console without local server
         shell: pwsh
-        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-3.1.0-Windows-x64.exe -Component console
+        run: ./tests/windows-client-install.ps1 -Setup out/installer/SOLVIA-Setup-3.1.1-Windows-x64.exe -Component console
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.1.0-Windows-x64-portable
+          name: SOLVIA-3.1.1-Windows-x64-portable
           path: out/SOLVIA/
           retention-days: 14
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.1.0-Setup-EXE
+          name: SOLVIA-3.1.1-Setup-EXE
           path: out/installer/*.exe
           if-no-files-found: error
           retention-days: 14
@@ -246,12 +246,12 @@ jobs:
           sudo pg_lsclusters || true
 
       - name: Archive Linux package
-        run: tar -C out -czf out/SOLVIA-3.1.0-Linux-x64.tar.gz SOLVIA-Linux
+        run: tar -C out -czf out/SOLVIA-3.1.1-Linux-x64.tar.gz SOLVIA-Linux
 
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.1.0-Linux-x64-installer
-          path: out/SOLVIA-3.1.0-Linux-x64.tar.gz
+          name: SOLVIA-3.1.1-Linux-x64-installer
+          path: out/SOLVIA-3.1.1-Linux-x64.tar.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -283,6 +283,7 @@ jobs:
           node tests/reception-booking.mjs
           node tests/calendar-reliability.mjs
           node tests/patient-care-ui.mjs
+          node tests/rehab-reliability.mjs
           node tests/desktop-system.mjs
           node tests/device-recovery.mjs
           node tests/account-waiting.mjs

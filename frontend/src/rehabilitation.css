@@ -28,3 +28,4 @@
 .rehab-timeline time{font-size:.78rem;color:var(--muted,#667);font-weight:700}
 .rehab-timeline li p{font-size:.9rem;color:var(--muted,#667);margin:.25rem 0;overflow-wrap:anywhere}
 @media(max-width:700px){.rehab-summary,.rehab-goal-bottom{align-items:flex-start}.rehab-timeline li{grid-template-columns:1fr;gap:.25rem}.rehab-plan .row-actions{width:100%;flex-wrap:wrap}}
+.rehab-fields{border:0;padding:0;margin:0;min-width:0;display:grid;gap:14px}

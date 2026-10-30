@@ -294,6 +294,7 @@ if (-not $rootCert) {
 }
 if (-not $rootCert) { throw 'HTTPS запущено, але сертифікат центру ще не знайдено. Повторіть налаштування.' }
 Copy-Item $rootCert (Join-Path $InstallDir 'QureMed-Local-CA.crt') -Force
+Copy-Item $rootCert (Join-Path $InstallDir 'LemvoriLab-Local-CA.crt') -Force
 
 $mobileConfigDir = Join-Path $env:PUBLIC 'Documents\QureMed\SOLVIA'
 New-Item -ItemType Directory -Force $mobileConfigDir | Out-Null

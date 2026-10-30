@@ -45,12 +45,13 @@ jobs:
           node tests/reception-booking.mjs
           node tests/calendar-reliability.mjs
           node tests/patient-care-ui.mjs
+          node tests/rehab-reliability.mjs
           node tests/request.mjs
       - run: python3 tools/package-mint-ui.py
       - uses: actions/upload-artifact@v7
         with:
-          name: SOLVIA-3.1.0-Linux-Motion-Workspace
-          path: out/SOLVIA-3.1.0-Linux-Motion-Workspace.tar.gz
+          name: SOLVIA-3.1.1-Linux-Motion-Workspace
+          path: out/SOLVIA-3.1.1-Linux-Motion-Workspace.tar.gz
       - uses: actions/upload-artifact@v7
         if: always()
         with:

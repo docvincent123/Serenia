@@ -1,3 +1,24 @@
+// The surrounding HTTP transaction owns this advisory lock until commit/rollback.
+// Two API processes therefore share the same author-scoped retry protection.
+std::string rehabRequestKey(DB&db,const J&u,const J&b){
+    auto key=str(b,"client_key",80,false);
+    if(!key.empty()){
+        check(std::regex_match(key,std::regex("[a-zA-Z0-9-]{16,80}")),"Некоректний ключ збереження");
+        db.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",{"rehabilitation:"+std::to_string(u["id"].get<int>())+":"+key});
+    }
+    return key;
+}
+J rehabReplay(DB&db,const J&u,const std::string&key,const std::string&fingerprint){
+    if(key.empty())return nullptr;
+    auto saved=db.query("SELECT fingerprint,response FROM rehabilitation_requests WHERE user_id=? AND client_key=?",{u["id"],key});
+    if(saved.empty())return nullptr;
+    check(saved[0]["fingerprint"]==fingerprint,"Цей запит уже збережено з іншими даними. Оновіть план перед повтором.",409);
+    auto response=J::parse(saved[0]["response"].get<std::string>());response["already_saved"]=true;return response;
+}
+void rehabReceipt(DB&db,const J&u,const std::string&key,const std::string&fingerprint,int id,const J&response){
+    if(!key.empty())db.query("INSERT INTO rehabilitation_requests(user_id,client_key,fingerprint,response,goal_id,created) VALUES(?,?,?,?,?,?)",{u["id"],key,fingerprint,response.dump(),id,now()});
+}
+
 // SOLVIA patient rehabilitation goals. Clinical text never enters operational feeds.
 J rehabilitation(DB&db,const J&u,const httplib::Request&r,const J&b){
     const auto& path=r.path;const auto& method=r.method;
@@ -14,6 +35,8 @@ J rehabilitation(DB&db,const J&u,const httplib::Request&r,const J&b){
         }
         allow(u,{"psychologist"});
         check(method=="POST","Метод не дозволений",405);
+        auto key=rehabRequestKey(db,u,b),fingerprint=digest(path+"\n"+b.dump());
+        auto replay=rehabReplay(db,u,key,fingerprint);if(!replay.is_null())return replay;
         auto course=db.query("SELECT id FROM patient_courses WHERE patient_id=? AND status='active' AND psychologist_id=?",{pid,u["id"]});
         check(!course.empty(),"Немає активного курсу, закріпленого за психологом",409);
         int owner=b.contains("owner_id")?num(b,"owner_id"):u["id"].get<int>();
@@ -27,7 +50,7 @@ J rehabilitation(DB&db,const J&u,const httplib::Request&r,const J&b){
         int id=db.id();
         db.query("INSERT INTO rehabilitation_goal_updates(goal_id,state,progress_value,note,author_id,created) VALUES(?,'planned','','Ціль створено',?,?)",{id,u["id"],ts});
         audit(db,u,"create","rehabilitation_goal",id);
-        return {{"id",id},{"revision",1}};
+        J response={{"id",id},{"revision",1}};rehabReceipt(db,u,key,fingerprint,id,response);return response;
     }
     if(std::regex_match(path,std::regex("/api/rehab-goals/[0-9]+"))){
         int id=std::stoi(path.substr(17));
@@ -37,6 +60,8 @@ J rehabilitation(DB&db,const J&u,const httplib::Request&r,const J&b){
         getPatient(db,u,goal["patient_id"].get<int>());
         if(method=="GET")return goal;
         allow(u,{"psychologist"});check(method=="PATCH","Метод не дозволений",405);
+        auto key=rehabRequestKey(db,u,b),fingerprint=digest(path+"\n"+b.dump());
+        auto replay=rehabReplay(db,u,key,fingerprint);if(!replay.is_null())return replay;
         check(goal["course_status"]=="active"&&goal["course_psychologist_id"]==u["id"],"Завершений або чужий курс не можна редагувати",409);
         auto revision=num(b,"revision");check(revision==goal["revision"].get<int>(),"Ціль змінено на іншому пристрої. Оновіть дані.",409);
         auto state=str(b,"state",20);
@@ -44,10 +69,11 @@ J rehabilitation(DB&db,const J&u,const httplib::Request&r,const J&b){
         auto progress=str(b,"progress_value",500,false),note=str(b,"note",2000,false);
         check(!note.empty(),"Вкажіть обґрунтування зміни прогресу");
         auto ts=now();
-        db.query("UPDATE rehabilitation_goals SET state=?,progress_value=?,revision=revision+1,updated=? WHERE id=? AND revision=?",{state,progress,ts,id,revision});
+        auto changed=db.query("UPDATE rehabilitation_goals SET state=?,progress_value=?,revision=revision+1,updated=? WHERE id=? AND revision=? RETURNING id",{state,progress,ts,id,revision});
+        check(!changed.empty(),"Ціль змінено на іншому пристрої. Оновіть дані.",409);
         db.query("INSERT INTO rehabilitation_goal_updates(goal_id,state,progress_value,note,author_id,created) VALUES(?,?,?,?,?,?)",{id,state,progress,note,u["id"],ts});
         audit(db,u,"update","rehabilitation_goal",id);
-        return {{"ok",true},{"revision",revision+1}};
+        J response={{"ok",true},{"revision",revision+1}};rehabReceipt(db,u,key,fingerprint,id,response);return response;
     }
     throw Error(404,"Невідомий маршрут");
 }

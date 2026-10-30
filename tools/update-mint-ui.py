@@ -15,7 +15,7 @@ import uuid
 def apply(package, prefix=Path('/')):
     package, prefix = Path(package).resolve(), Path(prefix).resolve()
     manifest = json.loads((package/'manifest.json').read_text())
-    if manifest['requires_version'] != '3.1.0':
+    if manifest['requires_version'] != '3.1.1':
         raise ValueError('Непідтримувана версія пакета.')
     for name, expected in manifest['sha256'].items():
         file = (package/name).resolve()
@@ -31,14 +31,14 @@ def apply(package, prefix=Path('/')):
         raise ValueError('Не знайдено встановленої SOLVIA. Цей пакет не є встановлювачем сервера.')
     wrapper = prefix/'usr/local/lib/solvia/solvia-linux-app.py'
     version_file = prefix/'opt/solvia/VERSION'
-    version_ok = (version_file.is_file() and version_file.read_text().strip() == '3.1.0')
+    version_ok = (version_file.is_file() and version_file.read_text().strip() == '3.1.1')
     if wrapper.is_file():
         # A client-only installation has no server VERSION file.
-        if 'SOLVIA 3.1.0' not in wrapper.read_text():
-            raise ValueError('Потрібна Linux-версія SOLVIA 3.1.0. Оновлення не застосовано.')
+        if 'SOLVIA 3.1.1' not in wrapper.read_text():
+            raise ValueError('Потрібна Linux-версія SOLVIA 3.1.1. Оновлення не застосовано.')
         version_ok = True
     if not version_ok:
-        raise ValueError('Не вдалося підтвердити версію SOLVIA 3.1.0. Оновлення не застосовано.')
+        raise ValueError('Не вдалося підтвердити версію SOLVIA 3.1.1. Оновлення не застосовано.')
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:6]
     staged, changed = [], []
     wrapper_backup = None

@@ -9,7 +9,7 @@ ApplicationWindow {
     height: 890
     minimumWidth: 920
     minimumHeight: 640
-    title: "SOLVIA · Центр реабілітації"
+    title: "SOLVIA · LemvoriLab"
     color: "#f5f5f2"
     property string page: "Головна"
     property int bookingPatientId: 0
@@ -126,6 +126,7 @@ ApplicationWindow {
                     spacing: 24
                     Image { source: "qrc:/brand.svg"; width: 72; height: 72; fillMode: Image.PreserveAspectFit }
                     Text { text: "SOLVIA"; font.pixelSize: 38; font.bold: true; color: "#fff" }
+                    Text { text: "by LemvoriLab"; font.pixelSize: 15; color: "#c2c7c2" }
                     Text { text: "Робочий простір\nреабілітаційного центру";
                            color: "#e9e9e0"; font.pixelSize: 20; lineHeight: 1.3; wrapMode: Text.WordWrap }
                     Item { height: 24; width: 1 }
@@ -232,7 +233,7 @@ ApplicationWindow {
                         }
                     }
                     Item { Layout.fillHeight: true }
-                    Text { text: "SOLVIA · Linux Native"; color:root.muted; font.pixelSize:11; Layout.leftMargin:10 }
+                    Text { text: "SOLVIA · LemvoriLab"; color:root.muted; font.pixelSize:11; Layout.leftMargin:10 }
                     Item { Layout.preferredHeight:10 }
                 }
             }

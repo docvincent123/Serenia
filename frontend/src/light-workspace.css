@@ -128,3 +128,5 @@
   .center-home-upcoming {padding:16px;}
  }
 }
+
+@media screen{.sidebar-support-contact{display:block;font-size:11px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;margin-top:6px}}

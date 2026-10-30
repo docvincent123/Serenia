@@ -50,7 +50,7 @@ Audit записує actor/event/entity/id, але не текст психол�
 
 ## Android/TLS
 
-Android-клієнт працює напряму з REST API через HTTPS і довіряє system + user CA store; WebView у мобільному застосунку відсутній. Локальний CA Caddy експортується як `QureMed-Local-CA.crt` для встановлення на планшети центру.
+Android-клієнт працює напряму з REST API через HTTPS і довіряє system + user CA store; WebView у мобільному застосунку відсутній. Локальний CA Caddy експортується як `LemvoriLab-Local-CA.crt` для встановлення на планшети центру.
 
 ## IP сервера
 

@@ -1,6 +1,6 @@
-#define MyAppName "SOLVIA by QureMed"
-#define MyAppVersion "3.1.0"
-#define MyAppPublisher "QureMed Industries"
+#define MyAppName "SOLVIA by LemvoriLab"
+#define MyAppVersion "3.1.1"
+#define MyAppPublisher "LemvoriLab"
 #define MyAppExeName "Solvia.exe"
 
 [Setup]
@@ -8,7 +8,7 @@ AppId={{8B75B3EA-33FB-4D1D-A04C-58F4269D31C7}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\QureMed\SOLVIA
+DefaultDirName={autopf}\LemvoriLab\SOLVIA
 DefaultGroupName=SOLVIA
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible

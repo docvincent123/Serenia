@@ -1315,6 +1315,60 @@ class Scenario(unittest.TestCase):
             if ids:sql('DELETE FROM patients WHERE id IN ('+','.join(map(str,ids))+')')
             sql(f'DELETE FROM families WHERE id={family}')
 
+    def test_zc_rehabilitation_retry_across_api_processes(self):
+        """One saved goal/history even when two real API processes receive retries."""
+        import uuid
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        psy=self.api('psychologist','GET','/api/me')['id']
+        pid=self.api('admin','POST','/api/patients',{'name':'Rehab retry synthetic','phone':'+380000009772','dob':'1990-01-01','category':'Інше','psychologist_id':psy})['id']
+        endpoint=f'/api/patients/{pid}/rehab-goals'
+        with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        other=subprocess.Popen([BINARY,'--database',self.database,'--port',str(port)],stdout=subprocess.DEVNULL)
+        def second(method,path,body):
+            req=urllib.request.Request(f'http://127.0.0.1:{port}'+path,data=json.dumps(body).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+self.tokens['psychologist']},method=method)
+            try:
+                with urllib.request.urlopen(req,timeout=15) as r:return r.status,json.load(r)
+            except urllib.error.HTTPError as e:return e.code,json.load(e)
+        try:
+            for _ in range(100):
+                try:
+                    with urllib.request.urlopen(f'http://127.0.0.1:{port}/api/health',timeout=1):break
+                except OSError:time.sleep(.05)
+            draft={'title':'Retry-safe rehabilitation goal','measurement':'Functional review','client_key':str(uuid.uuid4())}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                one=pool.submit(self.call,'POST',endpoint,draft,self.tokens['psychologist'])
+                two=pool.submit(second,'POST',endpoint,draft)
+                results=[one.result(),two.result()]
+            self.assertEqual([r[0] for r in results],[200,200],results)
+            self.assertEqual(results[0][1]['id'],results[1][1]['id'])
+            self.assertEqual(sum(bool(r[1].get('already_saved')) for r in results),1)
+            goals=self.api('psychologist','GET',endpoint)
+            self.assertEqual(len(goals),1)
+            self.assertEqual(len(goals[0]['updates']),1)
+            goal_id=goals[0]['id'];path=f'/api/rehab-goals/{goal_id}'
+            self.api('psychologist','POST',endpoint,{**draft,'title':'Changed data with old key'},status=409)
+            update={'revision':1,'state':'in_progress','progress_value':'Improving','note':'Original weekly review','client_key':str(uuid.uuid4())}
+            self.api('psychologist','PATCH',path,update)
+            code,replay=second('PATCH',path,update)
+            self.assertEqual(code,200,replay);self.assertTrue(replay['already_saved'])
+            self.api('psychologist','PATCH',path,{**update,'note':'Changed retry'},status=409)
+            competing=[{**update,'revision':2,'state':state,'client_key':str(uuid.uuid4())} for state in ('achieved','paused')]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                one=pool.submit(self.call,'PATCH',path,competing[0],self.tokens['psychologist'])
+                two=pool.submit(second,'PATCH',path,competing[1])
+                statuses=sorted([one.result()[0],two.result()[0]])
+            self.assertEqual(statuses,[200,409])
+            current=self.api('psychologist','GET',endpoint)[0]
+            self.assertEqual(current['revision'],3)
+            self.assertEqual(len(current['updates']),3)
+            self.api('reception','GET',endpoint,status=403)
+            self.api('psychologist','POST',endpoint,{'title':'Invalid receipt','client_key':'short'},status=400)
+            course=self.api('admin','GET',f'/api/patients/{pid}')['courses'][0]
+            self.api('admin','PATCH',f'/api/courses/{course["id"]}',{'status':'completed','ended_at':dt.date.today().isoformat(),'outcome':'Synthetic completion'})
+            self.assertTrue(self.api('psychologist','POST',endpoint,draft)['already_saved'])
+        finally:
+            other.terminate();other.wait(timeout=10)
+
     def test_zy_admin_host_diagnostics_are_role_restricted(self):
         system=self.api('admin','GET','/api/admin/system')
         self.assertIn('host_resources',system)

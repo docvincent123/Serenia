@@ -1,8 +1,15 @@
 name: SOLVIA Native Qt Linux
 on:
+  push:
+    branches: [feature/rehab-center-readiness]
+    paths:
+      - 'native/linux/**'
+      - 'tests/native-qt-settings.py'
+      - '.github/workflows/native-qt-linux.yml'
   pull_request:
     paths:
       - 'native/linux/**'
+      - 'tests/native-qt-settings.py'
       - '.github/workflows/native-qt-linux.yml'
   workflow_dispatch:
 jobs:
@@ -28,6 +35,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: timeout 15s build/native-linux/solvia-native --smoke
+      - name: Verify company settings migration
+        run: python3 tests/native-qt-settings.py build/native-linux/solvia-native
       - name: Check no WebKit or Chrome dependency is linked
         run: |
           if ldd build/native-linux/solvia-native | grep -Ei 'webkit|chromium|electron|webengine'; then
