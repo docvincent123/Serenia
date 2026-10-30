@@ -1,0 +1,71 @@
+1
+00:00:00,200 --> 00:00:02,582
+Your phone may see invisible light.
+
+2
+00:00:02,582 --> 00:00:04,420
+Try this simple experiment!
+
+3
+00:00:05,075 --> 00:00:06,774
+Point a TV remote at your
+
+4
+00:00:06,774 --> 00:00:08,745
+phone camera. Press a button.
+
+5
+00:00:08,745 --> 00:00:10,240
+You may see a flicker.
+
+6
+00:00:10,908 --> 00:00:13,227
+Many remotes use near-infrared light.
+
+7
+00:00:13,227 --> 00:00:14,982
+Your eyes cannot see it, but
+
+8
+00:00:14,982 --> 00:00:16,862
+a camera sensor may detect it.
+
+9
+00:00:17,533 --> 00:00:19,804
+Nothing? Try the front camera.
+
+10
+00:00:19,804 --> 00:00:21,470
+Infrared filters vary.
+
+11
+00:00:21,470 --> 00:00:23,816
+Not every remote uses infrared.
+
+12
+00:00:24,492 --> 00:00:26,278
+This is not thermal imaging or
+
+13
+00:00:26,278 --> 00:00:27,529
+seeing through walls.
+
+14
+00:00:27,529 --> 00:00:29,136
+It is simply another way to
+
+15
+00:00:29,136 --> 00:00:30,446
+detect a light signal.
+
+16
+00:00:31,117 --> 00:00:32,252
+Try your remote.
+
+17
+00:00:32,252 --> 00:00:33,812
+Did you see a flicker?
+
+18
+00:00:33,812 --> 00:00:35,798
+Tell us which camera worked!
