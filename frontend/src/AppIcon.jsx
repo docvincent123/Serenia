@@ -7,6 +7,7 @@ export default function AppIcon({ name, size = 18 }) {
     'new-booking': <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M8 16l2.5 2.5L16 13"/></>,
     refresh: <><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 9a7 7 0 0 1 12-2l1.8 5M4 12l1.8 5a7 7 0 0 0 12-2"/></>,
     'arrow-right': <path d="M4 12h16M14 6l6 6-6 6"/>,
+    handover: <><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 9h10M7 13h6M7 17h5M16 15l2 2 3-3"/></>,
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     'waiting-list': <><rect x="3" y="4" width="12" height="17" rx="2"/><path d="M6 8h6M6 12h5M6 16h3"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/></>,
     documents: <><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/></>,

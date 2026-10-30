@@ -234,6 +234,7 @@ J saveConsultation(DB&db,const J&u,const J&b,const J*actor=nullptr){allow(u,{"ps
 #include "tv_display.h"
 #include "center_access.h"
 #include "service_state.h"
+#include "shift_handover.h"
 
 std::string staffNumber(DB&db,const J&id){
  auto rows=db.query("SELECT staff_number FROM users WHERE id=?",{id});
@@ -259,7 +260,11 @@ J mobileProfile(DB&db,J u,const std::string&session){
  u["shift_bound"]=!rows[0]["shift_date"].get<std::string>().empty();return u;
 }
 
-struct App{DB db;std::mutex mutex;std::map<std::string,std::vector<long long>> attempts;long long successfulRequests=0,maxQueueWaitMs=0,maxProcessingMs=0;explicit App(const std::string&file):db(file){db.query("INSERT INTO installation_identity(id,server_id) VALUES(1,?) ON CONFLICT(id) DO NOTHING",{randomToken()});}
+struct App{
+DB db;std::mutex mutex;
+std::map<std::string,std::vector<long long>> attempts;
+long long successfulRequests=0,maxQueueWaitMs=0,maxProcessingMs=0;
+explicit App(const std::string&file):db(file){db.query("INSERT INTO installation_identity(id,server_id) VALUES(1,?) ON CONFLICT(id) DO NOTHING",{randomToken()});}
 void checkAttempts(const std::string&key){
     auto t=epoch();for(auto it=attempts.begin();it!=attempts.end();){std::erase_if(it->second,[&](auto x){return t-x>300;});if(it->second.empty())it=attempts.erase(it);else ++it;}
     auto it=attempts.find(key);check(it!=attempts.end()||attempts.size()<4096,"Забагато спроб. Зачекайте 5 хвилин.",429);
@@ -267,7 +272,20 @@ void checkAttempts(const std::string&key){
 }
 void failedAttempt(const std::string&key){attempts[key].push_back(epoch());}
 
-J route(const httplib::Request&r){const auto queued=std::chrono::steady_clock::now();std::lock_guard<std::mutex> lock(mutex);const auto acquired=std::chrono::steady_clock::now();const auto queueMs=std::chrono::duration_cast<std::chrono::milliseconds>(acquired-queued).count();Transaction tx(db);auto result=dispatch(r);tx.commit();const auto processMs=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-acquired).count();++successfulRequests;maxQueueWaitMs=std::max(maxQueueWaitMs,static_cast<long long>(queueMs));maxProcessingMs=std::max(maxProcessingMs,static_cast<long long>(processMs));return result;}
+J route(const httplib::Request&r){
+    const auto queued=std::chrono::steady_clock::now();
+    std::lock_guard<std::mutex> lock(mutex);
+    const auto acquired=std::chrono::steady_clock::now();
+    const auto queueMs=std::chrono::duration_cast<std::chrono::milliseconds>(acquired-queued).count();
+    Transaction tx(db);
+    auto result=dispatch(r);
+    tx.commit();
+    const auto processMs=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-acquired).count();
+    ++successfulRequests;
+    maxQueueWaitMs=std::max(maxQueueWaitMs,static_cast<long long>(queueMs));
+    maxProcessingMs=std::max(maxProcessingMs,static_cast<long long>(processMs));
+    return result;
+}
 J dispatch(const httplib::Request&r){auto path=r.path,method=r.method;J b=J::object();if(method!="GET"){check(r.body.size()<=(path=="/api/desktop-updates"?46137344:path=="/api/mobile-update"?12582912:2097152),"Запит завеликий",413);check(r.get_header_value("Content-Type").find("application/json")==0,"Потрібен JSON",415);try{b=J::parse(r.body);}catch(...){throw Error(400,"Некоректний JSON");}check(b.is_object(),"Очікується JSON-об’єкт");}
 if(path=="/api/client-status"&&method=="GET")return serviceStatus(db);
 if(method!="GET"&&path!="/api/login"&&path!="/api/logout"&&path!="/api/admin/service-state"){auto state=serviceStatus(db);check(state["mode"]!="maintenance","Сервер на обслуговуванні. Запис збережіть у чернетці та повторіть пізніше.",503);}
@@ -364,7 +382,7 @@ if(path=="/api/reception-access"){
         db.query("INSERT INTO shift_days(shift_date,opened_by,opened_at,closed_by,closed_at) VALUES(?,?,?,NULL,NULL) ON CONFLICT(shift_date) DO UPDATE SET opened_by=EXCLUDED.opened_by,opened_at=EXCLUDED.opened_at,closed_by=NULL,closed_at=NULL",{today,u["id"],now()});
     audit(db,u,enabled?"grant_access":"revoke_access","reception_access",0);return {{"ok",true}};
 }
-bool receptionWrite=path=="/api/tv/call"||path=="/api/patients"||path.rfind("/api/patients/",0)==0||path=="/api/families"||path.rfind("/api/families/",0)==0||path=="/api/appointments"||path.rfind("/api/appointments/",0)==0||path=="/api/waiting-list"||path.rfind("/api/waiting-list/",0)==0;
+bool receptionWrite=path=="/api/tv/call"||path=="/api/patients"||path.rfind("/api/patients/",0)==0||path=="/api/families"||path.rfind("/api/families/",0)==0||path=="/api/appointments"||path.rfind("/api/appointments/",0)==0||path=="/api/waiting-list"||path.rfind("/api/waiting-list/",0)==0||path=="/api/operations/handover"||path.rfind("/api/operations/handover/",0)==0;
 if(u["role"]=="reception"&&method!="GET"&&receptionWrite){
     auto access=db.query("SELECT access_date FROM reception_access WHERE access_date=? AND enabled=TRUE AND starts_at<=?",{now().substr(0,10),now().substr(0,16)});
     check(!access.empty(),"Адміністратор має надати доступ реєстратурі на сьогодні",423);
@@ -397,6 +415,7 @@ if(path=="/api/patients"){allow(u,{"admin","reception","psychologist"});if(metho
 if(std::regex_match(path,std::regex("/api/patients/[0-9]+"))&&method=="GET"){int id=std::stoi(path.substr(14));auto p=getPatient(db,u,id);p["courses"]=db.query("SELECT c.*,ps.name psychologist,cb.name created_by_name FROM patient_courses c JOIN users ps ON ps.id=c.psychologist_id LEFT JOIN users cb ON cb.id=c.created_by WHERE c.patient_id=? ORDER BY c.course_no DESC",{id});p["documents"]=db.query("SELECT d.id,d.document_type,d.title,d.status,d.signed_by_name,d.signed_at,d.created,us.name created_by_name FROM patient_documents d JOIN users us ON us.id=d.created_by WHERE d.patient_id=? ORDER BY d.id DESC",{id});p["referrals"]=db.query("SELECT r.*,us.name created_by_name FROM patient_referrals r JOIN users us ON us.id=r.created_by WHERE r.patient_id=? ORDER BY r.id DESC",{id});if(u["role"]=="psychologist"){p["consultations"]=db.query("SELECT c.*,u.name psychologist FROM consultations c JOIN users u ON u.id=c.psychologist_id WHERE c.patient_id=? AND c.psychologist_id=? ORDER BY c.id DESC",{id,u["id"]});p["assessments"]=db.query("SELECT id,created,completed,score,answers FROM assessments WHERE patient_id=? AND psychologist_id=? ORDER BY id",{id,u["id"]});}else if(u["role"]=="admin"){p["consultations"]=db.query("SELECT c.*,u.name psychologist FROM consultations c JOIN users u ON u.id=c.psychologist_id WHERE c.patient_id=? ORDER BY c.id DESC",{id});p["admin_notes"]=db.query("SELECT n.*,us.name author FROM admin_notes n JOIN users us ON us.id=n.author_id WHERE n.patient_id=? ORDER BY n.id DESC",{id});}if(u["role"]=="admin"||u["role"]=="psychologist"){p["discharges"]=db.query("SELECT d.*,us.name author,ps.name psychologist FROM discharge_summaries d JOIN users us ON us.id=d.author_id LEFT JOIN users ps ON ps.id=d.psychologist_id WHERE d.patient_id=? ORDER BY d.id DESC",{id});}if(p.contains("consultations"))for(auto&c:p["consultations"])c["addenda"]=db.query("SELECT a.id,a.reason,a.content,a.created,u.name author FROM consultation_addenda a JOIN users u ON u.id=a.author_id WHERE a.consultation_id=? ORDER BY a.id",{c["id"]});audit(db,u,"read","patient",id);return p;}
 if(std::regex_match(path,std::regex("/api/patients/[0-9]+/draft"))){int pid=std::stoi(path.substr(14,path.size()-20));return privateDraft(db,u,pid,method,b);}
 if(path=="/api/waiting-list"||path.rfind("/api/waiting-list/",0)==0)return waitingList(db,u,r,b);
+if(path=="/api/operations/handover"||std::regex_match(path,std::regex("/api/operations/handover/[0-9]+")))return shiftHandover(db,u,r,b);
 if(path=="/api/workflow-events")return workflowEvents(db,u,r);
 if(path=="/api/workday/home"&&method=="GET")return workdayHome(db,u,r);
 if(path=="/api/shift-workspace"&&method=="GET"){

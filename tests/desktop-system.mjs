@@ -5,7 +5,7 @@ import {readFile,mkdir} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {createRequire} from 'node:module';
 import {navFor,navigationGroups} from '../frontend/src/workspace-model.mjs';
-const expected={admin:['dashboard','shift-workspace','calendar','waiting-list','patients','families','team','staff-messages','rooms','reports','discharges','workload','supervisions','archive','devices','settings','audit'],reception:['shift-workspace','calendar','waiting-list','patients','families','archive'],director:['dashboard','workload','supervisions','discharges','staff-messages'],psychologist:['calendar','patients','reports','supervisions']};
+const expected={admin:['dashboard','shift-workspace','handover','calendar','waiting-list','patients','families','team','staff-messages','rooms','reports','discharges','workload','supervisions','archive','devices','settings','audit'],reception:['shift-workspace','handover','calendar','waiting-list','patients','families','archive'],director:['dashboard','workload','supervisions','discharges','staff-messages'],psychologist:['calendar','patients','reports','supervisions']};
 for(const [role,keys] of Object.entries(expected)){const nav=navFor(role).map(([key])=>key);assert.deepEqual(nav,keys,`Preserve every ${role} module and its order`);for(const key of nav.filter(key=>key!=='settings'))assert.equal(navigationGroups.filter(([, ,members])=>members.includes(key)).length,1,`Exactly one navigation group for ${key}`);}
 assert.deepEqual(navFor('unknown'),[]);
 const require=createRequire(import.meta.url),{chromium}=require(process.env.SOLVIA_PLAYWRIGHT_MODULE||'playwright');
@@ -15,6 +15,7 @@ const browser=await chromium.launch({headless:true,...(process.env.SOLVIA_CHROMI
 try{
   const page=await browser.newPage({viewport:{width:1440,height:1000}});await page.emulateMedia({reducedMotion:'reduce'});
   let role='admin';const errors=[],edits=[];page.on('pageerror',e=>errors.push(e.message));
+  const handovers=[];
   const p={id:10,patient_no:'12345',name:'Коваль Олена',phone:'+380671234567',dob:'1990-01-01',category:'Ветеран/ветеранка',psychologist_id:3,psychologist:'Марченко Оксана',status:'active',family_id:1,family:'Родина Коваль'};
   const p2={...p,id:11,name:'Бондар Андрій',patient_no:'23456',phone:'+380681234567',category:'Військовий/військова',family_id:null,family:''};
   const users=[{id:1,name:'Коваль Андрій',role:'admin',login:'admin',phone:'+380501234567',active:true,active_sessions:1,platforms:'Desktop'},{id:3,name:'Марченко Оксана',role:'psychologist',login:'oksana',phone:'+380501234568',active:true,active_sessions:1,platforms:'Android'}];
@@ -26,6 +27,14 @@ try{
     if(path==='/api/me')data={id:role==='admin'?1:role==='director'?4:2,name:role==='director'?'Дорошенко Олена':role==='reception'?'Сидоренко Наталія':'Коваль Андрій',role};
     else if(path==='/api/health')data={ok:true,version:'2.5.0'};
     else if(path==='/api/shift-day')data={open:true,shift_date:'2026-10-15',opened_by_name:'Коваль Андрій'};
+    else if(path==='/api/operations/handover'&&request.method()==='GET')data=handovers;
+    else if(path==='/api/operations/handover'&&request.method()==='POST'){
+      const body=request.postDataJSON();const item={id:handovers.length+1,shift_date:'2026-10-15',summary:body.summary,priority:body.priority,state:'open',created_at:'2026-10-15T08:00',created_by:'Тестовий адміністратор'};
+      handovers.push(item);data={id:item.id,replayed:false};
+    }
+    else if(path.startsWith('/api/operations/handover/')&&request.method()==='PATCH'){
+      const item=handovers.find(x=>x.id===Number(path.split('/').at(-1)));if(item)item.state='resolved';data={id:item?.id,state:'resolved'};
+    }
     else if(path==='/api/reception-access')data={access_date:'2026-10-15',starts_at:'2026-10-15T08:00',allowed:true,enabled:true};
     else if(path==='/api/stats')data=stats;
     else if(path==='/api/workday/home')data={date:'2026-10-15',counts:{waiting:2,arrived:1,completed:1},active_patients:32,waiting_list:4,next:[{appointment_id:7,patient_id:10,patient:p.name,patient_no:p.patient_no,start:'2026-10-15T09:00',end:'2026-10-15T10:00',psychologist:p.psychologist,room:'Кабінет 101',arrived_at:''}]};
@@ -72,10 +81,19 @@ try{
   await capture('admin-overview');
   await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
   await page.getByRole('heading',{name:'Усі розділи',exact:true}).waitFor();
-  assert.equal(await page.locator('.motion-module-card').count(),19,'All existing administrator modules, TV calls and profile');
+  assert.equal(await page.locator('.motion-module-card').count(),20,'Administrator modules including operational handover');
   for (const [key,title] of navFor('admin')) assert.equal(await page.getByRole('button',{name:`Відкрити розділ ${title}`,exact:true}).count(),1,`Admin module: ${key}`);
   await page.locator('.motion-role-map summary').click();assert.equal(await page.locator('.motion-role-map-grid article').count(),4);
   await capture('all-admin-modules');
+  await page.getByRole('button',{name:'Відкрити розділ Передача зміни',exact:true}).click();
+  await page.getByRole('heading',{name:'Передача зміни',exact:true}).waitFor();
+  await page.getByLabel('Що потрібно передати?').fill('Перевірити підготовку кабінету');
+  await page.getByRole('button',{name:'Передати наступній зміні',exact:true}).click();
+  await page.locator('.handover-item').getByText('Перевірити підготовку кабінету',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Позначити виконаним',exact:true}).click();
+  await page.getByText('Незавершених справ немає.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
+  await page.getByRole('heading',{name:'Усі розділи',exact:true}).waitFor();
   await page.getByLabel('Знайти розділ').fill('кабінет');
   await page.getByRole('button',{name:'Відкрити розділ Кабінети',exact:true}).waitFor();
   await page.getByRole('button',{name:'Відкрити розділ Кабінети',exact:true}).click();

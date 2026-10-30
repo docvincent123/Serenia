@@ -21,6 +21,7 @@ import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import usePatientDirectory from './usePatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
 import CenterHome from './CenterHome.jsx';
+import HandoverBoard from './HandoverBoard.jsx';
 import ServerReadiness from './ServerReadiness.jsx';
 import AppIcon from './AppIcon.jsx';
 import {ServiceStatus,ServiceControls} from './ServiceStatus.jsx';
@@ -3522,6 +3523,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={goBack} draftSession={draftSession} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'module-directory') return <ModuleDirectory role={user.role} onNavigate={navigate} Icon={AppIcon}/>;
+    if (page === 'handover' && ['admin','reception'].includes(user.role)) return <HandoverBoard api={api}/>;
     if (page === 'waiting-list') return <WaitingList api={api} openPatient={openPatient} Modal={Dialog} />;
     if (page === 'dashboard' && user.role==='admin') return <CenterHome api={api} role="admin" onNavigate={navigate} onRegister={()=>registerPatient()} onBook={()=>startBooking({})} onOpenPatient={openPatient}/>;
     if (page === 'reception-home' && user.role==='reception') return <CenterHome api={api} role="reception" onNavigate={navigate} onRegister={()=>registerPatient()} onBook={()=>startBooking({})} onOpenPatient={openPatient}/>;

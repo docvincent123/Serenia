@@ -1269,6 +1269,38 @@ class Scenario(unittest.TestCase):
         self.assertGreaterEqual(system['api_timing']['max_wait_ms'],0)
         self.api('reception','GET','/api/admin/system',status=403)
         self.api('psychologist','GET','/api/admin/system',status=403)
+    def test_zx_operational_handover_and_linux_telemetry(self):
+        """Handover survives retries and forbids access to unrelated roles."""
+        system=self.api('admin','GET','/api/admin/system')
+        self.assertIn('host_resources',system)
+        self.assertGreaterEqual(system['api_timing']['successful_requests'],0)
+        self.assertGreaterEqual(system['api_timing']['max_wait_ms'],0)
+        resources=system['host_resources']
+        self.assertIn(resources['platform'],('linux','windows','other'))
+        if resources.get('disk_available'):
+            self.assertGreater(resources['disk_total_bytes'],0)
+            self.assertLessEqual(resources['disk_free_bytes'],resources['disk_total_bytes'])
+        self.api('reception','GET','/api/admin/system',status=403)
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        day=dt.date.today().isoformat()
+        self.api('admin','POST','/api/reception-access',{'access_date':day,'start_time':'00:00','enabled':True})
+        key='ci-handover-'+str(time.time_ns())
+        draft={'summary':'Перевірити доступність кабінету після зміни','priority':'important','client_key':key}
+        created=self.api('reception','POST','/api/operations/handover',draft)
+        self.assertFalse(created['replayed'])
+        replay=self.api('reception','POST','/api/operations/handover',draft)
+        self.assertEqual(replay['id'],created['id'])
+        self.assertTrue(replay['replayed'])
+        self.api('reception','POST','/api/operations/handover',{**draft,'priority':'urgent'},status=409)
+        records=self.api('admin','GET','/api/operations/handover')
+        self.assertTrue(any(row['id']==created['id'] and row['state']=='open' for row in records))
+        for role in ('psychologist','director'):
+            self.api(role,'GET','/api/operations/handover',status=403)
+            self.api(role,'POST','/api/operations/handover',draft,status=403)
+        self.api('admin','PATCH',f'/api/operations/handover/{created["id"]}',{'state':'resolved'})
+        self.api('admin','PATCH',f'/api/operations/handover/{created["id"]}',{'state':'resolved'},status=409)
+        records=self.api('reception','GET','/api/operations/handover')
+        self.assertTrue(any(row['id']==created['id'] and row['state']=='resolved' for row in records))
 
     def test_zz_service_maintenance_and_durable_shift_backup(self):
         status=self.call('GET','/api/client-status')[1]
