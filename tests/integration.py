@@ -1261,6 +1261,60 @@ class Scenario(unittest.TestCase):
                 listing=','.join(map(str,ids))
                 sql(f'DELETE FROM waiting_list WHERE patient_id IN ({listing}); DELETE FROM patients WHERE id IN ({listing})')
 
+    def test_zb_patient_visits_and_family_members(self):
+        """Bounded visits, participant privacy, archive membership and role scope."""
+        def sql(statement):
+            return subprocess.check_output(['psql',self.database,'-X','-qAt','-v','ON_ERROR_STOP=1','-c',statement],text=True).strip()
+        psy=self.api('psychologist','GET','/api/me')['id']
+        admin=self.api('admin','GET','/api/me')['id']
+        room=self.api('admin','GET','/api/meta')['rooms'][0]['id']
+        family=int(sql("INSERT INTO families(name) VALUES('SyntheticVisitsFamily') RETURNING id"))
+        ids=[];apps=[]
+        try:
+            for name,owner in [('SyntheticVisitPerson',psy),('OtherGroupPrivatePerson',psy),('UnassignedVisitPerson',admin)]:
+                ids.append(int(sql(f"INSERT INTO patients(name,phone,dob,category,psychologist_id,family_id,created,admin_note) VALUES('{name}','+380501234567','1990-01-01','Інше',{owner},{family},'2026-01-01','PRIVATE_CLINICAL_NOTE') RETURNING id")))
+            for i in range(14):
+                day=(dt.date.today()+dt.timedelta(days=i+1 if i<13 else -1)).isoformat()
+                aid=int(sql(f"INSERT INTO appointments(psychologist_id,room_id,start,\"end\",kind,status,note,created) VALUES({psy},{room},'{day}T09:00','{day}T10:00','group','scheduled','PRIVATE_APPOINTMENT_NOTE','{day}') RETURNING id"))
+                apps.append(aid)
+                sql(f'INSERT INTO attendees(appointment_id,patient_id) VALUES({aid},{ids[0]}),({aid},{ids[1]})')
+            # A participant completed their consultation while the group appointment
+            # remains scheduled. It belongs in their history and cannot be moved.
+            sql(f"INSERT INTO consultations(patient_id,psychologist_id,appointment_id,note,goals,next_plan,homework,created) VALUES({ids[0]},{psy},{apps[12]},'PRIVATE_CLINICAL_NOTE','','','','2026-01-01')")
+            endpoint=f'/api/patients/{ids[0]}/appointments'
+            first=self.api('reception','GET',endpoint)
+            second=self.api('admin','GET',endpoint+'?page=2')
+            self.assertEqual(first['total'],12)
+            self.assertEqual(len(first['items']),10)
+            self.assertEqual(len(second['items']),2)
+            self.assertEqual([x['id'] for x in first['items']+second['items']],apps[:12])
+            self.assertNotIn('PRIVATE_',json.dumps(first))
+            self.assertNotIn('OtherGroupPrivatePerson',json.dumps(first))
+            history=self.api('psychologist','GET',endpoint+'?period=history')
+            self.assertEqual({x['id'] for x in history['items']},{apps[12],apps[13]})
+            self.assertFalse(next(x for x in history['items'] if x['id']==apps[12])['can_reschedule'])
+            self.api('psychologist','GET',f'/api/patients/{ids[2]}/appointments',status=403)
+            self.api('director','GET',endpoint,status=403)
+            self.api('admin','GET','/api/patients/99999999/appointments',status=404)
+            self.api('admin','POST',endpoint,{},status=405)
+            for query in ('period=bad','page=0','page=-1','page=100001','page=999999999999999'):
+                self.api('admin','GET',endpoint+'?'+query,status=400)
+            sql(f"UPDATE patients SET status='archived' WHERE id={ids[1]}")
+            members=self.api('reception','GET',f'/api/patient-directory?family_id={family}&status=all')
+            self.assertEqual(members['total'],3)
+            self.assertNotIn('PRIVATE_',json.dumps(members))
+            self.assertEqual(self.api('psychologist','GET',f'/api/patient-directory?family_id={family}&status=all')['total'],2)
+            listing=self.api('admin','GET','/api/families')
+            self.assertEqual(next(f for f in listing if f['id']==family)['member_count'],3)
+            for value in ('0','-1','abc','99999999999999999999'):
+                self.api('admin','GET','/api/patient-directory?family_id='+value,status=400)
+        finally:
+            if apps:
+                listing=','.join(map(str,apps))
+                sql(f'DELETE FROM consultations WHERE appointment_id IN ({listing}); DELETE FROM appointments WHERE id IN ({listing})')
+            if ids:sql('DELETE FROM patients WHERE id IN ('+','.join(map(str,ids))+')')
+            sql(f'DELETE FROM families WHERE id={family}')
+
     def test_zy_admin_host_diagnostics_are_role_restricted(self):
         system=self.api('admin','GET','/api/admin/system')
         self.assertIn('host_resources',system)

@@ -8,12 +8,14 @@ export default function HandoverBoard({api}){
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
  const [showClosed,setShowClosed]=useState(false);
  const key=useRef(crypto.randomUUID());
+ const sequence=useRef(0);
  const apiRef=useRef(api);apiRef.current=api;
  const reload=useCallback(async()=>{
-  try{const list=await apiRef.current('GET','/api/operations/handover');setItems(list);setError('');}
-  catch(e){setError(e.message);}finally{setLoading(false);}
+  const request=++sequence.current;setLoading(true);
+  try{const list=await apiRef.current('GET','/api/operations/handover');if(request===sequence.current){setItems(list);}}
+  catch(e){if(request===sequence.current){setItems([]);setError(e.message);}}finally{if(request===sequence.current)setLoading(false);}
  },[]);
- useEffect(()=>{void reload();const timer=setInterval(()=>{if(!document.hidden)void reload();},30000);return()=>clearInterval(timer);},[reload]);
+ useEffect(()=>{void reload();const timer=setInterval(()=>{if(!document.hidden)void reload();},30000);return()=>{++sequence.current;clearInterval(timer);};},[reload]);
  async function add(e){
   e.preventDefault();if(busy||!summary.trim())return;
   setBusy(true);setError('');
@@ -32,13 +34,13 @@ export default function HandoverBoard({api}){
   <header className="page-head">
    <div><div className="eyebrow">ОПЕРАТИВНА РОБОТА</div><h1>Передача зміни</h1>
     <p>Організаційні справи, які наступна зміна не повинна пропустити. Без діагнозів, деталей консультацій і приватних нотаток.</p></div>
-   <button type="button" className="button secondary" onClick={reload} disabled={loading}>Оновити</button>
+   <button type="button" className="button secondary" onClick={()=>{setError('');void reload();}} disabled={loading}>Оновити</button>
   </header>
   <div className="handover-layout">
    <form className="surface handover-form" onSubmit={add}>
     <h2>Нове завдання</h2>
-    <label>Що потрібно передати?<textarea required maxLength={300} rows={4} placeholder="Наприклад: перевірити доступність кабінету №3" value={summary} onChange={e=>{setSummary(e.target.value);key.current=crypto.randomUUID();}} /></label>
-    <label>Пріоритет<select value={priority} onChange={e=>{setPriority(e.target.value);key.current=crypto.randomUUID();}}><option value="normal">Звичайне</option><option value="important">Важливе</option><option value="urgent">Термінове</option></select></label>
+    <label>Що потрібно передати?<textarea disabled={busy} required maxLength={300} rows={4} placeholder="Наприклад: перевірити доступність кабінету №3" value={summary} onChange={e=>{setSummary(e.target.value);key.current=crypto.randomUUID();}} /></label>
+    <label>Пріоритет<select disabled={busy} value={priority} onChange={e=>{setPriority(e.target.value);key.current=crypto.randomUUID();}}><option value="normal">Звичайне</option><option value="important">Важливе</option><option value="urgent">Термінове</option></select></label>
     <button className="button primary" disabled={busy||!summary.trim()}>{busy?'Зберігаємо…':'Передати наступній зміні'}</button>
     <small>Завдання зберігаються на сервері та доступні адміністратору й реєстратурі.</small>
    </form>
@@ -50,7 +52,7 @@ export default function HandoverBoard({api}){
        <div className="handover-item-head"><strong>{labels[item.priority]||item.priority}</strong><small>{states[item.state]||item.state}</small></div>
        <p>{item.summary}</p><small>Зміна {item.shift_date} · {item.created_by} · {String(item.created_at).replace('T',' ').slice(0,16)}</small>
        {item.state==='resolved'?<small>Виконав: {item.resolved_by||'—'}</small>:
-       <button type="button" className="button secondary" disabled={busy} onClick={()=>resolve(item.id)}>Позначити виконаним</button>}
+       <button type="button" className="button secondary" disabled={busy||loading} onClick={()=>resolve(item.id)}>Позначити виконаним</button>}
       </article>)}
     </div>}
    </div>

@@ -5,7 +5,7 @@ import {readFile,mkdir} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {createRequire} from 'node:module';
 import {navFor,navigationGroups} from '../frontend/src/workspace-model.mjs';
-const expected={admin:['dashboard','shift-workspace','calendar','waiting-list','patients','families','team','staff-messages','rooms','reports','discharges','workload','supervisions','archive','devices','settings','audit'],reception:['shift-workspace','calendar','waiting-list','patients','families','archive'],director:['dashboard','workload','supervisions','discharges','staff-messages'],psychologist:['calendar','patients','reports','supervisions']};
+const expected={admin:['dashboard','shift-workspace','handover','calendar','waiting-list','patients','families','team','psychologist-roster','staff-messages','rooms','reports','discharges','workload','supervisions','archive','devices','settings','audit'],reception:['shift-workspace','handover','psychologist-roster','calendar','waiting-list','patients','families','archive'],director:['dashboard','psychologist-roster','workload','supervisions','discharges','staff-messages'],psychologist:['calendar','patients','reports','supervisions']};
 for(const [role,keys] of Object.entries(expected)){const nav=navFor(role).map(([key])=>key);assert.deepEqual(nav,keys,`Preserve every ${role} module and its order`);for(const key of nav.filter(key=>key!=='settings'))assert.equal(navigationGroups.filter(([, ,members])=>members.includes(key)).length,1,`Exactly one navigation group for ${key}`);}
 assert.deepEqual(navFor('unknown'),[]);
 const require=createRequire(import.meta.url),{chromium}=require(process.env.SOLVIA_PLAYWRIGHT_MODULE||'playwright');

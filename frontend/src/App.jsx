@@ -17,6 +17,7 @@ import WaitingList from './WaitingList.jsx';
 import ShiftWorkspace from './ShiftWorkspace.jsx';
 import DailyReport from './DailyReport.jsx';
 import AppointmentBooking from './AppointmentBooking.jsx';
+import PatientVisits from './PatientVisits.jsx';
 import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import usePatientDirectory from './usePatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
@@ -519,18 +520,23 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
   return (
     <div className="login-screen login-refined studio-login">
       <section className="login-brand">
-        <div className="brand-orbit">
-          <img className="brand-logo" src="/solvia-icon.png" alt="SOLVIA" />
-        </div>
+        <div className="login-brand-signature"><img src="/solvia-icon.png" alt=""/><strong>SOLVIA</strong><span>by QureMed</span></div>
         <div className="login-brand-copy">
-          <div className="eyebrow light">ПРОСТІР ЦЕНТРУ</div>
-          <h1>Менше рутини.<br />Більше уваги людині.</h1>
-          <p>Один простір для записів, консультацій і злагодженої роботи команди.</p><div className="login-capabilities"><span>01 · Прийоми та пацієнти</span><span>02 · Кабінети й команда</span><span>03 · Документи та рекомендації</span></div>
-          <div className="login-product-scene" aria-hidden="true">
-            <div className="login-scene-header"><strong>SOLVIA</strong><span>РОБОЧИЙ ПРОСТІР</span><i/></div>
-            <div className="login-scene-body"><div className="login-scene-rail"><AppIcon name="dashboard"/><AppIcon name="patients"/><AppIcon name="calendar"/><AppIcon name="reports"/></div><div className="login-scene-content"><span className="login-scene-eyebrow">КОЖНА ЗУСТРІЧ МАЄ ЗНАЧЕННЯ</span><strong>Усе починається з людини.</strong><div className="login-scene-tiles"><span><AppIcon name="patients"/>Пацієнти</span><span><AppIcon name="calendar"/>Календар</span><span><AppIcon name="team"/>Команда</span></div><div className="login-scene-visit"><i/><span><b>Місце для кожної зустрічі</b><small>Від першого запису — до супроводу</small></span><AppIcon name="calendar"/></div></div></div>
+          <div className="eyebrow light">ДЛЯ КОМАНДИ РЕАБІЛІТАЦІЙНОГО ЦЕНТРУ</div>
+          <h1>Менше рутини.<br/><span>Більше уваги людині.</span></h1>
+          <p>Пацієнти, розклад і робота команди — разом.<br/>Щоб зосередитися на тому, що має значення.</p>
+          <div className="login-care-scene" aria-hidden="true">
+            <div className="login-care-orbit"/>
+            <div className="login-care-window">
+              <div className="login-care-window-head"><span className="login-care-icon"><AppIcon name="calendar"/></span><div><strong>Ваш день у центрі</strong><small>Усе потрібне — під рукою</small></div><span className="login-care-dots">•••</span></div>
+              <div className="login-care-appointment"><time>09:00<span>10:00</span></time><div><strong>Індивідуальна зустріч</strong><small>Кабінет 01 · Психолог</small></div><span className="login-care-check">✓</span></div>
+              <div className="login-care-appointment"><time>10:30<span>11:30</span></time><div><strong>Реабілітаційний супровід</strong><small>Кабінет 02 · Команда центру</small></div><span className="login-care-check muted">↗</span></div>
+              <div className="login-care-window-foot"><span/><strong>Більше простору для турботи</strong></div>
+            </div>
+            <div className="login-care-note"><span><AppIcon name="patients"/></span><div><strong>Людина — у центрі уваги</strong><small>Від першої зустрічі до результату</small></div></div>
           </div>
         </div>
+        <div className="login-brand-bottom"><span>ПРОСТІР ДЛЯ ТУРБОТИ</span><span>Запис · Супровід · Команда</span></div>
 
       </section>
 
@@ -546,25 +552,26 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
 
           <div className="login-copy">
             <span className="studio-login-label">ВАШ РОБОЧИЙ ПРОСТІР</span>
-            <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA"}</h2><small>Версія {pkg.version}</small>
+            <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA"}</h2>
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
-          <div className={`alert ${availability.state === 'offline' ? 'error' : ''}`} role="status" aria-live="polite" data-testid="login-server-status">{availability.message}</div>
+          <div data-state={availability.state} className={`alert login-availability ${availability.state === 'offline' ? 'error' : ''}`} role="status" aria-live="polite" data-testid="login-server-status">{availability.message}</div>
           {error && <div className="alert error" role="alert">{error}</div>}
 
           <Field label="Логін" full>
-            <input value={login} onChange={(e) => setLogin(e.target.value)} autoFocus autoComplete="username" placeholder="Ваш логін" required />
+            <input value={login} onChange={(e) => setLogin(e.target.value)} disabled={busy} autoFocus autoComplete="username" placeholder="Ваш логін" required />
           </Field>
 
           <div className="field full"><label htmlFor="login-password">Пароль</label>
-            <div className="password-control"><input id="login-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="Введіть пароль" required /><button type="button" aria-pressed={showPassword} onClick={()=>setShowPassword(v=>!v)}>{showPassword ? "Сховати" : "Показати"}</button></div>
+            <div className="password-control"><input id="login-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} autoComplete="current-password" placeholder="Введіть пароль" required /><button type="button" aria-pressed={showPassword} onClick={()=>setShowPassword(v=>!v)}>{showPassword ? "Сховати" : "Показати"}</button></div>
           </div>
 
           <Button type="submit" className="login-submit" disabled={busy || !server.trim() || !configured}>
             {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
           </Button>
 
+          <p className="login-access-help">Потрібен обліковий запис? Зверніться до адміністратора центру.</p>
           {!configured&&<label className="field full">Перший запуск · відкрийте файл центру
             <input type="file" accept=".solvia,.json" disabled={checking||busy} onChange={e=>{importConnection(e.target.files?.[0]);e.target.value='';}} />
           </label>}
@@ -584,7 +591,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             </>
           )}
 
-          <div className="login-foot">SOLVIA · QureMed</div>
+          <div className="login-foot"><span>SOLVIA · QureMed</span><span>Версія {pkg.version}</span></div>
         </form>
       </section>
     </div>
@@ -1074,7 +1081,7 @@ function Patients({ api, role, openPatient, onBook, createRequest, onCreateReque
   );
 }
 
-function PatientCard({ api, role, patientId, back, draftSession }) {
+function PatientCard({ api, role, patientId, back, draftSession, onBook, bookingVersion }) {
   const draftWriter = useRef(null);
   const [draftStatus, setDraftStatus] = useState('');
   const [consultBusy, setConsultBusy] = useState(false);
@@ -1504,7 +1511,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
       {error && <div className="alert error">{error}</div>}
 
       <nav className="patient-section-tabs" aria-label="Розділи картки">
-        {[[ 'overview','Огляд' ], ...(canReadConsultations ? [['records','Записи']] : []), ['documents','Документи'], ['followup','Супровід']].map(([key,label]) =>
+        {[[ 'overview','Огляд' ], ['visits','Прийоми'], ...(canReadConsultations ? [['records','Записи']] : []), ['documents','Документи'], ['followup','Супровід']].map(([key,label]) =>
           <button key={key} aria-pressed={cardSection === key} className={cardSection === key ? 'active' : ''} onClick={() => setCardSection(key)}>{label}</button>)}
       </nav>
       <div className="patient-card-grid patient-registration-full" hidden={cardSection !== 'overview'}>
@@ -1531,6 +1538,7 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
 
       </div>
 
+      {cardSection === 'visits' && <PatientVisits api={api} patientId={patientId} refreshVersion={bookingVersion} canBook={(isAdmin||isReception)&&card.status==='active'} onBook={onBook}/> }
       {cardSection === 'overview' && <PatientJourney card={card} canReadClinical={canReadConsultations} />}
       {canReadConsultations && cardSection === 'followup' && <RehabilitationPlan api={api} patientId={patientId} patientName={card.name} patientNumber={card.patient_no} activeCourse={activeCourse} role={role} onPrint={printStandaloneNode} />}
       {canReadConsultations && cardSection === 'followup' && <PatientProgress api={api} patientId={patientId} canWrite={isPsychologist} history={card.consultations||[]} />}
@@ -2072,67 +2080,39 @@ function PatientCard({ api, role, patientId, back, draftSession }) {
 }
 
 function Families({ api, openPatient }) {
-  const [families, setFamilies] = useState([]);
-  const [patients, setPatients] = useState([]);
-  const [name, setName] = useState('');
-  const [dialog, setDialog] = useState(false);
-  const [error, setError] = useState('');
-
-  async function load() {
-    try {
-      const [f, p] = await Promise.all([api('GET', '/api/families'), api('GET', '/api/patients')]);
-      setFamilies(f);
-      setPatients(p);
-    } catch (e) {
-      setError(e.message);
-    }
+  const [families,setFamilies]=useState([]),[selected,setSelected]=useState(null);
+  const [query,setQuery]=useState(''),[memberSearch,setMemberSearch]=useState(''),[page,setPage]=useState(1);
+  const [name,setName]=useState(''),[dialog,setDialog]=useState(false),[busy,setBusy]=useState(false);
+  const [error,setError]=useState(''),[loading,setLoading]=useState(true);
+  const directory=usePatientDirectory(api,{search:memberSearch,page,status:'all',familyId:selected?.id??null,enabled:!!selected});
+  async function load(){
+    setLoading(true);setError('');
+    try{const data=await api('GET','/api/families');setFamilies(data);}
+    catch(e){setFamilies([]);setError(e.message);}finally{setLoading(false);}
   }
-
-  useEffect(() => { load(); }, []);
-
-  async function createFamily(e) {
-    e.preventDefault();
-    try {
-      await api('POST', '/api/families', { name });
-      setName('');
-      setDialog(false);
-      await load();
-    } catch (e) {
-      setError(e.message);
-    }
+  useEffect(()=>{void load();},[]);
+  async function createFamily(e){
+    e.preventDefault();if(busy||!name.trim())return;setBusy(true);setError('');
+    try{const created=await api('POST','/api/families',{name:name.trim()});const family={id:created.id,name:name.trim(),member_count:0};setName('');setDialog(false);await load();setSelected(family);setMemberSearch('');setPage(1);}
+    catch(e){setError(e.message);}finally{setBusy(false);}
   }
-
-  return (
-    <>
-      <PageHead eyebrow="СІМЕЙНА СИСТЕМА" title="Сім’ї" subtitle="Одна сім’я в системі, але приватні психологічні записи кожного учасника залишаються окремими." actions={<Button onClick={() => setDialog(true)}>+ Нова сім’я</Button>} />
-      {error && <div className="alert error">{error}</div>}
-      <div className="family-grid">
-        {families.map((f) => {
-          const members = patients.filter((p) => Number(p.family_id) === Number(f.id));
-          return (
-            <article className="family-card" key={f.id}>
-              <div className="family-symbol">⌂</div>
-              <h3>{f.name}</h3>
-              <p>{members.length} учасників</p>
-              <div className="family-members">
-                {members.length ? members.map((m) => <button className="family-member-link" key={m.id} onClick={()=>openPatient(m.id)}>{m.name}<small>{m.family_role || m.category}</small></button>) : <small>Ще немає учасників</small>}
-              </div>
-            </article>
-          );
-        })}
-      </div>
-      {!families.length && <section className="surface"><Empty title="Сімей ще немає" text="Створіть сім’ю, а потім оберіть її в картці нового пацієнта." /></section>}
-
-      {dialog && (
-        <Dialog error={error} title="Нова сім’я" onClose={() => setDialog(false)}>
-          <form onSubmit={createFamily}>
-            <Field label="Назва сім’ї" full><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Напр. Родина Коваленків" required /></Field>
-            <div className="form-actions"><Button type="button" variant="ghost" onClick={() => setDialog(false)}>Скасувати</Button><Button type="submit">Створити</Button></div>
-          </form>
-        </Dialog>
-      )}
-    </>
-  );
+  const shown=families.filter(f=>f.name.toLocaleLowerCase('uk').includes(query.trim().toLocaleLowerCase('uk')));
+  return <>
+    <PageHead eyebrow="СІМЕЙНИЙ СУПРОВІД" title="Сім’ї" subtitle="Оберіть сім’ю, щоб знайти її учасників. Приватні записи зберігаються окремо в картці кожного пацієнта." actions={<><Button variant="secondary" onClick={load} disabled={loading}>Оновити</Button><Button onClick={()=>{setError('');setDialog(true);}}>+ Нова сім’я</Button></>}/>
+    {error&&<div className="alert error" role="alert">{error}</div>}
+    <section className="surface"><label className="search-box"><AppIcon name="search"/><input aria-label="Пошук сім’ї" type="search" placeholder="Назва сім’ї" value={query} onChange={e=>setQuery(e.target.value)}/></label></section>
+    {loading?<Spinner/>:<div className="family-grid">{shown.map(f=><button type="button" className="family-card" key={f.id} aria-pressed={selected?.id===f.id} onClick={()=>{setSelected(f);setMemberSearch('');setPage(1);}}><span className="family-symbol" aria-hidden="true">⌂</span><h3>{f.name}</h3><p>{f.member_count??'—'} учасників</p><span>Переглянути учасників →</span></button>)}</div>}
+    {!loading&&!shown.length&&<section className="surface"><Empty title={query?'Сім’ю не знайдено':'Сімей ще немає'} text={query?'Змініть пошук або створіть нову сім’ю.':'Створіть сім’ю та оберіть її під час реєстрації або редагування пацієнта.'}/></section>}
+    {selected&&<section className="surface" aria-label="Учасники сім’ї"><div className="section-head"><div><h2>{selected.name}</h2><p>Щоб додати або змінити учасника, оберіть сім’ю в його картці → «Редагувати дані».</p></div><Button variant="ghost" onClick={()=>setSelected(null)}>Закрити учасників</Button></div>
+      <label className="search-box"><AppIcon name="search"/><input aria-label="Пошук учасника сім’ї" value={memberSearch} onChange={e=>{setMemberSearch(e.target.value);setPage(1);}} placeholder="ПІБ, номер картки або телефон"/></label>
+      {directory.loading?<Spinner/>:directory.error?<div role="alert" className="alert error">{directory.error}<Button variant="secondary" onClick={directory.reload}>Повторити</Button></div>:<>
+       <p role="status">Знайдено учасників: {directory.total} · включно із завершеними курсами</p>
+       {!directory.items.length?<Empty title="Учасників не знайдено" text="Перевірте пошук або зв’язок із сім’єю в картці пацієнта."/>:<PatientDirectory rows={directory.items} view="table" onOpen={openPatient} familyContext/>}
+       {directory.total>25&&<div className="directory-pagination"><Button variant="secondary" disabled={page===1} onClick={()=>setPage(p=>p-1)}>Назад</Button><span>Сторінка {page} з {Math.ceil(directory.total/25)}</span><Button variant="secondary" disabled={page*25>=directory.total} onClick={()=>setPage(p=>p+1)}>Далі</Button></div>}
+      </>}
+    </section>}
+    {dialog&&<Dialog error={error} title="Нова сім’я" onClose={()=>{if(!busy)setDialog(false);}}><form onSubmit={createFamily}><Field label="Назва сім’ї" full><input value={name} onChange={e=>setName(e.target.value)} maxLength={150} placeholder="Напр. Родина Коваленків" required disabled={busy}/></Field><div className="form-actions"><Button type="button" variant="ghost" disabled={busy} onClick={()=>setDialog(false)}>Скасувати</Button><Button type="submit" disabled={busy||!name.trim()}>{busy?'Зберігаємо…':'Створити'}</Button></div></form></Dialog>}
+  </>;
 }
 
 function Team({ api, currentUser }) {
@@ -3339,27 +3319,16 @@ function Supervisions({ api, role, user }) {
 }
 
 function Archive({ api, openPatient }) {
-  const [rows, setRows] = useState([]);
-  const [query,setQuery]=useState(''),[view,setView]=useState('table');
-  const visible=rows.filter(p=>[p.name,p.patient_no,p.phone,p.category,p.psychologist].some(v=>String(v || '').toLocaleLowerCase('uk').includes(query.toLocaleLowerCase('uk'))));
-  const [error, setError] = useState('');
-  async function load() {
-    try { setRows(await api('GET', '/api/patients?status=archived')); setError(''); }
-    catch (e) { setError(e.message); }
-  }
-  useEffect(() => { load(); }, []);
-
-  return (
-    <>
-      <PageHead eyebrow="ІСТОРІЯ ЦЕНТРУ" title="Архів пацієнтів" subtitle="Завершені курси не видаляються. При повторному зверненні відкривається новий курс у тій самій картці." actions={<Button variant="secondary" onClick={load}>Оновити</Button>} />
-      {error && <div className="alert error">{error}</div>}
-      <section className="surface">
-        <div className="toolbar"><div className="search-box"><AppIcon name="search"/><input aria-label="Пошук в архіві" type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="ПІБ, номер картки або телефон" /></div><span className="directory-total">Знайдено: {visible.length}</span><ViewSwitch value={view} onChange={setView}/></div>
-        {!visible.length?<Empty title={rows.length?'Нічого не знайдено':'Архів порожній'} text={rows.length?'Змініть пошук.':'Після завершення курсу картка пацієнта з’явиться тут.'}/>:<PatientDirectory rows={visible} view={view} onOpen={openPatient} archived />}
-
-      </section>
-    </>
-  );
+  const [query,setQuery]=useState(''),[view,setView]=useState('table'),[page,setPage]=useState(1);
+  const {items:rows,total,loading,error,reload}=usePatientDirectory(api,{search:query,page,status:'archived'});
+  return <>
+    <PageHead eyebrow="ІСТОРІЯ ЦЕНТРУ" title="Архів пацієнтів" subtitle="Завершені курси не видаляються. При повторному зверненні відкрийте новий курс у тій самій картці." actions={<Button variant="secondary" disabled={loading} onClick={reload}>Оновити</Button>}/>
+    {error&&<div className="alert error" role="alert">{error}<Button variant="secondary" onClick={reload}>Повторити</Button></div>}
+    <section className="surface"><div className="toolbar"><div className="search-box"><AppIcon name="search"/><input aria-label="Пошук в архіві" type="search" value={query} onChange={e=>{setQuery(e.target.value);setPage(1);}} placeholder="ПІБ, номер картки або телефон"/></div><span className="directory-total">Знайдено: {total}</span><ViewSwitch value={view} onChange={setView}/></div>
+      {loading?<Spinner/>:error?null:!rows.length?<Empty title={query?'Нічого не знайдено':'Архів порожній'} text={query?'Змініть пошук.':'Після завершення курсу картка пацієнта з’явиться тут.'}/>:<PatientDirectory rows={rows} view={view} onOpen={openPatient} archived/>}
+      {total>25&&<div className="directory-pagination"><Button variant="secondary" disabled={loading||page===1} onClick={()=>setPage(p=>p-1)}>Назад</Button><span>Сторінка {page} з {Math.ceil(total/25)}</span><Button variant="secondary" disabled={loading||page*25>=total} onClick={()=>setPage(p=>p+1)}>Далі</Button></div>}
+    </section>
+  </>;
 }
 
 function Audit({ api }) {
@@ -3521,7 +3490,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
   }, [apiBase]);
 
   const content = (() => {
-    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={goBack} draftSession={draftSession} />;
+    if (page === 'patient-card' && patientId) return <PatientCard key={patientId} api={api} role={user.role} patientId={patientId} back={goBack} draftSession={draftSession} onBook={startBooking} bookingVersion={bookingVersion} />;
     if (page === 'shift-workspace' && shift && ['admin','reception'].includes(user.role)) return <ShiftWorkspace api={api} shift={{...shift,shift_date:receptionAccess?.access_date || shift.shift_date}} openPatient={openPatient} openCalendar={() => navigate('calendar')} onBook={startBooking} onCreatePatient={registerPatient} refreshVersion={bookingVersion} savedDate={bookingResult?.date} />;
     if (page === 'module-directory') return <ModuleDirectory role={user.role} onNavigate={navigate} Icon={AppIcon}/>;
     if (page === 'handover' && ['admin','reception'].includes(user.role)) return <HandoverBoard api={api}/>;

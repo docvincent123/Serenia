@@ -1,9 +1,9 @@
 import {useEffect,useRef,useState} from 'react';
 
-export default function usePatientDirectory(api,{search,page,status,pageSize=25,enabled=true}){
+export default function usePatientDirectory(api,{search,page,status,pageSize=25,enabled=true,familyId=null}){
  const apiRef=useRef(api),sequence=useRef(0);
  apiRef.current=api;
- const key=JSON.stringify([search.trim(),page,status,pageSize,enabled]);
+ const key=JSON.stringify([search.trim(),page,status,pageSize,enabled,familyId]);
  const [result,setResult]=useState({key:'',items:[],total:0,loading:true,error:''});
  const [revision,setRevision]=useState(0);
  useEffect(()=>{
@@ -13,6 +13,7 @@ export default function usePatientDirectory(api,{search,page,status,pageSize=25,
   const timer=setTimeout(async()=>{
    try{
     const params=new URLSearchParams({q:search.trim(),page:String(page),page_size:String(pageSize),status});
+    if(familyId!==null)params.set('family_id',String(familyId));
     const data=await apiRef.current('GET',`/api/patient-directory?${params}`);
     if(!Array.isArray(data?.items)||!Number.isInteger(data.total))throw new Error('Не вдалося прочитати реєстр. Оновіть сервер SOLVIA.');
     if(sequence.current===request)setResult({...data,key,loading:false,error:''});

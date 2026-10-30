@@ -282,6 +282,7 @@ jobs:
           node tests/motion-workspace.mjs
           node tests/reception-booking.mjs
           node tests/calendar-reliability.mjs
+          node tests/patient-care-ui.mjs
           node tests/desktop-system.mjs
           node tests/device-recovery.mjs
           node tests/account-waiting.mjs

@@ -1,0 +1,10 @@
+.patient-visits-list{display:grid;gap:10px;margin-top:18px}
+.patient-visit-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:16px;border:1px solid #e5e7e8;border-radius:12px;background:#fff}
+.patient-visit-row>div:nth-child(2){flex:1;min-width:160px;overflow-wrap:anywhere}
+.patient-visit-row p{margin:5px 0 0;color:#697580;font-size:13px}
+.patient-visit-time{display:grid;gap:5px;font-size:14px}
+.patient-visit-time span{color:#697580}
+@media(max-width:600px){.patient-visit-row{gap:12px}.patient-visit-row .button{width:100%}.patient-visits .section-head{align-items:stretch}.patient-visits .row-actions{flex-wrap:wrap}}
+@media screen{button.family-card{text-align:left;color:#303b31;font:inherit;cursor:pointer;box-shadow:none;min-height:150px}button.family-card:hover{border-color:#9fa88f;background:#fcfdf9}button.family-card[aria-pressed=true]{border-color:#7d8b6b;background:#f7f9f2}button.family-card:focus-visible{outline:2px solid #7d8b6b;outline-offset:3px}button.family-card>span:last-child{font-size:12px;color:#68755c}.directory-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:18px;font-size:13px;color:#687260}}
+@media screen{.patient-visits .directory-view-switch{display:inline-flex;gap:4px;padding:4px;background:#f5f6f3;border:1px solid #e7e9e3;border-radius:10px}.patient-visits .directory-view-switch button{border:0;border-radius:7px;min-height:36px;padding:7px 13px;font:inherit;font-size:13px;color:#677061;background:transparent;cursor:pointer}.patient-visits .directory-view-switch button[aria-pressed=true]{background:#fff;color:#303b31;box-shadow:0 1px 4px #202c180a}.studio-shell .patient-secondary-actions:not([open])>div{display:none}}
+@media screen and (max-width:760px){.studio-shell .patient-section-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.studio-shell .patient-section-tabs button{min-width:0;white-space:normal;padding:8px 5px;overflow-wrap:anywhere}.studio-shell .patient-secondary-actions>div{left:auto;right:0;min-width:0;width:min(245px,calc(100vw - 64px));box-sizing:border-box}}

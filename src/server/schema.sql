@@ -780,3 +780,7 @@ CREATE TABLE IF NOT EXISTS psychologist_shift_roster (
   PRIMARY KEY(shift_date, psychologist_id)
 );
 CREATE INDEX IF NOT EXISTS idx_psychologist_roster_active ON psychologist_shift_roster(shift_date, removed_at);
+
+-- Bounded patient visit and family directories avoid scans of the full registry.
+CREATE INDEX IF NOT EXISTS idx_attendees_patient_appointments ON attendees(patient_id,appointment_id);
+CREATE INDEX IF NOT EXISTS idx_patients_family_directory ON patients(family_id,id DESC);

@@ -14,12 +14,14 @@ J patientDirectory(DB&db,const J&u,const httplib::Request&r){
  const auto query=r.get_param_value("q");
  check(query.size()<=300&&query.find('\0')==std::string::npos,"Завеликий пошуковий запит");
  const auto status=r.has_param("status")?r.get_param_value("status"):"current";
- check(status=="current"||status=="active"||status=="completed"||status=="archived","Некоректний статус");
+ check(status=="current"||status=="active"||status=="completed"||status=="archived"||status=="all","Некоректний статус");
  std::string source=" FROM patients p JOIN users u ON u.id=p.psychologist_id LEFT JOIN families f ON f.id=p.family_id WHERE ";
  J args=J::array();
- if(status=="current")source+="p.status<>'archived'";
+ if(status=="all")source+="TRUE";
+ else if(status=="current")source+="p.status<>'archived'";
  else {source+="p.status=?";args.push_back(status);}
  if(u["role"]=="psychologist"){source+=" AND p.psychologist_id=?";args.push_back(u["id"]);}
+ if(r.has_param("family_id")){source+=" AND p.family_id=?";args.push_back(integer("family_id",1,1000000));}
  if(!query.empty()){
   source+=" AND (strpos(lower(concat_ws(' ',p.patient_no,p.name,p.phone,p.category,u.name,f.name)),lower(?))>0";
   args.push_back(query);
@@ -33,6 +35,6 @@ J patientDirectory(DB&db,const J&u,const httplib::Request&r){
  }
  const auto total=db.query("SELECT count(*) total"+source,args)[0]["total"];
  args.push_back(size);args.push_back((page-1)*size);
- auto items=db.query("SELECT p.id,p.patient_no,p.name,p.phone,p.dob,p.category,p.status,p.psychologist_id,u.name psychologist,f.name family"+source+" ORDER BY p.created DESC,p.id DESC LIMIT ? OFFSET ?",args);
+ auto items=db.query("SELECT p.id,p.patient_no,p.name,p.phone,p.dob,p.category,p.status,p.family_role,p.psychologist_id,u.name psychologist,f.name family"+source+" ORDER BY p.created DESC,p.id DESC LIMIT ? OFFSET ?",args);
  return {{"items",items},{"total",total},{"page",page},{"page_size",size}};
 }
