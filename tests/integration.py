@@ -1324,4 +1324,40 @@ class Scenario(unittest.TestCase):
         rows=subprocess.check_output(['psql',self.database,'-X','-qAt','-c','SELECT count(*) FROM shift_backup_jobs'],text=True)
         self.assertGreater(int(rows),0)
 
+
+    def test_zzzz_shift_psychologists_role_boundary_and_booking_filter(self):
+        """Today's roster is approved by admin, not inferred from phone login."""
+        day=dt.date.today().isoformat()
+        self.api('admin','POST','/api/shift-day',{'action':'open'})
+        roster=self.api('admin','GET','/api/shift-psychologists')
+        self.assertEqual(roster['date'],day)
+        self.assertTrue(roster['shift_open'])
+        self.assertFalse(roster['configured'])
+        self.assertNotIn('patient',json.dumps(roster).lower())
+        self.api('psychologist','GET','/api/shift-psychologists',status=403)
+        meta=self.api('admin','GET','/api/meta')
+        existing=self.api('psychologist','GET','/api/me')['id']
+        room=meta['rooms'][0]['id']
+        worker=self.api('admin','POST','/api/users',{'name':'Психолог Зміни CI','login':'roster-ci-staff','password':'synthetic-shift-password','role':'psychologist'})['id']
+        try:
+            self.api('reception','POST','/api/shift-psychologists',{'psychologist_id':worker,'on_shift':True},status=403)
+            self.api('admin','POST','/api/shift-psychologists',{'psychologist_id':worker,'on_shift':'true'},status=400)
+            self.api('admin','POST','/api/shift-psychologists',{'psychologist_id':worker,'on_shift':True})
+            result=self.api('reception','GET','/api/shift-psychologists')
+            self.assertTrue(result['configured'])
+            staff=next(p for p in result['psychologists'] if p['id']==worker)
+            self.assertTrue(staff['on_shift'])
+            self.assertEqual(staff['status'],'available')
+            self.assertEqual(staff['busy_count'],0)
+            self.assertFalse(next(p for p in result['psychologists'] if p['id']==existing)['on_shift'])
+            self.api('admin','GET',f'/api/slots?date={day}&psychologist_id={existing}&room_id={room}',status=409)
+            self.api('admin','GET',f'/api/slots?date={day}&psychologist_id={worker}&room_id={room}')
+            self.api('admin','POST','/api/shift-psychologists',{'psychologist_id':worker,'on_shift':False})
+            result=self.api('admin','GET','/api/shift-psychologists')
+            self.assertFalse(next(p for p in result['psychologists'] if p['id']==worker)['on_shift'])
+            self.api('admin','GET',f'/api/slots?date={day}&psychologist_id={worker}&room_id={room}',status=409)
+        finally:
+            self.api('admin','PATCH',f'/api/users/{worker}',{'active':False})
+
+
 if __name__=='__main__': unittest.main()

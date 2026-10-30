@@ -17,6 +17,7 @@ export default function AppIcon({ name, size = 18 }) {
     'shift-workspace': <><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M9 3h6v3H9zM8 11h8M8 16h4M15 16l2 2 4-4"/></>,
     patients: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
     families: <><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M13.5 20a5 5 0 0 1 7.5-4.3"/></>,
+    'psychologist-roster': <><circle cx="8" cy="7" r="3"/><path d="M2 20v-2a6 6 0 0 1 12 0v2M16 6h6M16 11h6M16 16h4"/></>,
     team: <><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/><circle cx="12" cy="7" r="4"/></>,
     rooms: <><path d="M4 21V4a1 1 0 0 1 1-1h11v18"/><path d="M16 8h4v13M8 7h4M8 11h4M8 15h4"/><path d="M3 21h18"/></>,
     discharges: <><path d="M6 3h9l5 5v13H4V3zM14 3v6h6M8 13h8M8 17h5"/></>,

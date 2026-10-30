@@ -1,0 +1,18 @@
+.psy-roster-counts {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px}
+.psy-roster-counts>div {display:grid;gap:6px;background:var(--paper,#fff);border:1px solid var(--line,#e5e5e5);border-radius:12px;padding:14px}
+.psy-roster-counts strong{font-size:26px;font-weight:750}.psy-roster-counts span{font-size:12px;color:var(--muted,#6c6e70)}
+.psy-roster-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(275px,1fr));gap:12px}
+.psy-roster-card{background:var(--paper,#fff);padding:16px;border:1px solid var(--line,#ddd);border-radius:14px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.psy-roster-card.off-shift{background:var(--paper-2,#fafafa);opacity:.78}
+.psy-roster-top{display:flex;align-items:start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.psy-roster-top>div{display:grid;gap:4px;min-width:0;flex:1}.psy-roster-top strong{font-size:14px;overflow-wrap:anywhere}
+.psy-roster-top small,.psy-roster-next,.psy-roster-device{font-size:12px;color:var(--muted,#6c6e70)}
+.psy-roster-status{display:inline-flex;align-items:center;border-radius:20px;padding:6px 9px;font-size:11px;font-weight:700;background:#efefef;color:#555}
+.psy-roster-status.busy{background:#fff0e0;color:#8b4a13}.psy-roster-status.waiting{background:#fff8df;color:#735a19}.psy-roster-status.available{background:#eaf6ee;color:#226842}
+.psy-roster-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.psy-roster-facts>div{display:grid;gap:4px;padding:11px;border:1px solid var(--line,#e5e5e5);border-radius:9px;background:var(--paper-2,#fafafa)}
+.psy-roster-facts b{font-size:19px}.psy-roster-facts small{font-size:10px;color:var(--muted,#666)}
+.psy-roster-next{margin:0}.psy-roster-next strong{color:var(--ink,#242529)}
+.psy-roster-toggle{align-self:flex-start;margin-top:auto;min-height:36px}
+.psy-roster-notice{border-left:3px solid #b88c31;background:#fffaf0;padding:12px;border-radius:8px;font-size:13px;line-height:1.5}
+@media(max-width:650px){.psy-roster-counts{grid-template-columns:repeat(2,minmax(0,1fr))}.psy-roster-grid{grid-template-columns:minmax(0,1fr)}}

@@ -22,6 +22,7 @@ import usePatientDirectory from './usePatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
 import CenterHome from './CenterHome.jsx';
 import HandoverBoard from './HandoverBoard.jsx';
+import PsychologistShiftBoard from './PsychologistShiftBoard.jsx';
 import ServerReadiness from './ServerReadiness.jsx';
 import AppIcon from './AppIcon.jsx';
 import {ServiceStatus,ServiceControls} from './ServiceStatus.jsx';
@@ -3532,6 +3533,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'calendar') return <Calendar key={`${bookingVersion}:${calendarFocus||''}`} api={api} role={user.role} openPatient={openPatient} onBook={startBooking} initialDate={calendarFocus||bookingResult?.date} />;
     if (page === 'patients') return <Patients api={api} role={user.role} openPatient={openPatient} onBook={startBooking} createRequest={createRequest} onCreateRequestConsumed={()=>setCreateRequest(null)} />;
     if (page === 'families') return <Families api={api} openPatient={openPatient} />;
+    if (page === 'psychologist-roster' && ['admin','reception','director'].includes(user.role)) return <PsychologistShiftBoard api={api} role={user.role}/>;
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports key={shift?.shift_date} api={api} role={user.role} shiftDate={shift?.shift_date} />;

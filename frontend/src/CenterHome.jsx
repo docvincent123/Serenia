@@ -7,7 +7,7 @@ const quickByRole={
   ['shift-workspace','Прийоми сьогодні','Прибуття, виклик на TV','shift-workspace'],
   ['patients','Пацієнти','Знайти картку та історію','patients'],
   ['calendar','Календар','Записи, графіки й кабінети','calendar'],
-  ['team','Команда','Працівники та ролі','team']
+  ['psychologist-roster','Психологи на зміні','Вільні, зайняті, очікування','psychologist-roster']
  ],
  reception:[
   ['new-patient','Новий пацієнт','Створити реєстраційну картку','new-patient'],
