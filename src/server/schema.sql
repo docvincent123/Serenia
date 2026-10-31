@@ -795,3 +795,9 @@ CREATE TABLE IF NOT EXISTS rehabilitation_requests (
   created TEXT NOT NULL,
   PRIMARY KEY(user_id,client_key)
 );
+
+-- Paper documents retain the photograph and the processed copy independently.
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'digital';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS scan_data TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS original_data TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS paper_signed BOOLEAN NOT NULL DEFAULT FALSE;

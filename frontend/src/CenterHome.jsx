@@ -17,27 +17,6 @@ const quickByRole={
  ]
 };
 const fmtDate=value=>value?new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'long'}).format(new Date(value+'T12:00:00')):'Сьогодні';
-function AdminServerStatus({api}){
- const [data,setData]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
- async function load(){
-  setLoading(true);
-  try{setData(await api('GET','/api/admin/system'));setError('');}
-  catch(e){setError(e.message);}
-  finally{setLoading(false);}
- }
- return <details className="center-home-extras center-server-status" onToggle={e=>{if(e.currentTarget.open&&!data&&!loading)void load();}}>
-  <summary>Сервер і резервні копії</summary>
-  {error&&<p role="alert">Помилка отримання стану: {error} <button type="button" className="button secondary" onClick={load}>Повторити</button></p>}
-  {loading&&<p>Перевіряємо стан сервера…</p>}
-  {data&&<div className="center-server-facts">
-   <div><span>PostgreSQL</span><strong>{data.database?.name||'Невідомо'} · {data.database?.size||'—'}</strong></div>
-   <div><span>Остання резервна операція</span><strong>{data.backups?.[0]?.created?.replace('T',' ').slice(0,16)||'Немає даних'}</strong></div>
-   <div><span>Результат</span><strong>{data.backups?.[0]?.status==='success'?'Успішно':'Потребує перевірки'}</strong></div>
-  </div>}
-  <button className="button secondary" type="button" disabled={loading} onClick={load}>Оновити стан</button>
- </details>;
-}
-
 export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpenPatient}){
  const [snapshot,setSnapshot]=useState(null),[error,setError]=useState(''),[refreshing,setRefreshing]=useState(false),[lastSync,setLastSync]=useState(null);
  const apiRef=useRef(api),sequence=useRef(0);apiRef.current=api;
@@ -99,8 +78,6 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
     </button>)}</div>}
   </section>
   <div className="center-home-footer"><span>Активних пацієнтів: <b>{snapshot?.active_patients??'—'}</b> · Лист очікування: <b>{snapshot?.waiting_list??'—'}</b></span>
-   <button type="button" className="center-home-more" onClick={()=>onNavigate('module-directory')}>Інші функції центру <span aria-hidden="true">→</span></button>
   </div>
- {role==='admin'&&<AdminServerStatus api={api}/>}
  </div>;
 }

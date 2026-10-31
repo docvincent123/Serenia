@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {filterVisits,visitState,visitKey} from '../frontend/src/shift-workspace.mjs';
+import {filterVisits,visitState,visitKey,waitingMinutes} from '../frontend/src/shift-workspace.mjs';
 const group = {appointment_id:10,psychologist_id:3,patient:'Тестовий пацієнт',patient_no:'12345',status:'scheduled'};
 const rows=[{...group,patient_id:1,completed_at:'2026-10-13T10:00:00'}, {...group,patient_id:2,arrived_at:'2026-10-13T09:00:00'},
   {...group,appointment_id:11,patient_id:1}, {...group,appointment_id:12,patient_id:3,status:'no_show'},
@@ -25,3 +25,11 @@ const unordered = [
 assert.deepEqual(filterVisits(unordered).map(x=>x.appointment_id),[21,22], 'Visits must follow chronological order');
 assert.equal(filterVisits(unordered,{psychologist:3}).length,2,'Numeric and select-string filters must agree');
 assert.equal(unordered[0].appointment_id,22,'Filtering must not reorder source data');
+
+const now=Date.parse('2026-10-31T10:30:00');
+assert.equal(waitingMinutes({...group,arrived_at:'2026-10-31T10:10:00'},now),20);
+assert.equal(waitingMinutes({...group,arrived_at:'2026-10-31T11:00:00'},now),0);
+assert.equal(waitingMinutes({...group,arrived_at:'bad'},now),null);
+assert.equal(waitingMinutes({...group,arrived_at:'2026-10-31T10:10:00',started_at:'2026-10-31T10:15:00'},now),null);
+assert.equal(filterVisits(rows,{status:'arrived'}).length,1);
+assert.equal(filterVisits([{...group,room:'Кабінет 4'}],{query:'кабінет 4'}).length,1);

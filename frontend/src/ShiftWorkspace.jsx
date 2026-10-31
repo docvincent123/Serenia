@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { filterVisits, visitKey, visitState } from './shift-workspace.mjs';
+import { filterVisits, visitKey, visitState, waitingMinutes } from './shift-workspace.mjs';
 
 const stateLabels = {expected:'Очікуємо прибуття',arrived:'Пацієнт прибув',in_progress:'Консультація триває',completed:'Завершена',excluded:'Не проведено',draft:'Чернетка'};
 const kindLabels = {individual:'Індивідуальна',group:'Групова',family:'Сімейна',child:'Дитяча',crisis:'Кризова'};
@@ -10,6 +10,9 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
   const [day, setDay] = useState(date);
   useEffect(()=>{if(savedDate)setDay(savedDate);},[savedDate]);
   const [rows, setRows] = useState([]);
+  const [status,setStatus]=useState('');
+  const [clock,setClock]=useState(Date.now());
+  useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()),30000);return()=>clearInterval(timer);},[]);
   const [tab, setTab] = useState('active');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -48,9 +51,11 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
   const counts = useMemo(() => ({active:rows.filter(r=>['expected','arrived','in_progress'].includes(visitState(r))).length,
     expected:rows.filter(r=>visitState(r)==='expected').length,
     onsite:rows.filter(r=>['arrived','in_progress'].includes(visitState(r))).length,
+    waiting:rows.filter(r=>visitState(r)==='arrived').length,
+    inProgress:rows.filter(r=>visitState(r)==='in_progress').length,
     completed:rows.filter(r=>visitState(r)==='completed').length,
     excluded:rows.filter(r=>visitState(r)==='excluded').length}), [rows]);
-  const visible = filterVisits(rows,{tab,psychologist,query});
+  const visible = filterVisits(rows,{tab,psychologist,query,status});
   const detail = visible.find(r=>visitKey(r)===selected);
   const psychologists = [...new Map(rows.map(row=>[row.psychologist_id,row.psychologist])).entries()];
   async function arrive(row) {
@@ -83,15 +88,17 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
       </div></header>
     <div className="shift-summary focus-shift-summary" aria-label="Підсумок зміни">
       <article><span>Очікуємо прибуття</span><strong>{counts.expected}</strong></article>
-      <article><span>У центрі / на консультації</span><strong>{counts.onsite}</strong></article>
+      <article><span>Очікують у центрі</span><strong>{counts.waiting}</strong></article>
+      <article><span>На консультації</span><strong>{counts.inProgress}</strong></article>
       <article><span>Проконсультовано</span><strong>{counts.completed}</strong></article>
     </div>
     {success&&<div className="alert" role="status">{success}</div>}
     {error && <div className="alert error" role="alert">{error} <button className="button ghost" onClick={load}>Повторити</button></div>}
     <section className="surface shift-controls">
       <div className="shift-tabs" role="group" aria-label="Статус прийомів">{[['active','Активні'],['completed','Проконсультовані'],['excluded','Не проведені']].map(([key,label])=>
-        <button key={key} aria-pressed={tab===key} className={tab===key?'active':''} onClick={()=>{setTab(key);setSelected('');}}>{label}</button>)}</div>
+        <button key={key} aria-pressed={tab===key} className={tab===key?'active':''} onClick={()=>{setTab(key);setStatus('');setSelected('');}}>{label}</button>)}</div>
       <div className="focus-shift-search">
+        {tab==='active'&&<label className="shift-search">Стан прийому<select value={status} onChange={e=>{setStatus(e.target.value);setSelected('');}}><option value="">Усі активні</option><option value="expected">Очікуємо прибуття</option><option value="arrived">Очікують у центрі</option><option value="in_progress">На консультації</option></select></label>}
         <label className="shift-search">Знайти пацієнта
           <input type="search" value={query} onChange={e=>setQuery(e.target.value)}
             placeholder="ПІБ, номер картки або телефон" />
@@ -114,12 +121,20 @@ export default function ShiftWorkspace({ api, shift, openPatient, openCalendar, 
     <div className="shift-columns">
       <section className="surface shift-roster"><div className="section-head"><h2>{tab==='completed'?'Завершені консультації':tab==='excluded'?'Не проведені прийоми':'Активні пацієнти'}</h2><small>{updated ? `Оновлено о ${updated}` : 'Завантаження…'}</small></div>
         <p className="shift-explanation">{tab==='completed'?'Це завершені прийоми за обрану дату. Пацієнти залишаються на супроводі; завершення курсу оформлюється окремо.':'Один рядок — один пацієнт у прийомі. Учасники групи обліковуються окремо.'}</p>
-        {!loaded && !error ? <p role="status">Завантажуємо прийоми…</p> : visible.length===0 ? <div className="shift-empty"><strong>{query||psychologist?'Немає збігів':tab==='completed'?'Завершених консультацій ще немає':tab==='excluded'?'Непроведених прийомів немає':counts.completed>0?'Усі консультації завершено':'На обрану дату консультацій немає'}</strong><p>{query||psychologist?'Змініть пошук або скиньте фільтри.':tab==='active'?'Натисніть «Записати на прийом», щоб додати консультацію.':'Список оновиться після зміни статусу прийомів.'}</p></div> :
-          <><div className="reception-list-columns" aria-hidden="true"><span>Час</span><span>Пацієнт / психолог</span><span>Статус</span></div><div className="shift-visit-list">{visible.map(row=><button key={visitKey(row)} className={`shift-visit ${selected===visitKey(row)?'selected':''}`} aria-pressed={selected===visitKey(row)} onClick={()=>setSelected(visitKey(row))}>
-            <span className="shift-time"><strong>{time(row.start)}</strong><small>{time(row.end)}</small></span>
-            <span className="shift-person"><strong>{row.patient}</strong><span>№ {row.patient_no || '—'} · {row.psychologist}</span><small>{row.room} · {kindLabels[row.kind] || row.kind}</small></span>
-            <span className={`visit-status ${visitState(row)}`}>{stateLabels[visitState(row)]}{visitState(row)==='expected'&&row.start<new Date().toLocaleString('sv-SE').replace(' ','T').slice(0,16)?' · запізнення':''}</span>
-          </button>)}</div></>}
+        {!loaded && !error ? <p role="status">Завантажуємо прийоми…</p> : visible.length===0 ? <div className="shift-empty"><strong>{query||psychologist||status?'Немає збігів':tab==='completed'?'Завершених консультацій ще немає':tab==='excluded'?'Непроведених прийомів немає':counts.completed>0?'Усі консультації завершено':'На обрану дату консультацій немає'}</strong><p>{query||psychologist||status?'Змініть пошук або скиньте фільтри.':tab==='active'?'Натисніть «Записати на прийом», щоб додати консультацію.':'Список оновиться після зміни статусу прийомів.'}</p></div> :
+          <div className="reception-table-scroll"><table className="reception-table">
+            <caption className="sr-only">Прийоми за {day}. Оберіть пацієнта для доступних дій.</caption>
+            <thead><tr><th scope="col">Час</th><th scope="col">Пацієнт</th><th scope="col">Психолог / кабінет</th><th scope="col">Статус</th><th scope="col">Очікування</th><th scope="col">Дії</th></tr></thead>
+            <tbody>{visible.map(row=>{const waiting=waitingMinutes(row,clock);const state=visitState(row);return <tr key={visitKey(row)} className={selected===visitKey(row)?'selected':''}>
+              <td className="shift-time"><strong>{time(row.start)}</strong><small>{time(row.end)}</small></td>
+              <td><button className="visit-patient-link" onClick={()=>setSelected(visitKey(row))} aria-pressed={selected===visitKey(row)}>{row.patient}</button><small>№ {row.patient_no||'—'}</small></td>
+              <td><strong>{row.psychologist}</strong><small>{row.room||'—'} · {kindLabels[row.kind]||row.kind}</small></td>
+              <td><span className={`visit-status ${state}`}>{stateLabels[state]}</span>{state==='expected'&&Date.parse(row.start)<clock&&<small className="visit-attention">Час прийому минув</small>}</td>
+              <td><span className={waiting>=15?'visit-attention':''}>{waiting===null?'—':`${waiting} хв`}</span></td>
+              <td>{state==='expected'&&day===date?<button className="button secondary" disabled={busy} onClick={()=>arrive(row)}>Прибув</button>:state==='arrived'?<button className="button secondary" disabled={busy} onClick={()=>callOnTv(row)}>На TV</button>:<button className="button ghost" onClick={()=>setSelected(visitKey(row))}>Деталі</button>}</td>
+            </tr>})}</tbody>
+          </table></div>}
+
       </section>
       <aside className="surface shift-detail"><div className="eyebrow">КАРТКА ПРИЙОМУ</div>{!detail ? <div className="shift-empty"><strong>Оберіть пацієнта</strong><p>Контактні дані, час і доступні дії з’являться тут.</p></div> : <>
         <h2>{detail.patient}</h2><span className={`visit-status ${visitState(detail)}`}>{stateLabels[visitState(detail)]}</span>

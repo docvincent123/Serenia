@@ -79,7 +79,7 @@ try{
   assert(directoryQueries.length>0&&directoryQueries.every(q=>q.get('page_size')==='8'),'Booking uses bounded patient search');
   assert.equal(await page.getByRole('heading',{name:'Календар центру',exact:true}).count(),0,'Booking must not navigate to calendar');
   // Transfer the exact selected group appointment, retaining every participant.
-  await page.locator('.shift-visit').first().click();
+  await page.locator('.visit-patient-link').first().click();
   await page.getByRole('button',{name:'Перенести прийом',exact:true}).click();
   dialog=page.getByRole('dialog',{name:'Перенести / змінити прийом',exact:true});
   await dialog.getByLabel('Час початку',{exact:true}).waitFor();
