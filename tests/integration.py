@@ -572,6 +572,26 @@ class Scenario(unittest.TestCase):
         self.assertEqual(docs[0]['center_name_snapshot'],'Тестовий центр')
         self.assertEqual(docs[0]['center_email_snapshot'],'test@example.com')
 
+        scan_image=docs[0]['signature_data']
+        paper={'document_type':'other','title':'Паперовий документ','content':'Перевірений текст',
+               'status':'signed','signed_by_name':'Тестовий Пацієнт','signature_data':'',
+               'source':'paper_scan','scan_data':scan_image,'original_data':scan_image,'paper_signed':True}
+        for change in ({'paper_signed':False},{'paper_signed':'yes'},{'scan_data':''},
+                       {'original_data':''},{'scan_data':'data:image/jpeg;base64,AAAA'},
+                       {'source':'wrong'},{'source':'digital'}):
+            self.api(rec,'POST',f'/api/patients/{pid}/documents',{**paper,**change},status=400)
+        self.api(director,'POST',f'/api/patients/{pid}/documents',paper,status=403)
+        self.api('other','POST',f'/api/patients/{pid}/documents',paper,status=403)
+        saved_paper=self.api(rec,'POST',f'/api/patients/{pid}/documents',paper)
+        paper_docs=self.api(rec,'GET',f'/api/patients/{pid}/documents')
+        self.assertEqual(paper_docs[0]['id'],saved_paper['id'])
+        self.assertEqual(paper_docs[0]['source'],'paper_scan')
+        self.assertEqual(paper_docs[0]['scan_data'],scan_image)
+        self.assertEqual(paper_docs[0]['original_data'],scan_image)
+        self.assertTrue(paper_docs[0]['paper_signed'])
+        self.assertEqual(paper_docs[0]['signature_data'],'')
+        self.assertEqual(len(paper_docs),len(docs)+1) # failed writes leave no records
+
         referral=self.api(rec,'POST',f'/api/patients/{pid}/referrals',{
             'destination_type':'Психіатр',
             'destination_name':'Тестовий спеціаліст',

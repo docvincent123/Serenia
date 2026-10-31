@@ -1,3 +1,4 @@
+import DocumentPhoto from './DocumentPhoto';
 import {request} from './request.mjs';
 import StudioWorkspace from './StudioWorkspace.jsx';
 import TvSettings,{TvCallPanel} from './TvSettings.jsx';
@@ -1124,6 +1125,9 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
   const isAdmin = role === 'admin';
   const isReception = role === 'reception';
   const canManageCourse = isAdmin || isReception;
+  const [documentProcessing,setDocumentProcessing]=useState(false);
+  const [documentSaving,setDocumentSaving]=useState(false);
+  const documentSaveLock=useRef(false);
   const canManageDocuments = isAdmin || isReception || isPsychologist;
   const canReadConsultations = isPsychologist || isAdmin;
 
@@ -1369,7 +1373,7 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
       content: template.content,
       status: 'signed',
       signed_by_name: card?.name || '',
-      signature_data: ''
+      signature_data: '', source: 'paper_scan', scan_data: '', original_data: '', paper_signed: false
     });
     setDialog('document');
   }
@@ -1388,11 +1392,14 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
 
   async function saveDocument(e) {
     e.preventDefault();
+    if(documentSaveLock.current || documentProcessing)return;
+    documentSaveLock.current=true;setDocumentSaving(true);
     try {
       await api('POST', '/api/patients/' + patientId + '/documents', documentForm);
       setDialog('');
       await load();
     } catch (e) { setError(e.message); }
+    finally {documentSaveLock.current=false;setDocumentSaving(false);}
   }
 
   async function previewDocument(id) {
@@ -1410,7 +1417,7 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
 
   function printDocument() {
     const d=documentPreview;
-    if(!d?.title?.trim()||!d?.patient_name?.trim()||!d?.content?.trim()||!d?.signed_at||(d.status==='signed'&&(!d.signed_by_name?.trim()||!d.signature_data))){setError('Документ не готовий до друку: перевірте назву, текст, пацієнта, дату та підпис.');return;}
+    if(!d?.title?.trim()||!d?.patient_name?.trim()||(d.source!=='paper_scan'&&!d?.content?.trim())||!d?.signed_at||(d.status==='signed'&&(!d.signed_by_name?.trim()||(d.source==='paper_scan'?(!d.scan_data||!d.paper_signed):!d.signature_data)))){setError('Документ не готовий до друку: перевірте назву, текст, пацієнта, дату та підпис.');return;}
     const node = document.querySelector('.consent-print');
     printStandaloneNode(
       node,
@@ -1727,6 +1734,11 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
       {dialog === 'document' && canManageDocuments && (
         <Dialog title="Документ / згода" subtitle={card.name} onClose={() => setDialog('')} wide>
           <form className="form-grid" onSubmit={saveDocument}>
+            <Field label="Спосіб додавання" full><select value={documentForm.source || 'digital'} onChange={e=>setDocumentForm({...documentForm,source:e.target.value,scan_data:'',original_data:'',signature_data:'',paper_signed:false})}>
+              <option value="paper_scan">Фото паперового документа</option><option value="digital">Підпис на екрані</option>
+            </select></Field>
+            {documentForm.source==='paper_scan'&&<DocumentPhoto value={documentForm} onChange={setDocumentForm} onError={setError} onProcessingChange={setDocumentProcessing}/>}
+
             {!!centerDocumentTemplates.length && <Field label="Шаблон центру" full>
               <select defaultValue="" onChange={(e)=>{
                 const selected=centerDocumentTemplates.find(t=>String(t.id)===e.target.value);
@@ -1756,16 +1768,16 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
               </select>
             </Field>
             <Field label="Назва" full><input value={documentForm.title} onChange={(e) => setDocumentForm({ ...documentForm, title: e.target.value })} required /></Field>
-            <Field label="Текст документа" full><textarea rows="8" value={documentForm.content} onChange={(e) => setDocumentForm({ ...documentForm, content: e.target.value })} /></Field>
+            <Field label="Текст документа" full><textarea disabled={documentProcessing||documentSaving} rows="8" value={documentForm.content} onChange={(e) => setDocumentForm({ ...documentForm, content: e.target.value })} /></Field>
             <Field label="ПІБ підписанта" full><input value={documentForm.signed_by_name} onChange={(e) => setDocumentForm({ ...documentForm, signed_by_name: e.target.value })} /></Field>
-            {documentForm.status === 'signed' && (
+            {documentForm.status === 'signed' && documentForm.source !== 'paper_scan' && (
               <div className="field full">
                 <span>Підпис пацієнта / представника</span>
                 <SignaturePad value={documentForm.signature_data} onChange={(signature_data) => setDocumentForm({ ...documentForm, signature_data })} />
               </div>
             )}
             <div className="alert info full-span">Після збереження підпис і текст документа залишаються в картці. Кнопка «Перегляд / PDF» формує друковану версію для збереження у PDF.</div>
-            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Зберегти документ</Button></div>
+            <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit" disabled={documentSaving || documentProcessing || documentForm.source==='paper_scan'&&(!documentForm.scan_data||(documentForm.status==='signed'&&!documentForm.paper_signed))}>Зберегти документ</Button></div>
           </form>
         </Dialog>
       )}
@@ -1788,6 +1800,7 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
               <div><dt>Підписант</dt><dd>{documentPreview.signed_by_name || '—'}</dd></div>
               <div><dt>Дата</dt><dd>{documentPreview.signed_at?.replace('T',' ')}</dd></div>
             </dl>
+            {documentPreview.source === 'paper_scan' && <div><p>Скан паперового документа · {documentPreview.paper_signed ? 'підпис перевірено працівником' : 'без підтвердження підпису'}</p><img src={documentPreview.scan_data} alt="Скан документа" style={{width:'100%'}}/><details className="no-print"><summary>Вихідне кольорове фото</summary><img src={documentPreview.original_data} alt="Кольорове фото" style={{maxWidth:'100%'}}/></details></div>}
             {documentPreview.signature_data && <div className="saved-signature"><img src={documentPreview.signature_data} alt="Підпис" /><span>підпис</span></div>}
             <footer>
               <span>{documentPreview.center_name_snapshot || documentPreview.center?.center_name || 'SOLVIA Center'}</span>

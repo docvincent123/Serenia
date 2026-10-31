@@ -280,6 +280,7 @@ jobs:
           node tests/ui-regression.mjs
           node tests/login-studio.mjs
           node tests/motion-workspace.mjs
+          node tests/document-photo-ui.cjs
           node tests/reception-booking.mjs
           node tests/calendar-reliability.mjs
           node tests/patient-care-ui.mjs
