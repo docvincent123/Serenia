@@ -321,9 +321,9 @@ function WorkspaceNavigation({ navigation, role, page, locked, onNavigate }) {
   // The sidebar contains only four day-to-day destinations. Other allowed
   // features are discoverable from the home page, never removed from the API.
   const preferred = role === 'admin'
-    ? [['dashboard','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти']]
+    ? [['dashboard','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти'],['team','Команда']]
     : role === 'reception'
-    ? [['reception-home','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти']]
+    ? [['reception-home','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти'],['psychologist-roster','На зміні']]
     : role === 'director'
     ? [['dashboard','Головна'],['workload','Навантаження'],['discharges','Виписки']]
     : [['calendar','Мої прийоми'],['patients','Пацієнти'],['reports','Звіти']];
