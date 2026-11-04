@@ -64,6 +64,16 @@ try {
     catch { throw ("Native login failed: " + [Native]::DialogText($client.Id) + " / " + $_.Exception.Message) }
     Start-Sleep -Milliseconds 400
     if ([Native]::GetDlgItem($hwnd,50) -eq [IntPtr]::Zero) { throw "Login did not show native table: $role" }
+    if ($role -eq 'reception') {
+      # The registrar must land directly on patient search, not the calendar.
+      $search=[Native]::GetDlgItem($hwnd,30)
+      $list=[Native]::GetDlgItem($hwnd,50)
+      if ($search -eq [IntPtr]::Zero) { throw 'Reception did not open the search workspace' }
+      [Native]::SetWindowText($search,'дЕмО')
+      $matches=[Native]::SendMessage($list,0x1004,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+      if ($matches -lt 3) { throw "Case-insensitive Ukrainian patient search failed: $matches matches" }
+      [Native]::SetWindowText($search,'')
+    }
     $rect=New-Object Native+RECT
     [Native]::GetWindowRect($hwnd,[ref]$rect) | Out-Null
     $bitmap=New-Object Drawing.Bitmap(($rect.Right-$rect.Left),($rect.Bottom-$rect.Top))
