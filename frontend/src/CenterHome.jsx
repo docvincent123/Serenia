@@ -19,7 +19,7 @@ const receptionLinks=[
   ['shift-workspace','Прийоми за зміну','Прибуття та виклики'],
   ['psychologist-roster','Психологи на зміні','Доступні спеціалісти'],
   ['calendar','Календар','Час і кабінети'],
-  ['patients','Пацієнти','Реєстраційні картки']
+  ['patients','Пацієнти й документи','Картки, сканування, підписи']
 ];
 
 export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpenPatient}){
@@ -57,12 +57,12 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
   ];
   const links=isReception?receptionLinks:administratorLinks;
   const upcoming=[...(snapshot?.next||[])].sort((a,b)=>String(a.start||'').localeCompare(String(b.start||''))).slice(0,6);
-  const syncLabel=error?'Сервер недоступний':refreshing?'Оновлення даних…':lastSync?'Оновлено о '+lastSync.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'}):'Підключаємося…';
+  const syncLabel=error?'Немає зв’язку з сервером':refreshing?'Оновлюємо дані…':lastSync?'Оновлено о '+lastSync.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'}):'Підключаємося…';
 
   return <div className="center-home flow-desk" data-flow-role={role}>
     <header className="flow-desk-hero">
       <div className="flow-desk-title">
-        <div className="flow-desk-overline"><span className="flow-desk-overline-mark"/> SOLVIA <span className="flow-desk-overline-divider">/</span> FLOW DESK</div>
+        <div className="flow-desk-overline"><span className="flow-desk-overline-mark"/> SOLVIA <span className="flow-desk-overline-divider">/</span> {isReception?'РОБОЧЕ МІСЦЕ РЕЄСТРАТОРА':'АДМІНІСТРУВАННЯ'}</div>
         <h1>{isReception?'Реєстратура':'Керування центром'}</h1>
         <p>{formatDay(snapshot?.date)} <span aria-hidden="true">·</span> {isReception?'Записи, прибуття та пацієнти без зайвих переходів':'Головні показники та інструменти адміністратора'}</p>
       </div>
@@ -75,7 +75,7 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
       </div>
     </header>
 
-    {error&&<div role="alert" className="alert error">Дані наразі недоступні: {error} <button type="button" className="button secondary" onClick={reload}>Спробувати ще раз</button></div>}
+    {error&&<div role="alert" className="alert error flow-desk-error"><div><strong>З’єднання втрачено</strong><p>{error}. Дані прийомів приховано, щоб не показувати застарілий список. {lastSync?'Остання успішна перевірка: '+lastSync.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'}):''}</p></div><button type="button" className="button secondary" onClick={reload} disabled={refreshing}>{refreshing?'Перевіряємо…':'Повторити перевірку'}</button></div>}
 
     <section className="flow-desk-today" aria-label="Показники за сьогодні">
       <div className="flow-desk-section-head"><div><span className="flow-desk-section-label">ОГЛЯД</span><h2>Сьогодні в центрі</h2></div><button className="flow-desk-text-link" onClick={()=>onNavigate('shift-workspace')} type="button">Усі прийоми <AppIcon name="arrow-right" size={16}/></button></div>
@@ -117,7 +117,7 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
           <span className="flow-desk-shortcut-copy"><strong>{title}</strong><small>{subtitle}</small></span>
           <AppIcon name="arrow-right" size={16}/>
         </button>)}</div>
-        <div className="flow-desk-panel-note"><AppIcon name="check" size={16}/><span>Дані надходять із SOLVIA Server, без ручного дублювання.</span></div>
+        <div className="flow-desk-panel-note"><AppIcon name="check" size={16}/><span>Статуси й прийоми надходять із сервера. Для оновлення натисніть «Оновити».</span></div>
       </aside>
     </div>
   </div>;
