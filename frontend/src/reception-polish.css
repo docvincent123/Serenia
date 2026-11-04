@@ -1,0 +1,61 @@
+/* SOLVIA reception polish — predictable density, clear scan previews, no visual effects that tax low-power PCs. */
+.flow-desk-error {
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:14px;border:1px solid #e5b5ae;border-left:4px solid #cc5448;
+  border-radius:12px;padding:15px 18px;background:#fff7f5;color:#693631;
+}
+.flow-desk-error strong{display:block;font-size:14px;margin-bottom:4px;}
+.flow-desk-error p{margin:0;font-size:12px;line-height:1.5;max-width:690px;}
+.flow-desk-error .button{flex-shrink:0;}
+.flow-desk-hero-actions .flow-desk-create{min-width:180px;}
+.flow-desk-metric:focus-visible,.flow-desk-shortcut:focus-visible,
+.flow-desk-visit:focus-visible{outline:3px solid #b77d00;outline-offset:2px;}
+.flow-desk-visit-patient strong{font-size:13px;}
+.flow-desk-shortcut-copy strong{font-size:13px;}
+.flow-desk-primary-actions button{min-height:104px;}
+/* Document scan / OCR processing panel. */
+.document-photo{
+  display:grid;gap:15px;min-width:0;padding:18px;
+  background:#fff;border:1px solid #e0e5eb;border-radius:16px;
+  color:#24303c;box-shadow:0 1px 7px #20283208;
+}
+.document-photo-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+.document-photo-heading strong{display:block;font-size:16px;font-weight:750;line-height:1.35;}
+.document-photo-heading p{margin:5px 0 0;font-size:12px;line-height:1.5;color:#657485;max-width:560px;}
+.document-photo-local{padding:7px 10px;background:#e6f5ec;border:1px solid #cfe8d7;border-radius:9px;color:#236344;font-size:11px;font-weight:700;white-space:nowrap;}
+.document-photo-picker{
+  display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:15px;
+  background:#f8fafb;border:1px dashed #b7c1cb;border-radius:12px;min-width:0;
+  color:#56677a;font-size:12px;line-height:1.4;
+}
+.document-photo-picker-title{color:#24303c;font-size:13px;font-weight:750;flex-basis:100%;}
+.document-photo-picker input[type=file]{display:block;flex-basis:100%;max-width:100%;height:auto;min-height:36px;background:#fff;border-radius:9px;padding:7px;}
+.document-photo-picker input::file-selector-button{background:#f3ca56;color:#26313c;border:0;border-radius:7px;padding:8px 12px;margin-right:12px;font-weight:700;cursor:pointer;}
+.document-photo-progress{margin:0!important;padding:10px 12px;border-radius:10px;background:#fff7de;color:#735522;font-size:12px;line-height:1.45;}
+.document-photo-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.document-photo-toolbar .button{min-height:38px;padding:8px 12px;font-size:12px;white-space:normal;}
+.document-photo-crop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#465467;font-size:12px;font-weight:650;}
+.document-photo-crop span{font-variant-numeric:tabular-nums;color:#26313d;}
+.document-photo-crop input[type=range]{width:110px;min-width:85px;min-height:20px;accent-color:#cb9a26;}
+.document-photo-compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px;align-items:stretch;min-width:0;}
+.document-photo-compare figure{display:flex;flex-direction:column;gap:10px;margin:0;padding:12px;background:#f6f8fa;border:1px solid #e2e7ee;border-radius:12px;min-width:0;}
+.document-photo-compare figcaption{font-size:12px;font-weight:750;color:#455465;}
+.document-photo-compare img{display:block;max-width:100%;max-height:370px;width:auto;height:auto;object-fit:contain;margin:auto;border:1px solid #d9dee5;background:#fff;box-shadow:0 2px 10px #20283212;}
+.document-photo-confirm{display:flex;align-items:flex-start;gap:10px;background:#fff9e7;padding:12px 13px;border:1px solid #eee0ad;border-radius:10px;font-size:12px;line-height:1.5;color:#483e28;}
+.document-photo-confirm input[type=checkbox]{flex:0 0 auto;margin-top:2px;width:17px;height:17px;accent-color:#bb8b1a;}
+.document-photo-help{margin:0!important;font-size:11px;color:#657485;line-height:1.6;}
+@media(max-width:650px){
+ .flow-desk-table-head{display:none;}
+ .flow-desk-visit{min-width:0;grid-template-columns:68px minmax(0,1fr) auto;
+   grid-template-areas:"time patient status" "time specialist specialist";gap:5px 10px;padding:15px 8px;}
+ .flow-desk-visit time{grid-area:time;align-self:start;}
+ .flow-desk-visit-patient{grid-area:patient;}
+ .flow-desk-visit-psychologist{grid-area:specialist;}
+ .flow-desk-visit-badge{grid-area:status;}
+ .document-photo{padding:12px;}
+ .document-photo-local{white-space:normal;}
+ .document-photo-toolbar .button{flex:1 1 145px;}
+}
+@media(prefers-reduced-motion:reduce){
+ .flow-desk-visit,.flow-desk-metric,.document-photo .button{transition:none!important;transform:none!important;}
+}
