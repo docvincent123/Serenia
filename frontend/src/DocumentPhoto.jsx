@@ -57,7 +57,7 @@ export default function DocumentPhoto({value, onChange, onError, onProcessingCha
   async function load(file) {
     if(!file)return;
     cancel(); const request=++generation.current; setBusy(true);
-    onChange(current=>({...current,scan_data:'',original_data:'',paper_signed:false}));
+    onChange(current=>({...current,scan_data:'',original_data:'',paper_signed:false,content:''}));
     try {
       if(!['image/jpeg','image/png'].includes(file.type)||file.size>20000000)throw Error('Оберіть JPEG/PNG до 20 МБ.');
       const bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});
@@ -73,17 +73,35 @@ export default function DocumentPhoto({value, onChange, onError, onProcessingCha
       const scan=render(bounded,0,0,original);void recognize(scan);
     } catch(e){if(request===generation.current)onError(e.message);} finally{if(request===generation.current||imageRef.current)setBusy(false);}
   }
-  function update(angle,margin){cancel();try{render(image,angle,margin,value.original_data);setRotation(angle);setInset(margin);}catch(e){onError(e.message);}}
-  return <div className="field full document-photo">
-    <label>Фото підписаного документа<input type="file" accept="image/jpeg,image/png" disabled={busy||recognizing} onChange={e=>{load(e.target.files?.[0]);e.target.value='';}}/></label>
+  function update(angle,margin){if(!image)return;cancel();try{render(image,angle,margin,value.original_data);setRotation(angle);setInset(margin);setProgress('Скан змінено. Якщо текст уже розпізнано, перевірте його ще раз.');}catch(e){onError(e.message);}}
+  return <section className="field full document-photo" aria-label="Сканування паперового документа">
+    <div className="document-photo-heading">
+      <div><strong>Сканування паперового документа</strong><p>Завантажте фото, перевірте краї та читабельність, після чого збережіть документ у картці.</p></div>
+      <span className="document-photo-local">Обробка на пристрої</span>
+    </div>
+    <label className="document-photo-picker">
+      <span className="document-photo-picker-title">{value.scan_data?'Замінити фотографію':'Обрати фотографію документа'}</span>
+      <span>JPEG або PNG, до 20 МБ. Зображення обробляється локально.</span>
+      <input type="file" accept="image/jpeg,image/png" disabled={busy||recognizing} onChange={e=>{void load(e.target.files?.[0]);e.target.value='';}}/>
+    </label>
     <canvas ref={canvasRef} hidden />
-    {progress&&<span role="status">{progress}</span>}
+    {progress&&<p role="status" className="document-photo-progress">{progress}</p>}
     {recognizing&&<button className="button secondary" type="button" onClick={cancel}>Зупинити розпізнавання</button>}
     {!!value.scan_data&&<>
-      <div className="page-actions"><button className="button secondary" type="button" disabled={recognizing} onClick={()=>recognize(value.scan_data)}>Розпізнати текст</button><button className="button secondary" disabled={recognizing} type="button" onClick={()=>update((rotation+90)%360,inset)}>Повернути ↻</button><label>Обрізати поля <input disabled={recognizing} type="range" min="0" max="0.2" step="0.01" value={inset} onChange={e=>update(rotation,Number(e.target.value))}/></label><button className="button secondary" disabled={recognizing} type="button" onClick={()=>update(0,0)}>Скинути обробку</button></div>
-      <img src={value.scan_data} alt="Попередній перегляд скану" style={{maxWidth:'100%',maxHeight:400,objectFit:'contain'}} />
-      <label className="paper-confirm"><input type="checkbox" checked={!!value.paper_signed} onChange={e=>onChange(current=>({...current,paper_signed:e.target.checked}))}/> Перевірено: підпис є на паперовому документі</label>
+      <div className="document-photo-toolbar" role="group" aria-label="Обробка сканованого документа">
+        <button className="button secondary" type="button" disabled={recognizing||busy} onClick={()=>void recognize(value.scan_data)}>Повторити розпізнавання</button>
+        <button className="button secondary" type="button" disabled={recognizing||busy} onClick={()=>update((rotation+90)%360,inset)}>Повернути на 90°</button>
+        <label className="document-photo-crop">Обрізати поля <span>{Math.round(inset*100)}%</span>
+          <input disabled={recognizing||busy} type="range" aria-label="Симетричне обрізання країв" min="0" max="0.2" step="0.01" value={inset} onChange={e=>update(rotation,Number(e.target.value))}/>
+        </label>
+        <button className="button secondary" type="button" disabled={recognizing||busy} onClick={()=>update(0,0)}>Скинути</button>
+      </div>
+      <div className="document-photo-compare">
+        {value.original_data&&<figure><figcaption>Оригінальне фото</figcaption><img src={value.original_data} alt="Фото документа до обробки" loading="lazy"/></figure>}
+        <figure><figcaption>Оброблений скан</figcaption><img src={value.scan_data} alt="Попередній перегляд обробленого скана" loading="lazy"/></figure>
+      </div>
+      <label className="paper-confirm document-photo-confirm"><input type="checkbox" checked={!!value.paper_signed} onChange={e=>onChange(current=>({...current,paper_signed:e.target.checked}))}/> Підтверджую, що підпис на оригінальному паперовому документі присутній та видимий на скані.</label>
     </>}
-    <span>Фото обробляється на цьому пристрої. Перевірте читабельність. Текст розпізнається тут українською й англійською; перевірте його перед збереженням. Рукопис може не розпізнатися.</span>
-  </div>;
+    <p className="document-photo-help">Текст розпізнається локально українською та англійською. Перед збереженням перевірте його вручну: OCR може помилятися, особливо в рукописних записах. Обрізайте поля лише так, щоб усі реквізити залишались видимими.</p>
+  </section>;
 }
