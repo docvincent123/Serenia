@@ -17,6 +17,7 @@ import './light-workspace.css';
 import './studio-workspace.css';
 import './studio-login.css';
 import './flow-desk.css';
+import './reception-polish.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
