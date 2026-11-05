@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SOLVIA",
+  "productName": "SOLVIA One",
   "version": "0.1.0",
   "identifier": "com.lemvorilab.solvia",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "SOLVIA · LemvoriLab",
+        "title": "SOLVIA One · LemvoriLab",
         "label": "main",
         "width": 1360,
         "height": 850,

@@ -1,0 +1,17 @@
+name: SOLVIA Rust server migration checks
+on:
+  pull_request:
+    paths:
+      - 'rust-server/**'
+      - '.github/workflows/rust-server.yml'
+  workflow_dispatch:
+jobs:
+  rust-server:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check Rust API migration sidecar
+        run: cargo check --manifest-path rust-server/Cargo.toml
+      - name: Test security boundaries
+        run: cargo test --manifest-path rust-server/Cargo.toml

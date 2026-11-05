@@ -3,7 +3,7 @@ name = "solvia-tauri"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "SOLVIA desktop shell for Linux and Windows"
+description = "SOLVIA One desktop shell for Linux and Windows"
 
 [lib]
 name = "solvia_tauri_lib"

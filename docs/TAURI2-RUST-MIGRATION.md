@@ -30,8 +30,8 @@ Windows builds require Rust/MSVC, WebView2 and the Tauri Windows requirements. B
 - **Not production-ready yet.** Cargo lockfile and full Tauri bundling/installer smoke tests are pending; automated checks are added but not yet verified here.
 - Desktop update download/install workflow requires a new, independently signed Tauri package feed; the old WebView2 package is incompatible.
 - Browser printing, webcam, document OCR workers, and scanning import must be tested on real Linux Mint and Windows WebViews.
-- Current `pc-session.mjs` stores session token in browser storage, as in the existing client. Move sensitive tokens into an OS-backed encrypted store, with migration/logout policy, prior to rollout.
-- API and Linux server remain C++20/PostgreSQL; moving the *server* to Rust would be another, separate migration with exhaustive endpoint-level contract tests and safe DB migrations.
+- New Tauri clients now keep bearer tokens only in ephemeral sessionStorage and purge any native localStorage token. This avoids persistent browser token storage in Tauri, but remains subject to WebView/XSS risks; migrate secrets to OS-backed encrypted credentials after security review and before rollout. The legacy WebView2 path retains its previous persistent behaviour.
+- A Rust-native migration sidecar now exists under `rust-server/`, with two gated read endpoints and compatibility proxy. The production API and remaining business logic still run in C++20; complete endpoint-by-endpoint parity testing and safe DB migrations are required.
 - Android remains Kotlin. No changes to server's TLS, PostgreSQL, roles, backups, or production services.
 - Test only with synthetic patient records until role restrictions, offline recovery, printing, document scans and update signing pass acceptance tests.
 
