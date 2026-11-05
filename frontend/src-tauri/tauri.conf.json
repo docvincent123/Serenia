@@ -29,10 +29,6 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "deb",
-      "appimage",
-      "nsis"
-    ]
+    "targets": "all"
   }
 }

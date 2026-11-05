@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 const MAX_RESPONSE_BYTES: usize = 32 * 1024 * 1024;
-const MAX_REQUEST_BYTES: usize = 32 * 1024 * 1024;
+const MAX_REQUEST_BYTES: usize = 48 * 1024 * 1024;
 
 #[derive(Serialize)]
 struct ApiResponse {
