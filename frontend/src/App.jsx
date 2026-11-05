@@ -3617,7 +3617,7 @@ export default function App() {
   const params = new URLSearchParams(window.location.search);
   const queryBase = params.get('api');
   const appMode = params.get('mode') || 'center';
-  const runtimeBase = (window.location.hostname === 'app.solvia.invalid' || window.location.protocol === 'solvia:') ? (appMode === 'server' ? 'http://127.0.0.1:8765' : '') : window.location.origin;
+  const runtimeBase = (globalThis.__TAURI__?.core?.invoke || window.location.hostname === 'app.solvia.invalid' || window.location.protocol === 'solvia:') ? (appMode === 'server' ? 'http://127.0.0.1:8765' : '') : window.location.origin;
   const [apiBase, setApiBase] = useState(() => queryBase || localStorage.getItem('solvia_api') || params.get('default_api') || runtimeBase);
   const [token, setToken] = useState(() => readPcSession(apiBase));
   const activeToken = useRef(token);

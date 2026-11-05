@@ -8,6 +8,8 @@
     "prebuild": "node scripts/materialize-brand.cjs && node scripts/materialize-ocr.cjs",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "desktop:dev": "cargo tauri dev",
+    "desktop:build": "cargo tauri build",
     "predev": "node scripts/materialize-ocr.cjs"
   },
   "dependencies": {
