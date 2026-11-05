@@ -79,7 +79,9 @@ async fn solvia_api_request(
     valid_api_path(&path)?;
     let method = Method::from_bytes(method.as_bytes())
         .map_err(|_| "Невідомий HTTP-метод")?;
-    if !matches!(method, Method::GET | Method::HEAD | Method::POST | Method::PUT | Method::PATCH | Method::DELETE) {
+    if ![Method::GET, Method::HEAD, Method::POST, Method::PUT, Method::PATCH, Method::DELETE]
+        .contains(&method)
+    {
         return Err("Недозволений HTTP-метод".into());
     }
 
