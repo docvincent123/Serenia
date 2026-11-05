@@ -28,3 +28,7 @@ android/app/src/main/res/raw/solvia_consultation.wav
 
 # Generated local OCR runtime and language assets
 frontend/public/ocr/
+
+# Rust / Tauri 2 desktop client
+frontend/src-tauri/target/
+frontend/src-tauri/gen/schemas/

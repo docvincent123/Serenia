@@ -30,7 +30,9 @@ export function DesktopReleaseSettings({api}){
 }
 
 export function DesktopUpdateNotice({api,base,token}){
-  const platform=pcPlatform(navigator,Boolean(window.chrome?.webview));
+  // Existing packages contain WebView2/legacy launchers, not signed Tauri installers.
+  // Never offer those incompatible packages to a Tauri desktop client.
+  const platform=globalThis.__TAURI__?.core?.invoke ? '' : pcPlatform(navigator,Boolean(window.chrome?.webview));
   const [release,setRelease]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[hidden,setHidden]=useState('');
   useEffect(()=>{if(!platform)return;let alive=true,running=false;
     async function check(){if(running||document.hidden)return;running=true;try{const item=await api('GET','/api/desktop-updates?platform='+platform);if(alive)setRelease(item.available&&newerVersion(item.version,pkg.version)?item:null);}catch{}finally{running=false;}}
