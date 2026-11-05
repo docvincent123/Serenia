@@ -1,0 +1,254 @@
+/*
+ * SOLVIA ONE • unified operational desktop design system, vNext.
+ * Content remains controlled by existing role-based components and server RBAC.
+ * Performance: opaque surfaces, subtle shadows, no backdrops/blur/animated gradients.
+ */
+:root {
+ --ink:#1b2a38;
+ --ink-2:#3a5061;
+ --muted:#687b8b;
+ --line:#dde5ed;
+ --paper:#ffffff;
+ --paper-2:#f8fafc;
+ --forest:#1c634e;
+ --forest-dark:#164a3b;
+ --forest-soft:#e7f3ed;
+ --shadow:0 3px 18px rgba(22,42,62,.055);
+ font-family:Inter,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+}
+body {min-width:0; background:#f4f7fa; color:var(--ink);}
+.app-shell.studio-shell {
+ --flow-bg:#f4f7fa;
+ --flow-ink:#172838;
+ --flow-muted:#607588;
+ --flow-border:#e1e8f0;
+ --flow-yellow:#f5c95b;
+ --flow-graphite:#1b293a;
+ --flow-radius:17px;
+ background:#f4f7fa;
+ color:var(--ink);
+}
+.app-shell.studio-shell .workspace{background:#f4f7fa!important;min-width:0;}
+.app-shell.studio-shell .studio-chrome{background:#fff;padding:0 clamp(18px,2.1vw,32px);border-bottom:1px solid #e2e7ed;}
+.app-shell.studio-shell .studio-header{min-height:77px;gap:24px;}
+.app-shell.studio-shell .studio-identity{flex:0 1 auto;gap:12px;min-width:0;}
+.app-shell.studio-shell .studio-mark{width:34px;height:34px;}
+.app-shell.studio-shell .studio-wordmark{font-size:20px;font-weight:850;letter-spacing:.06em;color:#182636;}
+.app-shell.studio-shell .studio-header-divider{height:26px;margin:0 5px;background:#e0e5ea;}
+.solvia-header-location{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.solvia-header-location>span{font-size:10px;font-weight:780;letter-spacing:.09em;color:#8796a5;}
+.solvia-header-location>strong{max-width:240px;font-size:14px;font-weight:760;color:#24384a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.app-shell.studio-shell .studio-header-tools{gap:12px;min-width:0;justify-content:flex-end;}
+.app-shell.studio-shell .global-search-wrap{max-width:430px;}
+.app-shell.studio-shell .global-search{min-height:43px;border:1px solid #dfe6ed;background:#f7f9fb;border-radius:12px;}
+.app-shell.studio-shell .global-search:focus-within{background:#fff;border-color:#d4a741;box-shadow:0 0 0 3px #f5c95b40;}
+.app-shell.studio-shell .workflow-bell{border:1px solid #dfe6ed;border-radius:12px;background:#fff;min-width:42px;}
+.solvia-online-indicator{display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:999px;background:#edf8f1;color:#24724b;font-size:11px;font-weight:740;white-space:nowrap;border:1px solid #d5edde;}
+.solvia-online-indicator>span{width:8px;height:8px;border-radius:100%;background:#32a76a;flex:none;}
+.solvia-online-indicator.is-offline{color:#9a4844;background:#fff0ed;border-color:#f1d4cd;}
+.solvia-online-indicator.is-offline>span{background:#c95c50;}
+.solvia-header-person{display:flex;align-items:center;gap:9px;min-width:0;border-left:1px solid #e4eaf0;padding-left:12px;}
+.solvia-header-avatar{display:grid;place-items:center;width:37px;height:37px;border-radius:12px;background:#263b50;color:#fff;font-weight:800;font-size:14px;flex:none;}
+.solvia-header-person-info{display:flex;flex-direction:column;min-width:0;gap:2px;}
+.solvia-header-person-info strong{display:block;max-width:145px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#203348;font-size:12px;font-weight:760;}
+.solvia-header-person-info small{color:#8090a0;font-size:10px;white-space:nowrap;}
+.solvia-nav-heading{font-size:10px;font-weight:800;color:#8193a5;letter-spacing:.13em;padding:8px 12px 11px;line-height:1.2;}
+.solvia-nav-heading-tools{padding-top:24px!important;}
+@media screen and (min-width:761px){
+ .app-shell.studio-shell{grid-template-columns:248px minmax(0,1fr)!important;}
+ .app-shell.studio-shell .sidebar{
+   width:248px!important;min-width:248px!important;max-width:248px!important;
+   padding:24px 13px 18px!important;background:#18293b!important;
+   border-right:1px solid #26394c!important;color:#cbd5e0!important;
+   align-items:stretch!important;box-shadow:none!important;overflow-x:hidden;
+ }
+ .app-shell.studio-shell .sidebar-brand{display:flex!important;align-items:center!important;
+   flex-direction:row!important;justify-content:flex-start!important;
+   padding:4px 10px 23px!important;margin:0 0 24px!important;gap:11px!important;
+   border-bottom:1px solid #ffffff20!important;width:100%!important;
+ }
+ .app-shell.studio-shell .sidebar-brand>div:last-child{display:flex!important;flex-direction:column;gap:3px;min-width:0;}
+ .app-shell.studio-shell .sidebar-brand strong{color:#fff!important;font-size:22px!important;letter-spacing:.08em;}
+ .app-shell.studio-shell .sidebar-brand span{color:#b3c0cc!important;font-size:11px!important;}
+ .app-shell.studio-shell .sidebar-brand small{color:#849bae!important;font-size:10px!important;}
+ .app-shell.studio-shell .sidebar-brand .product-mark{width:44px!important;height:44px!important;margin:0!important;border-radius:13px!important;background:#f5c95b!important;color:#253548!important;}
+ .app-shell.studio-shell .focus-navigation,
+ .app-shell.studio-shell .focus-nav-primary,
+ .app-shell.studio-shell .sidebar nav{width:100%!important;align-items:stretch!important;}
+ .app-shell.studio-shell .focus-nav-primary{display:flex!important;flex-direction:column!important;gap:5px!important;padding:0!important;}
+ .app-shell.studio-shell .sidebar .nav-item{
+   display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;
+   gap:12px!important;width:100%!important;min-width:0!important;max-width:none!important;
+   min-height:46px!important;margin:0!important;padding:10px 12px!important;
+   border-radius:11px!important;border:1px solid transparent!important;
+   background:transparent!important;color:#c9d5df!important;
+   font-size:13px!important;line-height:1.2!important;font-weight:620!important;
+   text-align:left!important;letter-spacing:0!important;
+ }
+ .app-shell.studio-shell .sidebar .nav-item:hover{color:#fff!important;background:#283d51!important;}
+ .app-shell.studio-shell .sidebar .nav-item.active,
+ .app-shell.studio-shell .sidebar .nav-item[aria-current="page"]{
+   background:#f5c95b!important;color:#1b2a39!important;font-weight:770!important;
+ }
+ .app-shell.studio-shell .sidebar .nav-item>span:not(.nav-icon){display:inline!important;}
+ .app-shell.studio-shell .sidebar .nav-item .nav-icon{display:grid!important;place-items:center!important;flex:0 0 22px!important;width:22px!important;color:inherit!important;}
+ .app-shell.studio-shell .sidebar .nav-item .mobile-label{display:none!important;}
+ .app-shell.studio-shell .sidebar .nav-item .desktop-label{display:inline!important;}
+ .app-shell.studio-shell .studio-rail-directory{
+   display:flex!important;align-items:center;justify-content:flex-start;gap:12px;
+   width:100%!important;height:46px!important;min-height:46px!important;
+   border:1px solid #3d5368!important;background:#26394c!important;color:#e3edf4!important;
+   border-radius:11px!important;font-weight:680;font-size:13px;cursor:pointer;
+   padding:10px 12px!important;margin:0!important;align-self:stretch!important;
+ }
+ .app-shell.studio-shell .studio-rail-directory:hover,
+ .app-shell.studio-shell .studio-rail-directory.active{background:#354f65!important;border-color:#6a8699!important;color:#fff!important;}
+ .app-shell.studio-shell .sidebar-actions{width:100%!important;padding:15px 0 0!important;border-top:1px solid #ffffff1b!important;}
+ .app-shell.studio-shell .sidebar-spacer{min-height:16px;}
+ .app-shell.studio-shell .sidebar .sidebar-support{display:none!important;}
+ .app-shell.studio-shell .sidebar .user-card{display:flex!important;margin:10px 0 0!important;border:1px solid #ffffff18!important;
+   padding:12px 10px!important;background:#24384b!important;border-radius:12px;gap:10px;align-items:center;}
+ .app-shell.studio-shell .sidebar .user-card .avatar{width:35px;height:35px;border-radius:10px;flex:none;background:#f2c55d;color:#152b3d;}
+ .app-shell.studio-shell .sidebar .user-card .user-copy{min-width:0;}
+ .app-shell.studio-shell .sidebar .user-card .user-copy strong{color:#fff!important;font-size:12px;}
+ .app-shell.studio-shell .sidebar .user-card .user-copy span{color:#b2c0cb!important;font-size:10px;}
+}
+@media screen {
+ .app-shell.studio-shell .workspace-inner{
+   background:transparent!important;border:0!important;box-shadow:none!important;
+   width:auto!important;max-width:1680px!important;min-height:0!important;
+   margin:24px auto 38px!important;padding:0 clamp(18px,2.5vw,36px)!important;
+ }
+ .app-shell.studio-shell .shift-bar{
+   border:1px solid #eee0b6!important;border-radius:12px!important;
+   margin:14px clamp(18px,2.5vw,36px) 0!important;padding:12px 16px!important;
+   background:#fff9ea!important;color:#7b5d21!important;box-shadow:none!important;
+   display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:12px;
+ }
+ .app-shell.studio-shell .studio-back-row{padding:12px clamp(18px,2.5vw,36px) 0!important;}
+ .app-shell.studio-shell .studio-back-button{border-radius:10px;border-color:#dce5ed;background:#fff;color:#345066;font-size:12px;font-weight:700;}
+ .app-shell.studio-shell .surface,
+ .app-shell.studio-shell .flow-desk-visits,
+ .app-shell.studio-shell .flow-desk-panel,
+ .app-shell.studio-shell .document-photo{
+   background:#fff;border:1px solid #dfe7ef;border-radius:17px;
+   box-shadow:0 2px 15px rgba(22,45,68,.035);
+ }
+ .app-shell.studio-shell .page-head h1{color:#182c3d;font-weight:820;letter-spacing:-.04em;}
+ .app-shell.studio-shell :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea){
+   border-radius:10px;border:1px solid #d8e2eb;background:#fff;color:#20384d;font-size:13px;
+ }
+ .app-shell.studio-shell :is(input,select,textarea):focus-visible{outline:3px solid #f3c35b80;outline-offset:1px;}
+ .app-shell.studio-shell button:focus-visible{outline:3px solid #d49f22;outline-offset:2px;}
+ .app-shell.studio-shell .button{min-height:42px;border-radius:10px;font-size:12px;font-weight:750;}
+ .app-shell.studio-shell .button.primary{background:#19334a!important;color:#fff!important;box-shadow:none!important;}
+ .app-shell.studio-shell .button.primary:hover{background:#284c67!important;}
+ .app-shell.studio-shell .button.secondary{background:#f0f4f8!important;border:1px solid #dfe7ee!important;color:#29455a!important;}
+ .app-shell.studio-shell .button.secondary:hover{background:#e5edf4!important;}
+ .app-shell.studio-shell .button:disabled{cursor:not-allowed;}
+ .app-shell.studio-shell .flow-desk{gap:22px;color:#1a2c3e;max-width:1650px;}
+ .app-shell.studio-shell .flow-desk-hero{
+   min-height:183px;padding:30px 34px!important;gap:24px;
+   background:#1d3146!important;border:1px solid #293f55!important;
+   border-radius:21px!important;position:relative;overflow:hidden;
+ }
+ .app-shell.studio-shell .flow-desk-hero:after{
+   content:"";position:absolute;width:280px;height:280px;right:-155px;top:-160px;
+   border:38px solid #f4c95a22;border-radius:50%;pointer-events:none;
+ }
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-title{position:relative;z-index:1;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-title h1{color:#fff;font-size:clamp(26px,2.4vw,35px);line-height:1.17;font-weight:825;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-title p{color:#bccbd8;font-size:13px;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-overline{color:#f1d58c;font-size:10px;letter-spacing:.13em;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-overline-divider{color:#f1d58c70;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-hero-actions{position:relative;z-index:1;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-sync{color:#d4e1ea;font-size:11px;
+   padding:8px 11px;border:1px solid #ffffff35;background:#ffffff0a;border-radius:30px;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-reload{background:#2b4155;color:#edf3f6;border-color:#557086;border-radius:10px;font-size:12px;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-reload:hover{background:#395b75;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-create{background:#f5c95b;color:#182b3b;
+   border:1px solid #ebba3f;border-radius:10px;font-size:12px;min-height:43px;box-shadow:none;}
+ .app-shell.studio-shell .flow-desk-hero .flow-desk-create:hover{background:#ffdc84;transform:none;}
+ .app-shell.studio-shell .flow-desk-section-label{color:#7b8fa0;font-size:10px;letter-spacing:.12em;}
+ .app-shell.studio-shell .flow-desk-section-head h2{color:#1a2b3e;font-size:18px;font-weight:800;letter-spacing:-.025em;}
+ .app-shell.studio-shell .flow-desk-metrics{gap:14px;}
+ .app-shell.studio-shell .flow-desk-metric{
+   padding:22px 24px;min-height:154px;border:1px solid #dde6ee;background:#fff;
+   border-radius:17px;box-shadow:0 2px 13px #19304408;transform:none;
+ }
+ .app-shell.studio-shell .flow-desk-metric:hover{border-color:#d4a93f;box-shadow:0 4px 16px #1a385213;transform:none;}
+ .app-shell.studio-shell .flow-desk-metric strong{font-size:41px;color:#1a2c3d;}
+ .app-shell.studio-shell .flow-desk-metric-header{font-size:13px;font-weight:730;color:#465d70;}
+ .app-shell.studio-shell .flow-desk-metric-caption{color:#7c8b99;font-size:11px;}
+ .app-shell.studio-shell .flow-desk-metric[data-tone="waiting"]{border-top:3px solid #e8bb4f;}
+ .app-shell.studio-shell .flow-desk-metric[data-tone="arrived"]{border-top:3px solid #3ba67b;}
+ .app-shell.studio-shell .flow-desk-metric[data-tone="completed"]{border-top:3px solid #5884b4;}
+ .app-shell.studio-shell .flow-desk-columns{grid-template-columns:minmax(0,1.6fr) minmax(285px,.85fr);gap:17px;}
+ .app-shell.studio-shell .flow-desk-visits,
+ .app-shell.studio-shell .flow-desk-panel{padding:23px;min-width:0;}
+ .app-shell.studio-shell .flow-desk-table-head{background:#f4f7fa;color:#647c8d;font-size:11px;border:1px solid #e9eef4;border-radius:9px;}
+ .app-shell.studio-shell .flow-desk-visit{min-height:73px;padding:14px 12px;border-color:#edf1f5;}
+ .app-shell.studio-shell .flow-desk-visit:hover{background:#fff9eb;}
+ .app-shell.studio-shell .flow-desk-visit time{font-size:14px;color:#203a4e;}
+ .app-shell.studio-shell .flow-desk-visit-patient strong{font-size:13px;color:#1a2a38;}
+ .app-shell.studio-shell .flow-desk-visit-psychologist strong{font-size:12px;color:#3c5569;}
+ .app-shell.studio-shell .flow-desk-visit small{font-size:11px;color:#8392a0;}
+ .app-shell.studio-shell .flow-desk-visit-badge{border-radius:9px;font-size:11px;padding:7px 9px;background:#fff2d1;color:#806018;}
+ .app-shell.studio-shell .flow-desk-visit-badge.arrived{background:#e6f5eb;color:#21774c;}
+ .app-shell.studio-shell .flow-desk-primary-actions button{min-height:118px;background:#fff6df;border-color:#eed8a4;border-radius:13px;}
+ .app-shell.studio-shell .flow-desk-primary-actions button:nth-child(2){background:#f5f8fc;border-color:#e0e8ef;}
+ .app-shell.studio-shell .flow-desk-primary-actions strong{font-size:13px;color:#293d4f;}
+ .app-shell.studio-shell .flow-desk-shortcut{padding:13px 6px;}
+ .app-shell.studio-shell .flow-desk-shortcut-copy strong{font-size:13px;color:#273d50;}
+ .app-shell.studio-shell .flow-desk-shortcut-copy small{font-size:11px;color:#7e90a0;}
+ .app-shell.studio-shell .flow-desk-panel-note{color:#6b806f;}
+ .app-shell.studio-shell .document-photo{border-radius:16px;padding:20px;}
+ .app-shell.studio-shell .document-photo-picker{border-radius:12px;background:#f8fafc;border-color:#b6c7d3;}
+ .app-shell.studio-shell .document-photo-compare figure{background:#f7f9fb;border-radius:12px;}
+}
+@media screen and (max-width:1250px){
+ .solvia-header-person-info{display:none;}
+ .solvia-header-location>span{display:none;}
+ .app-shell.studio-shell .flow-desk-columns{grid-template-columns:minmax(0,1fr);}
+ .app-shell.studio-shell .flow-desk-panel{display:block;}
+ .app-shell.studio-shell .flow-desk-primary-actions{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media screen and (max-width:980px){
+ .solvia-header-location{display:none;}
+ .app-shell.studio-shell .flow-desk-hero{padding:23px!important;}
+ .app-shell.studio-shell .flow-desk-metrics{gap:9px;}
+ .app-shell.studio-shell .flow-desk-metric{padding:18px;min-height:135px;}
+}
+@media screen and (max-width:760px){
+ .app-shell.studio-shell{grid-template-columns:minmax(0,1fr)!important;}
+ .app-shell.studio-shell .studio-header{min-height:61px;gap:10px;}
+ .app-shell.studio-shell .studio-chrome{padding:0 12px;}
+ .app-shell.studio-shell .studio-identity{gap:7px;}
+ .app-shell.studio-shell .studio-wordmark{font-size:17px;}
+ .app-shell.studio-shell .studio-header-divider,.app-shell.studio-shell .solvia-header-person{display:none;}
+ .app-shell.studio-shell .studio-header-tools{gap:6px;}
+ .app-shell.studio-shell .global-search-wrap{max-width:none;}
+ .solvia-online-indicator{font-size:0;padding:7px;gap:0;}
+ .solvia-online-indicator>span{height:9px;width:9px;}
+ .app-shell.studio-shell .sidebar{width:min(280px,85vw)!important;max-width:min(280px,85vw)!important;background:#172a3e!important;}
+ .app-shell.studio-shell .sidebar .sidebar-brand>div:last-child{display:flex!important;flex-direction:column;}
+ .app-shell.studio-shell .sidebar .studio-rail-directory{width:100%!important;display:flex;gap:10px;}
+ .app-shell.studio-shell .workspace-inner{padding:0 12px!important;margin:14px auto 26px!important;}
+ .app-shell.studio-shell .flow-desk-hero{padding:20px!important;min-height:0;}
+ .app-shell.studio-shell .flow-desk-hero-actions{justify-content:flex-start;}
+ .app-shell.studio-shell .flow-desk-title h1{font-size:26px!important;}
+ .app-shell.studio-shell .flow-desk-metrics{grid-template-columns:1fr!important;}
+ .app-shell.studio-shell .flow-desk-metric{min-height:104px;padding:14px 17px;gap:5px;}
+ .app-shell.studio-shell .flow-desk-metric strong{font-size:31px;}
+ .app-shell.studio-shell .flow-desk-visits,.app-shell.studio-shell .flow-desk-panel{padding:15px;}
+ .app-shell.studio-shell .shift-bar{margin:10px 12px 0!important;}
+ .app-shell.studio-shell .studio-back-row{padding:9px 12px 0!important;}
+}
+@media screen and (prefers-reduced-motion:reduce){
+ .app-shell.studio-shell *, .app-shell.studio-shell *::before, .app-shell.studio-shell *::after{
+   animation-duration:0.01ms!important;transition-duration:0.01ms!important;scroll-behavior:auto!important;
+ }
+}
+@media print{
+ .solvia-online-indicator,.solvia-header-person,.solvia-header-location,.solvia-nav-heading{display:none!important;}
+}

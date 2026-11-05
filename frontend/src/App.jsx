@@ -329,6 +329,7 @@ function WorkspaceNavigation({ navigation, role, page, locked, onNavigate }) {
     : [['calendar','Мої прийоми'],['patients','Пацієнти'],['reports','Звіти']];
   const available=new Set(navigation.map(([key])=>key));
   return <nav aria-label="Робочі розділи" className={`focus-navigation solvia-minimal-navigation ${locked ? 'nav-locked' : ''}`}>
+    <div className="solvia-nav-heading">ЩОДЕННА РОБОТА</div>
     <div className="focus-nav-primary" aria-label="Головна навігація">
       {preferred.filter(([key])=>available.has(key)).map(([key,label])=><button key={key}
         type="button" disabled={locked && key !== 'staff-messages'} aria-current={active===key?'page':undefined}
@@ -3551,7 +3552,8 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         </div>
 
         <WorkspaceNavigation navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} />
-        <button type="button" className="studio-rail-directory" title="Усі функції центру" aria-label="Усі функції центру" disabled={locked} onClick={()=>navigate('module-directory')}><AppIcon name="module-directory" size={20}/></button>
+        <div className="solvia-nav-heading solvia-nav-heading-tools">ДОДАТКОВО</div>
+        <button type="button" className={`studio-rail-directory ${page==='module-directory'?'active':''}`} title="Усі функції центру" aria-label="Усі функції центру" aria-current={page==='module-directory'?'page':undefined} disabled={locked} onClick={()=>navigate('module-directory')}><AppIcon name="module-directory" size={20}/><span className="studio-directory-label">Усі розділи</span></button>
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
@@ -3573,7 +3575,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       </aside>
 
       <main className="workspace" data-page={page}>
-        <StudioWorkspace headerTools={!locked ? <>
+        <StudioWorkspace currentPage={activePageLabel} roleLabel={roleLabels[user.role]} staffName={user.name} online={health.online} headerTools={!locked ? <>
           {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
         </> : null}/>
