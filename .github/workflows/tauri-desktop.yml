@@ -6,6 +6,8 @@ on:
       - 'frontend/src-tauri/**'
       - 'frontend/src/request.mjs'
       - 'frontend/src/App.jsx'
+      - 'frontend/src/pc-session.mjs'
+      - 'tests/tauri-session.mjs'
       - 'frontend/src/DesktopUpdates.jsx'
       - 'frontend/package.json'
       - 'tests/tauri-transport.mjs'
@@ -29,6 +31,7 @@ jobs:
         run: |
           npm ci --prefix frontend
           node tests/tauri-transport.mjs
+          node tests/tauri-session.mjs
           npm run build --prefix frontend
       - name: Check native Rust shell
         run: cargo check --manifest-path frontend/src-tauri/Cargo.toml
