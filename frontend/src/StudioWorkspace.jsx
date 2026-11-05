@@ -8,7 +8,7 @@ export default function StudioWorkspace({headerTools=null,currentPage='Огля�
   <header className="studio-header">
    <div className="studio-identity">
     <img className="studio-mark" src="/solvia-icon.png" alt="" aria-hidden="true"/>
-    <span className="studio-wordmark">SOLVIA</span>
+    <span className="studio-wordmark">SOLVIA <em>One</em></span>
     <span className="studio-header-divider"/>
     <div className="solvia-header-location"><span>РОБОЧИЙ ПРОСТІР</span><strong>{currentPage}</strong></div>
    </div>

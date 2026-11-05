@@ -522,7 +522,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
   return (
     <div className="login-screen login-refined studio-login">
       <section className="login-brand">
-        <div className="login-brand-signature"><img src="/solvia-icon.png" alt=""/><strong>SOLVIA</strong><span>by LemvoriLab</span></div>
+        <div className="login-brand-signature"><img src="/solvia-icon.png" alt=""/><strong>SOLVIA One</strong><span>by LemvoriLab</span></div>
         <div className="login-brand-copy">
           <div className="eyebrow light">ДЛЯ КОМАНДИ РЕАБІЛІТАЦІЙНОГО ЦЕНТРУ</div>
           <h1>Менше рутини.<br/><span>Більше уваги людині.</span></h1>
@@ -547,14 +547,14 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
           <div className="product">
             <div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
             <div>
-              <strong>SOLVIA</strong>
+              <strong>SOLVIA One</strong>
               <span>by LemvoriLab</span>
             </div>
           </div>
 
           <div className="login-copy">
             <span className="studio-login-label">ВАШ РОБОЧИЙ ПРОСТІР</span>
-            <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA"}</h2>
+            <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA One"}</h2>
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
@@ -570,7 +570,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
           </div>
 
           <Button type="submit" className="login-submit" disabled={busy || !server.trim() || !configured}>
-            {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
+            {busy ? 'Підключення…' : 'Увійти до SOLVIA One'}
           </Button>
 
           <p className="login-access-help">Потрібен обліковий запис? Зверніться до адміністратора центру.</p>
@@ -593,7 +593,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             </>
           )}
 
-          <div className="login-foot"><span>SOLVIA · LemvoriLab</span><span>Версія {pkg.version}</span></div>
+          <div className="login-foot"><span>SOLVIA One · LemvoriLab</span><span>Версія {pkg.version}</span></div>
         </form>
       </section>
     </div>
@@ -2598,7 +2598,7 @@ function AccountSettings({ api, apiBase, onLogout, user }) {
           <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" disabled={busy} value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field></div>
           <Button type="submit" disabled={busy}>{busy ? 'Змінюємо пароль…' : 'Змінити пароль'}</Button>
         </form></section>
-        <section className="surface account-section account-version"><header><h2>Про SOLVIA {pkg.version}</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><span>Зверніться до адміністратора центру</span></div><small>Оновлення встановлює адміністратор центру.</small></section>
+        <section className="surface account-section account-version"><header><h2>Про SOLVIA One {pkg.version}</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><span>Зверніться до адміністратора центру</span></div><small>Оновлення встановлює адміністратор центру.</small></section>
       </div>
     </div>
   </>;
@@ -3548,7 +3548,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       }}>
         <div className="sidebar-brand">
           <div className="product-mark inverse motion-brand-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></div>
-          <div><strong>SOLVIA</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · LemvoriLab</small></div>
+          <div><strong>SOLVIA One</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · LemvoriLab</small></div>
         </div>
 
         <WorkspaceNavigation navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} />
@@ -3725,7 +3725,7 @@ export default function App() {
   }
 
   if (booting) {
-    return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
+    return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><Spinner /><span>Відкриваємо SOLVIA One…</span></div>;
   }
 
   if (!user) return <>{appMode !== 'server' && <ServiceStatus base={apiBase} enabled={Boolean(localStorage.getItem('solvia_api'))}/>}<Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} /></>;

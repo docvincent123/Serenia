@@ -252,3 +252,8 @@ body {min-width:0; background:#f4f7fa; color:var(--ink);}
 @media print{
  .solvia-online-indicator,.solvia-header-person,.solvia-header-location,.solvia-nav-heading{display:none!important;}
 }
+
+/* SOLVIA One wordmark; retain the server/URL identifier "solvia" for API compatibility. */
+.app-shell.studio-shell .studio-wordmark { display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap; }
+.app-shell.studio-shell .studio-wordmark em {font-size:12px;letter-spacing:.015em;font-style:normal;font-weight:790;color:#be8c28;background:#fff3d6;padding:3px 6px;border-radius:5px;}
+@media (min-width:761px) {.app-shell.studio-shell .sidebar-brand strong {font-size:19px!important;letter-spacing:.035em!important;white-space:nowrap;}}
