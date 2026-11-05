@@ -44,6 +44,7 @@ class MainActivity : Activity() {
     private val appointmentIo = Executors.newSingleThreadExecutor()
     private var cachePreparing = false
     private val openConfigRequest = 4101
+    private var managedProvisioningBusy = false
 
     private val bg = MobileUi.background
     private val ink = MobileUi.ink
@@ -109,7 +110,15 @@ class MainActivity : Activity() {
     }
     private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
     private fun offlineStore() = OfflineStore(this, server, userId)
-    override fun onResume() { super.onResume(); serviceStatus.resume();updates.resume(); syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick); syncHandler.removeCallbacks(appointmentTick); syncHandler.post(appointmentTick) }
+    override fun onResume() {
+        super.onResume()
+        serviceStatus.resume(); updates.resume()
+        syncHandler.removeCallbacks(syncTick); syncHandler.post(syncTick)
+        syncHandler.removeCallbacks(appointmentTick); syncHandler.post(appointmentTick)
+        if (server.isBlank() && !managedProvisioningBusy && intent?.data == null) {
+            if(runCatching { ManagedCenterConfig.read(this) }.getOrNull() != null) tryManagedCenterConnection()
+        }
+    }
     override fun onPause() { serviceStatus.pause();syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(appointmentTick); super.onPause() }
     override fun onDestroy() {
         syncHandler.removeCallbacks(syncTick); syncHandler.removeCallbacks(appointmentTick); syncHandler.removeCallbacks(draftSyncTick)
@@ -353,7 +362,9 @@ class MainActivity : Activity() {
         connectivity.registerNetworkCallback(android.net.NetworkRequest.Builder().build(), networkCallback!!)
         if (intent?.data != null) {
             importServerConfig(intent.data!!)
-        } else if (server.isBlank()) setupScreen() else restoreShiftSession()
+        } else if (!tryManagedCenterConnection()) {
+            if (server.isBlank()) setupScreen() else restoreShiftSession()
+        }
     }
 
     private fun mount(content: View) {
@@ -908,6 +919,55 @@ class MainActivity : Activity() {
         }
         server = candidate; prefs.edit().putString("server", candidate).apply()
     }
+    /**
+     * On a managed Android device the MDM supplies the center address again on
+     * reinstall. Unmanaged devices still use SOLVIA-Mobile.solvia once per install.
+     * Never import employee sessions, medical notes or TLS exceptions from policy.
+     */
+    private fun tryManagedCenterConnection(): Boolean {
+        val profile = try {
+            ManagedCenterConfig.read(this)
+        } catch (e: Exception) {
+            setupScreen()
+            showError("Корпоративне налаштування SOLVIA некоректне. Зверніться до адміністратора: " + (e.message ?: "перевірте сервер"))
+            return true
+        } ?: return false
+        val rememberedIdentity = prefs.getString("server_id:${profile.httpsUrl}", "").orEmpty()
+        if (server == profile.httpsUrl && rememberedIdentity == profile.serverId) return false
+        if (server.isNotBlank() && server != profile.httpsUrl) {
+            // Never silently abandon unsent encrypted clinical drafts tied to a server.
+            setupScreen()
+            showError("Адміністратор змінив сервер центру. Перед перепідключенням потрібно передати локальні чернетки на попередній сервер. Зверніться до адміністратора.")
+            return true
+        }
+        if (managedProvisioningBusy) return true
+        managedProvisioningBusy = true
+        setupScreen()
+        io.execute {
+            try {
+                val health = requestAt(profile.httpsUrl, "GET", "/api/health", authToken = "") as JSONObject
+                require(health.optBoolean("ok") && health.optString("server_id") == profile.serverId) {
+                    "Сервер не підтвердив ідентифікатор центру"
+                }
+                runOnUiThread {
+                    if(isDestroyed || isFinishing) return@runOnUiThread
+                    prefs.edit().putString("server_id:${profile.httpsUrl}", profile.serverId).apply()
+                    rememberServer(profile.httpsUrl)
+                    loginScreen()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    if(isDestroyed || isFinishing) return@runOnUiThread
+                    setupScreen()
+                    showError("Корпоративне підключення не вдалося. Перевірте Wi-Fi/VPN, сертифікат HTTPS і сервер: " + (e.message ?: "немає зв'язку"))
+                }
+            } finally {
+                runOnUiThread { managedProvisioningBusy = false }
+            }
+        }
+        return true
+    }
+
     private fun importServerConfig(uri: android.net.Uri) {
         io.execute {
             try {
@@ -936,6 +996,13 @@ class MainActivity : Activity() {
                     else httpsSource.ifBlank { json.optString("api_url").ifBlank { httpSource } }
                 val candidate = configAddress(firstSource)
                 if(version == 2) require(candidate.startsWith("https://")) { "Профіль центру потребує HTTPS" }
+                // MDM policy is authoritative for work-managed devices.
+                val managed = ManagedCenterConfig.read(this@MainActivity)
+                if (managed != null) {
+                    require(candidate == managed.httpsUrl && expectedId == managed.serverId) {
+                        "Цей службовий телефон закріплено за іншим сервером. Використайте корпоративні налаштування адміністратора."
+                    }
+                }
 
                 try {
                     val health = requestAt(candidate, "GET", "/api/health", authToken = "") as JSONObject
@@ -1028,6 +1095,14 @@ class MainActivity : Activity() {
         importCard.addView(title("Автоматичне підключення", 18f))
         importCard.addView(caption("Отримайте файл підключення в адміністратора центру й відкрийте його на телефоні."))
         importCard.addView(primary("Відкрити файл SOLVIA-Mobile.solvia") { openServerConfigFile() })
+        val policyAvailable = runCatching {
+            (getSystemService(android.content.Context.RESTRICTIONS_SERVICE) as? android.content.RestrictionsManager)
+                ?.applicationRestrictions?.containsKey(ManagedCenterConfig.URL_KEY) == true
+        }.getOrDefault(false)
+        if (policyAvailable) {
+            importCard.addView(caption("На цьому телефоні також доступні корпоративні налаштування."))
+            importCard.addView(secondary("Підключитися через керування пристроєм") { tryManagedCenterConnection() })
+        }
         body.addView(importCard)
         body.addView(spacer(14))
 

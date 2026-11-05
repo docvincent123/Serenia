@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="managed_solvia_url_title">SOLVIA HTTPS сервер</string>
+    <string name="managed_solvia_url_description">Постійна HTTPS адреса центру з портом (без шляху та пароля)</string>
+    <string name="managed_solvia_server_id_title">Ідентифікатор сервера SOLVIA</string>
+    <string name="managed_solvia_server_id_description">64-символьний server_id з файлу центру, без облікових даних</string>
+</resources>

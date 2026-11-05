@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+    <restriction
+        android:key="solvia_https_url"
+        android:title="@string/managed_solvia_url_title"
+        android:description="@string/managed_solvia_url_description"
+        android:restrictionType="string" />
+    <restriction
+        android:key="solvia_server_id"
+        android:title="@string/managed_solvia_server_id_title"
+        android:description="@string/managed_solvia_server_id_description"
+        android:restrictionType="string" />
+</restrictions>
