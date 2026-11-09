@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-', ignore_cleanup_er
         global app
         app = application
         # Native GTK window and dedicated WebKit widget, not a subprocess browser.
-        assert app.window.get_title() == 'SOLVIA 3.1.1'
+        assert app.window.get_title() == 'Lemvori Care 3.1.1'
         assert isinstance(app.view, WebKit2.WebView)
         assert app.view.get_website_data_manager().get_tls_errors_policy() == WebKit2.TLSErrorsPolicy.FAIL
         app.view.connect('print', printing)
@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-', ignore_cleanup_er
             if not other or other.view.is_loading() or busy:
                 return True
             assert other.view.get_context() == app.view.get_context()
-            assert other.window.get_title() == 'SOLVIA Server Console 3.1.1'
+            assert other.window.get_title() == 'Lemvori Care Server Console 3.1.1'
             busy = True
             def console_rendered(view, result, _):
                 global busy, phase
@@ -125,7 +125,7 @@ with tempfile.TemporaryDirectory(prefix='solvia-native-test-', ignore_cleanup_er
             busy = False
             try:
                 text = view.evaluate_javascript_finish(result).to_string()
-                if 'Вхід до SOLVIA' not in text:
+                if 'Вхід до Lemvori Care' not in text:
                     return
                 assert view.get_uri().startswith('solvia://app/')
                 if phase == 'login' and not provisioned:

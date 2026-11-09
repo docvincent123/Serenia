@@ -42,12 +42,12 @@ try {
   let page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const base=`http://127.0.0.1:${server.address().port}`;
   await page.addInitScript(()=>localStorage.setItem('solvia_api',location.origin));
-  await page.goto(base);await page.getByPlaceholder('Ваш логін').fill('admin');await page.getByPlaceholder('Введіть пароль').fill('test-password');await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();
+  await page.goto(base);await page.getByPlaceholder('Ваш логін').fill('admin');await page.getByPlaceholder('Введіть пароль').fill('test-password');await page.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).click();
   await page.getByRole('button',{name:'Налаштування центру',exact:true}).click();
   assert.equal(await page.locator('.settings-nav').getByRole('button',{name:/Оновлення/}).count(),0);
   await page.goto(base+'/?mode=server');
   await page.setViewportSize({width:1024,height:600});
-  await page.getByText('SOLVIA Server Console 3.1.1',{exact:true}).waitFor();
+  await page.getByText('Lemvori Care Server Console 3.1.1',{exact:true}).waitFor();
   assert.equal(await page.locator('.service-status-overlay').count(),0,'Server Console never shows the workstation maintenance overlay');
   assert.equal(await page.locator('.service-status-pill').count(),0,'Server Console does not show a workstation update pill');
   await page.getByRole('heading',{name:'Сервер центру 3.1.1',exact:true}).waitFor();

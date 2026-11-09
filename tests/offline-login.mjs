@@ -31,20 +31,20 @@ try{
   });
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}`);
-  await page.getByRole('heading',{name:'Вхід до SOLVIA'}).waitFor();
+  await page.getByRole('heading',{name:'Вхід до Lemvori Care'}).waitFor();
   await page.getByTestId('login-server-status').filter({hasText:'Сервер недоступний. Зверніться до системного адміністратора.'}).waitFor({timeout:22000});
   await page.getByPlaceholder('Ваш логін').fill('synthetic-user');
   await page.getByPlaceholder('Введіть пароль').fill('synthetic-password');
-  await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();
+  await page.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).click();
   await page.getByRole('alert').filter({hasText:'Сервер недоступний.'}).waitFor();
   online=true;
   await page.getByTestId('login-server-status').filter({hasText:'Сервер доступний. Можна увійти.'}).waitFor({timeout:22000});
   assert.equal(await page.getByPlaceholder('Ваш логін').inputValue(),'synthetic-user');
-  await page.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).click();
+  await page.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).click();
   await page.getByRole('alert').filter({hasText:'обліковий запис уже використовується'}).waitFor();
   assert.equal(loginCalls,1);
   assert.equal(await page.evaluate(()=>sessionStorage.getItem('solvia_token')),null);
-  assert.equal(await page.getByRole('heading',{name:'Вхід до SOLVIA'}).count(),1);
+  assert.equal(await page.getByRole('heading',{name:'Вхід до Lemvori Care'}).count(),1);
   // Starting while the API is down must not discard a still-valid saved token.
   const restored=await browser.newPage();let restoredOnline=false;
   await restored.addInitScript(()=>sessionStorage.setItem('solvia_token','saved-session-token'));
@@ -61,7 +61,7 @@ try{
     await route.fulfill({json:data});
   });
   await restored.goto(`http://127.0.0.1:${server.address().port}`);
-  await restored.getByRole('heading',{name:'Вхід до SOLVIA'}).waitFor();
+  await restored.getByRole('heading',{name:'Вхід до Lemvori Care'}).waitFor();
   assert.equal(await restored.evaluate(()=>sessionStorage.getItem('solvia_token')),'saved-session-token');
   restoredOnline=true;
   await restored.getByRole('button',{name:'Вийти',exact:true}).waitFor({timeout:22000});
