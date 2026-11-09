@@ -27,7 +27,7 @@ assert.match(text,/ЗГОДА/);
 assert.equal(await page.locator('#error').innerText(),'');
 await page.getByRole('checkbox').check();
 assert(JSON.parse(await page.locator('#scan-state').innerText()).paper_signed);
-await page.getByRole('button',{name:'Повернути ↻'}).click();
+await page.getByRole('button',{name:'Повернути на 90°',exact:true}).click();
 assert.equal(JSON.parse(await page.locator('#scan-state').innerText()).paper_signed,false);
 await page.setViewportSize({width:390,height:844});
 assert(await page.getByRole('table').isVisible());
