@@ -814,3 +814,27 @@ ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS approved_by BIGINT REFE
 ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS approved_at TEXT NOT NULL DEFAULT '';
 ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS return_reason TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_discharge_workflow ON discharge_summaries(workflow_status,id DESC);
+
+
+-- Configurable disciplines are centre-level service categories, not authorization roles.
+-- A "psychiatry" service does not grant prescribing or medical-record permissions.
+CREATE TABLE IF NOT EXISTS center_services(
+ id BIGSERIAL PRIMARY KEY,
+ code TEXT NOT NULL UNIQUE,
+ name TEXT NOT NULL,
+ category TEXT NOT NULL CHECK(category IN ('psychology','medical','rehabilitation','creative','other')),
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created TEXT NOT NULL DEFAULT '',
+ updated TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_center_services_name_ci ON center_services(lower(name));
+INSERT INTO center_services(code,name,category,active) VALUES
+ ('psychology','Психологічне консультування','psychology',TRUE),
+ ('psychiatry','Психіатрія','medical',TRUE),
+ ('rehabilitation','Фізична реабілітація','rehabilitation',TRUE),
+ ('movement','Танцювально-рухова терапія','creative',TRUE),
+ ('art','Арттерапія','creative',TRUE),
+ ('occupational','Ерготерапія','rehabilitation',TRUE),
+ ('speech','Логопедія','rehabilitation',TRUE),
+ ('social','Соціальний супровід','other',TRUE)
+ON CONFLICT(code) DO NOTHING;
