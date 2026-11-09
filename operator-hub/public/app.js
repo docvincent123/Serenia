@@ -40,7 +40,18 @@ async function reload(){
    if(!confirm('Змінити статус у реєстрі компанії? Це не зупиняє медичний сервер.'))return;
    try{await api('/api/centers/'+item.id,'PATCH',{status:item.status==='active'?'paused':'active'});await reload();notice('Статус обліку змінено. Робота медичного сервера не зачеплена.');}catch(e){notice(e.message,true);}
   };
-  controls.append(button);control.append(controls);tr.append(control);body.append(tr);
+  controls.append(button);
+  const rotate=document.createElement('button');rotate.className='secondary';rotate.textContent='Новий ключ';
+  rotate.title='Скинути ключ технічного стану. Попередній перестане працювати.';
+  rotate.onclick=async()=>{
+    if(!confirm('Змінити ключ підключення '+item.name+'? Старий ключ перестане працювати, доки його не замінять на сервері центру.'))return;
+    try{
+      const data=await api('/api/centers/'+item.id+'/rotate-token','POST',{});
+      q('token-box').hidden=false;q('new-token').textContent=data.center_token;
+      notice('Створено новий ключ. Замініть його в /etc/solvia/operator-heartbeat-token центру.');
+    }catch(e){notice(e.message,true);}
+  };
+  controls.append(rotate);control.append(controls);tr.append(control);body.append(tr);
  }
 }
 q('login-form').onsubmit=async event=>{
