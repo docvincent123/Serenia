@@ -1,0 +1,168 @@
+/* Lemvori Care — clear, low-overhead workstation layout.
+ * Imported last intentionally: supersedes old experimental studio/rail skins.
+ * No animations, video or expensive blur filters on low-power Linux PCs.
+ */
+.app-shell.studio-shell {
+  --care-ink:#24313b;--care-muted:#6d7985;--care-line:#e1e6eb;
+  --care-paper:#ffffff;--care-accent:#f2c75b;
+  background:#f3f5f7;color:var(--care-ink);
+}
+.studio-shell .studio-chrome{background:#f3f5f7}
+.studio-shell .studio-header{min-height:79px;gap:20px}
+.studio-shell .studio-identity{min-width:0;gap:13px}
+.studio-shell .studio-mark{width:42px;height:42px;border-radius:13px}
+.studio-shell .care-identity-text{display:flex;flex-direction:column;gap:3px;min-width:0}
+.studio-shell .studio-wordmark{font-size:20px;font-weight:800;line-height:1.1;letter-spacing:-.035em;color:#24313b}
+.studio-shell .studio-wordmark>span{margin-left:0;font-size:inherit;color:#ad822b}
+.studio-shell .care-center-name{display:block;font-size:12px;font-weight:650;color:#526477;max-width:310px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.studio-shell .care-center-city{font-size:12px;color:#82909e;white-space:nowrap}
+.studio-shell .studio-header-divider{height:26px}
+.studio-shell .studio-header-tools .global-search{border-radius:12px;background:#fff;border:1px solid #d8e0e6;min-height:46px}
+.studio-shell .studio-header-tools .global-search input{min-height:44px;height:44px;font-size:14px}
+.studio-shell .studio-header-tools .workflow-bell{height:46px;width:46px;flex-basis:46px;border-radius:12px}
+.studio-shell .studio-header-tools .global-search:focus-within{border-color:#347f77;box-shadow:0 0 0 3px rgba(39,128,116,.12)}
+.studio-shell .workspace,.studio-shell .workspace-inner{min-width:0;box-sizing:border-box}
+.studio-shell .studio-back-button{font-size:13px;border-radius:10px}
+.studio-shell .page-head h1{letter-spacing:-.035em;line-height:1.15}
+.studio-shell .page-head p{max-width:780px;line-height:1.6;color:var(--care-muted)}
+.studio-shell .surface,.studio-shell .flow-desk-panel,.studio-shell .flow-desk-visits{
+  border:1px solid var(--care-line);box-shadow:0 2px 14px rgba(22,42,58,.035);border-radius:15px
+}
+.studio-shell :is(button,input,textarea,select,a):focus-visible{outline:3px solid #3d9d94;outline-offset:2px}
+.studio-shell :is(button,.nav-item){touch-action:manipulation}
+.care-directory-caption{font-weight:700;font-size:13px}
+@media(min-width:761px){
+  .app-shell.studio-shell{grid-template-columns:250px minmax(0,1fr)!important;min-height:100dvh}
+  .app-shell.studio-shell .sidebar{
+    width:auto!important;min-width:0!important;box-sizing:border-box!important;
+    margin:0!important;border-radius:0!important;align-items:stretch!important;
+    padding:23px 13px 17px!important;overflow-y:auto!important;overflow-x:hidden!important;
+    background:#202c36!important;color:#e6edf4!important;border-right:1px solid #33414d!important;
+    box-shadow:none!important
+  }
+  .studio-shell .sidebar-brand{
+    display:flex!important;align-items:center!important;justify-content:flex-start!important;
+    margin:0 0 16px!important;padding:3px 7px 21px!important;gap:11px!important;
+    border-bottom:1px solid rgba(255,255,255,.13)!important;min-height:64px
+  }
+  .studio-shell .sidebar .sidebar-brand>div:last-child{
+    display:grid!important;min-width:0;gap:5px!important
+  }
+  .studio-shell .sidebar-brand strong{
+    display:block;color:#fff!important;letter-spacing:-.02em!important;
+    font-size:19px!important;font-weight:800!important;line-height:1.05
+  }
+  .studio-shell .sidebar-brand span{color:#b4bfca!important;font-size:11px!important}
+  .studio-shell .sidebar-brand small{color:#84919d!important;font-size:10px!important}
+  .studio-shell .sidebar .product-mark{margin:0!important;flex:0 0 44px!important;width:44px!important;height:44px!important}
+  .studio-shell .sidebar nav,.studio-shell .sidebar .focus-nav-primary{
+    display:flex!important;flex-direction:column!important;align-items:stretch!important;
+    gap:5px!important;width:100%!important;padding:0!important;margin:0!important;overflow:visible!important
+  }
+  .studio-shell .sidebar .nav-item{
+    width:100%!important;min-width:0!important;max-width:100%!important;
+    margin:0!important;min-height:47px!important;height:auto!important;
+    display:flex!important;align-items:center!important;justify-content:flex-start!important;
+    text-align:left!important;gap:12px!important;padding:10px 12px!important;
+    border:1px solid transparent!important;border-radius:11px!important;
+    background:transparent!important;color:#cad5df!important;font-weight:650!important;
+    font-size:13px!important;letter-spacing:0!important;transform:none!important;
+    white-space:normal!important;box-sizing:border-box!important;box-shadow:none!important
+  }
+  .studio-shell .sidebar .nav-item:hover{
+    background:#33424e!important;color:#fff!important
+  }
+  .studio-shell .sidebar .nav-item.active,.studio-shell .sidebar .nav-item[aria-current=page]{
+    color:#202a33!important;background:var(--care-accent)!important;border-color:#f2c75b!important;
+    font-weight:800!important
+  }
+  .studio-shell .sidebar .nav-item>span:not(.nav-icon){display:inline!important;overflow:visible!important}
+  .studio-shell .sidebar .nav-icon{flex:0 0 23px!important;width:23px!important;height:23px!important;display:grid;place-items:center}
+  .studio-shell .sidebar-actions{
+    border-top:1px solid rgba(255,255,255,.13)!important;
+    display:flex!important;flex-direction:column!important;gap:4px!important;
+    align-items:stretch!important;width:100%!important;margin:0!important;padding:13px 0 0!important
+  }
+  .studio-shell .sidebar .studio-rail-directory{
+    display:flex!important;align-items:center;justify-content:flex-start;gap:12px;
+    align-self:stretch!important;width:100%!important;min-height:47px!important;
+    margin:12px 0 4px!important;padding:10px 12px!important;border-radius:11px!important;
+    border:1px solid rgba(255,255,255,.17)!important;background:#2c3a46!important;color:#e4eaf0!important
+  }
+  .studio-shell .sidebar .studio-rail-directory:hover{background:#394b59!important}
+  .studio-shell .sidebar .user-card{display:flex!important;margin-top:17px!important;padding:14px 5px 2px!important}
+  .studio-shell .sidebar .user-copy strong{color:#fff!important;font-size:12px}
+  .studio-shell .sidebar .user-copy span{color:#aebcc8!important;font-size:11px}
+  .studio-shell .sidebar .sidebar-support{display:none!important}
+  .studio-shell .studio-chrome{padding:0 clamp(18px,3vw,38px)!important}
+  .studio-shell .workspace-inner{
+    margin:10px clamp(16px,2.5vw,34px) 30px!important;
+    width:calc(100% - 2*clamp(16px,2.5vw,34px))!important;
+    padding:clamp(20px,2.6vw,34px)!important;min-height:calc(100dvh - 195px)!important;
+    border-radius:17px!important;border:1px solid var(--care-line)!important;background:#fff!important
+  }
+  .studio-shell .shift-bar{margin:2px clamp(16px,2.5vw,34px) 0!important;border-radius:10px!important}
+  .studio-shell .studio-back-row{padding:9px clamp(16px,2.5vw,34px) 0!important}
+  .studio-shell .flow-desk-metrics{gap:12px!important}
+  .studio-shell .flow-desk-metric{min-height:123px!important;padding:16px 19px!important}
+  .studio-shell .flow-desk-metric strong{font-size:32px!important}
+  .studio-shell .flow-desk-columns{gap:16px!important}
+  .studio-shell .flow-desk-visits,.studio-shell .flow-desk-panel{padding:18px!important}
+}
+@media(min-width:761px) and (max-width:1120px){
+  .app-shell.studio-shell{grid-template-columns:210px minmax(0,1fr)!important}
+  .studio-shell .studio-chrome{padding-inline:18px!important}
+  .studio-shell .studio-center-city,.studio-shell .studio-header-divider{display:none!important}
+  .studio-shell .care-center-name{max-width:205px}
+  .studio-shell .studio-header-tools{gap:8px}
+  .studio-shell .flow-desk-columns{grid-template-columns:minmax(0,1fr)!important}
+}
+@media(max-width:760px){
+  .studio-shell .studio-chrome{padding:0 12px!important}
+  .studio-shell .studio-header{min-height:70px;gap:10px;flex-wrap:wrap;padding:10px 0}
+  .studio-shell .studio-identity{flex:1;gap:8px}
+  .studio-shell .studio-mark{height:34px;width:34px}
+  .studio-shell .studio-wordmark{font-size:17px}
+  .studio-shell .care-center-name{max-width:200px;font-size:11px}
+  .studio-shell .studio-center-city,.studio-shell .studio-header-divider{display:none!important}
+  .studio-shell .studio-header-tools{flex:1 1 100%;width:100%;gap:10px}
+  .studio-shell .studio-header-tools .global-search-wrap{flex:1;max-width:none}
+  .studio-shell .studio-header-tools .global-search{min-height:44px}
+  .studio-shell .workspace-inner{margin:12px 8px 24px!important;width:calc(100% - 16px)!important;padding:16px 12px!important;border-radius:13px}
+  .studio-shell .flow-desk-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .studio-shell .flow-desk-metric{min-width:0;min-height:110px;padding:12px!important}
+  .studio-shell .flow-desk-metric strong{font-size:25px}
+  .studio-shell .flow-desk-metric-caption{display:none}
+  .studio-shell .flow-desk-metric-header{font-size:11px}
+  .studio-shell .flow-desk-columns{grid-template-columns:minmax(0,1fr)!important}
+  .studio-shell .flow-desk-visits,.studio-shell .flow-desk-panel{padding:14px!important}
+  .care-directory-caption{display:none}
+}
+@media(max-width:420px){
+  .studio-shell .care-center-name{max-width:156px}
+  .studio-shell .flow-desk-metric-header{font-size:10px}
+  .studio-shell .flow-desk-title h1{font-size:26px}
+}
+.care-services{max-width:1320px;margin:auto}
+.care-services-note{padding:12px 14px;background:#f1f8f5;color:#315d56;border:1px solid #d9e9e2;border-radius:11px;font-size:13px;line-height:1.6}
+.care-services-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(245px,.45fr);gap:22px;align-items:start;margin-top:21px}
+.care-services-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 13px}
+.care-services-toolbar label{display:flex;gap:8px;align-items:center;font-size:13px;color:#63717f}
+.care-service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.care-service-card{border:1px solid #e0e7eb;border-radius:13px;background:#fff;padding:16px;display:flex;flex-direction:column;justify-content:space-between;gap:15px;min-width:0}
+.care-service-card>div:first-child{display:grid;gap:6px}
+.care-service-card strong{color:#253542;font-size:15px;line-height:1.35}
+.care-service-card small{font-size:12px;color:#77848e}
+.care-service-category{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#24796c;font-weight:800}
+.care-service-actions{display:flex;flex-wrap:wrap;gap:8px}
+.care-service-card .button{min-height:34px;padding:7px 11px;font-size:12px}
+.care-services-form{display:grid;gap:12px;padding:19px;border-radius:14px;background:#f7f9fa;border:1px solid #e0e7eb}
+.care-services-form h2{margin:0;font-size:19px;color:#253542}
+.care-services-form p{margin:0;color:#6b7885;font-size:13px}
+.care-services-form label,.care-service-card form label{display:grid;gap:6px;color:#435666;font-weight:650;font-size:13px}
+.care-services-form input,.care-services-form select,.care-service-card form input,.care-service-card form select{width:100%;min-height:43px;box-sizing:border-box;background:#fff;border:1px solid #cbd6df;border-radius:9px;padding:9px;color:#253542}
+.care-service-card form{display:grid;gap:9px}
+.care-services-form .button{min-height:44px}
+@media(max-width:1050px){.care-services-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:640px){.care-service-grid{grid-template-columns:minmax(0,1fr)}.care-services-toolbar{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.studio-shell *, .studio-shell *::before,.studio-shell *::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
