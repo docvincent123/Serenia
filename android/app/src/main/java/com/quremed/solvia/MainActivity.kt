@@ -387,7 +387,7 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(dp(48), dp(48)))
             header.addView(TextView(this).apply {
                 workspaceTitle = this
-                text = "SOLVIA"; textSize = 18f; setTextColor(MobileUi.onAccent)
+                text = "Lemvori Care"; textSize = 18f; setTextColor(MobileUi.onAccent)
                 maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(dp(12), 0, 0, 0); typeface = Typeface.create("sans-serif", Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -474,7 +474,7 @@ class MainActivity : Activity() {
         identity.addView(logo(44).apply { contentDescription = "Емблема SOLVIA" }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(14) })
         identity.addView(title(userName, 20f).apply { setTextColor(MobileUi.onAccent) }, LinearLayout.LayoutParams(0, -2, 1f))
         heading.addView(identity)
-        heading.addView(TextView(this).apply { text = "Психолог · SOLVIA"; setTextColor(MobileUi.onAccent); textSize = 13f })
+        heading.addView(TextView(this).apply { text = "Психолог · Lemvori Care"; setTextColor(MobileUi.onAccent); textSize = 13f })
         panel.addView(heading)
         val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(12)) }
         val popup = android.widget.PopupWindow(panel, (resources.displayMetrics.widthPixels * 0.86f).toInt(), -1, true).apply {
@@ -1066,7 +1066,7 @@ class MainActivity : Activity() {
         backAction = null
         val body = root().apply {
             setPadding(dp(24), dp(36), dp(24), dp(24))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(bg, Color.rgb(233,240,226)))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(bg, MobileUi.panel))
         }
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         brand.addView(logo(88))
