@@ -2608,3 +2608,17 @@ html[data-compact="true"] .appointment, html[data-compact="true"] .patient-row, 
 .product-mark {background:#fbfaf8;box-shadow:none;border:1px solid #ece6d4;}
 .product-mark.inverse {background:rgba(255,255,255,.96);border-color:rgba(255,255,255,.3);box-shadow:none;}
 .product-logo {object-fit:contain;border-radius:0;}
+
+/* Lemvori Care document review: accessible, compact controls across desktop sizes. */
+.discharge-workflow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;max-width:100%}
+.discharge-workflow small{width:100%;color:var(--muted,#64746e)}
+.discharge-state{font-size:.75rem;font-weight:700;padding:5px 9px;border-radius:999px;background:#edf1f3;color:#344d52}
+.discharge-state-draft{background:#fef2d9;color:#875e15}
+.discharge-state-review{background:#e7edfb;color:#294aa2}
+.discharge-state-approved{background:#e0f5ea;color:#246748}
+.discharge-state-legacy{background:#f1f3f4;color:#62747b}
+.discharge-return{display:grid;gap:8px;flex-basis:100%;max-width:370px}
+.discharge-return label{display:grid;gap:6px;font-size:.85rem}
+.discharge-return textarea{width:100%;box-sizing:border-box}
+.discharge-workflow .alert{flex-basis:100%}
+@media print{.discharge-workflow{display:none!important}}
