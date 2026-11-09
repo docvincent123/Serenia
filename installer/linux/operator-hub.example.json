@@ -1,0 +1,5 @@
+{
+  "hub_url": "https://YOUR-COMPANY-HUB-DOMAIN",
+  "server_id": "PASTE-64-HEX-CHARACTER-SERVER-ID",
+  "token_file": "/etc/solvia/operator-heartbeat-token"
+}
