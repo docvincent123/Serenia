@@ -1723,6 +1723,28 @@ class MainActivity : Activity() {
                 addGap(box)
                 box.addView(caption("Приватна нотатка психолога"))
                 box.addView(note)
+                box.addView(secondary("Розгорнути нотатку для зручного введення") {
+                    val large = edit("Приватна нотатка").apply {
+                        setText(note.text)
+                        minLines = 10
+                        maxLines = 18
+                        textSize = 18f
+                        setSelection(text.length)
+                    }
+                    val holder = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp(16), dp(10), dp(16), dp(10))
+                        addView(large)
+                    }
+                    AlertDialog.Builder(this)
+                        .setTitle("Зручний редактор нотатки")
+                        .setView(holder)
+                        .setNegativeButton("Скасувати", null)
+                        .setPositiveButton("Перенести в запис") { _, _ ->
+                            note.setText(large.text.toString())
+                            note.setSelection(note.text.length)
+                        }.show()
+                })
                 addGap(box)
                 box.addView(caption("Цілі поточного етапу"))
                 box.addView(goals)
@@ -1801,15 +1823,23 @@ class MainActivity : Activity() {
                     draftStatus.text = if(DraftSync.transferred(local)) "Запис передано на сервер" else if(local.optBoolean("sync_blocked")) "Потрібна перевірка серверної версії" else "Запис збережено на телефоні"
                 }
             }
+            // Encrypted drafts were written on every keystroke and every scroll pixel.
+            // Debounce while typing, but always flush on close so nothing is lost.
+            val localSaveHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            val localSaveTask = Runnable { persistDraft() }
+            fun queueLocalSave() {
+                localSaveHandler.removeCallbacks(localSaveTask)
+                localSaveHandler.postDelayed(localSaveTask, 420)
+            }
             val watcher = object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { persistDraft() }
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { queueLocalSave() }
                 override fun afterTextChanged(s: Editable?) {}
             }
             textFields.values.forEach { it.addTextChangedListener(watcher) }
-            flagChecks.forEach { it.setOnCheckedChangeListener { _, _ -> persistDraft() } }
+            flagChecks.forEach { it.setOnCheckedChangeListener { _, _ -> queueLocalSave() } }
             val selectionWatcher = object : android.widget.AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { persistDraft() }
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { queueLocalSave() }
                 override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
             }
             listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.onItemSelectedListener = selectionWatcher }
@@ -1821,9 +1851,14 @@ class MainActivity : Activity() {
                 .setPositiveButton("Завершити", null)
                 .create()
             consultationWindow = dialog
-            scroll.setOnScrollChangeListener { _, _, _, _, _ -> persistDraft() }
+            scroll.setOnScrollChangeListener { _, _, _, _, _ -> queueLocalSave() }
             scroll.post {scroll.scrollTo(0,savedDraft?.optInt("scroll_y",0) ?: 0)}
-            dialog.setOnDismissListener { persistDraft(); draftIndicatorRefresh = null; if (consultationWindow === dialog) consultationWindow = null }
+            dialog.setOnDismissListener {
+                localSaveHandler.removeCallbacks(localSaveTask)
+                persistDraft()
+                draftIndicatorRefresh = null
+                if (consultationWindow === dialog) consultationWindow = null
+            }
             tools.addView(secondary("Повторити передавання") {
                 persistDraft(); syncNow()
             })
