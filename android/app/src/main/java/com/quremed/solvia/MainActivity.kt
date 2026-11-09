@@ -483,7 +483,7 @@ class MainActivity : Activity() {
         fun row(label: String, icon: Int, action: () -> Unit) {
             rows.addView(MobileUi.button(this, label) { popup.dismiss(); action() }.apply {
                 textSize = 15f; gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                background = rounded(MobileUi.panel, 0)
+                background = rounded(MobileUi.panel, 18)
                 val image = getDrawable(icon)?.mutate(); image?.setTint(MobileUi.ink)
                 image?.setBounds(0, 0, dp(24), dp(24)); setCompoundDrawables(image, null, null, null)
                 compoundDrawablePadding = dp(12); minHeight = dp(48); minimumHeight = dp(48)
@@ -1882,7 +1882,7 @@ class MainActivity : Activity() {
             dialog.setOnShowListener {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).apply {
                     isAllCaps = false; textSize = 15f; setTextColor(MobileUi.onAccent)
-                    background = rounded(forest, 14); setPadding(dp(18), dp(10), dp(18), dp(10)); minHeight = dp(48)
+                    background = rounded(forest, 28); setPadding(dp(18), dp(10), dp(18), dp(10)); minHeight = dp(48)
                 }
                 dialog.getButton(AlertDialog.BUTTON_NEGATIVE).apply { isAllCaps = false; setTextColor(muted) }
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
