@@ -19,7 +19,6 @@ export function navFor(role) {
       ['supervisions', 'Супервізії'],
       ['archive', 'Архів'],
       ['devices', 'Пристрої'],
-      ['settings', 'Налаштування'],
       ['audit', 'Журнал дій']
     ];
   }
