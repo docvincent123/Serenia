@@ -91,6 +91,7 @@ chown root:root /etc/solvia/address
 install -m 0755 solvia-admin /usr/local/sbin/solvia-admin
 install -m 0755 solvia-updater /usr/local/sbin/solvia-updater
 install -m 0755 solvia-continuity /usr/local/sbin/solvia-continuity
+install -m 0755 lemvori-heartbeat /usr/local/sbin/lemvori-heartbeat
 install -d -m 0755 /usr/local/lib/solvia
 install -m 0644 solvia-linux-app.py /usr/local/lib/solvia/solvia-linux-app.py
 rm -rf /usr/local/lib/solvia/ui
