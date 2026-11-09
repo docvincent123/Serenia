@@ -18,7 +18,7 @@ cd "$package"
 sha256sum --check SHA256SUMS
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 iproute2 xdg-utils libnss3-tools desktop-file-utils restic openssh-client
+apt-get install -y postgresql-16 openssl curl ca-certificates libstdc++6 libssl3t64 libpq5 python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 pkexec iproute2 xdg-utils libnss3-tools desktop-file-utils restic openssh-client
 libraries=$(ldd ./SolviaServer)
 printf '%s\n' "$libraries"
 if grep -q 'not found' <<< "$libraries"; then echo 'Відсутні бібліотеки сервера'; exit 1; fi
