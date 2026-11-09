@@ -62,7 +62,7 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
   return <div className="center-home flow-desk" data-flow-role={role}>
     <header className="flow-desk-hero">
       <div className="flow-desk-title">
-        <div className="flow-desk-overline"><span className="flow-desk-overline-mark"/> SOLVIA <span className="flow-desk-overline-divider">/</span> {isReception?'РОБОЧЕ МІСЦЕ РЕЄСТРАТОРА':'АДМІНІСТРУВАННЯ'}</div>
+        <div className="flow-desk-overline"><span className="flow-desk-overline-mark"/> Lemvori Care <span className="flow-desk-overline-divider">/</span> {isReception?'РОБОЧЕ МІСЦЕ РЕЄСТРАТОРА':'АДМІНІСТРУВАННЯ'}</div>
         <h1>{isReception?'Реєстратура':'Керування центром'}</h1>
         <p>{formatDay(snapshot?.date)} <span aria-hidden="true">·</span> {isReception?'Записи, прибуття та пацієнти без зайвих переходів':'Головні показники та інструменти адміністратора'}</p>
       </div>
