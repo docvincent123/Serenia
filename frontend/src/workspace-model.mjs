@@ -9,6 +9,7 @@ export function navFor(role) {
       ['patients', 'Пацієнти'],
       ['families', 'Сім’ї'],
       ['team', 'Команда'],
+      ['services', 'Напрямки допомоги'],
       ['psychologist-roster', 'Психологи на зміні'],
       ['staff-messages', 'Повідомлення'],
       ['rooms', 'Кабінети'],
