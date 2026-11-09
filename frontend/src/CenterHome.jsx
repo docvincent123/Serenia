@@ -13,7 +13,7 @@ const administratorLinks=[
   ['rooms','Кабінети','Розміщення прийомів'],
   ['reports','Звіти','Підсумки роботи'],
   ['devices','Пристрої','Підключені робочі місця'],
-  ['settings','Налаштування','Параметри центру']
+  ['services','Напрямки допомоги','Психологія й реабілітація']
 ];
 const receptionLinks=[
   ['shift-workspace','Прийоми за зміну','Прибуття та виклики'],
@@ -68,7 +68,7 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
       </div>
       <div className="flow-desk-hero-actions">
         <span role="status" aria-live="polite" className={'flow-desk-sync'+(error?' is-error':'')}>{syncLabel}</span>
-        <button className="flow-desk-reload" type="button" onClick={reload} disabled={refreshing} aria-label="Оновити дані"><AppIcon name="refresh" size={17}/> Оновити</button>
+        {/* Динамічне оновлення працює кожні 30 секунд і після подій, без кнопки. */}
         <button className="flow-desk-create" type="button" onClick={isReception?onBook:()=>onNavigate('shift-workspace')}>
           <AppIcon name={isReception?'new-booking':'shift-workspace'} size={18}/>{isReception?'Записати на прийом':'Список прийомів'}
         </button>
