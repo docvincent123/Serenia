@@ -29,7 +29,7 @@ export function DesktopReleaseSettings({api}){
   </section>;
 }
 
-export function DesktopUpdateNotice({api,base,token}){
+export function DesktopUpdateNotice({api,base,token,passive=false}){
   const platform=pcPlatform(navigator,Boolean(window.chrome?.webview));
   const [release,setRelease]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[hidden,setHidden]=useState('');
   useEffect(()=>{if(!platform)return;let alive=true,running=false;
@@ -44,5 +44,9 @@ export function DesktopUpdateNotice({api,base,token}){
     setMessage(platform==='windows'?'Файл перевірено. Збережіть його, закрийте SOLVIA та запустіть EXE-інсталятор поверх наявної програми.':'Файл перевірено. Збережіть і розпакуйте архів, закрийте SOLVIA та виконайте в його папці: sudo bash install-client.sh');
   }catch(e){setMessage(e.message);}finally{setBusy(false);}}
   if(!release||hidden===release.sha256)return null;
+  if(passive)return <aside role="region" aria-label="Доступна нова версія програми" className="pc-update-notice">
+    <strong>Доступне оновлення Lemvori Care · {release.version}</strong>
+    <p>Встановленням керує адміністратор через окрему SOLVIA Server Console. Збережіть записи перед плановим оновленням.</p>
+  </aside>;
   return <aside role="region" aria-label="Оновлення SOLVIA на ПК" className="pc-update-notice"><strong>Потрібно оновити SOLVIA · {release.version}</strong><p>Цей ПК: {pkg.version} · {platform==='windows'?'Windows':'Linux'}</p>{release.release_notes&&<p>{release.release_notes}</p>}{busy&&<div className="pc-update-progress" role="status" aria-label="Завантаження та перевірка оновлення"><span/></div>}<button className="button" disabled={busy} onClick={download}>{busy?'Завантажуємо…':'Завантажити оновлення'}</button> <button className="button secondary" disabled={busy} onClick={()=>setHidden(release.sha256)}>Пізніше</button>{message&&<p role="status">{message}</p>}</aside>;
 }
