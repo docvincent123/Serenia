@@ -121,7 +121,7 @@ try {
   await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog',{name:'Сервер на оновленні',exact:true}).count(),0);
   const studioHeader=page.locator('.studio-header');
-  assert.equal(await studioHeader.locator('img.studio-mark[src="/solvia-icon.png"]').count(),1,'The supplied SOLVIA logo appears in the desktop header');
+  assert.equal(await studioHeader.locator('img.studio-mark[src="/lemvori-care.svg"]').count(),1,'The supplied SOLVIA logo appears in the desktop header');
   const shiftStatus=page.locator('.shift-bar').first();
   assert.equal(await page.locator('.studio-tabs').count(),0,'Tabs removed');
   assert.equal(await page.locator('.workspace-topbar').count(),0,'Old toolbar removed');
@@ -190,7 +190,7 @@ try {
   await page.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.workspace')?.scrollTo(0,0);});
   await page.screenshot({path:'out/design/desktop-messages.png',fullPage:true});
   await page.setViewportSize({width:1280,height:600});
-    await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
+    await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
   await page.screenshot({ path:'out/design/desktop-settings.png',fullPage:true });
   assert.equal(await page.locator('.settings-nav').getByRole('button',{name:/Оновлення Android/}).count(),0);
   await page.goto(base+'/?mode=server');
@@ -214,7 +214,7 @@ try {
   assert.equal(config.server_id,'a'.repeat(64));
   assert.equal(config.format,'quremed.solvia.mobile');
   // Settings remain accessible even with the shift closed.
-  open = false; await page.goto(base); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
+  open = false; await page.goto(base); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
   open = true; await page.reload();
   await page.locator('.focus-navigation').getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
@@ -363,23 +363,23 @@ try {
   assert.equal(closeCalls,0,'Shift remains open while reception waits for permission');
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
   await systemSettings.click();
-  await page.getByRole('heading',{name:'Налаштування SOLVIA',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
   const fresh=await browser.newPage();
   await fresh.route('**/api/**',async route=>route.fulfill({contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({ok:true,version:'3.1.0',server_id:'a'.repeat(64),mode:'ready'})}));
   await fresh.goto(base);
-  await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).waitFor();
-  assert.equal(await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).isDisabled(),true,'New workstation requires its center file');
+  await fresh.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).waitFor();
+  assert.equal(await fresh.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).isDisabled(),true,'New workstation requires its center file');
   assert.equal(await fresh.getByLabel('Адреса сервера центру',{exact:true}).count(),0,'No manual API field in employee setup');
   const connectionFile={format:'quremed.solvia.mobile',version:2,server_id:'b'.repeat(64),https_url:'https://synthetic-center.invalid',center:'Тестовий центр'};
   const upload=async()=>fresh.locator('input[type=file]').first().setInputFiles({name:'center.solvia',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(connectionFile))});
   await upload();await fresh.getByRole('alert').filter({hasText:'інший сервер'}).waitFor();
   connectionFile.server_id='a'.repeat(64);await upload();
-  await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).waitFor({state:'visible'});
+  await fresh.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).waitFor({state:'visible'});
   await fresh.waitForFunction(()=>localStorage.getItem('solvia_api')==='https://synthetic-center.invalid');
   await fresh.reload();
   await fresh.getByText('Замінити файл підключення',{exact:true}).waitFor();
-  assert.equal(await fresh.getByRole('button',{name:'Увійти до SOLVIA',exact:true}).isEnabled(),true,'Imported connection persists after restart');
+  assert.equal(await fresh.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).isEnabled(),true,'Imported connection persists after restart');
   await fresh.screenshot({path:'out/design/connection-file-once.png',fullPage:true});await fresh.close();
   console.log('PASS: four role workspaces, daily reception access with persistent shift, shift-bound report date, short-screen actions, settings without reception authorization, waiting list, mobile layout, offline logout, encrypted drafts and consultation retry');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
