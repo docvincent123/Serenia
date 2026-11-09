@@ -90,11 +90,12 @@ def run(on_ready=None):
             self.window.set_titlebar(header)
             self.spinner = Gtk.Spinner()
             header.pack_start(self.spinner)
-            for label, callback in [('Оновити екран', lambda *_: self.load()),
-                                    ('Підключення', lambda *_: self.connection())]:
-                button = Gtk.Button(label=label)
-                button.connect('clicked', callback)
-                header.pack_end(button)
+            # The employee program has no update / server administration icons.
+            # The dedicated Server Console can change the server endpoint.
+            if console:
+                connection = Gtk.Button(label='Підключення до сервера')
+                connection.connect('clicked', lambda *_: self.connection())
+                header.pack_end(connection)
             if console:
                 # Critical database operations exist only in the separately
                 # launched, local Server Console, never in the staff workspace.
