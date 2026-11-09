@@ -1,4 +1,5 @@
 import DocumentPhoto from './DocumentPhoto';
+import DischargeWorkflowControls,{dischargeStatusText,canPrintDischarge} from './DischargeWorkflowControls.jsx';
 import {request} from './request.mjs';
 import StudioWorkspace from './StudioWorkspace.jsx';
 import TvSettings,{TvCallPanel} from './TvSettings.jsx';
@@ -131,7 +132,7 @@ function monthStart() {
   const d = new Date();
   return localDate(new Date(d.getFullYear(), d.getMonth(), 1));
 }
-function printStandaloneNode(node, title = 'SOLVIA Document') {
+function printStandaloneNode(node, title = 'Lemvori Care Document') {
   if (!node) throw new Error('Не знайдено документ для друку.');
 
   const frame = document.createElement('iframe');
@@ -310,7 +311,7 @@ function deviceIdentity() {
     localStorage.setItem('solvia_device_id', id);
   }
   const platform = navigator.userAgentData?.platform || navigator.platform || 'Windows';
-  return { device_id: id, device_name: `SOLVIA · ${platform}`, platform: window.chrome?.webview ? 'Windows' : platform };
+  return { device_id: id, device_name: `Lemvori Care · ${platform}`, platform: window.chrome?.webview ? 'Windows' : platform };
 }
 
 
@@ -461,7 +462,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
       catch (e) { setAvailability({ state: 'invalid', message: e.message }); return; }
       try {
         const health = await request(base, '', 'GET', '/api/health');
-        if (health.ok !== true || !health.version) throw new Error('За цією адресою немає SOLVIA API.');
+        if (health.ok !== true || !health.version) throw new Error('За цією адресою немає Lemvori Care API.');
         if (!cancelled) setAvailability({ state: 'online', message: 'Сервер доступний. Можна увійти.' });
       } catch (e) {
         if (!cancelled) setAvailability({ state: 'offline', message: e.status === 0 || e.status >= 500 ? 'Сервер недоступний. Зверніться до системного адміністратора.' : e.message });
@@ -491,9 +492,9 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
     try {
       const base = cleanBase(server);
       const health = await request(base, '', 'GET', '/api/health');
-      if (health.ok !== true || !health.version) throw new Error('За цією адресою немає SOLVIA API.');
+      if (health.ok !== true || !health.version) throw new Error('За цією адресою немає Lemvori Care API.');
       localStorage.setItem('solvia_api', base);
-      setConnection(`Сервер SOLVIA ${health.version} доступний · ${health.platform || 'HTTPS'}`);
+      setConnection(`Сервер Lemvori Care ${health.version} доступний · ${health.platform || 'HTTPS'}`);
     } catch (e) { setError(e.status === 0 || e.status >= 500 ? 'Сервер недоступний. Зверніться до системного адміністратора.' : e.message); }
     finally { setChecking(false); }
   }
@@ -521,7 +522,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
   return (
     <div className="login-screen login-refined studio-login">
       <section className="login-brand">
-        <div className="login-brand-signature"><img src="/solvia-icon.png" alt=""/><strong>SOLVIA</strong><span>by LemvoriLab</span></div>
+        <div className="login-brand-signature"><img src="/lemvori-care.svg" alt=""/><strong>Lemvori Care</strong><span>by LemvoriLab</span></div>
         <div className="login-brand-copy">
           <div className="eyebrow light">ДЛЯ КОМАНДИ РЕАБІЛІТАЦІЙНОГО ЦЕНТРУ</div>
           <h1>Менше рутини.<br/><span>Більше уваги людині.</span></h1>
@@ -544,16 +545,16 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
       <section className="login-panel">
         <form className="login-card" onSubmit={submit}>
           <div className="product">
-            <div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div>
+            <div className="product-mark"><img className="product-logo" src="/lemvori-care.svg" alt="Lemvori Care" /></div>
             <div>
-              <strong>SOLVIA</strong>
+              <strong>Lemvori Care</strong>
               <span>by LemvoriLab</span>
             </div>
           </div>
 
           <div className="login-copy">
             <span className="studio-login-label">ВАШ РОБОЧИЙ ПРОСТІР</span>
-            <h2>{consoleMode?"Вхід до Server Console":"Вхід до SOLVIA"}</h2>
+            <h2>{consoleMode?"Вхід до Server Console":"Вхід до Lemvori Care"}</h2>
             <p>Використайте персональний обліковий запис працівника.</p>
           </div>
 
@@ -569,7 +570,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
           </div>
 
           <Button type="submit" className="login-submit" disabled={busy || !server.trim() || !configured}>
-            {busy ? 'Підключення…' : 'Увійти до SOLVIA'}
+            {busy ? 'Підключення…' : 'Увійти до Lemvori Care'}
           </Button>
 
           <p className="login-access-help">Потрібен обліковий запис? Зверніться до адміністратора центру.</p>
@@ -592,7 +593,7 @@ function Login({ initialBase, onLogin, consoleMode = false }) {
             </>
           )}
 
-          <div className="login-foot"><span>SOLVIA · LemvoriLab</span><span>Версія {pkg.version}</span></div>
+          <div className="login-foot"><span>Lemvori Care · LemvoriLab</span><span>Версія {pkg.version}</span></div>
         </form>
       </section>
     </div>
@@ -1421,7 +1422,7 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
     const node = document.querySelector('.consent-print');
     printStandaloneNode(
       node,
-      (documentPreview?.title || 'Документ SOLVIA') + ' — ' + (documentPreview?.patient_name || card.name)
+      (documentPreview?.title || 'Документ Lemvori Care') + ' — ' + (documentPreview?.patient_name || card.name)
     );
   }
 
@@ -1720,9 +1721,12 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
             <div className="assessment-list">
               {card.discharges.map((d) => (
                 <div className="assessment-row" key={d.id}>
-                  <div><strong>{d.date_from} — {d.date_to}</strong><span>{d.consultation_count} консультацій · {d.author}</span></div>
-                  <div className="page-actions"><Button variant="secondary" onClick={() => openDischargePrint(d)}>Перегляд / PDF</Button>
-                  {(isAdmin || isPsychologist) && <Button variant="secondary" onClick={() => setEditingDischarge(d)}>Редагувати</Button>}</div>
+                  <div><strong>Виписка № {d.document_no || d.id} · {d.date_from} — {d.date_to}</strong><span>{d.consultation_count} консультацій · {d.author}</span></div>
+                  <div className="page-actions">
+                    <DischargeWorkflowControls api={api} item={d} role={role} onSaved={load}/>
+                    <Button variant="secondary" onClick={() => openDischargePrint(d)}>{canPrintDischarge(d)?'Перегляд / PDF':'Переглянути проєкт'}</Button>
+                    {(isAdmin || isPsychologist) && (d.workflow_status==='draft'||d.workflow_status==='legacy') && <Button variant="secondary" onClick={() => setEditingDischarge(d)}>Редагувати</Button>}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1786,8 +1790,8 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
         <Dialog title={documentPreview.title} subtitle="Підписаний документ" onClose={() => { setDialog(''); setDocumentPreview(null); }} wide>
           <article className="consent-print">
             <header>
-              <img src={documentPreview.center?.logo_data || '/solvia-icon.png'} alt="SOLVIA" />
-              <div><strong>{documentPreview.center_name_snapshot || documentPreview.center?.center_name || 'SOLVIA Center'}</strong><span>{documentPreview.center_address_snapshot || documentPreview.center?.address || ''}</span></div>
+              <img src={documentPreview.center?.logo_data || '/lemvori-care.svg'} alt="Lemvori Care" />
+              <div><strong>{documentPreview.center_name_snapshot || documentPreview.center?.center_name || 'Lemvori Care Center'}</strong><span>{documentPreview.center_address_snapshot || documentPreview.center?.address || ''}</span></div>
             </header>
             <div className="consent-title"><div className="eyebrow">ДОКУМЕНТ ПАЦІЄНТА · №{documentPreview.patient_no_snapshot || card.patient_no}</div><h1>{documentPreview.title}</h1></div>
             <p className="consent-body">{documentPreview.content || '—'}</p>
@@ -1803,9 +1807,9 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
             {documentPreview.source === 'paper_scan' && <div><p>Скан паперового документа · {documentPreview.paper_signed ? 'підпис перевірено працівником' : 'без підтвердження підпису'}</p><img src={documentPreview.scan_data} alt="Скан документа" style={{width:'100%'}}/><details className="no-print"><summary>Вихідне кольорове фото</summary><img src={documentPreview.original_data} alt="Кольорове фото" style={{maxWidth:'100%'}}/></details></div>}
             {documentPreview.signature_data && <div className="saved-signature"><img src={documentPreview.signature_data} alt="Підпис" /><span>підпис</span></div>}
             <footer>
-              <span>{documentPreview.center_name_snapshot || documentPreview.center?.center_name || 'SOLVIA Center'}</span>
+              <span>{documentPreview.center_name_snapshot || documentPreview.center?.center_name || 'Lemvori Care Center'}</span>
               <span>{[documentPreview.center_phone_snapshot || documentPreview.center?.phone, documentPreview.center_email_snapshot || documentPreview.center?.email].filter(Boolean).join(' · ')}</span>
-              <span>{documentPreview.center?.document_footer || 'SOLVIA by LemvoriLab'}</span>
+              <span>{documentPreview.center?.document_footer || 'Lemvori Care by LemvoriLab'}</span>
             </footer>
           </article>
           <div className="form-actions no-print"><Button variant="ghost" onClick={() => { setDialog(''); setDocumentPreview(null); }}>Закрити</Button><Button onClick={printDocument}>Друк / Зберегти PDF</Button></div>
@@ -1970,7 +1974,7 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
           <form className="form-grid" onSubmit={saveDischarge}>
             <Field label="Початок періоду"><input type="date" value={discharge.date_from} onChange={(e) => setDischarge({ ...discharge, date_from: e.target.value })} required /></Field>
             <Field label="Кінець періоду"><input type="date" value={discharge.date_to} onChange={(e) => setDischarge({ ...discharge, date_to: e.target.value })} required /></Field>
-            <div className="alert info full-span">SOLVIA сама сформує підсумок, динаміку, рекомендації та подальший супровід із завершених консультацій за цей період. Психолог повторно нічого не переписує.</div>
+            <div className="alert info full-span">Система сформує чернетку підсумку, динаміки, рекомендацій і подальшого супроводу. Перед видачею психолог має перевірити текст і подати документ на погодження керівнику.</div>
             <div className="form-actions full-span"><Button type="button" variant="ghost" onClick={() => setDialog('')}>Скасувати</Button><Button type="submit">Сформувати виписку</Button></div>
           </form>
         </Dialog>
@@ -2026,11 +2030,13 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
       {editingDischarge && <DischargeEditor api={api} item={editingDischarge} onClose={() => setEditingDischarge(null)} onSaved={async () => { setEditingDischarge(null); await load(); }} />}
       {dialog === 'print-discharge' && printDoc && (
         <Dialog title="Виписка пацієнта" subtitle="Попередній перегляд документа" onClose={() => { setDialog(''); setPrintDoc(null); }} wide>
+          {!canPrintDischarge(printDoc.item)&&<div className="alert error no-print" role="status">Чернетка або виписка на погодженні. Друк для видачі пацієнту недоступний до погодження керівником.</div>}
+          {printDoc.item.workflow_status==='legacy'&&<div className="alert info no-print">Архівна виписка: статус погодження до оновлення системи не підтверджувався.</div>}
           <article className="discharge-print">
             <header className="discharge-header">
-              <img className="discharge-logo" src={printDoc.center.logo_data || '/solvia-icon.png'} alt="Емблема" />
+              <img className="discharge-logo" src={printDoc.center.logo_data || '/lemvori-care.svg'} alt="Емблема" />
               <div className="discharge-center-copy">
-                <strong>{printDoc.center.center_name || 'SOLVIA'}</strong>
+                <strong>{printDoc.center.center_name || 'Lemvori Care'}</strong>
                 {printDoc.center.address && <p>{printDoc.center.address}</p>}
                 <p>{[printDoc.center.phone, printDoc.center.email, printDoc.center.website].filter(Boolean).join(' · ')}</p>
               </div>
@@ -2040,6 +2046,9 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
               <div className="eyebrow">ПСИХОЛОГІЧНИЙ СУПРОВІД</div>
               <h1>ВИПИСКА</h1>
               <p>Дата формування: {printDoc.item.created?.slice(0, 10) || localDate()}</p>
+              <p>Статус: {dischargeStatusText[printDoc.item.workflow_status] || 'Архівна виписка'}</p>
+              {printDoc.item.workflow_status==='approved'&&<p>Внутрішнє погодження: {printDoc.item.approved_by_name || 'Керівник'} · {printDoc.item.approved_at?.replace('T',' ')}</p>}
+              {printDoc.item.workflow_status==='legacy'&&<p>Документ попередньої версії. Статус внутрішнього погодження не підтверджено.</p>
             </div>
             <dl className="profile-list discharge-profile">
               <div><dt>Номер пацієнта</dt><dd>№{printDoc.item.patient_no_snapshot || card.patient_no || '00000'}</dd></div>
@@ -2068,13 +2077,13 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
             </div>
 
             <footer className="discharge-footer">
-              <span>{printDoc.center.center_name || 'SOLVIA'}</span>
+              <span>{printDoc.center.center_name || 'Lemvori Care'}</span>
               <span>{printDoc.center.document_footer || ''}</span>
             </footer>
           </article>
           <div className="form-actions no-print">
             <Button type="button" variant="ghost" onClick={() => { setDialog(''); setPrintDoc(null); }}>Закрити</Button>
-            <Button type="button" onClick={printDischargeDocument}>Друк / Зберегти PDF</Button>
+            <Button type="button" disabled={!canPrintDischarge(printDoc.item)} onClick={printDischargeDocument}>Друк / Зберегти PDF</Button>
           </div>
         </Dialog>
       )}
@@ -2473,11 +2482,11 @@ function ServerMaintenance({ api, apiBase }) {
         </small>
       </article>
       <article>
-        <strong>Оновлення SOLVIA</strong>
+        <strong>Оновлення Lemvori Care</strong>
         <p>Встановлена версія: <b>{serverVersion || '—'}</b></p>
         <p><code>sudo solvia-admin check-update</code></p>
         <p><code>sudo solvia-admin update</code></p>
-        <small>Або скористайтесь дією «Оновити SOLVIA» у меню програми Linux.</small>
+        <small>Або скористайтесь дією «Оновити Lemvori Care» у меню програми Linux.</small>
       </article>
       <article>
         <strong>Резервні копії</strong>
@@ -2513,11 +2522,11 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
   useEffect(()=>{load();const timer=setInterval(load,30000);return()=>clearInterval(timer);},[]);
   async function terminate(session){if(!window.confirm(`Завершити сесію ${session.name} на ${session.device_name||session.platform}?`))return;try{await api('DELETE',`/api/admin/sessions/${session.session_id}`,{});await load();}catch(e){setError(e.message);}}
   if(user.role!=='admin')return <div className="server-console"><div className="alert error">Server Console доступна тільки адміністратору.</div><Button onClick={onLogout}>Вийти</Button></div>;
-  return <div className="server-console" tabIndex={0} role="region" aria-label="SOLVIA Server Console">
-    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><div><strong>SOLVIA Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
+  return <div className="server-console" tabIndex={0} role="region" aria-label="Lemvori Care Server Console">
+    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/lemvori-care.svg" alt="Lemvori Care" /></div><div><strong>Lemvori Care Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
     <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['tv','TV-табло'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
     {error&&<div className="alert error">{error}</div>}
-    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>SOLVIA SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><ServerReadiness api={api}/><section className="surface"><h2>Обслуговування сервера</h2><ServiceControls api={api}/><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
+    {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>Lemvori Care SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><ServerReadiness api={api}/><section className="surface"><h2>Обслуговування сервера</h2><ServiceControls api={api}/><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
     {page==='settings'&&<Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} technical />}
     {page==='pc'&&<DesktopReleaseSettings api={api} />}
     {page==='mobile'&&<MobileReleaseSettings api={api} />}
@@ -2597,7 +2606,7 @@ function AccountSettings({ api, apiBase, onLogout, user }) {
           <Field label="Повторіть новий пароль"><input type="password" minLength="1" autoComplete="new-password" disabled={busy} value={password.confirm} onChange={e=>setPassword({...password,confirm:e.target.value})} required /></Field></div>
           <Button type="submit" disabled={busy}>{busy ? 'Змінюємо пароль…' : 'Змінити пароль'}</Button>
         </form></section>
-        <section className="surface account-section account-version"><header><h2>Про SOLVIA {pkg.version}</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><span>Зверніться до адміністратора центру</span></div><small>Оновлення встановлює адміністратор центру.</small></section>
+        <section className="surface account-section account-version"><header><h2>Про Lemvori Care {pkg.version}</h2><p>Сервер {health?.version || '…'} {health?.platform ? `· ${health.platform}` : ''}</p></header>{healthError&&<div className="alert error" role="alert">{healthError}</div>}<p className="account-address">{apiBase}</p><div className="page-actions"><Button variant="secondary" onClick={openProductUpdates}>Офіційні випуски</Button><span>Зверніться до адміністратора центру</span></div><small>Оновлення встановлює адміністратор центру.</small></section>
       </div>
     </div>
   </>;
@@ -2617,7 +2626,7 @@ function MobileReleaseSettings({ api }) {
       setCurrent(await api('GET','/api/mobile-update')); setMessage('Оновлення опубліковано на сервері центру. Телефони побачать його після входу або наступної перевірки.');
     } catch(e) {setMessage(e.message);} finally {setBusy(false);}
   }
-  return <section className="surface settings-panel"><h2>Оновлення Android</h2><p>{current?.available ? `На сервері: SOLVIA ${current.version_name}` : 'Підписаний APK ще не завантажено.'}</p>
+  return <section className="surface settings-panel"><h2>Оновлення Android</h2><p>{current?.available ? `На сервері: Lemvori Care ${current.version_name}` : 'Підписаний APK ще не завантажено.'}</p>
     <p>Встановлення поза Play Market. Наступні APK мають використовувати той самий постійний підпис.</p>
     <form className="form-grid" onSubmit={publish}>
       <Field label="Опис випуску — release.json"><input type="file" accept=".json" disabled={busy} onChange={e=>setRelease(e.target.files[0]||null)} /></Field>
@@ -2684,7 +2693,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
       link.href = href; link.download = 'SOLVIA-Mobile.solvia';
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(href), 1000);
-      setConnectionTest({ state: 'ok', message: 'Файл створено сервером зі збережених налаштувань. Відкрийте його на телефоні у SOLVIA.' });
+      setConnectionTest({ state: 'ok', message: 'Файл створено сервером зі збережених налаштувань. Відкрийте його на телефоні у Lemvori Care.' });
     } catch (e) { setConnectionTest({ state: 'error', message: e.message }); }
   }
 
@@ -2699,7 +2708,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
       const endpoint = selectedEndpoint();
       const result = await request(endpoint, '', 'GET', '/api/health');
       if (!result.ok) throw new Error('API відповів без статусу OK');
-      setConnectionTest({ state: 'ok', message: `SOLVIA ${result.version || '—'} доступна · ${endpoint}` });
+      setConnectionTest({ state: 'ok', message: `Lemvori Care ${result.version || '—'} доступна · ${endpoint}` });
     } catch (e) {
       setConnectionTest({ state: 'error', message: e.message });
     }
@@ -2719,7 +2728,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
     <>
       <PageHead
         eyebrow="СИСТЕМА"
-        title={technical?"Налаштування сервера":"Налаштування SOLVIA"}
+        title={technical?"Налаштування сервера":"Налаштування Lemvori Care"}
         subtitle="Центр, документи, підключення до локального сервера або VPS і технічне обслуговування."
       />
       {error && <div className="alert error">{error}</div>}
@@ -2752,7 +2761,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
                   <div className="eyebrow">{activeSection === 'center' ? 'ПРОФІЛЬ ЦЕНТРУ' : 'ДОКУМЕНТИ'}</div>
                   <h2>{activeSection === 'center' ? 'Реквізити та оформлення' : 'Виписки та підписи'}</h2>
                 </div>
-                <Badge tone="forest">SOLVIA {pkg.version}</Badge>
+                <Badge tone="forest">Lemvori Care {pkg.version}</Badge>
               </div>
 
               <form className="form-grid" onSubmit={save}>
@@ -2772,11 +2781,11 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
                   <div className="field full">
                     <span>Емблема центру</span>
                     <div className="logo-settings">
-                      <img src={form.logo_data || '/solvia-icon.png'} alt="Емблема центру" />
+                      <img src={form.logo_data || '/lemvori-care.svg'} alt="Емблема центру" />
                       <div>
                         <input type="file" accept="image/png,image/jpeg" onChange={(e) => chooseLogo(e.target.files?.[0])} />
                         <small>PNG/JPEG до 1 МБ. Використовується у виписках і документах.</small>
-                        {form.logo_data && <Button type="button" variant="ghost" onClick={() => setForm({ ...form, logo_data: '' })}>Повернути емблему SOLVIA</Button>}
+                        {form.logo_data && <Button type="button" variant="ghost" onClick={() => setForm({ ...form, logo_data: '' })}>Повернути емблему Lemvori Care</Button>}
                       </div>
                     </div>
                   </div>
@@ -2786,8 +2795,8 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
                   <Field label="Посада психолога у виписці"><input value={form.discharge_signatory} onChange={(e) => setForm({ ...form, discharge_signatory: e.target.value })} placeholder="Психолог" /></Field>
                   <Field label="Футер документів" full><textarea rows="5" value={form.document_footer} onChange={(e) => setForm({ ...form, document_footer: e.target.value })} placeholder="Ліцензія, юридична інформація, контакти або примітка для друкованих документів." /></Field>
                   <div className="document-preview full-span">
-                    <div className="document-preview-mark"><img src={form.logo_data || '/solvia-icon.png'} alt="" /></div>
-                    <div><small>ПОПЕРЕДНІЙ ВИГЛЯД</small><strong>{form.center_name || 'SOLVIA Center'}</strong><span>{form.head_title || 'Завідувач центру'} · {form.head_name || 'ПІБ'}</span></div>
+                    <div className="document-preview-mark"><img src={form.logo_data || '/lemvori-care.svg'} alt="" /></div>
+                    <div><small>ПОПЕРЕДНІЙ ВИГЛЯД</small><strong>{form.center_name || 'Lemvori Care Center'}</strong><span>{form.head_title || 'Завідувач центру'} · {form.head_name || 'ПІБ'}</span></div>
                   </div>
                 </>}
                 <div className="form-actions full-span"><Button type="submit">Зберегти зміни</Button></div>
@@ -2845,7 +2854,7 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
 
               <div className="security-callout">
                 <strong>VPS працює тільки через HTTPS</strong>
-                <p>SOLVIA не зберігає пароль від VPS. У налаштуваннях зберігається лише адреса API. Авторизація користувачів залишається через персональні облікові записи SOLVIA.</p>
+                <p>Lemvori Care не зберігає пароль від VPS. У налаштуваннях зберігається лише адреса API. Авторизація користувачів залишається через персональні облікові записи Lemvori Care.</p>
               </div>
             </section>
           )}
@@ -3390,7 +3399,7 @@ function DischargeEditor({ api, item, onClose, onSaved }) {
   </Dialog>;
 }
 
-function Discharges({ api }) {
+function Discharges({ api, role }) {
   const [items,setItems]=useState(null),[error,setError]=useState(''),[editing,setEditing]=useState(null),[query,setQuery]=useState('');
   async function load(){try{setItems(await api('GET','/api/discharges'));setError('');}catch(e){setError(e.message);}}
   useEffect(()=>{load();},[]);
@@ -3398,7 +3407,7 @@ function Discharges({ api }) {
   return <><PageHead eyebrow="ДОКУМЕНТИ" title="Виписки" subtitle="Підсумки супроводу, динаміка, рекомендації та історія редагувань." />
     {error && <div className="alert error" role="alert">{error}</div>}
     <section className="surface"><Field label="Пошук виписки"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Пацієнт або номер документа" /></Field>
-    {items===null ? <Spinner /> : !visible.length ? <Empty title="Виписок немає" text="Створені в картках пацієнтів виписки з’являться тут." /> : <div className="assessment-list">{visible.map(item=><div className="assessment-row" key={item.id}><div><strong>{item.patient_name} · № {item.document_no || item.id}</strong><span>{item.date_from} — {item.date_to} · {item.author} · версія {item.revision || 1}</span></div><Button variant="secondary" onClick={()=>setEditing(item)}>Редагувати</Button></div>)}</div>}</section>
+    {items===null ? <Spinner /> : !visible.length ? <Empty title="Виписок немає" text="Створені в картках пацієнтів виписки з’являться тут." /> : <div className="assessment-list">{visible.map(item=><div className="assessment-row" key={item.id}><div><strong>{item.patient_name} · № {item.document_no || item.id}</strong><span>{item.date_from} — {item.date_to} · {item.author} · версія {item.revision || 1}</span></div><div className="page-actions"><DischargeWorkflowControls api={api} item={item} role={role} onSaved={load}/>{(item.workflow_status==='draft'||item.workflow_status==='legacy')&&<Button variant="secondary" onClick={()=>setEditing(item)}>Редагувати</Button>}</div></div>)}</div>}</section>
     {editing && <DischargeEditor key={editing.id} api={api} item={editing} onClose={()=>setEditing(null)} onSaved={async()=>{setEditing(null);await load();}} />}</>;
 }
 
@@ -3452,7 +3461,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if(menuOpen) document.querySelector('.sidebar button:not(:disabled)')?.focus();
     else document.querySelector('.mobile-menu-button')?.focus();
   }, [compactNav, menuOpen]);
-  const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'SOLVIA');
+  const activePageLabel = page === 'patient-card' ? 'Картка пацієнта' : (navigation.find(([key]) => key === page)?.[1] || 'Lemvori Care');
 
   function rememberPage() {
     pageHistory.current.push({page,patientId});
@@ -3519,7 +3528,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'team') return <Team api={api} currentUser={user} />;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports key={shift?.shift_date} api={api} role={user.role} shiftDate={shift?.shift_date} />;
-    if (page === 'discharges') return <Discharges api={api} />;
+    if (page === 'discharges') return <Discharges api={api} role={user.role} />;
     if (page === 'workload') return <Workload api={api} />;
     if (page === 'supervisions') return <Supervisions api={api} role={user.role} user={user} />;
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
@@ -3547,7 +3556,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       }}>
         <div className="sidebar-brand">
           <div className="product-mark inverse motion-brand-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></div>
-          <div><strong>SOLVIA</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · LemvoriLab</small></div>
+          <div><strong>Lemvori Care</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · LemvoriLab</small></div>
         </div>
 
         <WorkspaceNavigation navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} />
@@ -3597,7 +3606,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
           {shiftError && <div className="alert error">{shiftError}</div>}
           {!shift && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (shiftError ? <Button variant="secondary" onClick={loadShift}>Повторити завантаження зміни</Button> : <Spinner />) : locked && page !== 'preferences' && page !== 'staff-messages' && !(user.role === 'admin' && page === 'settings') ? (
             <section className="shift-gate surface">
-              <img src="/solvia-icon.png" alt="SOLVIA" />
+              <img src="/lemvori-care.svg" alt="Lemvori Care" />
               <div className="eyebrow">ДОСТУП ДО РОБОТИ</div>
               <h1>Очікуємо дозволу адміністратора</h1>
               <p>{receptionAccess?.starts_at && receptionAccess.enabled ? `Доступ заплановано з ${receptionAccess.starts_at.replace('T',' ')} за часом сервера.` : 'Адміністратор має надати доступ на сьогодні. Зміна залишається відкритою.'}</p>
@@ -3723,7 +3732,7 @@ export default function App() {
   }
 
   if (booting) {
-    return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/solvia-icon.png" alt="SOLVIA" /></div><Spinner /><span>Відкриваємо SOLVIA…</span></div>;
+    return <div className="boot-screen"><div className="product-mark"><img className="product-logo" src="/lemvori-care.svg" alt="Lemvori Care" /></div><Spinner /><span>Відкриваємо Lemvori Care…</span></div>;
   }
 
   if (!user) return <>{appMode !== 'server' && <ServiceStatus base={apiBase} enabled={Boolean(localStorage.getItem('solvia_api'))}/>}<Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} /></>;
