@@ -1,0 +1,32 @@
+name: LemvoriLab operator hub security tests
+
+on:
+  push:
+    branches: [main, 'feature/**']
+    paths:
+      - 'operator-hub/**'
+      - 'installer/linux/lemvori-heartbeat'
+      - '.github/workflows/operator-hub.yml'
+  pull_request:
+    paths:
+      - 'operator-hub/**'
+      - 'installer/linux/lemvori-heartbeat'
+      - '.github/workflows/operator-hub.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-hub:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate Python syntax
+        run: python3 -m py_compile operator-hub/server.py installer/linux/lemvori-heartbeat
+      - name: Company registry authentication and privacy tests
+        run: python3 -m unittest discover -s operator-hub/tests -v
