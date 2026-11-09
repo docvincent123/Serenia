@@ -801,3 +801,16 @@ ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFA
 ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS scan_data TEXT NOT NULL DEFAULT '';
 ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS original_data TEXT NOT NULL DEFAULT '';
 ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS paper_signed BOOLEAN NOT NULL DEFAULT FALSE;
+
+
+-- Lemvori Care: new discharges require psychologist review and head approval.
+-- Historical documents are marked as legacy, not retroactively approved.
+CREATE SEQUENCE IF NOT EXISTS lemvori_discharge_number_seq START WITH 1;
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS workflow_status TEXT NOT NULL DEFAULT 'legacy'
+  CHECK(workflow_status IN ('legacy','draft','review','approved'));
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS submitted_by BIGINT REFERENCES users(id);
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS submitted_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS approved_by BIGINT REFERENCES users(id);
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS approved_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS return_reason TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_discharge_workflow ON discharge_summaries(workflow_status,id DESC);
