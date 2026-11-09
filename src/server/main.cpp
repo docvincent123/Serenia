@@ -338,6 +338,36 @@ if(path=="/api/license"){
  audit(db,u,"activate","center_license",1);return centerAccess(db);
 }
 if(path=="/api/desktop-updates"||path=="/api/desktop-updates/package")return desktopUpdates(db,u,r,b);
+if(path=="/api/center-identity"&&method=="GET"){
+ auto settings=db.query("SELECT center_name AS name,short_name,city FROM center_settings WHERE id=1");
+ J identity=settings.empty()?J::object():settings[0];
+ identity["server_id"]=installationId(db);
+ return identity;
+}
+if(path=="/api/services"){
+ allow(u,{"admin","reception","psychologist","director"});
+ if(method=="GET")return db.query("SELECT id,code,name,category,active FROM center_services ORDER BY active DESC,name");
+ allow(u,{"admin"});check(method=="POST","Метод не дозволений",405);
+ auto name=str(b,"name",100),category=str(b,"category",30);
+ check(category=="psychology"||category=="medical"||category=="rehabilitation"||category=="creative"||category=="other","Невідома категорія напрямку");
+ check(db.query("SELECT count(*) n FROM center_services")[0]["n"].get<long long>()<200,"Досягнуто обмеження у 200 напрямків",409);
+ auto code="custom-"+randomToken().substr(0,16);
+ db.query("INSERT INTO center_services(code,name,category,active,created) VALUES(?,?,?,TRUE,?)",{code,name,category,now()});
+ auto id=db.id();audit(db,u,"create","center_service",id);return {{"id",id},{"code",code}};
+}
+if(std::regex_match(path,std::regex("/api/services/[0-9]+"))){
+ allow(u,{"admin"});check(method=="PATCH","Метод не дозволений",405);
+ int id=std::stoi(path.substr(14));
+ auto rows=db.query("SELECT id,name,category,active FROM center_services WHERE id=?",{id});
+ check(!rows.empty(),"Напрямок не знайдено",404);
+ auto old=rows[0];auto name=b.contains("name")?str(b,"name",100):old["name"].get<std::string>();
+ auto category=b.contains("category")?str(b,"category",30):old["category"].get<std::string>();
+ check(category=="psychology"||category=="medical"||category=="rehabilitation"||category=="creative"||category=="other","Невідома категорія напрямку");
+ check(!b.contains("active")||b["active"].is_boolean(),"Невірна ознака активності");
+ bool active=b.contains("active")?b["active"].get<bool>():old["active"].get<bool>();
+ db.query("UPDATE center_services SET name=?,category=?,active=?,updated=? WHERE id=?",{name,category,active,now(),id});
+ audit(db,u,"update","center_service",id);return {{"ok",true}};
+}
 if(path=="/api/me"&&method=="GET")return mobileProfile(db,u,token);
 if(path=="/api/logout"&&method=="POST"){db.query("DELETE FROM sessions WHERE token=?",{token});return {{"ok",true}};}
 if(path=="/api/account/password"&&method=="POST"){
