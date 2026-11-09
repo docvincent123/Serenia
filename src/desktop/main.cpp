@@ -42,7 +42,7 @@ std::wstring envValue(const wchar_t* name) {
 std::filesystem::path userDataDirectory() {
     auto local = envValue(L"LOCALAPPDATA");
     std::filesystem::path root = local.empty() ? executableDirectory() : std::filesystem::path(local);
-    auto path = root / L"QureMed" / L"SOLVIA" / L"WebView2";
+    auto path = root / L"QureMed" / L"Lemvori Care" / L"WebView2";
     std::error_code ec;
     std::filesystem::create_directories(path, ec);
     return path;
@@ -56,7 +56,7 @@ void resizeWebView() {
 }
 
 void fatal(const wchar_t* message) {
-    MessageBoxW(g_window, message, L"SOLVIA", MB_OK | MB_ICONERROR);
+    MessageBoxW(g_window, message, L"Lemvori Care", MB_OK | MB_ICONERROR);
     if (g_window) PostMessageW(g_window, WM_CLOSE, 0, 0);
 }
 
@@ -69,9 +69,9 @@ void workflowNotice(const std::wstring& kind) {
     auto found=titles.find(kind);if(found==titles.end())return;
     NOTIFYICONDATAW data{};data.cbSize=sizeof(data);data.hWnd=g_window;data.uID=1;
     data.uFlags=NIF_ICON|NIF_MESSAGE|NIF_TIP|NIF_INFO;data.uCallbackMessage=WorkflowNoticeMessage;
-    data.hIcon=LoadIconW(nullptr,IDI_INFORMATION);wcscpy_s(data.szTip,L"SOLVIA");
-    wcscpy_s(data.szInfoTitle,L"SOLVIA");
-    std::wstring body=found->second+L". Відкрийте SOLVIA для перегляду.";
+    data.hIcon=LoadIconW(nullptr,IDI_INFORMATION);wcscpy_s(data.szTip,L"Lemvori Care");
+    wcscpy_s(data.szInfoTitle,L"Lemvori Care");
+    std::wstring body=found->second+L". Відкрийте Lemvori Care для перегляду.";
     wcsncpy_s(data.szInfo,body.c_str(),_TRUNCATE);data.dwInfoFlags=NIIF_INFO|NIIF_NOSOUND;
     g_noticeVisible=Shell_NotifyIconW(g_noticeVisible?NIM_MODIFY:NIM_ADD,&data)!=FALSE;
 }
@@ -170,7 +170,7 @@ void createWebView(HWND hwnd) {
                                              message == L"restore" ? L"Restore-Database.ps1" :
                                              L"Restart-Server.ps1");
                                         if (!std::filesystem::exists(script)) {
-                                            MessageBoxW(g_window, L"Не знайдено скрипт обслуговування SOLVIA.", L"SOLVIA", MB_OK | MB_ICONERROR);
+                                            MessageBoxW(g_window, L"Не знайдено скрипт обслуговування SOLVIA.", L"Lemvori Care", MB_OK | MB_ICONERROR);
                                             return S_OK;
                                         }
 
@@ -180,7 +180,7 @@ void createWebView(HWND hwnd) {
                                             executableDirectory().c_str(), SW_SHOWNORMAL
                                         ));
                                         if (result <= 32 && result != ERROR_CANCELLED) {
-                                            MessageBoxW(g_window, L"Не вдалося запустити обслуговування бази.", L"SOLVIA", MB_OK | MB_ICONERROR);
+                                            MessageBoxW(g_window, L"Не вдалося запустити обслуговування бази.", L"Lemvori Care", MB_OK | MB_ICONERROR);
                                         }
                                         return S_OK;
                                     }
@@ -236,7 +236,7 @@ void createWebView(HWND hwnd) {
                                         std::wstring message = L"Не вдалося завантажити локальний інтерфейс SOLVIA. WebView2 status: " +
                                             std::to_wstring(static_cast<int>(status)) +
                                             L". Файл: " + (executableDirectory() / L"ui" / L"index.html").wstring();
-                                        MessageBoxW(g_window, message.c_str(), L"SOLVIA", MB_OK | MB_ICONERROR);
+                                        MessageBoxW(g_window, message.c_str(), L"Lemvori Care", MB_OK | MB_ICONERROR);
                                         return S_OK;
                                     }
                                 ).Get(),
@@ -320,7 +320,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
     const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(com) && com != RPC_E_CHANGED_MODE) {
-        MessageBoxW(nullptr, L"Не вдалося ініціалізувати Windows COM.", L"SOLVIA", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, L"Не вдалося ініціалізувати Windows COM.", L"Lemvori Care", MB_OK | MB_ICONERROR);
         return 1;
     }
 
@@ -345,9 +345,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         0,
         wc.lpszClassName,
 #ifdef SOLVIA_SERVER_CONSOLE
-        L"SOLVIA Server Console 3.1.1 • LemvoriLab",
+        L"Lemvori Care Server Console 3.1.1 • LemvoriLab",
 #else
-        L"SOLVIA 3.1.1 by LemvoriLab • Центр психологічної реабілітації",
+        L"Lemvori Care 3.1.1 by LemvoriLab • Центр психологічної реабілітації",
 #endif
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,
