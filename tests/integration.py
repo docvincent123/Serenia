@@ -1518,4 +1518,28 @@ class Scenario(unittest.TestCase):
             self.api('admin','PATCH',f'/api/users/{worker}',{'active':False})
 
 
+    def test_z_center_identity_and_service_directions(self):
+        identity=self.api('admin','GET','/api/center-identity')
+        health=self.call('GET','/api/health')[1]
+        self.assertEqual(identity['server_id'],health['server_id'])
+        self.assertTrue(identity['name'])
+        self.assertEqual(self.call('GET','/api/center-identity')[0],401)
+        services=self.api('reception','GET','/api/services')
+        self.assertTrue(any(item['code']=='psychology' for item in services))
+        self.assertTrue(any(item['code']=='psychiatry' for item in services))
+        self.api('psychologist','POST','/api/services',{'name':'Нова терапія','category':'creative'},status=403)
+        name='Тестовий напрямок '+str(time.time_ns())
+        created=self.api('admin','POST','/api/services',{'name':name,'category':'creative'})
+        sid=created['id']
+        self.assertGreater(sid,0)
+        self.assertTrue(created['code'].startswith('custom-'))
+        self.assertTrue(any(x['id']==sid for x in self.api('psychologist','GET','/api/services')))
+        self.api('psychologist','PATCH',f'/api/services/{sid}',{'active':False},status=403)
+        self.api('admin','PATCH',f'/api/services/{sid}',{'category':'wrong'},status=400)
+        self.api('admin','PATCH',f'/api/services/{sid}',{'name':name+' редаговано','active':False})
+        current=next(x for x in self.api('admin','GET','/api/services') if x['id']==sid)
+        self.assertFalse(current['active'])
+        self.assertEqual(current['name'],name+' редаговано')
+
+
 if __name__=='__main__': unittest.main()
