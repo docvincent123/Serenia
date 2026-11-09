@@ -25,7 +25,7 @@ try {
   await page.emulateMedia({reducedMotion:'reduce'});
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   let dischargePatchCalls=0;
-  let dischargeRecord={id:1,patient_name:'Демонстраційний пацієнт',document_no:'2026-12345',date_from:'2026-10-01',date_to:'2026-10-15',author:'Тестовий психолог',revision:1,summary:'Підсумок супроводу',dynamics:'Динаміка',recommendations:'Попередня рекомендація',followup:'Подальший супровід'};
+  let dischargeRecord={id:1,patient_name:'Демонстраційний пацієнт',document_no:'2026-12345',date_from:'2026-10-01',date_to:'2026-10-15',author:'Тестовий психолог',revision:1,workflow_status:'legacy',summary:'Підсумок супроводу',dynamics:'Динаміка',recommendations:'Попередня рекомендація',followup:'Подальший супровід'};
   let staffMessages = [], staffCalls = 0;
   let accessAllowed = true, accessCalls = 0;
   let serviceMode='ready';
@@ -346,20 +346,24 @@ try {
     await page.screenshot({path:`out/design/desktop-${role}.png`,fullPage:true});
     if(role==='director'){
       await page.getByRole('button',{name:'Виписки',exact:true}).click();
-      await page.getByRole('button',{name:'Редагувати',exact:true}).click();
-      const editor=page.getByRole('dialog',{name:'Редагування виписки',exact:true});
-      await editor.getByLabel('Рекомендації',{exact:true}).fill('Уточнена рекомендація');
-      await editor.getByLabel('Причина редагування',{exact:true}).fill('Уточнення рекомендацій');
-      await page.screenshot({path:'out/design/desktop-discharge-editor.png',fullPage:true});
-      await editor.getByRole('button',{name:'Зберегти зміни',exact:true}).click();
-      await editor.waitFor({state:'hidden'});
-      assert.equal(dischargePatchCalls,1);assert.equal(dischargeRecord.recommendations,'Уточнена рекомендація');
-      await page.getByText(/версія 2/).waitFor();
+      await page.getByText('Архівна виписка',{exact:true}).waitFor();
+      assert.equal(await page.getByRole('button',{name:'Редагувати',exact:true}).count(),0,'Director cannot edit clinical content; only responsible professionals may revise it');
     }
 
   }
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};
   await page.reload();
+  await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Відкрити розділ Виписки',exact:true}).click();
+  await page.getByRole('button',{name:'Редагувати',exact:true}).click();
+  const editor=page.getByRole('dialog',{name:'Редагування виписки',exact:true});
+  await editor.getByLabel('Рекомендації',{exact:true}).fill('Уточнена рекомендація');
+  await editor.getByLabel('Причина редагування',{exact:true}).fill('Уточнення рекомендацій');
+  await page.screenshot({path:'out/design/desktop-discharge-editor.png',fullPage:true});
+  await editor.getByRole('button',{name:'Зберегти зміни',exact:true}).click();
+  await editor.waitFor({state:'hidden'});
+  assert.equal(dischargePatchCalls,1);assert.equal(dischargeRecord.recommendations,'Уточнена рекомендація');
+  await page.getByText(/версія 2/).waitFor();
   accessAllowed=false;currentUser={id:2,name:'Реєстратура',role:'reception'};await page.reload();
   await page.getByRole('heading',{name:'Очікуємо дозволу адміністратора',exact:true}).waitFor();
   assert.equal(closeCalls,0,'Shift remains open while reception waits for permission');
