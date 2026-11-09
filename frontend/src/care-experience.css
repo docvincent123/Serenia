@@ -174,3 +174,215 @@
 @media(max-width:1050px){.care-services-layout{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.care-service-grid{grid-template-columns:minmax(0,1fr)}.care-services-toolbar{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){.studio-shell *, .studio-shell *::before,.studio-shell *::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+
+/* LEMVORI CARE / graphite-gray — 2026 design refresh
+   Reference: #06141B #11212D #253745 #4A5C6A #9BA8AB #CCD0CF.
+   Light surfaces deliberately use gray, not black. Uses flat surfaces to
+   remain fast on modest Linux workstations. */
+:root {
+  color-scheme:light;
+  --bg:#9BA8AB;--paper:#CCD0CF;--paper-2:#B9C2C4;--ink:#11212D;--ink-2:#253745;
+  --muted:#4A5C6A;--line:#9BA8AB;--forest:#253745;--forest-dark:#11212D;
+  --forest-soft:#B9C2C4;--sage:#9BA8AB;--sand:#B9C2C4;--sky:#B9C2C4;
+  --shadow:0 12px 30px rgba(17,33,45,.09);
+}
+html,body,#root {background:#9BA8AB!important;color:#11212D!important}
+body {background:#9BA8AB!important}
+.app-shell.studio-shell {
+  --care-ink:#11212D;--care-muted:#4A5C6A;--care-line:#9BA8AB;
+  --care-paper:#CCD0CF;--care-accent:#253745;
+  color:#11212D!important;background:#9BA8AB!important;
+}
+.app-shell.studio-shell .workspace,
+.app-shell.studio-shell .studio-chrome {
+  background:#9BA8AB!important;color:#11212D!important
+}
+.app-shell.studio-shell .workspace-inner {
+  background:#CCD0CF!important;color:#11212D!important;
+  border:1px solid rgba(74,92,106,.2)!important;
+  border-radius:25px!important;box-shadow:0 10px 32px rgba(17,33,45,.09)!important
+}
+.app-shell.studio-shell .sidebar {
+  background:#4A5C6A!important;color:#CCD0CF!important;
+  border-color:#4A5C6A!important;box-shadow:none!important
+}
+.app-shell.studio-shell .sidebar-brand strong,
+.app-shell.studio-shell .sidebar .user-copy strong {color:#CCD0CF!important}
+.app-shell.studio-shell .sidebar-brand span,
+.app-shell.studio-shell .sidebar-brand small,
+.app-shell.studio-shell .sidebar .user-copy span {color:#CCD0CF!important;opacity:.78}
+.app-shell.studio-shell .sidebar .nav-item{
+  border-radius:18px!important;color:#CCD0CF!important;
+  transition:background-color .12s ease!important
+}
+.app-shell.studio-shell .sidebar .nav-item:hover{
+  color:#fff!important;background:#253745!important
+}
+.app-shell.studio-shell .sidebar .nav-item.active,
+.app-shell.studio-shell .sidebar .nav-item[aria-current=page]{
+  color:#11212D!important;background:#CCD0CF!important;
+  border-color:#CCD0CF!important;box-shadow:none!important
+}
+.app-shell.studio-shell .sidebar .studio-rail-directory{
+  background:#253745!important;color:#CCD0CF!important;
+  border-color:#9BA8AB!important;border-radius:18px!important
+}
+.app-shell.studio-shell .sidebar .studio-rail-directory:hover{background:#11212D!important}
+.studio-shell .studio-header{border-bottom:1px solid rgba(74,92,106,.2)!important}
+.studio-shell .studio-wordmark,.studio-shell .studio-wordmark>span,
+.studio-shell .care-center-name {color:#11212D!important}
+.studio-shell .studio-center-city,.studio-shell .care-center-city {color:#4A5C6A!important}
+.studio-shell .studio-header-divider{background:#9BA8AB!important}
+.studio-shell .studio-header-tools .global-search {
+  border:1px solid #9BA8AB!important;border-radius:999px!important;
+  background:#CCD0CF!important;color:#11212D!important
+}
+.studio-shell .studio-header-tools .global-search input {
+  background:transparent!important;color:#11212D!important
+}
+.studio-shell .studio-header-tools .workflow-bell {
+  border-radius:50%!important;background:#CCD0CF!important;
+  border-color:#9BA8AB!important;color:#253745!important
+}
+.studio-shell .studio-back-button {
+  background:#CCD0CF!important;color:#253745!important;
+  border:1px solid #9BA8AB!important;border-radius:999px!important
+}
+.app-shell.studio-shell :is(
+ .surface,.flow-desk-panel,.flow-desk-visits,.flow-desk-metric,.flow-desk-visit,
+ .flow-desk-shortcut,.flow-desk-upcoming,.stat-card,.device-card,.patient-list-card,
+ .patient-card,.assessment-row,.motion-module-card,.context-panel,.settings-panel,
+ .account-identity,.account-section,.document-photo,.document-photo-compare figure,
+ .calendar-surface,.form-card,.care-service-card,.care-services-form,
+ .flow-desk-hero,.overview-status,.shift-bar,.care-services-note,.discharge-workflow
+ ){
+  background:#CCD0CF!important;border-color:rgba(74,92,106,.25)!important;
+  color:#11212D!important;border-radius:23px!important;box-shadow:0 2px 12px rgba(17,33,45,.04)!important
+}
+.app-shell.studio-shell :is(.flow-desk-metric,.flow-desk-visit,.flow-desk-shortcut,
+.patient-list-card,.assessment-row,.care-service-card):hover{
+  border-color:#4A5C6A!important
+}
+.app-shell.studio-shell :is(h1,h2,h3,h4,strong,dt,th,.flow-desk-shortcut-copy strong,
+.flow-desk-visit-patient strong,.flow-desk-metric strong,.care-service-card strong,
+.care-service-category,.page-head h1,.eyebrow){
+  color:#11212D
+}
+.app-shell.studio-shell :is(p,small,caption,dd,.flow-desk-metric-header,.flow-desk-shortcut-copy small,
+.care-service-card small,.flow-desk-section-note,.page-head p){
+  color:#4A5C6A
+}
+.app-shell.studio-shell :is(.button,button:not(.nav-item):not(.studio-rail-directory):not(.icon-button):not(.workflow-bell)){
+  border-radius:999px!important;min-height:40px;transform:none!important
+}
+.app-shell.studio-shell .button.primary,
+.app-shell.studio-shell .button:not(.secondary):not(.ghost):not(.danger),
+.app-shell.studio-shell .flow-desk-create,
+.app-shell.studio-shell .flow-desk-primary-actions button {
+  background:#253745!important;color:#CCD0CF!important;
+  border-color:#253745!important;box-shadow:none!important
+}
+.app-shell.studio-shell .button.primary:hover,
+.app-shell.studio-shell .flow-desk-create:hover {background:#11212D!important}
+.app-shell.studio-shell .button.secondary,
+.app-shell.studio-shell .button.ghost{
+  background:#B9C2C4!important;border:1px solid #9BA8AB!important;
+  color:#253745!important;box-shadow:none!important
+}
+.app-shell.studio-shell :is(.button.secondary,.button.ghost):hover{
+  background:#9BA8AB!important;color:#11212D!important
+}
+.app-shell.studio-shell :is(.button.danger,.alert.error) {border-color:#bd8585!important}
+.app-shell.studio-shell :is(.icon-button,.workflow-bell){border-radius:50%!important}
+.app-shell.studio-shell :is(input,textarea,select){
+  background:#DEE2E2!important;color:#11212D!important;
+  border:1px solid #9BA8AB!important;border-radius:17px!important;
+  box-shadow:none!important;min-height:43px
+}
+.app-shell.studio-shell :is(input,textarea)::placeholder {color:#4A5C6A!important;opacity:.78}
+.app-shell.studio-shell :is(input,textarea,select):focus{
+  border-color:#253745!important;box-shadow:0 0 0 3px rgba(37,55,69,.13)!important
+}
+.app-shell.studio-shell :is(input[type=checkbox],input[type=radio]){
+  accent-color:#253745!important;min-height:auto
+}
+.app-shell.studio-shell :is(.search-box,.global-search,.toolbar,.form-grid,.directory-toolbar-surface){
+  border-radius:21px!important
+}
+.app-shell.studio-shell :is(.shift-bar,.flow-desk-panel-note,.alert.info,.security-callout){
+  background:#B9C2C4!important;color:#253745!important;border-color:#9BA8AB!important
+}
+.app-shell.studio-shell :is(.badge,.chip,.discharge-state){
+  border-radius:999px!important
+}
+.app-shell.studio-shell .dialog-backdrop{
+  background:rgba(17,33,45,.52)!important
+}
+.app-shell.studio-shell .dialog{
+  background:#CCD0CF!important;color:#11212D!important;
+  border-radius:27px!important
+}
+.app-shell.studio-shell :is(.settings-nav button,.connection-mode-grid button,.studio-tabs button){
+  background:#B9C2C4!important;color:#253745!important;border-radius:22px!important
+}
+.app-shell.studio-shell :is(.settings-nav button.active,.connection-mode-grid button.active){
+  background:#253745!important;color:#CCD0CF!important
+}
+/* Consistent gray scheme for the dedicated local Server Console */
+.server-console{
+  --bg:#9BA8AB;--paper:#CCD0CF;--ink:#11212D;--muted:#4A5C6A;
+  color:#11212D!important;background:#9BA8AB!important;min-height:100dvh
+}
+.server-console :is(.surface,.stat-card,.server-console-head,.settings-panel,.maintenance-grid article,.device-card){
+  color:#11212D!important;background:#CCD0CF!important;
+  border:1px solid rgba(74,92,106,.22)!important;border-radius:23px!important
+}
+.server-console :is(.button,button){
+  border-radius:999px!important
+}
+.server-console :is(.button.primary,.button:not(.secondary):not(.ghost):not(.danger)){
+  background:#253745!important;color:#CCD0CF!important
+}
+.server-console :is(.button.secondary,.button.ghost) {
+  background:#B9C2C4!important;color:#253745!important;border:1px solid #9BA8AB!important
+}
+.server-console :is(input,textarea,select){
+  background:#DEE2E2!important;color:#11212D!important;
+  border:1px solid #9BA8AB!important;border-radius:17px!important
+}
+/* Same visual language on onboarding and sign-in screens */
+.login-screen.studio-login{
+  background:#9BA8AB!important;color:#11212D!important
+}
+.login-screen.studio-login :is(.login-brand,.login-panel){background:#9BA8AB!important;color:#11212D!important}
+.login-screen.studio-login :is(.login-card,.login-care-window,.login-care-note){
+  background:#CCD0CF!important;color:#11212D!important;
+  border-color:#9BA8AB!important;border-radius:27px!important
+}
+.login-screen.studio-login :is(h1,h2,strong,.login-brand-signature strong,.login-brand-copy h1){
+  color:#11212D!important
+}
+.login-screen.studio-login :is(input,select){
+  background:#DEE2E2!important;color:#11212D!important;
+  border-color:#9BA8AB!important;border-radius:16px!important
+}
+.login-screen.studio-login :is(button,.button){
+  border-radius:999px!important
+}
+.login-screen.studio-login .login-submit{
+  background:#253745!important;color:#CCD0CF!important
+}
+@media(min-width:761px) and (max-height:680px){
+  .app-shell.studio-shell .sidebar{padding:11px 13px 8px!important}
+  .app-shell.studio-shell .sidebar .nav-item{min-height:39px!important;padding:7px 12px!important}
+}
+@media(max-width:760px){
+  .app-shell.studio-shell .workspace-inner{border-radius:20px!important}
+  .app-shell.studio-shell :is(.flow-desk-visit,.flow-desk-metric,.flow-desk-panel){border-radius:18px!important}
+}
+@media print{
+  :root{color-scheme:light!important}
+  html,body,.discharge-print,.consent-print{background:white!important;color:black!important}
+  .discharge-print *,.consent-print *{color:black!important}
+}
