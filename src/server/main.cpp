@@ -352,8 +352,9 @@ if(path=="/api/services"){
  check(category=="psychology"||category=="medical"||category=="rehabilitation"||category=="creative"||category=="other","Невідома категорія напрямку");
  check(db.query("SELECT count(*) n FROM center_services")[0]["n"].get<long long>()<200,"Досягнуто обмеження у 200 напрямків",409);
  auto code="custom-"+randomToken().substr(0,16);
- db.query("INSERT INTO center_services(code,name,category,active,created) VALUES(?,?,?,TRUE,?)",{code,name,category,now()});
- auto id=db.id();audit(db,u,"create","center_service",id);return {{"id",id},{"code",code}};
+ auto inserted=db.query("INSERT INTO center_services(code,name,category,active,created) VALUES(?,?,?,TRUE,?) RETURNING id",{code,name,category,now()});
+ check(inserted.size()==1&&inserted[0].contains("id"),"Не вдалося підтвердити створення напрямку",500);
+ auto id=inserted[0]["id"].get<int>();audit(db,u,"create","center_service",id);return {{"id",id},{"code",code}};
 }
 if(std::regex_match(path,std::regex("/api/services/[0-9]+"))){
  allow(u,{"admin"});check(method=="PATCH","Метод не дозволений",405);
