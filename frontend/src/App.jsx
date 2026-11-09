@@ -3754,6 +3754,6 @@ export default function App() {
 
   if (!user) return <>{appMode !== 'server' && <ServiceStatus base={apiBase} enabled={Boolean(localStorage.getItem('solvia_api'))}/>}<Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} /></>;
   if (appMode === 'server') return <><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
-  return <><ServiceStatus base={apiBase} enabled={true}/><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
+  return <><ServiceStatus base={apiBase} enabled={true}/><DesktopUpdateNotice api={api} base={apiBase} token={token} passive /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
 }
 
