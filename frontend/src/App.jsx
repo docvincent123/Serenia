@@ -3536,7 +3536,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
     if (page === 'staff-messages' && ['admin','director'].includes(user.role)) return <StaffMessages api={api} initialRecipient={messageTarget?.user_id} initialDevice={messageTarget?.device_id} />;
     if (page === 'devices') return <Devices api={api} onMessage={target=>{setMessageTarget(target);navigate('staff-messages');}} />;
-    if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
+    // Center and server administration is available only in the dedicated Server Console.
     if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
@@ -3566,7 +3566,6 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
-          {user.role === 'admin' && <button aria-label="Налаштування центру" title="Налаштування центру" className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span className="desktop-label">Налаштування центру</span><span className="mobile-label" aria-hidden="true">Система</span></button>}
           <button aria-label="Налаштування профілю" title="Налаштування профілю" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Налаштування профілю</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
           <button className="nav-item" aria-label="Вийти" title="Вийти" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
         </div>
