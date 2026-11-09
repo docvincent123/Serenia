@@ -2048,7 +2048,7 @@ function PatientCard({ api, role, patientId, back, draftSession, onBook, booking
               <p>Дата формування: {printDoc.item.created?.slice(0, 10) || localDate()}</p>
               <p>Статус: {dischargeStatusText[printDoc.item.workflow_status] || 'Архівна виписка'}</p>
               {printDoc.item.workflow_status==='approved'&&<p>Внутрішнє погодження: {printDoc.item.approved_by_name || 'Керівник'} · {printDoc.item.approved_at?.replace('T',' ')}</p>}
-              {printDoc.item.workflow_status==='legacy'&&<p>Документ попередньої версії. Статус внутрішнього погодження не підтверджено.</p>
+              {printDoc.item.workflow_status==='legacy'&&<p>Документ попередньої версії. Статус внутрішнього погодження не підтверджено.</p>}
             </div>
             <dl className="profile-list discharge-profile">
               <div><dt>Номер пацієнта</dt><dd>№{printDoc.item.patient_no_snapshot || card.patient_no || '00000'}</dd></div>
