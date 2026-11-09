@@ -24,6 +24,7 @@ import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import usePatientDirectory from './usePatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
 import CenterHome from './CenterHome.jsx';
+import CenterServices from './CenterServices.jsx';
 import HandoverBoard from './HandoverBoard.jsx';
 import PsychologistShiftBoard from './PsychologistShiftBoard.jsx';
 import ServerReadiness from './ServerReadiness.jsx';
@@ -322,7 +323,7 @@ function WorkspaceNavigation({ navigation, role, page, locked, onNavigate }) {
   // The sidebar contains only four day-to-day destinations. Other allowed
   // features are discoverable from the home page, never removed from the API.
   const preferred = role === 'admin'
-    ? [['dashboard','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти'],['team','Команда']]
+    ? [['dashboard','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти'],['team','Команда'],['services','Напрямки']]
     : role === 'reception'
     ? [['reception-home','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти'],['psychologist-roster','На зміні']]
     : role === 'director'
@@ -3526,6 +3527,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'families') return <Families api={api} openPatient={openPatient} />;
     if (page === 'psychologist-roster' && ['admin','reception','director'].includes(user.role)) return <PsychologistShiftBoard api={api} role={user.role}/>;
     if (page === 'team') return <Team api={api} currentUser={user} />;
+    if (page === 'services' && user.role==='admin') return <CenterServices api={api}/>;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports key={shift?.shift_date} api={api} role={user.role} shiftDate={shift?.shift_date} />;
     if (page === 'discharges') return <Discharges api={api} role={user.role} />;
@@ -3582,7 +3584,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       </aside>
 
       <main className="workspace" data-page={page}>
-        <StudioWorkspace headerTools={!locked ? <>
+        <StudioWorkspace api={api} headerTools={!locked ? <>
           {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
         </> : null}/>
