@@ -108,20 +108,20 @@ try {
     } else if (path === '/api/logout') { await route.abort('timedout'); return; }
     await route.fulfill({ contentType:'application/json',body:JSON.stringify(data) });
   });
-  await page.goto(base); await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  await page.goto(base); await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
   serviceMode='maintenance';
   await page.reload();
   const maintenance=page.getByRole('dialog',{name:'Сервер на оновленні',exact:true});
   await maintenance.waitFor();
   await page.screenshot({path:'out/design/server-maintenance.png',fullPage:true});
   await maintenance.getByRole('button',{name:'Згорнути повідомлення',exact:true}).click();
-  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
   serviceMode='ready';
   await page.reload();
-  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog',{name:'Сервер на оновленні',exact:true}).count(),0);
   const studioHeader=page.locator('.studio-header');
-  assert.equal(await studioHeader.locator('img.studio-mark[src="/lemvori-care.svg"]').count(),1,'The supplied SOLVIA logo appears in the desktop header');
+  assert.equal(await studioHeader.locator('img.studio-mark[src="/lemvori-care.svg"]').count(),1,'The Lemvori Care mark appears in the desktop header');
   const shiftStatus=page.locator('.shift-bar').first();
   assert.equal(await page.locator('.studio-tabs').count(),0,'Tabs removed');
   assert.equal(await page.locator('.workspace-topbar').count(),0,'Old toolbar removed');
@@ -131,7 +131,7 @@ try {
   await page.locator('.focus-nav-primary').getByRole('button',{name:'Календар',exact:true}).click();
   await page.getByRole('heading',{name:'Календар центру',exact:true}).waitFor();
   await page.getByRole('button',{name:'Назад до попереднього розділу'}).click();
-  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
   assert.equal(await page.locator('.studio-back-row').count(),0,'No back button on initial home');
   const globalSearch=page.getByRole('textbox',{name:'Пошук у центрі',exact:true});
   await globalSearch.fill('late-global');
