@@ -282,6 +282,9 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__=='__main__':
     bootstrap()
+    if '--init-only' in os.sys.argv[1:]:
+        print('Operator database initialized. Exit without opening a listener.')
+        raise SystemExit(0)
     port=int(os.environ.get('HUB_PORT','8769'))
     print(f'LemvoriLab metadata hub bound to 127.0.0.1:{port}. HTTPS proxy required.',flush=True)
     ThreadingHTTPServer(('127.0.0.1',port),Handler).serve_forever()
