@@ -14,15 +14,15 @@ import android.widget.TextView
 
 /** One native visual language for the psychologist's phone workspace. */
 object MobileUi {
-    val background = Color.rgb(6,20,27) // #06141B
-    val ink = Color.rgb(204,208,207) // #CCD0CF
-    val muted = Color.rgb(155,168,171) // #9BA8AB
+    val background = Color.rgb(155,168,171) // #9BA8AB gray workspace
+    val ink = Color.rgb(17,33,45) // #11212D
+    val muted = Color.rgb(74,92,106) // #4A5C6A
     val accent = Color.rgb(37,55,69) // #253745
-    val onAccent = Color.rgb(204,208,207)
-    val soft = Color.rgb(74,92,106) // #4A5C6A
-    val border = Color.rgb(74,92,106)
-    val panel = Color.rgb(17,33,45) // #11212D
-    val buttonInk = Color.rgb(204,208,207)
+    val onAccent = Color.rgb(204,208,207) // #CCD0CF
+    val soft = Color.rgb(185,195,197) // soft gray selected states
+    val border = Color.rgb(155,168,171) // #9BA8AB
+    val panel = Color.rgb(204,208,207) // #CCD0CF
+    val buttonInk = Color.rgb(17,33,45) // #11212D
     fun textScale(context: Context) = when(context.getSharedPreferences("solvia_settings", 0).getInt("text_size", 0)) { 1 -> 1.12f; 2 -> 1.25f; else -> 1f }
     fun dp(context: Context, n: Int) = (n * context.resources.displayMetrics.density).toInt()
     fun surface(context: Context, color: Int = panel, radius: Int = 16, outlined: Boolean = false) = GradientDrawable().apply {
@@ -54,7 +54,7 @@ object MobileUi {
         field.setSelectAllOnFocus(field.context.getSharedPreferences("solvia_settings", 0).getBoolean("select_all", false))
         field.typeface=Typeface.create("sans-serif",Typeface.NORMAL);field.setTextColor(ink); field.setHintTextColor(muted); field.textSize = 16f * textScale(field.context)
         field.setPadding(dp(field.context, 14), dp(field.context, 13), dp(field.context, 14), dp(field.context, 13))
-        field.background = surface(field.context, accent, 18, true)
+        field.background = surface(field.context, Color.rgb(220,225,226), 18, true)
         field.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(field.context, 10) }
     }
 }
