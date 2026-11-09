@@ -2458,17 +2458,27 @@ function ServerMaintenance({ api, apiBase }) {
     }
   }
 
-  useEffect(() => { loadSystem(); }, [apiBase]);
+  useEffect(() => {
+    void loadSystem();
+    const timer = setInterval(() => { if (!document.hidden) void loadSystem(); }, 30000);
+    return () => clearInterval(timer);
+  }, [apiBase]);
 
   let localWindows = false;
   try { localWindows = platform === 'windows' && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(apiBase).hostname) && !!window.chrome?.webview; } catch {}
+
+  const localLinux = platform === 'linux' && !!window.webkit?.messageHandlers?.solviaAdmin;
+  const linuxAction = action => {
+    if (!localLinux) return;
+    window.webkit.messageHandlers.solviaAdmin.postMessage(action);
+  };
 
   if (!localWindows) return <div className="maintenance-grid">
     <article>
       <strong>Сервер {platform === 'linux' ? 'Linux' : 'центру'}</strong>
       <p>{system?.lan_url || apiBase}</p>
       <p>{platform === 'linux' ? 'systemd + PostgreSQL + HTTPS. Критичні root-операції виконуються локально на сервері.' : 'Обслуговування виконує адміністратор на сервері.'}</p>
-      <Button variant="secondary" onClick={loadSystem}>Оновити діагностику</Button>
+      <p className="server-auto-refresh"><span aria-hidden="true">●</span> Стан оновлюється автоматично кожні 30 секунд.</p>
       {system && backupNeedsAttention(system.backups) && <div className="alert error" role="alert">Резервна копія потребує перевірки: немає свіжої успішної копії або остання операція завершилася помилкою.</div>}
       {systemError && <p className="danger-text">{systemError}</p>}
     </article>
@@ -2491,6 +2501,11 @@ function ServerMaintenance({ api, apiBase }) {
       </article>
       <article>
         <strong>Резервні копії</strong>
+        {localLinux && <div className="backup-actions" role="group" aria-label="Резервне копіювання та відновлення бази">
+          <Button onClick={() => linuxAction('backup')}>Створити резервну копію БД</Button>
+          <Button variant="secondary" onClick={() => linuxAction('restore')}>Відновити з файлу .dump</Button>
+          <small>Ці дії виконуються лише на локальному сервері Linux через підтвердження адміністратора ОС. Перед відновленням створюється захисна копія.</small>
+        </div>}
         <p>Після кожної закритої зміни. О 00:00 за Києвом — копія й передавання на віддалений сервер; додаткова локальна копія о 02:00. Для ручного запуску:</p>
         <code>sudo solvia-admin backup</code>
         <p><code>sudo solvia-admin backups</code></p>
@@ -2504,8 +2519,8 @@ function ServerMaintenance({ api, apiBase }) {
       <article>
         <strong>Діагностика / відновлення</strong>
         <p><code>sudo solvia-admin doctor</code></p>
-        <p><code>sudo solvia-admin restore /path/backup.dump</code></p>
-        <small>Restore навмисно вимагає sudo та ручне підтвердження на Linux-сервері.</small>
+        {!localLinux && <p><code>sudo solvia-admin restore /path/backup.dump</code></p>}
+        <small>{localLinux ? 'Оберіть файл через кнопку «Відновити з файлу»; Linux перевірить архів та попросить підтвердження.' : 'Відновлення навмисно вимагає sudo та локальне підтвердження на сервері.'}</small>
       </article>
     </>}
   </div>;
@@ -2524,10 +2539,11 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
   async function terminate(session){if(!window.confirm(`Завершити сесію ${session.name} на ${session.device_name||session.platform}?`))return;try{await api('DELETE',`/api/admin/sessions/${session.session_id}`,{});await load();}catch(e){setError(e.message);}}
   if(user.role!=='admin')return <div className="server-console"><div className="alert error">Server Console доступна тільки адміністратору.</div><Button onClick={onLogout}>Вийти</Button></div>;
   return <div className="server-console" tabIndex={0} role="region" aria-label="Lemvori Care Server Console">
-    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/lemvori-care.svg" alt="Lemvori Care" /></div><div><strong>Lemvori Care Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
-    <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['tv','TV-табло'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
+    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/lemvori-care.svg" alt="Lemvori Care" /></div><div><strong>Lemvori Care Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><span className="server-auto-refresh">Стан оновлюється автоматично</span><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
+    <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['backup','Резервні копії'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['tv','TV-табло'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
     {error&&<div className="alert error">{error}</div>}
     {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>Lemvori Care SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><ServerReadiness api={api}/><section className="surface"><h2>Обслуговування сервера</h2><ServiceControls api={api}/><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
+    {page==='backup'&&<section className="surface"><h2>Резервне копіювання та відновлення</h2><p>Файли резервних копій зберігаються окремо для кожного центру. Відновлення замінює базу лише на цьому локальному сервері після підтвердження.</p><ServerMaintenance api={api} apiBase={apiBase} /></section>}
     {page==='settings'&&<Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} technical />}
     {page==='pc'&&<DesktopReleaseSettings api={api} />}
     {page==='mobile'&&<MobileReleaseSettings api={api} />}
