@@ -1,0 +1,15 @@
+[Unit]
+Description=LemvoriLab center metadata heartbeat (no patient data)
+After=network-online.target solvia-http.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lemvori-heartbeat
+UMask=0077
+TimeoutStartSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/tmp
