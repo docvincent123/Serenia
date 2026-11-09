@@ -1,0 +1,38 @@
+<!doctype html><html lang="uk"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#202c36"><title>LemvoriLab | Кабінет оператора</title>
+<link rel="stylesheet" href="/app.css"></head><body>
+<div class="layout">
+  <aside class="sidebar"><div class="brand"><span class="brand-mark">L</span><div><strong>LemvoriLab</strong><small>Company Control</small></div></div>
+    <p class="menu-label">КЕРУВАННЯ</p><div class="menu-item">▦ Центри</div><div class="side-notice">Окрема компанійна панель. Клінічні записи пацієнтів тут не зберігаються.</div>
+    <div class="side-bottom"><span id="operator-label">Оператор</span><button id="logout" type="button" hidden>Вийти</button></div>
+  </aside>
+  <main>
+    <header class="topbar"><div><span class="overline">LEMVORI CARE</span><h1>Центри та підключення</h1></div><div class="topbar-badge">Захищений кабінет</div></header>
+    <section id="login-panel" class="login-card">
+      <h2>Увійти до компанії</h2><p>Доступ лише для уповноважених операторів LemvoriLab.</p>
+      <form id="login-form"><label>Логін<input id="username" autocomplete="username" required></label>
+      <label>Пароль<input id="password" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Увійти</button></form>
+    </section>
+    <section id="dashboard" hidden>
+      <div class="overview"><div class="metric"><small>Зареєстровано</small><strong id="center-count">—</strong><span>центрів</span></div>
+      <div class="metric"><small>На зв'язку</small><strong id="online-count">—</strong><span>за останні 15 хв</span></div>
+      <div class="metric"><small>Увага до копій</small><strong id="backup-count">—</strong><span>немає підтвердження</span></div></div>
+      <div class="main-grid">
+        <section class="panel"><div class="panel-head"><div><span class="overline">ІНСТАЛЯЦІЇ</span><h2>Зареєстровані центри</h2></div><button class="secondary" type="button" id="reload">Оновити</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Центр</th><th>Версія</th><th>Зв'язок</th><th>Резервування</th><th>Керування обліком</th></tr></thead><tbody id="centers"></tbody></table></div>
+          <div id="empty" class="empty">Центрів ще немає. Додайте перший заклад праворуч.</div>
+        </section>
+        <section class="panel register"><span class="overline">ПІДКЛЮЧЕННЯ</span><h2>Новий центр</h2><p>Внесіть дані з інсталяції. Програма видасть окремий ключ для безпечної передачі технічного стану.</p>
+          <form id="center-form"><label>Назва закладу<input name="name" required maxlength="160" placeholder="Назва центру"></label>
+          <label>Місто<input name="city" maxlength="100" placeholder="Наприклад, Івано-Франківськ"></label>
+          <label>ID сервера (64 символи)<input name="server_id" required pattern="[0-9a-f]{64}" autocomplete="off" spellcheck="false" placeholder="Скопіюйте з Server Console"></label>
+          <button class="primary" type="submit">Зареєструвати центр</button></form>
+          <div class="token-box" id="token-box" hidden><strong>Ключ підключення — показується лише зараз</strong><code id="new-token"></code><button class="secondary" id="copy-token" type="button">Скопіювати ключ</button><small>Збережіть ключ лише в захищеному конфігураційному файлі центру. Він не надає доступу до карток пацієнтів.</small></div>
+        </section>
+      </div>
+    </section>
+    <p id="notice" role="status" aria-live="polite"></p>
+  </main>
+</div><script src="/app.js" defer></script></body></html>
