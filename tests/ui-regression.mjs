@@ -154,17 +154,18 @@ try {
   await page.locator('.flow-desk-visit').first().waitFor();
   await page.getByText(/Оновлено о/).waitFor();
   await page.route('**/api/workday/home',route=>route.abort('failed'));
-  await page.getByRole('button',{name:'Оновити дані'}).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('solvia:workflow-updated')));
   await page.locator('.center-home .alert.error').waitFor();
   assert.equal(await page.locator('.flow-desk-visit').count(),0,'No stale appointments during disconnection');
   await page.unroute('**/api/workday/home');
-  await page.getByRole('button',{name:'Оновити дані'}).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('solvia:workflow-updated')));
   await page.locator('.flow-desk-visit').first().waitFor();
   assert.equal(await page.locator('.center-home .alert.error').count(),0,'Appointments refresh when server returns');
 
-  const systemSettings = page.getByRole('button',{name:'Налаштування центру',exact:true});
+  assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Employee workspace has no server settings button');
+  const profileSettings = page.getByRole('button',{name:'Налаштування профілю',exact:true});
   const exit = page.getByRole('button',{name:'Вийти',exact:true});
-  for (const target of [systemSettings, exit]) {
+  for (const target of [profileSettings, exit]) {
     const box = await target.boundingBox(); assert(box && box.y >= 0 && box.y+box.height <= 600, 'Account actions must be in the visible viewport');
   }
   await page.screenshot({ path:'out/design/desktop-dashboard.png',fullPage:true });
@@ -192,7 +193,7 @@ try {
   await page.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.workspace')?.scrollTo(0,0);});
   await page.screenshot({path:'out/design/desktop-messages.png',fullPage:true});
   await page.setViewportSize({width:1280,height:600});
-    await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
+    await profileSettings.click(); await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
   await page.screenshot({ path:'out/design/desktop-settings.png',fullPage:true });
   assert.equal(await page.locator('.settings-nav').getByRole('button',{name:/Оновлення Android/}).count(),0);
   await page.goto(base+'/?mode=server');
@@ -216,7 +217,7 @@ try {
   assert.equal(config.server_id,'a'.repeat(64));
   assert.equal(config.format,'quremed.solvia.mobile');
   // Settings remain accessible even with the shift closed.
-  open = false; await page.goto(base); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
+  open = false; await page.goto(base); await profileSettings.click(); await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
   open = true; await page.reload();
   await page.locator('.focus-navigation').getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
@@ -368,8 +369,8 @@ try {
   await page.getByRole('heading',{name:'Очікуємо дозволу адміністратора',exact:true}).waitFor();
   assert.equal(closeCalls,0,'Shift remains open while reception waits for permission');
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
-  await systemSettings.click();
-  await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
+  await profileSettings.click();
+  await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
   const fresh=await browser.newPage();
   await fresh.route('**/api/**',async route=>route.fulfill({contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({ok:true,version:'3.1.0',server_id:'a'.repeat(64),mode:'ready'})}));
