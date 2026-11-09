@@ -3562,7 +3562,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         </div>
 
         <WorkspaceNavigation navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} />
-        <button type="button" className="studio-rail-directory" title="Усі функції центру" aria-label="Усі функції центру" disabled={locked} onClick={()=>navigate('module-directory')}><AppIcon name="module-directory" size={20}/></button>
+        <button type="button" className="studio-rail-directory" title="Усі функції центру" aria-label="Усі функції центру" disabled={locked} onClick={()=>navigate('module-directory')}><AppIcon name="module-directory" size={20}/><span className="care-directory-caption">Усі розділи</span></button>
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
