@@ -92,13 +92,16 @@ jobs:
       - name: Launch both packaged native executables
         shell: pwsh
         env:
-          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORM: windows
           QT_QUICK_BACKEND: software
+          QT_FORCE_STDERR_LOGGING: "1"
         run: |
           foreach ($name in @("Lemvori Care.exe", "Lemvori Care Admin.exe")) {
-            $process = Start-Process -FilePath (Join-Path "out/lemvori-care-native" $name) -ArgumentList "--smoke" -PassThru
-            if (!$process.WaitForExit(15000)) { $process.Kill(); throw "$name did not exit after smoke test." }
-            if ($process.ExitCode -ne 0) { throw "$name exited with $($process.ExitCode)" }
+            $log = Join-Path $env:RUNNER_TEMP "$name-stderr.log"
+            $exe = (Resolve-Path (Join-Path "out/lemvori-care-native" $name)).Path
+            $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -ArgumentList "--smoke" -RedirectStandardError $log -PassThru
+            if (!$process.WaitForExit(20000)) { $process.Kill(); Get-Content $log; throw "$name did not exit after smoke test." }
+            if ($process.ExitCode -ne 0) { Get-Content $log; throw "$name exited with $($process.ExitCode)" }
           }
       - uses: actions/upload-artifact@v4
         with:
