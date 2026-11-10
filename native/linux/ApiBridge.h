@@ -13,6 +13,7 @@ class ApiBridge final : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool adminEdition READ adminEdition CONSTANT)
     Q_PROPERTY(QVariantList adminRows READ adminRows NOTIFY dataChanged)
+    Q_PROPERTY(QVariantList serviceChoices READ serviceChoices NOTIFY dataChanged)
     Q_PROPERTY(QVariantMap adminDetails READ adminDetails NOTIFY dataChanged)
     Q_PROPERTY(QStringList availableSlots READ availableSlots NOTIFY slotsChanged)
     Q_PROPERTY(bool databaseWorking READ databaseWorking NOTIFY stateChanged)
@@ -45,6 +46,7 @@ public:
     bool adminEdition() const { return adminEdition_; }
     QVariantList dischargeRows() const { return dischargeRows_; }
     QVariantList adminRows() const { return adminRows_; }
+    QVariantList serviceChoices() const { return serviceChoices_; }
     QVariantMap adminDetails() const { return adminDetails_; }
     QStringList availableSlots() const { return slots_; }
     bool databaseWorking() const { return databaseWorking_; }
@@ -140,7 +142,7 @@ private:
     QStringList slots_;
     QString slotError_, adminSection_, bookingKey_;
     QJsonObject pendingBooking_;
-    QVariantList adminRows_, dischargeRows_;
+    QVariantList adminRows_, dischargeRows_, serviceChoices_;
     QVariantMap adminDetails_;
     QString origin_, pinnedId_, token_, role_, name_, error_, notice_, lastRefresh_;
     bool connected_ = false, working_ = false, rosterSupported_ = false, rosterConfigured_ = false;
