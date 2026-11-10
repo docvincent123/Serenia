@@ -639,6 +639,18 @@ void ApiBridge::endSession(const QString &id) {
     });
 }
 
+void ApiBridge::endUserSessions(int userId) {
+    if (!adminEdition_ || role_ != "admin" || working_ || userId <= 0) return;
+    working_ = true;
+    error_.clear();
+    emit stateChanged();
+    request("DELETE", QString("/api/users/%1/sessions").arg(userId), {}, [this](const QJsonValue &) {
+        working_ = false;
+        notify("Сеанси працівника завершено.");
+        loadAdminSection("team");
+    });
+}
+
 bool ApiBridge::localDatabaseTools() const {
     const QString host = QUrl(origin_).host();
     return adminEdition_ && (host == "localhost" || host == "127.0.0.1" || host == "::1")
