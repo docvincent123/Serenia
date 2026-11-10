@@ -62,6 +62,7 @@ void ApiBridge::clearSession() {
     token_.clear();
     name_.clear();
     role_.clear();
+    blockedModules_.clear();
     working_ = false;
     shift_.clear(); overview_.clear(); system_.clear(); visits_.clear();
     patients_.clear(); appointments_.clear(); roster_.clear();
@@ -343,9 +344,26 @@ void ApiBridge::checkServer() {
         notify("HTTPS-з'єднання та сервер перевірено.");
     });
 }
+bool ApiBridge::moduleEnabled(const QString &module) const {
+    return role_ == "admin" || !blockedModules_.contains(module);
+}
+
 void ApiBridge::refresh() {
     if (!authenticated()) return;
     const int generation = ++refreshGeneration_;
+    if (role_ != "admin") {
+        request("GET", "/api/my-module-permissions", {}, [this,generation](const QJsonValue &response) {
+            if (generation != refreshGeneration_) return;
+            QStringList next;
+            for (const auto &item : response.toObject().value("blocked_modules").toArray()) {
+                if (item.isString()) next.append(item.toString());
+            }
+            if (next != blockedModules_) {
+                blockedModules_ = next;
+                emit dataChanged();
+            }
+        }, true);
+    }
     getShift(generation);
     getMeta(generation);
     if (role_ == "admin" || role_ == "reception") {
