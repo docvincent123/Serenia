@@ -1,27 +1,36 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 ApplicationWindow {
     id: root
     visible: true
+    onClosing: function(event) { if (api.databaseWorking) event.accepted = false }
     width: 1400
     height: 890
     minimumWidth: 920
     minimumHeight: 640
-    title: "Lemvori Care · LemvoriLab"
+    title: api.adminEdition ? "Lemvori Care Admin" : "Lemvori Care"
     color: "#DEE2E2"
     property string page: "Головна"
     property int bookingPatientId: 0
     property int bookingAssignedPsychId: 0
+    property string selectedSlot: ""
     readonly property color ink: "#11212D"
     readonly property color muted: "#4A5C6A"
     readonly property color accent: "#253745"
     readonly property color line: "#9BA8AB"
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
 
+    function updateBookingSlots() {
+        selectedSlot = ""
+        if (bookingDialog.opened) slotDebounce.restart()
+    }
     function showPage(next) {
         page = next
+        if (next === "Адміністрування") api.loadAdminSection(adminWorkspace.section)
+        if (next === "Виписки") api.loadDischarges()
         if (next === "Пацієнти") api.searchPatients(patientSearch.text)
         if (next === "Психологи" || next === "Прийоми" || next === "Календар") api.refresh()
     }
@@ -31,13 +40,27 @@ ApplicationWindow {
         bookingName.text = patient.name || "Пацієнт"
         bookingPsych.currentIndex = bookingPsych.indexOfValue(Number(patient.psychologist_id))
         bookingDialog.open()
+        updateBookingSlots()
     }
     Connections {
         target: api
+        function onStateChanged() {
+            if (!api.authenticated) {
+                bookingDialog.close()
+                newPatientDialog.close()
+                dischargeReview.close()
+            }
+        }
         function onOperationCompleted(name) {
             if (name === "booking") bookingDialog.close()
             if (name === "patient") newPatientDialog.close()
+            if (name === "discharge") dischargeReview.close()
         }
+    }
+    Timer {
+        id: slotDebounce; interval: 220
+        onTriggered: api.loadSlots(bookingDate.text, Number(bookingPsych.currentValue || 0),
+            Number(bookingRoom.currentValue || 0), Number(bookingDuration.currentValue || 0))
     }
     Timer { interval: 15000; running: root.visible && api.authenticated; repeat: true; onTriggered: api.refresh() }
 
@@ -125,7 +148,7 @@ ApplicationWindow {
                     anchors.margins: 38
                     spacing: 24
                     Image { source: "qrc:/brand.svg"; width: 72; height: 72; fillMode: Image.PreserveAspectFit }
-                    Text { text: "Lemvori Care"; font.pixelSize: 38; font.bold: true; color: "#fff" }
+                    Text { text: root.title; font.pixelSize: 34; font.bold: true; color: "#fff" }
                     Text { text: "by LemvoriLab"; font.pixelSize: 15; color: "#CCD0CF" }
                     Text { text: "Робочий простір\nреабілітаційного центру";
                            color: "#DEE2E2"; font.pixelSize: 20; lineHeight: 1.3; wrapMode: Text.WordWrap }
@@ -141,7 +164,7 @@ ApplicationWindow {
                 color: "#fff"
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 36; spacing: 12
-                    Text { text: "Вхід до Lemvori Care"; font.pixelSize: 26; font.bold: true; color: root.ink }
+                    Text { text: "Вхід до " + root.title; font.pixelSize: 24; font.bold: true; color: root.ink }
                     Text { text: "Адміністратор · Реєстратура · Керівник"; color: root.muted; font.pixelSize: 12 }
                     Item { Layout.preferredHeight: 8 }
                     Text { text: "Сервер центру"; font.pixelSize: 12; color: root.muted }
@@ -150,6 +173,7 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         SolviaButton { text: "Перевірити сервер"; onClicked: api.configureServer(serverField.text) }
+                        SolviaButton { text: "Файл центру"; onClicked: centerFile.open() }
                         Text { text: api.connected ? "● HTTPS перевірено" : "● Не підтверджено";
                                color: api.connected ? "#287950" : "#a07521"; font.pixelSize: 11 }
                     }
@@ -182,7 +206,7 @@ ApplicationWindow {
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 26; anchors.rightMargin: 26; spacing: 15
                 Image { source: "qrc:/brand.svg"; Layout.preferredWidth: 38; Layout.preferredHeight: 38; fillMode: Image.PreserveAspectFit }
-                Text { text: "Lemvori Care"; font.pixelSize: 22; font.bold: true; color: root.ink }
+                Text { text: root.title; font.pixelSize: 21; font.bold: true; color: root.ink }
                 Rectangle { width: 1; height: 25; color: root.line }
                 Text { text: "Робочий простір центру"; color: root.muted; font.pixelSize: 13 }
                 Item { Layout.fillWidth: true }
@@ -190,7 +214,7 @@ ApplicationWindow {
                        font.pixelSize: 11; color: root.muted }
                 Rectangle { width: 1; height: 27; color: root.line }
                 Text { text: api.displayName; color: root.ink; font.bold: true; font.pixelSize: 12 }
-                SolviaButton { text: "Вихід"; subtle: true; onClicked: { api.logout(); root.page="Головна" } }
+                SolviaButton { text: "Вихід"; subtle: true; enabled: !api.databaseWorking; onClicked: { api.logout(); root.page="Головна" } }
             }
         }
         Rectangle { Layout.fillWidth:true; Layout.preferredHeight:1; color:root.line }
@@ -219,10 +243,10 @@ ApplicationWindow {
                     Item { Layout.preferredHeight: 10 }
                     Repeater {
                         model: api.role === "director"
-                          ? ["Головна","Психологи","Календар"]
+                          ? ["Головна","Психологи","Виписки"]
                           : api.role === "reception"
                           ? ["Головна","Прийоми","Пацієнти","Психологи","Календар"]
-                          : ["Головна","Прийоми","Пацієнти","Психологи","Календар","Сервер"]
+                          : ["Головна","Адміністрування","Прийоми","Пацієнти","Психологи","Календар","Виписки","Сервер"]
                         delegate: SolviaButton {
                             required property string modelData
                             Layout.fillWidth: true
@@ -237,7 +261,14 @@ ApplicationWindow {
                 }
             }
             Rectangle { width:1; Layout.fillHeight:true; color:root.line }
+            AdminWorkspace {
+                id: adminWorkspace
+                visible: root.page === "Адміністрування" && api.adminEdition && api.authenticated
+                Layout.fillWidth: true; Layout.fillHeight: true
+                bridge: api
+            }
             ScrollView {
+                visible: root.page !== "Адміністрування"
                 id: scrollArea
                 Layout.fillHeight:true; Layout.fillWidth:true; clip:true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -270,9 +301,9 @@ ApplicationWindow {
                         Text { text:"Найважливіше на цю зміну"; font.pixelSize:13; color:root.muted }
                         RowLayout {
                             Layout.fillWidth:true; spacing:12
-                            MetricTile { Layout.fillWidth:true; figure:String((api.overview.counts ? api.overview.counts.waiting : "—")); heading:"Очікують прийому" }
-                            MetricTile { Layout.fillWidth:true; figure:String((api.overview.counts ? api.overview.counts.arrived : "—")); heading:"Прибули" }
-                            MetricTile { Layout.fillWidth:true; figure:String((api.overview.counts ? api.overview.counts.completed : "—")); heading:"Завершені прийоми" }
+                            MetricTile { Layout.fillWidth:true; figure:String(api.role === "director" ? (api.overview.total_patients ?? "—") : (api.overview.counts ? api.overview.counts.waiting : "—")); heading:api.role === "director" ? "Пацієнти центру" : "Очікують прийому" }
+                            MetricTile { Layout.fillWidth:true; figure:String(api.role === "director" ? (api.overview.consultations ?? "—") : (api.overview.counts ? api.overview.counts.arrived : "—")); heading:api.role === "director" ? "Консультації за місяць" : "Прибули" }
+                            MetricTile { Layout.fillWidth:true; figure:String(api.role === "director" ? (api.overview.active_courses ?? "—") : (api.overview.counts ? api.overview.counts.completed : "—")); heading:api.role === "director" ? "Активні курси" : "Завершені прийоми" }
                             MetricTile { Layout.fillWidth:true; figure:String((api.overview.active_patients !== undefined ? api.overview.active_patients : "—")); heading:"Активні пацієнти" }
                         }
                         RowLayout {
@@ -447,6 +478,27 @@ ApplicationWindow {
                         Text { visible:api.appointments.length===0; text:"Сьогодні прийомів немає."; color:root.muted }
                     }
                     ColumnLayout {
+                        visible: root.page === "Виписки"
+                        Layout.fillWidth: true; spacing: 10
+                        Text { visible: !api.dischargeRows.length; text: "Виписок немає."; color: root.muted }
+                        Repeater {
+                            model: api.dischargeRows
+                            delegate: Rectangle {
+                                required property var modelData
+                                Layout.fillWidth: true; implicitHeight: 75; radius: 15; color: "#CCD0CF"; border.color: root.line
+                                RowLayout {
+                                    anchors.fill: parent; anchors.margins: 12
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        Text { text: (modelData.patient_name || "") + " · № " + (modelData.document_no || "—"); font.bold: true; color: root.ink }
+                                        Text { text: (modelData.author || "") + " · " + (modelData.workflow_status === "review" ? "На погодженні" : modelData.workflow_status === "approved" ? "Погоджено" : modelData.workflow_status === "draft" ? "Чернетка" : "Архівна"); color: root.muted }
+                                    }
+                                    SolviaButton { text: "Відкрити"; onClicked: { dischargeReview.record = modelData; reviewReason.clear(); dischargeReview.open() } }
+                                }
+                            }
+                        }
+                    }
+                    ColumnLayout {
                         visible:root.page==="Сервер"&&api.role==="admin"; Layout.fillWidth:true; spacing:12
                         Text { text:"Захищений центр підключення · без команд Linux та доступу до shell";
                                font.pixelSize:12; color:root.muted }
@@ -484,6 +536,43 @@ ApplicationWindow {
         onAccepted:api.setShift(false)
         Label { text:"Сервер перевірить незавершені консультації та синхронізацію телефонів."; wrapMode:Text.WordWrap }
     }
+    FileDialog {
+        id: centerFile
+        title: "Виберіть файл підключення центру"
+        nameFilters: ["Профіль центру (*.solvia *.json)"]
+        onAccepted: api.importProfile(selectedFile)
+    }
+    Dialog {
+        id: dischargeReview
+        property var record: ({})
+        title: "Виписка № " + (record.document_no || "—")
+        modal: true; anchors.centerIn: Overlay.overlay
+        width: Math.min(640, root.width - 40); height: Math.min(530, root.height - 30)
+        contentItem: ScrollView {
+            contentWidth: availableWidth
+            ColumnLayout {
+                width: parent.width
+                Text { text: dischargeReview.record.patient_name || ""; font.bold: true; color: root.ink }
+                Repeater {
+                    model: [["Підсумок","summary"],["Динаміка","dynamics"],["Рекомендації","recommendations"],["Подальший супровід","followup"]]
+                    delegate: ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Text { text: modelData[0]; font.bold: true; color: root.ink }
+                        Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: dischargeReview.record[modelData[1]] || "—"; color: root.muted }
+                    }
+                }
+                TextField { id: reviewReason; visible: dischargeReview.record.workflow_status === "review"; Layout.fillWidth: true; placeholderText: "Причина повернення на доопрацювання" }
+                Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: api.error; visible: !!api.error; color: "#8C3632" }
+                RowLayout {
+                    visible: dischargeReview.record.workflow_status === "review"
+                    SolviaButton { text: "Повернути"; enabled: !api.working && !!reviewReason.text.trim(); onClicked: api.reviewDischarge(Number(dischargeReview.record.id), Number(dischargeReview.record.revision), false, reviewReason.text) }
+                    SolviaButton { text: "Погодити"; primary: true; enabled: !api.working; onClicked: api.reviewDischarge(Number(dischargeReview.record.id), Number(dischargeReview.record.revision), true, "") }
+                }
+            }
+        }
+        standardButtons: Dialog.Close
+    }
     Dialog {
         id:bookingDialog; title:"Записати пацієнта"; modal:true; anchors.centerIn:Overlay.overlay
         width:Math.min(540,root.width-60); standardButtons:Dialog.NoButton
@@ -493,34 +582,71 @@ ApplicationWindow {
             Text { text:"Психолог"; color:root.muted; font.pixelSize:12 }
             ComboBox { id:bookingPsych; Layout.fillWidth:true
                 model:bookingDate.text===root.today ? api.bookingPsychologists : api.psychologists
-                textRole:"name"; valueRole:"id" }
+                textRole:"name"; valueRole:"id"; onCurrentValueChanged: root.updateBookingSlots() }
             Text { visible:root.bookingAssignedPsychId>0 && bookingDate.text===root.today && !api.psychologistBookable(root.bookingAssignedPsychId,bookingDate.text)
                    Layout.fillWidth:true; wrapMode:Text.WordWrap; color:"#a05b23"; font.pixelSize:12
                    text:"Закріплений за пацієнтом психолог не на зміні. Попросіть адміністратора переглянути призначення." }
             Text { text:"Кабінет"; color:root.muted; font.pixelSize:12 }
-            ComboBox { id:bookingRoom; Layout.fillWidth:true; model:api.rooms; textRole:"name"; valueRole:"id" }
+            ComboBox { id:bookingRoom; Layout.fillWidth:true; model:api.rooms; textRole:"name"; valueRole:"id"; onCurrentValueChanged: root.updateBookingSlots() }
             Text { text:"Тип прийому"; color:root.muted; font.pixelSize:12 }
             ComboBox { id:bookingKind; Layout.fillWidth:true; model:["Індивідуальна","Дитяча","Кризова"]; currentIndex:0 }
-            Text { text:"Дата (РРРР-ММ-ДД)"; color:root.muted; font.pixelSize:12 }
-            TextField { id:bookingDate; Layout.fillWidth:true; text:root.today; inputMask:"9999-99-99"; selectByMouse:true }
             RowLayout {
-                Layout.fillWidth:true
-                ColumnLayout { Layout.fillWidth:true
-                    Text { text:"Початок (ГГ:ХХ)"; color:root.muted; font.pixelSize:12 }
-                    TextField { id:bookingStart; Layout.fillWidth:true; text:"09:00"; inputMask:"99:99" }
+                Layout.fillWidth: true
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Text { text: "Дата (РРРР-ММ-ДД)"; color: root.muted; font.pixelSize: 12 }
+                    TextField { id: bookingDate; Layout.fillWidth: true; text: root.today; inputMask: "9999-99-99"; onTextChanged: root.updateBookingSlots() }
                 }
-                ColumnLayout { Layout.fillWidth:true
-                    Text { text:"Кінець (ГГ:ХХ)"; color:root.muted; font.pixelSize:12 }
-                    TextField { id:bookingEnd; Layout.fillWidth:true; text:"10:00"; inputMask:"99:99" }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Text { text: "Тривалість"; color: root.muted; font.pixelSize: 12 }
+                    ComboBox {
+                        id: bookingDuration; Layout.fillWidth: true
+                        model: [{minutes:30,label:"30 хв"},{minutes:45,label:"45 хв"},{minutes:60,label:"60 хв"},{minutes:90,label:"90 хв"},{minutes:120,label:"120 хв"}]
+                        textRole: "label"; valueRole: "minutes"; currentIndex: 2
+                        onCurrentValueChanged: root.updateBookingSlots()
+                    }
                 }
+            }
+            Text {
+                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                text: api.slotError || (api.loadingSlots ? "Шукаємо вільний час…" : api.availableSlots.length ? "Виберіть вільний час" : "На цю дату вільного часу немає.")
+                color: api.slotError ? "#8C3632" : root.muted
+            }
+            ScrollView {
+                Layout.fillWidth: true; Layout.preferredHeight: 134
+                contentWidth: availableWidth
+                Flow {
+                    width: parent.width; spacing: 8
+                    Repeater {
+                        model: api.availableSlots
+                        delegate: SolviaButton {
+                            required property string modelData
+                            text: modelData
+                            primary: root.selectedSlot === modelData
+                            enabled: !api.working
+                            onClicked: root.selectedSlot = modelData
+                        }
+                    }
+                }
+            }
+            Text {
+                visible: !!root.selectedSlot || !!api.error
+                Layout.fillWidth: true; wrapMode: Text.WordWrap; color: api.error ? "#8C3632" : root.ink
+                text: api.error || root.selectedSlot + "–" + api.endTime(root.selectedSlot, Number(bookingDuration.currentValue))
             }
             RowLayout {
                 Layout.fillWidth:true
                 SolviaButton { text:"Скасувати"; onClicked:bookingDialog.close() }
                 Item { Layout.fillWidth:true }
-                SolviaButton { primary:true; text:"Записати"; enabled:bookingPsych.currentIndex>=0 && bookingRoom.currentIndex>=0 && api.psychologistBookable(root.bookingAssignedPsychId,bookingDate.text); onClicked: api.book(root.bookingPatientId,Number(bookingPsych.currentValue),
-                    Number(bookingRoom.currentValue),bookingDate.text,bookingStart.text,bookingEnd.text,
-                    ["individual","child","crisis"][bookingKind.currentIndex]) }
+                SolviaButton {
+                    primary:true; text:api.working ? "Записуємо…" : "Підтвердити запис"
+                    enabled: !api.working && !api.loadingSlots && !slotDebounce.running && api.availableSlots.includes(root.selectedSlot)
+                    onClicked: api.book(root.bookingPatientId, Number(bookingPsych.currentValue),
+                        Number(bookingRoom.currentValue), bookingDate.text, root.selectedSlot,
+                        api.endTime(root.selectedSlot, Number(bookingDuration.currentValue)),
+                        ["individual","child","crisis"][bookingKind.currentIndex])
+                }
             }
         }
     }

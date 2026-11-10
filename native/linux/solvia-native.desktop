@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Lemvori Care Native
+Name=Lemvori Care · Реєстратура та керівник
 GenericName=Нативне робоче місце Lemvori Care
 Comment=Lemvori Care by LemvoriLab · Реабілітаційний центр
 Exec=/usr/local/bin/solvia-native
@@ -8,5 +8,5 @@ Icon=solvia-admin
 Terminal=false
 Categories=Office;MedicalSoftware;
 StartupNotify=true
-StartupWMClass=SOLVIA
+StartupWMClass=solvia-native
 Keywords=Lemvori Care;LemvoriLab;реєстратура;пацієнти;психологи;реабілітація;

@@ -10,7 +10,7 @@ qt_add_executable(solvia-native
     ApiBridge.cpp
 )
 qt_add_resources(solvia-native "solvia_qml" PREFIX "/"
-    FILES Main.qml brand.svg
+    FILES Main.qml AdminWorkspace.qml brand.svg
 )
 target_link_libraries(solvia-native PRIVATE
     Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Svg

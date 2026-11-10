@@ -1,4 +1,4 @@
-name: SOLVIA Native Qt Linux
+name: Lemvori Care native Linux
 on:
   push:
     branches: [feature/rehab-center-readiness]
@@ -22,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-svg-dev \
-            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
             qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models \
             qml6-module-qtquick-templates qml6-module-qtquick-shapes \
             qml6-module-qtqml-workerscript libqt6svg6
@@ -34,7 +34,9 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: timeout 15s build/native-linux/solvia-native --smoke
+        run: |
+          timeout 15s build/native-linux/solvia-native --smoke
+          timeout 15s build/native-linux/solvia-native --admin --smoke
       - name: Verify company settings migration
         run: python3 tests/native-qt-settings.py build/native-linux/solvia-native
       - name: Check no WebKit or Chrome dependency is linked
@@ -46,7 +48,7 @@ jobs:
         run: bash native/linux/package-deb.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: solvia-native-linux-x64
+          name: lemvori-care-native-linux-x64
           path: |
             build/native-linux/solvia-native
             build/native-linux/solvia-native_*.deb
