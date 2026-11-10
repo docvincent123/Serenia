@@ -297,6 +297,16 @@ Item {
                                 }
                             }
                             Action { text: "Редагувати"; visible: root.listEditable; enabled: !root.bridge.working && (root.section !== "team" || root.bridge.serviceChoices.length > 0); onClicked: root.edit(modelData) }
+                            Action {
+                                text: "Сеанси (" + Number(modelData.active_sessions || 0) + ")"
+                                visible: root.section === "team" && Number(modelData.active_sessions || 0) > 0
+                                enabled: !root.bridge.working
+                                onClicked: {
+                                    endUserSessions.targetId = Number(modelData.id)
+                                    endUserSessions.targetName = String(modelData.name || modelData.login || "працівник")
+                                    endUserSessions.open()
+                                }
+                            }
                             Action { text: "Завершити сеанс"; visible: root.section === "sessions"; enabled: !root.bridge.working; onClicked: { endSession.sessionId = modelData.session_id; endSession.open() } }
                         }
                     }
@@ -399,6 +409,20 @@ Item {
         modal: true; anchors.centerIn: Overlay.overlay
         standardButtons: Dialog.Yes | Dialog.No
         onAccepted: root.bridge.endSession(sessionId)
+    }
+    Dialog {
+        id: endUserSessions
+        property int targetId: 0
+        property string targetName: ""
+        title: "Завершити всі сеанси працівника?"
+        modal: true; anchors.centerIn: Overlay.overlay
+        width: Math.min(450, root.width - 32)
+        standardButtons: Dialog.Yes | Dialog.No
+        contentItem: Label {
+            text: "Користувач: " + endUserSessions.targetName + "\nУсі його пристрої будуть розлогінені. Інших працівників це не зачепить."
+            wrapMode: Text.WordWrap; color: root.ink; padding: 14
+        }
+        onAccepted: root.bridge.endUserSessions(targetId)
     }
     FileDialog {
         id: exportPicker
