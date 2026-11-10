@@ -83,6 +83,7 @@ public:
     Q_INVOKABLE void loadAdminSection(const QString &section);
     Q_INVOKABLE void saveAdminEntry(const QString &section, int id, const QVariantMap &fields);
     Q_INVOKABLE void endSession(const QString &id);
+    Q_INVOKABLE void endUserSessions(int userId);
     Q_INVOKABLE bool localDatabaseTools() const;
     Q_INVOKABLE void databaseBackup();
     Q_INVOKABLE void databaseRestore(const QUrl &file, const QString &confirmation);
