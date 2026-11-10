@@ -148,6 +148,11 @@ void ApiBridge::configureServer(const QString &value) {
     connectServer(value, {});
 }
 
+void ApiBridge::verifySavedServer() {
+    if (authenticated() || working_ || connected_ || pinnedId_.isEmpty()) return;
+    connectServer(origin_, pinnedId_);
+}
+
 void ApiBridge::importProfile(const QUrl &url) {
     if (authenticated() || working_) return;
     QFile file(url.toLocalFile());
@@ -180,6 +185,7 @@ void ApiBridge::connectServer(const QString &value, const QString &expectedId) {
     clearSession();
     origin_ = normalized;
     connected_ = false;
+    working_ = true;
     error_.clear();
     notice_ = "Перевіряємо сервер та TLS-сертифікат…";
     emit stateChanged();
@@ -202,11 +208,13 @@ void ApiBridge::connectServer(const QString &value, const QString &expectedId) {
         settings.setValue("server/identity", id);
         pinnedId_ = id;
         connected_ = true;
+        working_ = false;
         notify("Сервер Lemvori Care підтверджено. Увійдіть до свого кабінету.");
     });
 }
 
 void ApiBridge::login(const QString &username, const QString &password) {
+    if (authenticated() || working_) return;
     if (username.trimmed().isEmpty() || password.isEmpty()) {
         issue("Вкажіть логін та пароль.");
         return;
@@ -221,7 +229,6 @@ void ApiBridge::login(const QString &username, const QString &password) {
     QJsonObject body{{"login",username.trimmed()}, {"password",password},
                      {"platform","Desktop"}, {"device_name", QSysInfo::prettyProductName()}};
     request("POST", "/api/login", body, [this](const QJsonValue &json) {
-        working_ = false;
         const QString token = json.toObject().value("token").toString();
         if (token.isEmpty()) {
             issue("Сервер не повернув сеанс входу.");
@@ -241,6 +248,7 @@ void ApiBridge::login(const QString &username, const QString &password) {
             }
             role_ = accountRole;
             name_ = data.value("name").toString();
+            working_ = false;
             notify("Вітаємо в Lemvori Care!");
             refresh();
         });

@@ -211,70 +211,92 @@ ApplicationWindow {
         font.bold: true
     }
 
-    // Login / server provisioning. Session tokens intentionally stay in RAM only.
-    Rectangle {
+    Component.onCompleted: api.verifySavedServer()
+
+    // Session tokens intentionally stay in RAM only.
+    Item {
         anchors.fill: parent
         visible: !api.authenticated
-        color: "#DEE2E2"
-        RowLayout {
+        Rectangle {
             anchors.centerIn: parent
-            width: Math.min(910, parent.width - 60)
-            height: 490
-            spacing: 0
+            width: 430
+            height: loginForm.implicitHeight + 64
+            radius: 24
+            color: "#FFFFFF"
+            border.color: root.line
             Rectangle {
-                Layout.fillHeight: true
-                Layout.preferredWidth: 350
-                color: "#253745"
-                radius: 20
-                Column {
-                    anchors.fill: parent
-                    anchors.margins: 38
-                    spacing: 24
-                    Image { source: "qrc:/brand.png"; width: 72; height: 72; fillMode: Image.PreserveAspectFit }
-                    Text { width: parent.width; text: root.title; font.pixelSize: 32; font.bold: true; color: "#fff"; wrapMode: Text.WordWrap }
-                    Text { text: "by LemvoriLab"; font.pixelSize: 15; color: "#CCD0CF" }
-                    Text { text: "Робочий простір\nреабілітаційного центру";
-                           color: "#DEE2E2"; font.pixelSize: 20; lineHeight: 1.3; wrapMode: Text.WordWrap }
-                    Item { height: 24; width: 1 }
-                    Text { text: "Робоче місце для Windows і Linux\nЗахищене підключення до сервера центру";
-                           color: "#CCD0CF"; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4 }
-                }
+                width: 48; height: 4; radius: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top; anchors.topMargin: 13
+                color: root.accent
             }
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                radius: 20
-                color: "#fff"
-                ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 36; spacing: 12
-                    Text { text: "Вхід до " + root.title; font.pixelSize: 24; font.bold: true; color: root.ink }
-                    Text { text: api.adminEdition ? "Вхід для адміністратора" : "Вхід для реєстратури та керівника"; color: root.muted; font.pixelSize: 12 }
-                    Item { Layout.preferredHeight: 8 }
-                    Text { text: "Сервер центру"; font.pixelSize: 12; color: root.muted }
-                    CareField { id: serverField; Layout.fillWidth: true; text: api.serverUrl
-                                selectByMouse: true; placeholderText: "https://server.center:8443" }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        SolviaButton { text: "Перевірити сервер"; onClicked: api.configureServer(serverField.text) }
-                        SolviaButton { text: "Файл центру"; onClicked: centerFile.open() }
-                        Text { text: api.connected ? "● HTTPS перевірено" : "● Не підтверджено";
-                               color: api.connected ? "#287950" : "#a07521"; font.pixelSize: 11 }
+            ColumnLayout {
+                id: loginForm
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 32
+                spacing: 10
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    Image {
+                        source: "qrc:/brand.png"
+                        Layout.preferredWidth: 46; Layout.preferredHeight: 46
+                        fillMode: Image.PreserveAspectFit
                     }
-                    Item { Layout.preferredHeight: 8 }
-                    Text { text: "Логін"; font.pixelSize: 12; color: root.muted }
-                    CareField { id: username; Layout.fillWidth: true; placeholderText: "Логін працівника"
-                                selectByMouse: true }
-                    Text { text: "Пароль"; font.pixelSize: 12; color: root.muted }
-                    CareField { id: password; Layout.fillWidth: true; placeholderText: "Пароль"; selectByMouse: true
-                                echoMode: TextInput.Password; onAccepted: enter.clicked() }
-                    SolviaButton { id: enter; Layout.fillWidth: true; text: api.working ? "Входимо…" : "Увійти";
-                                   primary: true; enabled: api.connected && !api.working
-                                   onClicked: { api.login(username.text,password.text); password.clear() } }
-                    Text { text: "Сертифікат центру має бути довіреним на цьому комп’ютері.";
-                           Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted; font.pixelSize: 11 }
-                    Text { text: api.error || api.notice; visible: text.length > 0;
-                           color: api.error ? "#a13f36" : "#287950"; wrapMode: Text.WordWrap
-                           Layout.fillWidth: true; font.pixelSize: 12 }
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 3
+                        Label { text: root.title; color: root.ink; font.pixelSize: 18; font.bold: true }
+                        Label { text: "Реабілітаційний центр"; color: root.muted; font.pixelSize: 12 }
+                    }
+                }
+                Label { text: "Вхід у систему"; color: root.ink; font.pixelSize: 28; font.bold: true; Layout.topMargin: 9 }
+                Label {
+                    text: api.adminEdition ? "Кабінет адміністратора" : "Кабінет реєстратури та керівника"
+                    color: root.muted; font.pixelSize: 13
+                }
+                Label { text: "Логін"; color: root.ink; font.pixelSize: 13; Layout.topMargin: 10 }
+                CareField {
+                    id: username; Layout.fillWidth: true; Layout.preferredHeight: 44
+                    Accessible.name: "Логін"; placeholderText: "Введіть логін"
+                    selectByMouse: true; enabled: !api.working
+                    onAccepted: password.forceActiveFocus()
+                }
+                Label { text: "Пароль"; color: root.ink; font.pixelSize: 13 }
+                CareField {
+                    id: password; Layout.fillWidth: true; Layout.preferredHeight: 44
+                    Accessible.name: "Пароль"; placeholderText: "Введіть пароль"
+                    echoMode: TextInput.Password; enabled: !api.working
+                    onAccepted: { if (enter.enabled) enter.clicked() }
+                }
+                SolviaButton {
+                    id: enter
+                    Layout.fillWidth: true; Layout.preferredHeight: 46; Layout.topMargin: 4
+                    primary: true
+                    text: api.working && api.connected ? "Входимо…" : "Увійти"
+                    enabled: api.connected && !api.working && !!username.text.trim() && !!password.text
+                    onClicked: { api.login(username.text, password.text); password.clear() }
+                }
+                Label {
+                    visible: api.connected && !!api.error && !connectionDialog.visible
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    color: "#8C3632"; font.pixelSize: 12; text: api.error
+                }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: 7; color: root.line }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap; font.pixelSize: 12
+                        color: api.connected ? "#256540" : root.muted
+                        text: api.connected ? "Сервер підключено" : api.working ? "Перевіряємо з’єднання…"
+                              : api.error ? "З’єднання не встановлено" : "Підключіть сервер центру"
+                    }
+                    SolviaButton {
+                        text: "Підключення"
+                        subtle: true
+                        enabled: !api.working || !api.connected
+                        onClicked: connectionDialog.open()
+                    }
                 }
             }
         }
@@ -664,11 +686,84 @@ ApplicationWindow {
         onAccepted:api.setShift(false)
         Label { text:"Сервер перевірить незавершені консультації та синхронізацію телефонів."; wrapMode:Text.WordWrap }
     }
+    Dialog {
+        id: connectionDialog
+        property bool attempted: false
+        title: "Підключення до центру"
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        width: 510
+        padding: 22
+        onOpened: {
+            attempted = false
+            serverField.text = api.serverUrl
+            serverField.forceActiveFocus()
+        }
+        background: Rectangle { color: "#FFFFFF"; radius: 20; border.color: root.line }
+        header: Label {
+            text: connectionDialog.title
+            leftPadding: 22; topPadding: 18
+            color: root.ink; font.pixelSize: 21; font.bold: true
+        }
+        contentItem: ColumnLayout {
+            spacing: 11
+            Label {
+                Layout.fillWidth: true; wrapMode: Text.WordWrap
+                text: "Введіть HTTPS-адресу або відкрийте файл підключення, який видав адміністратор центру."
+                color: root.muted
+            }
+            Label { text: "Адреса сервера"; color: root.ink; font.bold: true }
+            CareField {
+                id: serverField
+                Layout.fillWidth: true; enabled: !api.working
+                Accessible.name: "Адреса сервера"; placeholderText: "https://server.center:8443"
+                selectByMouse: true
+                onAccepted: { if (verifyConnection.enabled) verifyConnection.clicked() }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                SolviaButton {
+                    id: verifyConnection
+                    text: api.working ? "Перевіряємо…" : "Перевірити адресу"
+                    primary: true; enabled: !api.working && !!serverField.text.trim()
+                    onClicked: {
+                        connectionDialog.attempted = true
+                        api.configureServer(serverField.text)
+                    }
+                }
+                SolviaButton { text: "Відкрити файл центру"; enabled: !api.working; onClicked: centerFile.open() }
+            }
+            Label {
+                Layout.fillWidth: true; wrapMode: Text.WordWrap; font.pixelSize: 12
+                color: !api.working && api.error && (connectionDialog.attempted || !api.connected) ? "#8C3632"
+                       : api.connected ? "#256540" : root.muted
+                text: api.working ? "Перевіряємо HTTPS-з’єднання…"
+                      : api.error && (connectionDialog.attempted || !api.connected) ? api.error
+                      : api.connected ? "HTTPS-з’єднання підтверджено." : "Сервер ще не підключено."
+            }
+            SolviaButton {
+                Layout.alignment: Qt.AlignRight
+                text: "Готово"
+                onClicked: connectionDialog.close()
+            }
+        }
+    }
+    Connections {
+        target: api
+        function onStateChanged() {
+            if (connectionDialog.visible && connectionDialog.attempted && api.connected && !api.error) {
+                serverField.text = api.serverUrl
+            }
+        }
+    }
     FileDialog {
         id: centerFile
         title: "Виберіть файл підключення центру"
         nameFilters: ["Профіль центру (*.solvia *.json)"]
-        onAccepted: api.importProfile(selectedFile)
+        onAccepted: {
+            connectionDialog.attempted = true
+            api.importProfile(selectedFile)
+        }
     }
     Dialog {
         id: dischargeReview

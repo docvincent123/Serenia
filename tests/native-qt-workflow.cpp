@@ -42,7 +42,8 @@ int main(int argc, char **argv) {
     QSslConfiguration::setDefaultConfiguration(ssl);
 
     ApiBridge staff;
-    ApiBridge admin(true);
+    staff.verifySavedServer();
+    verify(!staff.connected() && !staff.working(), "First launch tried to connect without a saved center");
     staff.configureServer(address);
     verify(waitFor([&] { return staff.connected(); }), "HTTPS did not connect");
     staff.login("admin", "test");
@@ -65,8 +66,9 @@ int main(int argc, char **argv) {
     staff.reviewDischarge(9, 2, false, "Уточнити рекомендації");
     verify(waitFor([&] { return staff.notice().contains("Статус виписки оновлено"); }), "Director could not return a discharge");
 
-    admin.configureServer(address);
-    verify(waitFor([&] { return admin.connected(); }), "Admin HTTPS did not connect");
+    ApiBridge admin(true);
+    admin.verifySavedServer();
+    verify(waitFor([&] { return admin.connected(); }), "Saved center was not verified on restart");
     admin.login("reception", "test");
     verify(waitFor([&] { return admin.error().contains("лише адміністраторам"); }), "Admin app accepted reception");
     admin.login("admin", "test");
@@ -81,4 +83,14 @@ int main(int argc, char **argv) {
     ApiBridge pairedStaff;
     pairedStaff.importProfile(profile);
     verify(waitFor([&] { return pairedStaff.connected(); }), "Profile failed to verify the center");
+
+    QSettings settings;
+    const QString wrongIdentity(64, QLatin1Char('c'));
+    settings.setValue("server/identity", wrongIdentity);
+    settings.sync();
+    ApiBridge rejectedCenter;
+    rejectedCenter.verifySavedServer();
+    verify(waitFor([&] { return !rejectedCenter.error().isEmpty(); }), "Changed identity did not report an error");
+    verify(!rejectedCenter.connected() && !rejectedCenter.working(), "Changed identity was accepted");
+    verify(settings.value("server/identity").toString() == wrongIdentity, "Rejected server replaced saved identity");
 }
