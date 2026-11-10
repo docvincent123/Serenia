@@ -23,6 +23,7 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QString serverUrl READ serverUrl NOTIFY stateChanged)
     Q_PROPERTY(QString displayName READ displayName NOTIFY stateChanged)
     Q_PROPERTY(QString role READ role NOTIFY stateChanged)
+    Q_PROPERTY(QStringList blockedModules READ blockedModules NOTIFY dataChanged)
     Q_PROPERTY(QString error READ error NOTIFY stateChanged)
     Q_PROPERTY(QString notice READ notice NOTIFY stateChanged)
     Q_PROPERTY(QString lastRefresh READ lastRefresh NOTIFY stateChanged)
@@ -58,6 +59,7 @@ public:
     QString serverUrl() const { return origin_; }
     QString displayName() const { return name_; }
     QString role() const { return role_; }
+    QStringList blockedModules() const { return blockedModules_; }
     QString error() const { return error_; }
     QString notice() const { return notice_; }
     QString lastRefresh() const { return lastRefresh_; }
@@ -104,6 +106,7 @@ public:
     Q_INVOKABLE void login(const QString &login, const QString &password);
     Q_INVOKABLE void logout();
     Q_INVOKABLE void refresh();
+    Q_INVOKABLE bool moduleEnabled(const QString &module) const;
     Q_INVOKABLE void checkServer();
     Q_INVOKABLE bool psychologistBookable(int id, const QString &date) const;
     Q_INVOKABLE void searchPatients(const QString &text);
@@ -160,6 +163,7 @@ private:
     QString rosterDate_, calendarDate_;
     int calendarGeneration_ = 0;
     QVariantMap shift_, overview_, system_;
+    QStringList blockedModules_;
     QVariantList visits_, patients_, appointments_, roster_, psychologists_, rooms_;
     int sessionGeneration_ = 0, refreshGeneration_ = 0, patientGeneration_ = 0;
 };
