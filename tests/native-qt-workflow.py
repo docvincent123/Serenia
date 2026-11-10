@@ -43,6 +43,7 @@ class Center(BaseHTTPRequestHandler):
             "/api/admin/module-permissions": [{"id":4,"name":"Synthetic staff","role":"reception","blocked_modules":[]}],
             "/api/discharges": [{"id": 9, "revision": 2, "workflow_status": "review"}],
             "/api/stats": {"total_patients": 15},
+            "/api/my-module-permissions": {"role":role,"blocked_modules": ["messages"] if role == "reception" else []},
             "/api/mobile-config": {
                 "format": "quremed.solvia.mobile", "version": 2, "server_id": SERVER_ID,
                 "api_url": f"https://127.0.0.1:{self.server.server_port}",
