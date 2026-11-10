@@ -52,6 +52,8 @@ int main(int argc, char **argv) {
 
     staff.login("reception", "test");
     verify(waitFor([&] { return staff.role() == "reception"; }), "Reception sign-in failed");
+    verify(waitFor([&] { return !staff.moduleEnabled("messages"); }), "Reception restrictions were not loaded");
+    verify(staff.moduleEnabled("patients"), "Permission projection removed a permitted module");
     staff.loadSlots("2026-11-11", 7, 2, 45, 0);
     verify(waitFor([&] { return staff.availableSlots().contains("10:15"); }), "Server slot did not load");
     staff.book(19, 7, 2, "2026-11-11", "10:15", "11:00", "individual");
