@@ -39,6 +39,7 @@ class Center(BaseHTTPRequestHandler):
             "/api/me": {"role": role, "name": "Synthetic account"},
             "/api/slots": ["10:15", "14:15"],
             "/api/users": [{"id": 4, "name": "Synthetic staff", "active": True}],
+            "/api/services": [{"id": 2, "code": "art", "name": "Арттерапія", "category": "creative", "active": True}],
             "/api/discharges": [{"id": 9, "revision": 2, "workflow_status": "review"}],
             "/api/stats": {"total_patients": 15},
             "/api/mobile-config": {
@@ -91,5 +92,5 @@ assert len(bookings) == 1, "Double submit must create only one booking"
 assert bookings[0]["patient_ids"] == [19] and bookings[0]["client_key"]
 assert bookings[0]["start"] == "2026-11-11T10:15" and bookings[0]["end"] == "2026-11-11T11:00"
 assert ("/api/discharges/9/workflow", {"action": "return", "revision": 2, "reason": "Уточнити рекомендації"}) in Center.requests
-assert ("/api/users/4", {"name": "Test Staff", "role": "reception", "active": True}) in Center.requests
+assert ("/api/users/4", {"name": "Test Staff", "role": "reception", "active": True, "primary_service_code": "art"}) in Center.requests
 print("PASS: native HTTPS and profile binding, distinct staff/admin roles, slot booking with duplicate-submit protection, director review, and team editing")
