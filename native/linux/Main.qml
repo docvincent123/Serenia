@@ -63,7 +63,17 @@ ApplicationWindow {
         selectedSlot = ""
         if (bookingDialog.opened) slotDebounce.restart()
     }
+    function pageAllowed(next) {
+        const lookup = {
+            "Прийоми":"appointments", "Пацієнти":"patients",
+            "Психологи":"roster", "Календар":"appointments",
+            "Виписки":"documents"
+        }
+        const module = lookup[next]
+        return !module || api.moduleEnabled(module)
+    }
     function showPage(next) {
+        if (!pageAllowed(next)) return
         page = next
         if (next === "Адміністрування") api.loadAdminSection(adminWorkspace.section)
         if (next === "Виписки") api.loadDischarges()
@@ -117,6 +127,9 @@ ApplicationWindow {
     }
     Connections {
         target: api
+        function onDataChanged() {
+            if (!root.pageAllowed(root.page)) root.page = "Головна"
+        }
         function onStateChanged() {
             if (!api.authenticated) {
                 bookingDialog.close()
@@ -395,10 +408,10 @@ ApplicationWindow {
                         }
                         Repeater {
                             model: api.role === "director"
-                              ? ["Головна","Психологи","Виписки"]
+                              ? ["Головна","Психологи","Виписки"].filter(function(tab) { return root.pageAllowed(tab) })
                               : api.role === "reception"
-                              ? ["Головна","Прийоми","Пацієнти","Психологи","Календар"]
-                              : ["Головна","Адміністрування","Прийоми","Пацієнти","Психологи","Календар","Виписки","Сервер"]
+                              ? ["Головна","Прийоми","Пацієнти","Психологи","Календар"].filter(function(tab) { return root.pageAllowed(tab) })
+                              : ["Головна","Адміністрування","Прийоми","Пацієнти","Психологи","Календар","Виписки","Сервер"].filter(function(tab) { return root.pageAllowed(tab) })
                             delegate: SolviaButton {
                                 required property string modelData
                                 Layout.fillWidth: true
@@ -455,6 +468,17 @@ ApplicationWindow {
                         visible: root.page === "Головна"
                         Layout.fillWidth:true; spacing:18
                         Rectangle {
+                            visible: api.blockedModules.length > 0
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 42
+                            color: "#E7EEF0"; radius: 12
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Деякі робочі розділи обмежені адміністратором"
+                                color: root.muted; font.pixelSize: 12
+                            }
+                        }
+                        Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 138
                             radius: 20; color: "#253745"
                             RowLayout {
@@ -476,7 +500,7 @@ ApplicationWindow {
                                     }
                                 }
                                 SolviaButton {
-                                    visible: api.role !== "director"
+                                    visible: api.role !== "director" && root.pageAllowed("Пацієнти") && root.pageAllowed("Прийоми")
                                     text: "+ Записати на прийом"
                                     Accessible.name: "Відкрити пошук пацієнта для запису"
                                     onClicked: root.openPatientDirectory("")
@@ -489,7 +513,7 @@ ApplicationWindow {
                             }
                         }
                         RowLayout {
-                            visible: api.role !== "director"; Layout.fillWidth: true; spacing: 10
+                            visible: api.role !== "director" && root.pageAllowed("Пацієнти"); Layout.fillWidth: true; spacing: 10
                             CareField {
                                 id: quickPatientSearch
                                 Layout.fillWidth: true; Layout.preferredHeight: 46
@@ -514,12 +538,12 @@ ApplicationWindow {
                         Flow {
                             Layout.fillWidth:true; Layout.preferredHeight: childrenRect.height
                             spacing:12
-                            SolviaButton { text:"+ Новий запис"; visible: api.role !== "director"; primary:true; onClicked:root.openPatientDirectory("") }
-                            SolviaButton { text:"Прийоми сьогодні"; visible: api.role !== "director"; onClicked:root.showPage("Прийоми") }
-                            SolviaButton { text:"Психологи на зміні"; onClicked:root.showPage("Психологи") }
-                            SolviaButton { text:"+ Новий пацієнт"; visible:api.role!=="director"; onClicked:newPatientDialog.open() }
-                            SolviaButton { text:"Календар"; visible:api.role!=="director"; onClicked:root.showPage("Календар") }
-                            SolviaButton { text:"Виписки"; visible:api.role==="director"; onClicked:root.showPage("Виписки") }
+                            SolviaButton { text:"+ Новий запис"; visible: api.role !== "director" && root.pageAllowed("Пацієнти"); primary:true; onClicked:root.openPatientDirectory("") }
+                            SolviaButton { text:"Прийоми сьогодні"; visible: api.role !== "director" && root.pageAllowed("Прийоми"); onClicked:root.showPage("Прийоми") }
+                            SolviaButton { text:"Психологи на зміні"; visible: root.pageAllowed("Психологи"); onClicked:root.showPage("Психологи") }
+                            SolviaButton { text:"+ Новий пацієнт"; visible:api.role!=="director" && root.pageAllowed("Пацієнти"); onClicked:newPatientDialog.open() }
+                            SolviaButton { text:"Календар"; visible:api.role!=="director" && root.pageAllowed("Календар"); onClicked:root.showPage("Календар") }
+                            SolviaButton { text:"Виписки"; visible:api.role==="director" && root.pageAllowed("Виписки"); onClicked:root.showPage("Виписки") }
                         }
                         ColumnLayout {
                             visible: api.role === "director"; Layout.fillWidth: true; spacing: 9
