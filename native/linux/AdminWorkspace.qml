@@ -7,6 +7,18 @@ Item {
     id: root
     required property var bridge
     property string section: "team"
+    property string searchText: ""
+    readonly property var filteredRows: {
+        const rows = bridge.adminRows || []
+        const needle = searchText.trim().toLowerCase()
+        if (!needle) return rows
+        const fields = ["name", "login", "role", "code", "type", "category", "device_name", "platform", "event", "entity", "actor", "ip_address"]
+        return rows.filter(function(record) {
+            return fields.some(function(key) {
+                return String(record[key] ?? "").toLowerCase().includes(needle)
+            })
+        })
+    }
     readonly property color ink: "#11212D"
     readonly property color muted: "#4A5C6A"
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
@@ -86,6 +98,7 @@ Item {
     })
 
     function select(key) {
+        searchText = ""
         section = key
         if (key !== "database") bridge.loadAdminSection(key)
     }
@@ -202,8 +215,48 @@ Item {
                         }
                     }
                 }
+                ColumnLayout {
+                    visible: root.listEditable || root.section === "sessions" || root.section === "audit"
+                    Layout.fillWidth: true; spacing: 8
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 10
+                        TextField {
+                            id: adminSearch
+                            Layout.fillWidth: true; Layout.preferredHeight: 42
+                            text: root.searchText
+                            Accessible.name: "Пошук у поточному розділі"
+                            placeholderText: root.section === "team" ? "Пошук за ПІБ, логіном або роллю" :
+                                             root.section === "sessions" ? "Пошук пристрою або користувача" :
+                                             "Пошук у списку"
+                            selectByMouse: true
+                            onTextEdited: root.searchText = text
+                            color: root.ink
+                            background: Rectangle {
+                                radius: 12; color: "#FFFFFF"
+                                border.color: adminSearch.activeFocus ? "#253745" : "#CCD0CF"
+                                border.width: adminSearch.activeFocus ? 2 : 1
+                            }
+                        }
+                        Action { text: "Очистити"; enabled: root.searchText.length > 0; onClicked: root.searchText = "" }
+                    }
+                    Label {
+                        text: "Показано " + root.filteredRows.length + " із " + root.bridge.adminRows.length
+                        color: root.muted; font.pixelSize: 12
+                    }
+                }
+                Label {
+                    visible: (root.listEditable || root.section === "sessions" || root.section === "audit") &&
+                             root.filteredRows.length === 0 && !root.bridge.working
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
+                    text: root.searchText ? "За цим запитом нічого не знайдено." : "У цьому розділі поки немає записів."
+                }
+                Label {
+                    visible: root.section === "services"
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
+                    text: "Напрямки — це послуги центру. Права доступу працівника задаються окремою роллю; спеціалізація не надає доступ до чужих медичних записів."
+                }
                 Repeater {
-                    model: root.listEditable || root.section === "sessions" || root.section === "audit" ? root.bridge.adminRows : []
+                    model: root.listEditable || root.section === "sessions" || root.section === "audit" ? root.filteredRows : []
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true; implicitHeight: row.implicitHeight + 22
@@ -223,7 +276,7 @@ Item {
                                         if (root.section === "team") return [modelData.login, root.readable(root.roles,modelData.role), modelData.active ? "Активний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "rooms") return [modelData.code, root.readable(root.roomTypes,modelData.type), modelData.capacity + " місць", modelData.active ? "Доступний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "services") return root.readable(root.categories,modelData.category) + (modelData.active ? "" : " · Вимкнено")
-                                        if (root.section === "sessions") return [modelData.device_name || modelData.platform, modelData.last_seen, modelData.online ? "Онлайн" : "Офлайн"].filter(Boolean).join(" · ")
+                                        if (root.section === "sessions") return [modelData.login || modelData.user_name || modelData.user, modelData.device_name || modelData.platform, modelData.last_seen, modelData.online ? "Онлайн" : "Офлайн"].filter(Boolean).join(" · ")
                                         return [modelData.actor, modelData.created].filter(Boolean).join(" · ")
                                     }
                                 }
