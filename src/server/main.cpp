@@ -362,6 +362,14 @@ if(u["role"]!="admin"){
  const auto module=moduleForApi(path);
  if(!module.empty())check(db.query("SELECT 1 FROM user_module_blocks WHERE user_id=? AND module=?",{u["id"],module}).empty(),
     "Адміністратор обмежив доступ до цього розділу",403);
+ // The legacy patient-detail projection includes courses, documents and
+ // consultation text. Denying those modules must also close this alternate path.
+ if(std::regex_match(path,std::regex("/api/patients/[0-9]+")) ||
+    (path.find("/progress")!=std::string::npos && path.rfind("/api/patients/",0)==0)){
+  for(const auto&privateModule:{"clinical","rehabilitation","documents"})
+   check(db.query("SELECT 1 FROM user_module_blocks WHERE user_id=? AND module=?",{u["id"],privateModule}).empty(),
+      "Доступ до приватного вмісту картки обмежено адміністратором",403);
+ }
 }
 if(path=="/api/admin/module-permissions"){
  allow(u,{"admin"});
