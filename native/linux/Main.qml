@@ -54,7 +54,7 @@ ApplicationWindow {
 
     function visitStatus(item) {
         if (item.completed_at || item.visit_status === "completed") return "completed"
-        if (item.visit_status) return "other"
+        if (item.visit_status || item.status === "cancelled" || item.status === "no_show") return "other"
         if (item.started_at) return "busy"
         if (item.arrived_at) return "arrived"
         return "waiting"
@@ -623,8 +623,11 @@ ApplicationWindow {
                                             Text { text:(modelData.psychologist||"") + " · " +(modelData.room||""); color:root.muted; font.pixelSize:12 }
                                         }
                                         StatusChip {
-                                            state:modelData.started_at?"busy":modelData.arrived_at?"waiting":"normal"
-                                            caption:modelData.completed_at?"Завершено":modelData.started_at?"На консультації":modelData.arrived_at?"Прибув":"Очікується"
+                                            state:root.visitStatus(modelData)==="busy"?"busy":root.visitStatus(modelData)==="arrived"?"waiting":"normal"
+                                            caption:root.visitStatus(modelData)==="completed"?"Завершено":
+                                                    root.visitStatus(modelData)==="busy"?"На консультації":
+                                                    root.visitStatus(modelData)==="arrived"?"Прибув":
+                                                    root.visitStatus(modelData)==="other"?"Скасовано / неявка":"Очікується"
                                         }
                                         SolviaButton {
                                             text:"Пацієнт прибув"
@@ -658,7 +661,7 @@ ApplicationWindow {
                         }
                     }
 
-                    // Native patient directory, limited to the requested search results.
+                    // Server-backed patient directory with bounded pages and an explicit total.
                     ColumnLayout {
                         visible: root.page==="Пацієнти"; Layout.fillWidth:true; spacing:12
                         CareField {
@@ -668,6 +671,15 @@ ApplicationWindow {
                             onTextEdited: patientDebounce.restart()
                         }
                         Timer { id:patientDebounce; interval:350; onTriggered:api.searchPatients(patientSearch.text) }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label {
+                                text: api.patientsLoading ? "Завантажуємо картки…" : "Знайдено пацієнтів: " + api.patientTotal
+                                color: root.muted; font.pixelSize: 12
+                            }
+                            Item { Layout.fillWidth: true }
+                            SolviaButton { text: "+ Новий пацієнт"; primary: true; onClicked: newPatientDialog.open() }
+                        }
                         Repeater {
                             model: api.patients
                             delegate: Panel {
@@ -681,14 +693,36 @@ ApplicationWindow {
                                             Text { text:modelData.name||""; color:root.ink; font.pixelSize:16; font.bold:true }
                                             Text { text:"№ "+(modelData.patient_no||"—")+" · "+(modelData.psychologist||"Психолог не призначений");
                                                    color:root.muted; font.pixelSize:12 }
+                                            Text { text:[modelData.phone,modelData.category].filter(Boolean).join(" · ");
+                                                   color:root.muted; font.pixelSize:12 }
                                         }
                                         SolviaButton { text:"Записати на прийом"; onClicked:root.beginBooking(modelData) }
                                     }
                                 ]
                             }
                         }
+                        RowLayout {
+                            visible: !api.patientsLoading && api.patientTotal > 0
+                            Layout.fillWidth: true; spacing: 12
+                            SolviaButton {
+                                text: "‹ Попередня"
+                                enabled: !api.patientsLoading && api.patientPage > 1
+                                onClicked: api.loadPatientPage(api.patientPage - 1)
+                            }
+                            Item { Layout.fillWidth: true }
+                            Text {
+                                text: "Сторінка " + api.patientPage + " із " + Math.max(1, Math.ceil(api.patientTotal / 25))
+                                color:root.muted; font.pixelSize: 13
+                            }
+                            Item { Layout.fillWidth: true }
+                            SolviaButton {
+                                text: "Наступна ›"
+                                enabled: !api.patientsLoading && api.patientPage * 25 < api.patientTotal
+                                onClicked: api.loadPatientPage(api.patientPage + 1)
+                            }
+                        }
                         Panel {
-                            visible: api.patients.length===0
+                            visible: !api.patientsLoading && api.patients.length===0
                             Layout.fillWidth: true
                             panelContent: [
                                 Text { text: "Нічого не знайдено"; color:root.ink; font.pixelSize:17; font.bold:true },
