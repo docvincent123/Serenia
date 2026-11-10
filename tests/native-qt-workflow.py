@@ -47,6 +47,16 @@ class Center(BaseHTTPRequestHandler):
                 "api_url": f"https://127.0.0.1:{self.server.server_port}",
             },
         }
+        if path == "/api/patient-directory":
+            from urllib.parse import parse_qs, urlsplit
+            params = parse_qs(urlsplit(self.path).query)
+            page = int(params.get("page", ["1"])[0])
+            if page not in (1, 2):
+                return self.respond({"error": "Unexpected register page"}, 400)
+            return self.respond({
+                "items": [{"id": page, "name": "Пацієнт " + str(page), "patient_no": "TEST" + str(page)}],
+                "total": 41, "page": page, "page_size": 25,
+            })
         if path in {"/api/users", "/api/mobile-config"} and role != "admin":
             return self.respond({"error": "Forbidden"}, 403)
         self.respond(responses.get(path, {}))
