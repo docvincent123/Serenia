@@ -846,3 +846,19 @@ ON CONFLICT(code) DO NOTHING;
 -- Blank means the employee is not assigned to a primary service.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_service_code TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_users_primary_service_code ON users(primary_service_code);
+
+-- Optional professional title (distinct from the security role).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT '';
+
+-- Deny-only per-user restrictions. Absence of an entry preserves the existing
+-- hard-coded role access: a restriction NEVER grants a forbidden permission.
+CREATE TABLE IF NOT EXISTS user_module_blocks(
+ user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ module TEXT NOT NULL CHECK(module IN (
+  'patients','appointments','clinical','rehabilitation','documents',
+  'reports','messages','roster'
+ )),
+ blocked_at TEXT NOT NULL DEFAULT '',
+ blocked_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ PRIMARY KEY(user_id,module)
+);
