@@ -209,8 +209,13 @@ class NativeWorkflowTest {
                 val foreground=android.graphics.Color.luminance(MobileUi.onAccent).toDouble()
                 val background=android.graphics.Color.luminance(MobileUi.accent).toDouble()
                 val contrast=(maxOf(foreground,background)+0.05)/(minOf(foreground,background)+0.05)
-                assertTrue("Primary labels stay readable on the mint workspace",contrast>=4.5)
-                assertTrue(android.graphics.Color.luminance(MobileUi.background)>0.8f)
+                assertTrue("Primary labels stay readable on the graphite workspace",contrast>=4.5)
+                // The new gray workspace is intentionally mid-tone, not mint/white.
+                val workspaceLuminance = android.graphics.Color.luminance(MobileUi.background)
+                assertTrue("Graphite-gray workspace must remain bright enough for dark text",workspaceLuminance in 0.30f..0.65f)
+                val textLuminance = android.graphics.Color.luminance(MobileUi.ink).toDouble()
+                val workspaceContrast = (maxOf(workspaceLuminance.toDouble(),textLuminance)+0.05)/(minOf(workspaceLuminance.toDouble(),textLuminance)+0.05)
+                assertTrue("Graphite workspace body text must meet WCAG AA",workspaceContrast>=4.5)
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             var reference: MainActivity? = null
