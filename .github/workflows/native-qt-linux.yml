@@ -1,15 +1,17 @@
-name: Lemvori Care native Linux
+name: Lemvori Care native desktop
 on:
   push:
     branches: [feature/rehab-center-readiness]
     paths:
       - 'native/linux/**'
-      - 'tests/native-qt-settings.py'
+      - 'tests/native-qt-*.py'
+      - 'tests/native-qt-*.cpp'
       - '.github/workflows/native-qt-linux.yml'
   pull_request:
     paths:
       - 'native/linux/**'
-      - 'tests/native-qt-settings.py'
+      - 'tests/native-qt-*.py'
+      - 'tests/native-qt-*.cpp'
       - '.github/workflows/native-qt-linux.yml'
   workflow_dispatch:
 jobs:
@@ -39,6 +41,8 @@ jobs:
           timeout 15s build/native-linux/solvia-native --admin --smoke
       - name: Verify company settings migration
         run: python3 tests/native-qt-settings.py build/native-linux/solvia-native
+      - name: Verify staff and admin workflows through HTTPS
+        run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-workflow-check
       - name: Check no WebKit or Chrome dependency is linked
         run: |
           if ldd build/native-linux/solvia-native | grep -Ei 'webkit|chromium|electron|webengine'; then
@@ -52,4 +56,52 @@ jobs:
           path: |
             build/native-linux/solvia-native
             build/native-linux/solvia-native_*.deb
+          retention-days: 7
+
+
+  qt-windows:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Qt for MSVC
+        shell: pwsh
+        run: |
+          python -m pip install aqtinstall
+          python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O "${{ runner.temp }}\qt"
+          "QT_DIR=${{ runner.temp }}\qt\6.8.3\msvc2022_64" >> $env:GITHUB_ENV
+      - name: Build native Qt applications and package dependencies
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_DIR\bin;$env:PATH"
+          cmake -S native/linux -B build/native-windows -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$env:QT_DIR" -DBUILD_TESTING=OFF
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build/native-windows --config Release --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force out/lemvori-care-native | Out-Null
+          Copy-Item build/native-windows/Release/solvia-native.exe "out/lemvori-care-native/Lemvori Care.exe"
+          & "$env:QT_DIR\bin\windeployqt.exe" --release --no-compiler-runtime --qmldir native/linux "out/lemvori-care-native/Lemvori Care.exe"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item "out/lemvori-care-native/Lemvori Care.exe" "out/lemvori-care-native/Lemvori Care Admin.exe"
+          if (Get-ChildItem out/lemvori-care-native -Recurse -File | Where-Object Name -Match "WebEngine|WebView2|Chromium") {
+            throw "The native package includes a browser engine."
+          }
+      - name: Launch both packaged native executables
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          foreach ($name in @("Lemvori Care.exe", "Lemvori Care Admin.exe")) {
+            $process = Start-Process -FilePath (Join-Path "out/lemvori-care-native" $name) -ArgumentList "--smoke" -PassThru
+            if (!$process.WaitForExit(15000)) { $process.Kill(); throw "$name did not exit after smoke test." }
+            if ($process.ExitCode -ne 0) { throw "$name exited with $($process.ExitCode)" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemvori-care-native-windows-x64
+          path: out/lemvori-care-native/
           retention-days: 7

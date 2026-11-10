@@ -72,7 +72,9 @@ Item {
             {key:"phone", label:"Телефон"}, {key:"email", label:"Електронна пошта"},
             {key:"website", label:"Сайт"}, {key:"work_hours", label:"Години роботи"},
             {key:"director_name", label:"Керівник"}, {key:"head_name", label:"Завідувач"},
-            {key:"head_title", label:"Посада завідувача"}, {key:"document_footer", label:"Підвал документів"}
+            {key:"head_title", label:"Посада завідувача"}, {key:"document_footer", label:"Підвал документів"},
+            {key:"connection_mode", label:"Підключення", options:[{key:"local",label:"Мережа центру"},{key:"vps",label:"VPS"}], initial:"local"},
+            {key:"local_api_url", label:"HTTPS-адреса в мережі центру"}, {key:"vps_api_url", label:"HTTPS-адреса VPS"}
         ]
     })
 
@@ -205,6 +207,11 @@ Item {
                         }
                     }
                 }
+                RowLayout {
+                    visible: root.section === "center"
+                    Action { text:"Файл для Android / ПК"; onClicked:{ exportPicker.localOnly = false; exportPicker.open() } }
+                    Action { text:"Файл для Wi-Fi центру"; visible:root.bridge.adminDetails.connection_mode === "local"; onClicked:{ exportPicker.localOnly = true; exportPicker.open() } }
+                }
                 Label {
                     visible: root.section === "database"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
@@ -298,6 +305,15 @@ Item {
         modal: true; anchors.centerIn: Overlay.overlay
         standardButtons: Dialog.Yes | Dialog.No
         onAccepted: root.bridge.endSession(sessionId)
+    }
+    FileDialog {
+        id: exportPicker
+        property bool localOnly: false
+        title: "Зберегти файл підключення центру"
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "solvia"
+        nameFilters: ["Файл центру (*.solvia)"]
+        onAccepted: root.bridge.exportProfile(selectedFile, localOnly)
     }
     FileDialog {
         id: picker

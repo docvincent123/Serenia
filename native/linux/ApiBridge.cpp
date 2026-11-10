@@ -12,6 +12,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QSettings>
 #include <QSysInfo>
 #include <QTime>
@@ -53,6 +54,7 @@ void ApiBridge::clearSession() {
     ++patientGeneration_;
     ++adminGeneration_;
     ++slotsGeneration_;
+    ++calendarGeneration_;
     adminRows_.clear(); adminDetails_.clear(); adminSection_.clear(); dischargeRows_.clear();
     loadingSlots_ = false; slots_.clear(); slotError_.clear();
     pendingBooking_ = {}; bookingKey_.clear();
@@ -252,6 +254,8 @@ void ApiBridge::logout() {
         QNetworkRequest req(QUrl(origin_ + "/api/logout"));
         req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
         req.setRawHeader("Authorization", "Bearer " + bearer);
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+        req.setTransferTimeout(15000);
         auto *reply = network_.post(req, QByteArray("{}"));
         connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
     }
@@ -281,9 +285,9 @@ void ApiBridge::getVisits(int generation) {
     }, true);
 }
 void ApiBridge::getAppointments(int generation) {
-    const QString day = QDate::currentDate().toString(Qt::ISODate);
+    const QString day = calendarDate_.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : calendarDate_;
     request("GET", "/api/appointments?date=" + day, {}, [this,generation](const QJsonValue &v){
-        if (generation != refreshGeneration_) return;
+        if (generation != calendarGeneration_) return;
         appointments_ = v.toArray().toVariantList();
         emit dataChanged();
     }, true);
@@ -338,7 +342,7 @@ void ApiBridge::refresh() {
     if (role_ == "admin" || role_ == "reception") {
         getOverview(generation);
         getVisits(generation);
-        getAppointments(generation);
+        getAppointments(++calendarGeneration_);
     } else {
         getOverview(generation);
     }
@@ -422,7 +426,15 @@ void ApiBridge::assignPsychologist(int id,bool onShift) {
         refresh();
     });
 }
-void ApiBridge::loadSlots(const QString &date, int psychologistId, int roomId, int duration) {
+void ApiBridge::setCalendarDate(const QString &date) {
+    if (!canWrite() || !QDate::fromString(date, Qt::ISODate).isValid() || calendarDate_ == date) return;
+    calendarDate_ = date;
+    appointments_.clear();
+    emit dataChanged();
+    getAppointments(++calendarGeneration_);
+}
+
+void ApiBridge::loadSlots(const QString &date, int psychologistId, int roomId, int duration, int excludedId) {
     const int generation = ++slotsGeneration_;
     slots_.clear();
     slotError_.clear();
@@ -430,8 +442,9 @@ void ApiBridge::loadSlots(const QString &date, int psychologistId, int roomId, i
         && psychologistId > 0 && roomId > 0 && duration >= 15 && duration <= 240;
     emit slotsChanged();
     if (!loadingSlots_) return;
-    const QString path = QString("/api/slots?date=%1&psychologist_id=%2&room_id=%3&duration_minutes=%4")
+    QString path = QString("/api/slots?date=%1&psychologist_id=%2&room_id=%3&duration_minutes=%4")
         .arg(date).arg(psychologistId).arg(roomId).arg(duration);
+    if (excludedId > 0) path += "&exclude_appointment_id=" + QString::number(excludedId);
     request("GET", path, {}, [this, generation](const QJsonValue &result) {
         if (generation != slotsGeneration_) return;
         for (const auto &slot : result.toArray()) slots_.append(slot.toString());
@@ -450,6 +463,10 @@ QString ApiBridge::endTime(const QString &start, int duration) const {
     return time.isValid() ? time.addSecs(duration * 60).toString("HH:mm") : QString();
 }
 
+int ApiBridge::durationMinutes(const QString &start, const QString &end) const {
+    return QDateTime::fromString(start, Qt::ISODate).secsTo(QDateTime::fromString(end, Qt::ISODate)) / 60;
+}
+
 void ApiBridge::book(int patientId, int psychologistId, int roomId, const QString &date,
                      const QString &start, const QString &end, const QString &kind) {
     if (!requireStaffRole() || working_) return;
@@ -458,38 +475,73 @@ void ApiBridge::book(int patientId, int psychologistId, int roomId, const QStrin
     if (patientId <= 0 || psychologistId <= 0 || roomId <= 0 ||
         !QDate::fromString(date, Qt::ISODate).isValid() || start >= end)
         return issue("Оберіть пацієнта, психолога, кабінет і коректний час.");
-    const QJsonObject booking{{"patient_ids", QJsonArray{patientId}},
+    saveBooking({{"patient_ids", QJsonArray{patientId}},
         {"psychologist_id", psychologistId}, {"room_id", roomId}, {"kind", kind},
-        {"status", "scheduled"}, {"start", date + "T" + start}, {"end", date + "T" + end}};
-    if (booking != pendingBooking_) {
-        pendingBooking_ = booking;
-        bookingKey_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        {"status", "scheduled"}, {"start", date + "T" + start}, {"end", date + "T" + end}});
+}
+
+void ApiBridge::moveBooking(const QVariantMap &appointment, int roomId,
+                            const QString &date, const QString &start, const QString &end) {
+    if (!requireStaffRole() || working_) return;
+    const int id = appointment.value("id").toInt();
+    const int psychologistId = appointment.value("psychologist_id").toInt();
+    const QString status = appointment.value("status").toString();
+    if (id <= 0 || roomId <= 0 || start >= end || !QDate::fromString(date, Qt::ISODate).isValid() ||
+        !QStringList{"scheduled", "confirmed", "draft"}.contains(status) || !psychologistBookable(psychologistId, date))
+        return issue("Цей прийом не можна перенести на вибрану дату.");
+    QJsonArray patientIds;
+    for (const auto &patient : appointment.value("patients").toList()) {
+        const auto attendee = patient.toMap();
+        if (!attendee.value("arrived_at").toString().isEmpty() ||
+            !attendee.value("started_at").toString().isEmpty() ||
+            !attendee.value("completed_at").toString().isEmpty() ||
+            !attendee.value("visit_status").toString().isEmpty())
+            return issue("Прийом уже має зафіксований статус учасника.");
+        patientIds.append(attendee.value("id").toInt());
     }
-    auto body = booking;
-    body.insert("client_key", bookingKey_);
+    if (patientIds.isEmpty()) return issue("У прийомі немає учасників.");
+    saveBooking({{"patient_ids", patientIds}, {"psychologist_id", psychologistId},
+        {"room_id", roomId}, {"kind", appointment.value("kind").toString()}, {"status", status},
+        {"note", appointment.value("note").toString()}, {"start", date + "T" + start}, {"end", date + "T" + end}}, id);
+}
+
+void ApiBridge::saveBooking(QJsonObject booking, int id) {
+    if (id == 0) {
+        if (booking != pendingBooking_) {
+            pendingBooking_ = booking;
+            bookingKey_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        }
+        booking.insert("client_key", bookingKey_);
+    }
     working_ = true;
     error_.clear();
     emit stateChanged();
-    request("POST", "/api/appointments", body, [this](const QJsonValue &) {
-        pendingBooking_ = {};
-        bookingKey_.clear();
+    const QString path = id > 0 ? "/api/appointments/" + QString::number(id) : "/api/appointments";
+    request(id > 0 ? "PATCH" : "POST", path, booking, [this, id](const QJsonValue &) {
+        if (id == 0) { pendingBooking_ = {}; bookingKey_.clear(); }
         working_ = false;
-        notify("Пацієнта записано на прийом.");
+        notify(id > 0 ? "Прийом перенесено." : "Пацієнта записано на прийом.");
         emit operationCompleted("booking");
         refresh();
     });
 }
 void ApiBridge::registerPatient(const QString &name,const QString &phone,
-                                const QString &dob,const QString &category,int psychologistId) {
-    if (!requireStaffRole()) return;
+                                const QString &dob,const QString &category,int psychologistId, bool bookAfter) {
+    if (!requireStaffRole() || working_) return;
     if (name.trimmed().isEmpty()||phone.trimmed().isEmpty()||psychologistId<=0)
         return issue("Заповніть обов'язкові поля.");
+    working_ = true;
+    error_.clear();
+    emit stateChanged();
     request("POST","/api/patients",{{"name",name.trimmed()},{"phone",phone.trimmed()},
         {"dob",dob},{"category",category},{"psychologist_id",psychologistId}},
-        [this](const QJsonValue &){
+        [this, name, psychologistId, bookAfter](const QJsonValue &result){
+        working_ = false;
         notify("Картку пацієнта створено.");
         searchPatients(QString());
         emit operationCompleted("patient");
+        emit patientRegistered({{"id", result.toObject().value("id").toInt()},
+            {"name", name.trimmed()}, {"psychologist_id", psychologistId}}, bookAfter);
         refresh();
     });
 }
@@ -619,5 +671,37 @@ void ApiBridge::reviewDischarge(int id, int revision, bool approve, const QStrin
         notify("Статус виписки оновлено.");
         emit operationCompleted("discharge");
         loadDischarges();
+    });
+}
+
+void ApiBridge::cancelBooking(int id, const QString &reason) {
+    if (!requireStaffRole() || id <= 0 || working_) return;
+    if (reason.trimmed().isEmpty()) return issue("Вкажіть причину скасування.");
+    working_ = true;
+    error_.clear();
+    emit stateChanged();
+    request("PATCH", "/api/appointments/" + QString::number(id),
+            {{"status", "cancelled"}, {"cancellation_reason", reason.trimmed()}}, [this](const QJsonValue &) {
+        working_ = false;
+        notify("Прийом скасовано.");
+        emit operationCompleted("cancel");
+        refresh();
+    });
+}
+
+void ApiBridge::exportProfile(const QUrl &file, bool localOnly) {
+    if (!adminEdition_ || role_ != "admin" || !file.isLocalFile()) return;
+    const QString path = file.toLocalFile();
+    request("GET", localOnly ? "/api/mobile-config?lan=1" : "/api/mobile-config?stable=1",
+            {}, [this, path](const QJsonValue &result) {
+        const auto profile = result.toObject();
+        if (profile.value("format").toString() != "quremed.solvia.mobile" ||
+            profile.value("api_url").toString().isEmpty())
+            return issue("Сервер не надав файл підключення.");
+        const QByteArray bytes = QJsonDocument(profile).toJson();
+        QSaveFile output(path);
+        if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit())
+            return issue("Не вдалося зберегти файл підключення.");
+        notify("Файл підключення збережено.");
     });
 }

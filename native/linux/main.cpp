@@ -1,4 +1,5 @@
 #include "ApiBridge.h"
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
@@ -10,10 +11,11 @@ int main(int argc, char **argv) {
     QGuiApplication app(argc, argv);
     app.setOrganizationName("LemvoriLab");
     app.setApplicationName("SOLVIA");
-    const bool adminEdition = app.arguments().contains(QStringLiteral("--admin"));
+    const bool adminEdition = app.arguments().contains(QStringLiteral("--admin"))
+        || QFileInfo(app.applicationFilePath()).completeBaseName().compare("Lemvori Care Admin", Qt::CaseInsensitive) == 0;
     app.setApplicationDisplayName(adminEdition ? "Lemvori Care Admin" : "Lemvori Care");
     app.setDesktopFileName(adminEdition ? "lemvori-care-admin" : "solvia-native");
-    app.setWindowIcon(QIcon(":/brand.svg"));
+    app.setWindowIcon(QIcon(":/brand.png"));
     QQuickStyle::setStyle("Basic");
 
     ApiBridge api(adminEdition);

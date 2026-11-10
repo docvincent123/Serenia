@@ -17,6 +17,8 @@ ApplicationWindow {
     property int bookingPatientId: 0
     property int bookingAssignedPsychId: 0
     property string selectedSlot: ""
+    property var bookingOriginal: ({})
+    property string calendarDay: today
     readonly property color ink: "#11212D"
     readonly property color muted: "#4A5C6A"
     readonly property color accent: "#253745"
@@ -35,12 +37,36 @@ ApplicationWindow {
         if (next === "Психологи" || next === "Прийоми" || next === "Календар") api.refresh()
     }
     function beginBooking(patient) {
+        bookingOriginal = ({})
         bookingPatientId = Number(patient.id)
         bookingAssignedPsychId = Number(patient.psychologist_id)
         bookingName.text = patient.name || "Пацієнт"
-        bookingPsych.currentIndex = bookingPsych.indexOfValue(Number(patient.psychologist_id))
+        bookingDate.text = calendarDay
+        bookingDuration.value = 60
+        bookingKind.currentIndex = 0
+        bookingPsych.currentIndex = bookingPsych.indexOfValue(bookingAssignedPsychId)
         bookingDialog.open()
         updateBookingSlots()
+    }
+    function canChange(appointment) {
+        return ["scheduled","confirmed","draft"].includes(appointment.status) &&
+            !(appointment.patients || []).some(person => person.arrived_at || person.started_at || person.completed_at || person.visit_status)
+    }
+    function beginMove(appointment) {
+        bookingOriginal = appointment
+        bookingAssignedPsychId = Number(appointment.psychologist_id)
+        bookingName.text = (appointment.patients || []).map(person => person.name).join(", ")
+        bookingDate.text = String(appointment.start).slice(0,10)
+        bookingDuration.value = api.durationMinutes(appointment.start, appointment.end)
+        bookingPsych.currentIndex = bookingPsych.indexOfValue(bookingAssignedPsychId)
+        bookingRoom.currentIndex = bookingRoom.indexOfValue(Number(appointment.room_id))
+        bookingDialog.open()
+        updateBookingSlots()
+    }
+    function changeCalendar(day) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || isNaN(Date.parse(day))) return
+        calendarDay = day
+        api.setCalendarDate(day)
     }
     Connections {
         target: api
@@ -49,18 +75,23 @@ ApplicationWindow {
                 bookingDialog.close()
                 newPatientDialog.close()
                 dischargeReview.close()
+                cancelDialog.close()
             }
+        }
+        function onPatientRegistered(patient, bookAfter) {
+            if (bookAfter && Number(patient.id) > 0) root.beginBooking(patient)
         }
         function onOperationCompleted(name) {
             if (name === "booking") bookingDialog.close()
             if (name === "patient") newPatientDialog.close()
             if (name === "discharge") dischargeReview.close()
+            if (name === "cancel") cancelDialog.close()
         }
     }
     Timer {
         id: slotDebounce; interval: 220
         onTriggered: api.loadSlots(bookingDate.text, Number(bookingPsych.currentValue || 0),
-            Number(bookingRoom.currentValue || 0), Number(bookingDuration.currentValue || 0))
+            Number(bookingRoom.currentValue || 0), bookingDuration.value, Number(root.bookingOriginal.id || 0))
     }
     Timer { interval: 15000; running: root.visible && api.authenticated; repeat: true; onTriggered: api.refresh() }
 
@@ -147,7 +178,7 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.margins: 38
                     spacing: 24
-                    Image { source: "qrc:/brand.svg"; width: 72; height: 72; fillMode: Image.PreserveAspectFit }
+                    Image { source: "qrc:/brand.png"; width: 72; height: 72; fillMode: Image.PreserveAspectFit }
                     Text { text: root.title; font.pixelSize: 34; font.bold: true; color: "#fff" }
                     Text { text: "by LemvoriLab"; font.pixelSize: 15; color: "#CCD0CF" }
                     Text { text: "Робочий простір\nреабілітаційного центру";
@@ -205,7 +236,7 @@ ApplicationWindow {
             color: "#ffffff"
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 26; anchors.rightMargin: 26; spacing: 15
-                Image { source: "qrc:/brand.svg"; Layout.preferredWidth: 38; Layout.preferredHeight: 38; fillMode: Image.PreserveAspectFit }
+                Image { source: "qrc:/brand.png"; Layout.preferredWidth: 38; Layout.preferredHeight: 38; fillMode: Image.PreserveAspectFit }
                 Text { text: root.title; font.pixelSize: 21; font.bold: true; color: root.ink }
                 Rectangle { width: 1; height: 25; color: root.line }
                 Text { text: "Робочий простір центру"; color: root.muted; font.pixelSize: 13 }
@@ -308,11 +339,29 @@ ApplicationWindow {
                         }
                         RowLayout {
                             spacing:12; Layout.fillWidth:true
-                            SolviaButton { text:"Прийоми сьогодні"; primary:true; onClicked:root.showPage("Прийоми") }
+                            SolviaButton { text:"+ Новий запис"; visible: api.role !== "director"; primary:true; onClicked:root.showPage("Пацієнти") }
+                            SolviaButton { text:"Прийоми сьогодні"; visible: api.role !== "director"; onClicked:root.showPage("Прийоми") }
                             SolviaButton { text:"Психологи на зміні"; onClicked:root.showPage("Психологи") }
-                            SolviaButton { text:"Пацієнти"; visible:api.role!=="director"; onClicked:root.showPage("Пацієнти") }
+                            SolviaButton { text:"Виписки"; visible:api.role==="director"; onClicked:root.showPage("Виписки") }
+                        }
+                        ColumnLayout {
+                            visible: api.role === "director"; Layout.fillWidth: true; spacing: 9
+                            Text { text:"Навантаження за місяць"; color:root.ink; font.bold:true; font.pixelSize:18 }
+                            Repeater {
+                                model: api.overview.load || []
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    Layout.fillWidth: true; implicitHeight: 48; radius: 12; color:"#CCD0CF"
+                                    RowLayout {
+                                        anchors.fill: parent; anchors.margins: 10
+                                        Text { Layout.fillWidth:true; elide:Text.ElideRight; text:modelData.name || "Психолог"; color:root.ink; font.bold:true }
+                                        Text { text:String(modelData.appointments ?? 0) + " прийомів · " + String(modelData.hours ?? 0) + " год"; color:root.muted }
+                                    }
+                                }
+                            }
                         }
                         Panel {
+                            visible: api.role !== "director"
                             Layout.fillWidth:true
                             panelContent: [
                                 Text { text:"Найближчі прийоми"; font.pixelSize:18; font.bold:true; color:root.ink },
@@ -362,13 +411,7 @@ ApplicationWindow {
                                             onClicked:api.markArrived(Number(modelData.appointment_id),Number(modelData.patient_id))
                                         }
                                         SolviaButton { text:"Записати"; visible:api.role!=="director"
-                                            onClicked: {
-                                                root.bookingPatientId=Number(modelData.patient_id);
-                                                root.bookingAssignedPsychId=Number(modelData.psychologist_id);
-                                                bookingName.text=modelData.patient||"Пацієнт";
-                                                bookingPsych.currentIndex=bookingPsych.indexOfValue(Number(modelData.psychologist_id));
-                                                bookingDialog.open();
-                                            }}
+                                            onClicked: root.beginBooking({id:modelData.patient_id, psychologist_id:modelData.psychologist_id, name:modelData.patient}) }
                                     }
                                 ]
                             }
@@ -454,7 +497,14 @@ ApplicationWindow {
                     // Calendar uses live appointment data without extra web rendering.
                     ColumnLayout {
                         visible:root.page==="Календар"; Layout.fillWidth:true; spacing:12
-                        Text { text:"Прийоми за сьогодні · "+root.today; color:root.muted; font.pixelSize:12 }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text:"Дата"; color:root.ink; font.bold:true }
+                            TextField { id: calendarField; text: root.calendarDay; inputMask:"9999-99-99"; onEditingFinished: root.changeCalendar(text) }
+                            SolviaButton { text:"Сьогодні"; onClicked: { calendarField.text = root.today; root.changeCalendar(root.today) } }
+                            SolviaButton { text:"Показати"; primary:true; onClicked: root.changeCalendar(calendarField.text) }
+                            Item { Layout.fillWidth: true }
+                        }
                         Repeater {
                             model:api.appointments
                             delegate: Panel {
@@ -467,15 +517,17 @@ ApplicationWindow {
                                                font.bold:true; color:root.accent }
                                         ColumnLayout {
                                             Layout.fillWidth:true
-                                            Text { text:modelData.psychologist||""; color:root.ink; font.bold:true }
-                                            Text { text:(modelData.room||"") + " · " + (modelData.kind||""); color:root.muted; font.pixelSize:12 }
+                                            Text { Layout.fillWidth:true; elide:Text.ElideRight; text:(modelData.patients || []).map(person => person.name).join(", "); color:root.ink; font.bold:true }
+                                            Text { text:(modelData.psychologist||"") + " · " + (modelData.room||""); color:root.muted; font.pixelSize:12 }
                                         }
-                                        StatusChip { caption:modelData.status==="confirmed"?"Підтверджено":modelData.status==="scheduled"?"Заплановано":modelData.status||"—" }
+                                        StatusChip { caption:modelData.status==="confirmed"?"Підтверджено":modelData.status==="scheduled"?"Заплановано":modelData.status==="cancelled"?"Скасовано":modelData.status==="completed"?"Завершено":"Чернетка" }
+                                        SolviaButton { text:"Перенести"; visible:root.canChange(modelData); onClicked:root.beginMove(modelData) }
+                                        SolviaButton { text:"Скасувати"; visible:root.canChange(modelData); onClicked:{ cancelDialog.appointmentId = Number(modelData.id); cancelReason.clear(); cancelDialog.open() } }
                                     }
                                 ]
                             }
                         }
-                        Text { visible:api.appointments.length===0; text:"Сьогодні прийомів немає."; color:root.muted }
+                        Text { visible:api.appointments.length===0; text:"На обрану дату прийомів немає."; color:root.muted }
                     }
                     ColumnLayout {
                         visible: root.page === "Виписки"
@@ -574,7 +626,22 @@ ApplicationWindow {
         standardButtons: Dialog.Close
     }
     Dialog {
-        id:bookingDialog; title:"Записати пацієнта"; modal:true; anchors.centerIn:Overlay.overlay
+        id: cancelDialog
+        property int appointmentId: 0
+        title: "Скасувати прийом?"
+        modal: true; anchors.centerIn: Overlay.overlay; width: 450
+        ColumnLayout {
+            width: parent.width
+            TextField { id: cancelReason; Layout.fillWidth: true; placeholderText: "Причина скасування" }
+            Text { Layout.fillWidth: true; wrapMode: Text.WordWrap; visible: !!api.error; text: api.error; color: "#8C3632" }
+            RowLayout {
+                SolviaButton { text:"Назад"; enabled:!api.working; onClicked:cancelDialog.close() }
+                SolviaButton { text:"Підтвердити скасування"; primary:true; enabled:!api.working && !!cancelReason.text.trim(); onClicked:api.cancelBooking(cancelDialog.appointmentId,cancelReason.text) }
+            }
+        }
+    }
+    Dialog {
+        id:bookingDialog; title:root.bookingOriginal.id ? "Перенести прийом" : "Записати пацієнта"; modal:true; anchors.centerIn:Overlay.overlay
         width:Math.min(540,root.width-60); standardButtons:Dialog.NoButton
         ColumnLayout {
             width:parent.width; spacing:10
@@ -582,14 +649,18 @@ ApplicationWindow {
             Text { text:"Психолог"; color:root.muted; font.pixelSize:12 }
             ComboBox { id:bookingPsych; Layout.fillWidth:true
                 model:bookingDate.text===root.today ? api.bookingPsychologists : api.psychologists
-                textRole:"name"; valueRole:"id"; onCurrentValueChanged: root.updateBookingSlots() }
+                textRole:"name"; valueRole:"id"; enabled: root.bookingAssignedPsychId === 0 && !api.working
+                onModelChanged: Qt.callLater(() => {
+                    if (root.bookingAssignedPsychId) currentIndex = indexOfValue(root.bookingAssignedPsychId)
+                })
+                onCurrentValueChanged: root.updateBookingSlots() }
             Text { visible:root.bookingAssignedPsychId>0 && bookingDate.text===root.today && !api.psychologistBookable(root.bookingAssignedPsychId,bookingDate.text)
                    Layout.fillWidth:true; wrapMode:Text.WordWrap; color:"#a05b23"; font.pixelSize:12
                    text:"Закріплений за пацієнтом психолог не на зміні. Попросіть адміністратора переглянути призначення." }
             Text { text:"Кабінет"; color:root.muted; font.pixelSize:12 }
             ComboBox { id:bookingRoom; Layout.fillWidth:true; model:api.rooms; textRole:"name"; valueRole:"id"; onCurrentValueChanged: root.updateBookingSlots() }
-            Text { text:"Тип прийому"; color:root.muted; font.pixelSize:12 }
-            ComboBox { id:bookingKind; Layout.fillWidth:true; model:["Індивідуальна","Дитяча","Кризова"]; currentIndex:0 }
+            Text { text:"Тип прийому"; visible:!root.bookingOriginal.id; color:root.muted; font.pixelSize:12 }
+            ComboBox { id:bookingKind; Layout.fillWidth:true; model:["Індивідуальна","Дитяча","Кризова"]; currentIndex:0; visible:!root.bookingOriginal.id }
             RowLayout {
                 Layout.fillWidth: true
                 ColumnLayout {
@@ -600,11 +671,10 @@ ApplicationWindow {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Text { text: "Тривалість"; color: root.muted; font.pixelSize: 12 }
-                    ComboBox {
+                    SpinBox {
                         id: bookingDuration; Layout.fillWidth: true
-                        model: [{minutes:30,label:"30 хв"},{minutes:45,label:"45 хв"},{minutes:60,label:"60 хв"},{minutes:90,label:"90 хв"},{minutes:120,label:"120 хв"}]
-                        textRole: "label"; valueRole: "minutes"; currentIndex: 2
-                        onCurrentValueChanged: root.updateBookingSlots()
+                        from: 15; to: 240; value: 60; stepSize: 5; editable: true
+                        onValueChanged: root.updateBookingSlots()
                     }
                 }
             }
@@ -633,7 +703,7 @@ ApplicationWindow {
             Text {
                 visible: !!root.selectedSlot || !!api.error
                 Layout.fillWidth: true; wrapMode: Text.WordWrap; color: api.error ? "#8C3632" : root.ink
-                text: api.error || root.selectedSlot + "–" + api.endTime(root.selectedSlot, Number(bookingDuration.currentValue))
+                text: api.error || root.selectedSlot + "–" + api.endTime(root.selectedSlot, bookingDuration.value)
             }
             RowLayout {
                 Layout.fillWidth:true
@@ -642,10 +712,15 @@ ApplicationWindow {
                 SolviaButton {
                     primary:true; text:api.working ? "Записуємо…" : "Підтвердити запис"
                     enabled: !api.working && !api.loadingSlots && !slotDebounce.running && api.availableSlots.includes(root.selectedSlot)
-                    onClicked: api.book(root.bookingPatientId, Number(bookingPsych.currentValue),
-                        Number(bookingRoom.currentValue), bookingDate.text, root.selectedSlot,
-                        api.endTime(root.selectedSlot, Number(bookingDuration.currentValue)),
-                        ["individual","child","crisis"][bookingKind.currentIndex])
+                    onClicked: {
+                        const end = api.endTime(root.selectedSlot, bookingDuration.value)
+                        if (root.bookingOriginal.id) {
+                            api.moveBooking(root.bookingOriginal, Number(bookingRoom.currentValue), bookingDate.text, root.selectedSlot, end)
+                        } else {
+                            api.book(root.bookingPatientId, Number(bookingPsych.currentValue), Number(bookingRoom.currentValue),
+                                bookingDate.text, root.selectedSlot, end, ["individual","child","crisis"][bookingKind.currentIndex])
+                        }
+                    }
                 }
             }
         }
@@ -663,13 +738,17 @@ ApplicationWindow {
             ComboBox { id:patientCategory; Layout.fillWidth:true; model:["Військовий/військова","Ветеран/ветеранка","Партнер/партнерка","Дитина","Інше"] }
             Text { text:"Психолог"; color:root.muted; font.pixelSize:12 }
             ComboBox { id:patientPsy; Layout.fillWidth:true; model:api.psychologists; textRole:"name"; valueRole:"id" }
+            Text { Layout.fillWidth:true; wrapMode:Text.WordWrap; text:api.error; visible:!!api.error; color:"#8C3632" }
             RowLayout {
                 Layout.fillWidth:true
-                SolviaButton { text:"Скасувати"; onClicked:newPatientDialog.close() }
+                SolviaButton { text:"Скасувати"; enabled:!api.working; onClicked:newPatientDialog.close() }
                 Item { Layout.fillWidth:true }
-                SolviaButton { text:"Зберегти пацієнта"; primary:true
+                SolviaButton { text:"Зберегти"; enabled:!api.working
                     onClicked:api.registerPatient(patientName.text,patientPhone.text,patientDob.text,
-                                                   String(patientCategory.currentText),Number(patientPsy.currentValue)) }
+                                                   String(patientCategory.currentText),Number(patientPsy.currentValue),false) }
+                SolviaButton { text:"Зберегти й записати"; primary:true; enabled:!api.working
+                    onClicked:api.registerPatient(patientName.text,patientPhone.text,patientDob.text,
+                                                   String(patientCategory.currentText),Number(patientPsy.currentValue),true) }
             }
         }
     }

@@ -78,7 +78,13 @@ public:
     Q_INVOKABLE bool localDatabaseTools() const;
     Q_INVOKABLE void databaseBackup();
     Q_INVOKABLE void databaseRestore(const QUrl &file, const QString &confirmation);
-    Q_INVOKABLE void loadSlots(const QString &date, int psychologistId, int roomId, int duration);
+    Q_INVOKABLE void loadSlots(const QString &date, int psychologistId, int roomId, int duration, int excludedId);
+    Q_INVOKABLE void setCalendarDate(const QString &date);
+    Q_INVOKABLE int durationMinutes(const QString &start, const QString &end) const;
+    Q_INVOKABLE void moveBooking(const QVariantMap &appointment, int roomId,
+                                 const QString &date, const QString &start, const QString &end);
+    Q_INVOKABLE void cancelBooking(int id, const QString &reason);
+    Q_INVOKABLE void exportProfile(const QUrl &file, bool localOnly);
     Q_INVOKABLE QString endTime(const QString &start, int duration) const;
     Q_INVOKABLE void loadDischarges();
     Q_INVOKABLE void reviewDischarge(int id, int revision, bool approve, const QString &reason);
@@ -98,13 +104,14 @@ public:
                           const QString &kind);
     Q_INVOKABLE void registerPatient(const QString &name, const QString &phone,
                                      const QString &dob, const QString &category,
-                                     int psychologistId);
+                                     int psychologistId, bool bookAfter);
 signals:
     void stateChanged();
     void dataChanged();
     void slotsChanged();
     void bookingOptionsChanged();
     void operationCompleted(const QString &operation);
+    void patientRegistered(const QVariantMap &patient, bool bookAfter);
 private:
     using Callback = std::function<void(const QJsonValue &)>;
     void request(const QByteArray &method, const QString &path, const QJsonObject &body,
@@ -115,6 +122,7 @@ private:
     void clearSession();
     void getOverview(int generation);
     void connectServer(const QString &value, const QString &expectedId);
+    void saveBooking(QJsonObject booking, int id = 0);
     void runDatabaseTool(const QStringList &arguments);
     void getSystem(int generation);
     void getVisits(int generation);
@@ -135,7 +143,8 @@ private:
     QVariantMap adminDetails_;
     QString origin_, pinnedId_, token_, role_, name_, error_, notice_, lastRefresh_;
     bool connected_ = false, working_ = false, rosterSupported_ = false, rosterConfigured_ = false;
-    QString rosterDate_;
+    QString rosterDate_, calendarDate_;
+    int calendarGeneration_ = 0;
     QVariantMap shift_, overview_, system_;
     QVariantList visits_, patients_, appointments_, roster_, psychologists_, rooms_;
     int sessionGeneration_ = 0, refreshGeneration_ = 0, patientGeneration_ = 0;
