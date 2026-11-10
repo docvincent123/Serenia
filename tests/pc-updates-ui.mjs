@@ -43,6 +43,7 @@ try {
   const base=`http://127.0.0.1:${server.address().port}`;
   await page.addInitScript(()=>localStorage.setItem('solvia_api',location.origin));
   await page.goto(base);await page.getByPlaceholder('Ваш логін').fill('admin');await page.getByPlaceholder('Введіть пароль').fill('test-password');await page.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).click();
+  await page.getByRole('button',{name:'Вийти',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Employee workspace must not expose server settings');
   assert.equal(await page.getByRole('button',{name:'Завантажити оновлення',exact:true}).count(),0,'Employee workspace cannot install updates');
   await page.goto(base+'/?mode=server');

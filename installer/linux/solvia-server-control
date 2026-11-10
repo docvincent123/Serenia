@@ -20,7 +20,7 @@ if (( EUID != 0 )); then admin=(sudo -- /usr/local/sbin/solvia-admin); fi
 run_action() {
   local action=$1 rc=0
   if [[ ! -x /usr/local/sbin/solvia-admin ]]; then
-    echo 'На цьому ПК не встановлено сервер SOLVIA.' >&2; return 1
+    echo 'На цьому ПК не встановлено сервер Lemvori Care.' >&2; return 1
   fi
   if [[ $action == logs ]]; then
     echo 'Ctrl+C завершує перегляд журналу; сервер продовжує працювати.'
@@ -41,7 +41,7 @@ case ${1:-menu} in
   *) echo 'Використання: solvia-server-control [start|stop|restart|status|health|logs|update]' >&2; exit 2;;
 esac
 while true; do
-  printf '\nSOLVIA SERVER\n\n1  Запустити сервер\n2  Перезапустити сервер\n3  Зупинити сервер\n4  Стан служб\n5  Перевірити API / HTTPS\n6  Журнал наживо (Ctrl+C — назад)\n7  Завершити сеанси за логіном\n0  Закрити меню\n\n'
+  printf '\nLemvori Care SERVER\n\n1  Запустити сервер\n2  Перезапустити сервер\n3  Зупинити сервер\n4  Стан служб\n5  Перевірити API / HTTPS\n6  Журнал наживо (Ctrl+C — назад)\n7  Завершити сеанси за логіном\n0  Закрити меню\n\n'
   read -r -p 'Оберіть дію: ' choice || exit 0
   case $choice in
     1) run_action start;;

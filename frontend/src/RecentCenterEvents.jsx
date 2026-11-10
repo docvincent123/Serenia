@@ -17,7 +17,7 @@ export default function RecentCenterEvents({api}) {
         const result=await apiRef.current('GET','/api/workflow-events');
         if(!alive)return;
         if(!Array.isArray(result?.events)) {
-          setStatus('Оновіть сервер SOLVIA для перегляду подій.');
+          setStatus('Оновіть сервер Lemvori Care для перегляду подій.');
           setEvents([]);
           return;
         }

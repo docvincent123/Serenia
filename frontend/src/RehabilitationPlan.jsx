@@ -122,7 +122,7 @@ export default function RehabilitationPlan({api,patientId,patientName,patientNum
     </fieldset></form>}
    </article>)}</div>}
   <div className="rehab-print-host" aria-hidden="true"><div ref={printRef} className="discharge-print">
-   <div className="discharge-header"><div className="discharge-center-copy"><strong>SOLVIA · Реабілітаційний план</strong><p>План цілей, історія та поточні результати — для перевірки спеціалістом</p></div></div>
+   <div className="discharge-header"><div className="discharge-center-copy"><strong>Lemvori Care · Реабілітаційний план</strong><p>План цілей, історія та поточні результати — для перевірки спеціалістом</p></div></div>
    <div className="discharge-title"><h1>Індивідуальний план реабілітації</h1><p>{patientName} · №{patientNumber||'—'}</p></div>
    {goals.map(g=><section key={g.id}><h3>{g.title} · Курс №{g.course_no}</h3><p>Відповідальний: {g.owner_name}. Статус: {stateNames[g.state]||g.state}. Дата перегляду: {dateOnly(g.target_date)}.</p><p>Початковий стан: {g.baseline||'—'}. Очікуваний результат: {g.target_value||'—'}. Поточний: {g.progress_value||'—'}.</p></section>)}
    <div className="signature-grid"><div className="signature-block"><strong>Спеціаліст</strong><div className="signature-line">Підпис, ПІБ, дата</div></div><div className="signature-block"><strong>Керівник</strong><div className="signature-line">Підпис, ПІБ, дата</div></div></div>

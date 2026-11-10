@@ -15,7 +15,7 @@ export default function usePatientDirectory(api,{search,page,status,pageSize=25,
     const params=new URLSearchParams({q:search.trim(),page:String(page),page_size:String(pageSize),status});
     if(familyId!==null)params.set('family_id',String(familyId));
     const data=await apiRef.current('GET',`/api/patient-directory?${params}`);
-    if(!Array.isArray(data?.items)||!Number.isInteger(data.total))throw new Error('Не вдалося прочитати реєстр. Оновіть сервер SOLVIA.');
+    if(!Array.isArray(data?.items)||!Number.isInteger(data.total))throw new Error('Не вдалося прочитати реєстр. Оновіть сервер Lemvori Care.');
     if(sequence.current===request)setResult({...data,key,loading:false,error:''});
    }catch(e){if(sequence.current===request)setResult({key,items:[],total:0,loading:false,error:e.message});}
   },search.trim()?250:0);

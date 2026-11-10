@@ -162,8 +162,8 @@ CREATE INDEX IF NOT EXISTS idx_shift_report_date ON shift_reports(shift_date);
 
 CREATE TABLE IF NOT EXISTS center_settings(
   id SMALLINT PRIMARY KEY CHECK(id=1),
-  center_name TEXT NOT NULL DEFAULT 'SOLVIA Center',
-  short_name TEXT NOT NULL DEFAULT 'SOLVIA',
+  center_name TEXT NOT NULL DEFAULT 'Lemvori Care',
+  short_name TEXT NOT NULL DEFAULT 'Lemvori Care',
   address TEXT NOT NULL DEFAULT '',
   phone TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
@@ -184,7 +184,10 @@ CREATE TABLE IF NOT EXISTS center_settings(
   vps_name TEXT NOT NULL DEFAULT '',
   updated TEXT NOT NULL DEFAULT ''
 );
-INSERT INTO center_settings(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
+INSERT INTO center_settings(id,center_name,short_name) VALUES(1,'Lemvori Care','Lemvori Care')
+ON CONFLICT(id) DO NOTHING;
+UPDATE center_settings SET center_name='Lemvori Care',short_name='Lemvori Care'
+WHERE id=1 AND center_name='SOLVIA Center' AND short_name='SOLVIA' AND updated='';
 
 CREATE TABLE IF NOT EXISTS admin_notes(
   id BIGSERIAL PRIMARY KEY,

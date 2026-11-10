@@ -69,13 +69,13 @@ object ShiftNotifications {
         if(settings.getBoolean("shift_notification", true) && !LiveShiftService.running) {
             val text = "Активних пацієнтів: $count" + if(next.isNotBlank()) " · прийом ${next.substring(11,16)}" else " · усі прийоми завершені"
             manager(c).notify(SHIFT_ID, Notification.Builder(c, SHIFT_CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
-                .setContentTitle("SOLVIA · активна зміна $today").setContentText(text).setContentIntent(open(c))
+                .setContentTitle("Lemvori Care · активна зміна $today").setContentText(text).setContentIntent(open(c))
                 .setOngoing(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
                 .setTimeoutAfter((expires - System.currentTimeMillis()).coerceAtLeast(1)).build())
         } else manager(c).cancel(SHIFT_ID)
         if(same && added.isNotEmpty() && settings.getBoolean("new_visit_notifications", true)) {
             manager(c).notify(NEW_ID, Notification.Builder(c, NEW_CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
-                .setContentTitle("Нова консультація").setContentText("Додано прийомів: ${added.size}. Перевірте активний список у SOLVIA.")
+                .setContentTitle("Нова консультація").setContentText("Додано прийомів: ${added.size}. Перевірте активний список у Lemvori Care.")
                 .setContentIntent(open(c)).setAutoCancel(true).setVisibility(Notification.VISIBILITY_PRIVATE).setTimeoutAfter((expires-System.currentTimeMillis()).coerceAtLeast(1)).build())
         }
     }
@@ -87,7 +87,7 @@ object ShiftNotifications {
         if(!AppointmentReminders.allowed(c)) return
         channels(c)
         manager(c).notify("test", NEW_ID, Notification.Builder(c, NEW_CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
-            .setContentTitle("SOLVIA · тестове повідомлення").setContentText("Оповіщення про нову консультацію працюють.")
+            .setContentTitle("Lemvori Care · тестове повідомлення").setContentText("Оповіщення про нову консультацію працюють.")
             .setContentIntent(open(c)).setAutoCancel(true).setTimeoutAfter(15000).build())
     }
 }

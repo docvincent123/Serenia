@@ -140,7 +140,7 @@ class PatientWorkspace(
                         .setMessage("Посилання для пацієнта:\n" + server + response.optString("link"))
                         .setNeutralButton("Скопіювати посилання") { _, _ ->
                             val clipboard = activity.getSystemService(Activity.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Анкета SOLVIA", server + response.optString("link")))
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Анкета Lemvori Care", server + response.optString("link")))
                             open(id)
                         }
                         .setPositiveButton("Готово") { _, _ -> open(id) }.show()
@@ -412,7 +412,7 @@ class PatientWorkspace(
     private fun document(title: String, sections: List<DocumentSection>, signature: String = "", snapshot: JSONObject = JSONObject()) {
         api.call("GET", "/api/settings/center", success = { value ->
             val center = value as JSONObject
-            val name = snapshot.optString("center_name_snapshot").ifBlank { center.optString("center_name", "SOLVIA") }
+            val name = snapshot.optString("center_name_snapshot").ifBlank { center.optString("center_name", "Lemvori Care") }
             val identity = listOf(DocumentSection("Пацієнт", snapshot.optString("patient_name").ifBlank { patient.optString("name") }),
                 DocumentSection("Номер картки", snapshot.optString("patient_no_snapshot").ifBlank { patient.optString("patient_no") }),
                 DocumentSection("Дата народження", snapshot.optString("patient_dob").ifBlank { patient.optString("dob") }))

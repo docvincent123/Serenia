@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""SOLVIA Linux client: GTK3 window with WebKitGTK 4.1, no Chrome process."""
+"""Lemvori Care Linux client: GTK3 window with WebKitGTK 4.1, no Chrome process."""
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit, unquote, urlencode
@@ -55,7 +55,7 @@ def run(on_ready=None):
     config = Path(GLib.get_user_config_dir()) / 'solvia' / 'server-url'
     ui_root = next((root for root in (Path(__file__).resolve().parent / 'ui', Path('/usr/local/lib/solvia/ui'), Path('/opt/solvia/ui')) if (root / 'index.html').is_file()), None)
     if ui_root is None:
-        print('Не знайдено локальний інтерфейс SOLVIA. Повторно встановіть повний пакет клієнта.', file=sys.stderr)
+        print('Не знайдено локальний інтерфейс Lemvori Care. Повторно встановіть повний пакет клієнта.', file=sys.stderr)
         return 1
 
     class WindowController:
@@ -132,7 +132,7 @@ def run(on_ready=None):
                         stream = Gio.MemoryInputStream.new_from_bytes(GLib.Bytes.new(data))
                         request.finish(stream, len(data), mime)
                     except (OSError, ValueError):
-                        request.finish_error(GLib.Error('Файл локального інтерфейсу SOLVIA недоступний.'))
+                        request.finish_error(GLib.Error('Файл локального інтерфейсу Lemvori Care недоступний.'))
                 context.register_uri_scheme('solvia', asset)
                 # Local LAN connections must not be sent to a desktop HTTP proxy.
                 manager.set_network_proxy_settings(WebKit2.NetworkProxyMode.NO_PROXY, None)
@@ -150,7 +150,7 @@ def run(on_ready=None):
             self.view.connect('load-failed', self.failed)
             self.view.connect('load-failed-with-tls-errors', self.tls_failed)
             self.view.connect('web-process-terminated', lambda *_: self.show_error(
-                'Робоче вікно SOLVIA перервало роботу. Натисніть «Повторити підключення».'))
+                'Робоче вікно Lemvori Care перервало роботу. Натисніть «Повторити підключення».'))
             self.view.connect('decide-policy', self.policy)
             self.view.connect('permission-request', lambda _, request: (request.deny(), True)[1])
             self.view.connect('close', lambda *_: self.window.destroy())
@@ -326,7 +326,7 @@ def run(on_ready=None):
         def failed(self, view, event, uri, error):
             if error.matches(WebKit2.network_error_quark(), WebKit2.NetworkError.CANCELLED):
                 return False
-            self.show_error('Не вдалося відкрити локальний інтерфейс SOLVIA. Повторно встановіть повний пакет клієнта.')
+            self.show_error('Не вдалося відкрити локальний інтерфейс Lemvori Care. Повторно встановіть повний пакет клієнта.')
             return True
 
         def tls_failed(self, view, uri, certificate, errors):
@@ -358,7 +358,7 @@ def run(on_ready=None):
             return True
 
         def connection(self):
-            dialog = Gtk.Dialog(title='Сервер SOLVIA', transient_for=self.window, modal=True)
+            dialog = Gtk.Dialog(title='Сервер Lemvori Care', transient_for=self.window, modal=True)
             dialog.add_buttons('Скасувати', Gtk.ResponseType.CANCEL, 'Підключитися', Gtk.ResponseType.OK)
             box = dialog.get_content_area()
             box.set_spacing(12)
@@ -400,7 +400,7 @@ def run(on_ready=None):
             if download.get_web_view() != self.view:
                 return
             def destination(item, suggested):
-                dialog = Gtk.FileChooserDialog(title='Зберегти файл SOLVIA', parent=self.window,
+                dialog = Gtk.FileChooserDialog(title='Зберегти файл Lemvori Care', parent=self.window,
                                               action=Gtk.FileChooserAction.SAVE)
                 dialog.add_buttons('Скасувати', Gtk.ResponseType.CANCEL, 'Зберегти', Gtk.ResponseType.OK)
                 dialog.set_do_overwrite_confirmation(True)

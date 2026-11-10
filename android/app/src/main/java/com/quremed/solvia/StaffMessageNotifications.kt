@@ -19,7 +19,7 @@ object StaffMessageNotifications {
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Повідомлення команди", NotificationManager.IMPORTANCE_DEFAULT))
         val intent = PendingIntent.getActivity(context, ID, Intent(context, MainActivity::class.java).putExtra("staff_messages", true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
-            .setContentTitle("SOLVIA · Повідомлення команди").setContentText("Непрочитаних повідомлень: $count")
+            .setContentTitle("Lemvori Care · Повідомлення команди").setContentText("Непрочитаних повідомлень: $count")
             .setContentIntent(intent).setAutoCancel(true).setOnlyAlertOnce(!fresh).setVisibility(Notification.VISIBILITY_SECRET).build()
         runCatching { manager.notify(ID, notification); store.saveCache("/local/staff-notification",JSONObject().put("newest",maxOf(previous,newest))) }
     }

@@ -60,7 +60,10 @@ try {
     else if(path === '/api/shift-readiness') data=readiness;
     else if(path === '/api/shift-reports') { if(method === 'POST') { reportCalls++; const body=route.request().postDataJSON(); assert.equal(body.shift_date,'2026-10-02','Report must use active shift date, not device calendar date'); data={id:1,consultations_count:3}; } }
     else if (path === '/api/mobile-update') data = { available:false };
-    else if (path === '/api/mobile-config') data = { format:'quremed.solvia.mobile',version:2,server_id:'a'.repeat(64),api_url:'https://solvia.example.test',https_url:'https://solvia.example.test',preferred:'https' };
+    else if (path === '/api/mobile-config') {
+      const endpoint = url.searchParams.has('lan') ? 'https://192.168.1.105:8443' : 'https://solvia.example.test';
+      data = { format:'quremed.solvia.mobile',version:2,server_id:'a'.repeat(64),api_url:endpoint,https_url:endpoint,preferred:'https' };
+    }
     else if (path === '/api/settings/center') data = { center_name:'Тестовий центр', connection_mode:'local' };
     else if (path === '/api/center-identity') data = { name:'Тестовий центр',city:'Львів',server_id:'a'.repeat(64) };
     else if (path === '/api/settings/workflow') data = { opening_time:'09:00',closing_time:'18:00',working_days:'1234567',slot_step_minutes:60,default_duration_minutes:60,session_hours:8 };
@@ -211,11 +214,18 @@ try {
   const configDownload = page.waitForEvent('download');
   await page.getByRole('button',{name:'Файл для Android / ПК',exact:true}).click();
   const downloaded = await configDownload;
-  assert.equal(downloaded.suggestedFilename(),'SOLVIA-Mobile.solvia');
+  assert.equal(downloaded.suggestedFilename(),'Lemvori-Care-Mobile.solvia');
   const config = JSON.parse(await readFile(await downloaded.path(),'utf8'));
   assert.equal(config.api_url,'https://solvia.example.test');
   assert.equal(config.server_id,'a'.repeat(64));
   assert.equal(config.format,'quremed.solvia.mobile');
+  const lanDownload = page.waitForEvent('download');
+  await page.getByRole('button',{name:'Файл для Wi-Fi центру',exact:true}).click();
+  const lanFile = await lanDownload;
+  assert.equal(lanFile.suggestedFilename(),'Lemvori-Care-LAN.solvia');
+  const lanConfig = JSON.parse(await readFile(await lanFile.path(),'utf8'));
+  assert.equal(lanConfig.https_url,'https://192.168.1.105:8443');
+  assert.equal(lanConfig.server_id,config.server_id);
   // Settings remain accessible even with the shift closed.
   open = false; await page.goto(base); await profileSettings.click(); await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
   open = true; await page.reload();

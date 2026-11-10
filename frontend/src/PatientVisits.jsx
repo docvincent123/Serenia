@@ -19,7 +19,7 @@ export default function PatientVisits({api,patientId,canBook,onBook,refreshVersi
   let alive=true;
   apiRef.current('GET',`/api/patients/${patientId}/appointments?period=${period}&page=${page}`)
    .then(data=>{
-    if(!Array.isArray(data?.items)||!Number.isInteger(data.total))throw new Error('Не вдалося прочитати прийоми. Оновіть сервер SOLVIA.');
+    if(!Array.isArray(data?.items)||!Number.isInteger(data.total))throw new Error('Не вдалося прочитати прийоми. Оновіть сервер Lemvori Care.');
     if(alive)setResult({key,...data});
    }).catch(e=>{if(alive)setResult({key,error:e.message});});
   return()=>{alive=false;};

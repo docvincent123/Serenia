@@ -9,15 +9,15 @@ ApplicationWindow {
     height: 890
     minimumWidth: 920
     minimumHeight: 640
-    title: "SOLVIA · LemvoriLab"
-    color: "#f5f5f2"
+    title: "Lemvori Care · LemvoriLab"
+    color: "#DEE2E2"
     property string page: "Головна"
     property int bookingPatientId: 0
     property int bookingAssignedPsychId: 0
-    readonly property color ink: "#23282b"
-    readonly property color muted: "#758080"
-    readonly property color gold: "#b78b19"
-    readonly property color line: "#e5e6e1"
+    readonly property color ink: "#11212D"
+    readonly property color muted: "#4A5C6A"
+    readonly property color accent: "#253745"
+    readonly property color line: "#9BA8AB"
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
 
     function showPage(next) {
@@ -58,9 +58,9 @@ ApplicationWindow {
             elide: Text.ElideRight
         }
         background: Rectangle {
-            radius: 11
-            color: !btn.enabled ? "#e6e6e3" : btn.down ? (btn.primary ? "#765917" : "#e8e5dc")
-                         : btn.primary ? root.ink : btn.hovered ? "#fff8e8" : btn.subtle ? "transparent" : "#ffffff"
+            radius: height / 2
+            color: !btn.enabled ? "#DEE2E2" : btn.down ? (btn.primary ? "#253745" : "#9BA8AB")
+                         : btn.primary ? root.ink : btn.hovered ? "#CCD0CF" : btn.subtle ? "transparent" : "#ffffff"
             border.color: btn.primary || btn.subtle ? "transparent" : root.line
             border.width: 1
         }
@@ -109,7 +109,7 @@ ApplicationWindow {
     Rectangle {
         anchors.fill: parent
         visible: !api.authenticated
-        color: "#f5f5f2"
+        color: "#DEE2E2"
         RowLayout {
             anchors.centerIn: parent
             width: Math.min(910, parent.width - 60)
@@ -118,20 +118,20 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 350
-                color: "#252b2b"
+                color: "#253745"
                 radius: 20
                 Column {
                     anchors.fill: parent
                     anchors.margins: 38
                     spacing: 24
                     Image { source: "qrc:/brand.svg"; width: 72; height: 72; fillMode: Image.PreserveAspectFit }
-                    Text { text: "SOLVIA"; font.pixelSize: 38; font.bold: true; color: "#fff" }
-                    Text { text: "by LemvoriLab"; font.pixelSize: 15; color: "#c2c7c2" }
+                    Text { text: "Lemvori Care"; font.pixelSize: 38; font.bold: true; color: "#fff" }
+                    Text { text: "by LemvoriLab"; font.pixelSize: 15; color: "#CCD0CF" }
                     Text { text: "Робочий простір\nреабілітаційного центру";
-                           color: "#e9e9e0"; font.pixelSize: 20; lineHeight: 1.3; wrapMode: Text.WordWrap }
+                           color: "#DEE2E2"; font.pixelSize: 20; lineHeight: 1.3; wrapMode: Text.WordWrap }
                     Item { height: 24; width: 1 }
                     Text { text: "Нативна Linux-програма\nЗахищене підключення до сервера центру";
-                           color: "#c2c7c2"; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4 }
+                           color: "#CCD0CF"; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4 }
                 }
             }
             Rectangle {
@@ -141,7 +141,7 @@ ApplicationWindow {
                 color: "#fff"
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 36; spacing: 12
-                    Text { text: "Вхід до SOLVIA"; font.pixelSize: 26; font.bold: true; color: root.ink }
+                    Text { text: "Вхід до Lemvori Care"; font.pixelSize: 26; font.bold: true; color: root.ink }
                     Text { text: "Адміністратор · Реєстратура · Керівник"; color: root.muted; font.pixelSize: 12 }
                     Item { Layout.preferredHeight: 8 }
                     Text { text: "Сервер центру"; font.pixelSize: 12; color: root.muted }
@@ -182,11 +182,10 @@ ApplicationWindow {
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 26; anchors.rightMargin: 26; spacing: 15
                 Image { source: "qrc:/brand.svg"; Layout.preferredWidth: 38; Layout.preferredHeight: 38; fillMode: Image.PreserveAspectFit }
-                Text { text: "SOLVIA"; font.pixelSize: 22; font.bold: true; color: root.ink }
+                Text { text: "Lemvori Care"; font.pixelSize: 22; font.bold: true; color: root.ink }
                 Rectangle { width: 1; height: 25; color: root.line }
                 Text { text: "Робочий простір центру"; color: root.muted; font.pixelSize: 13 }
                 Item { Layout.fillWidth: true }
-                SolviaButton { text: "Оновити ↻"; onClicked: api.refresh() }
                 Text { text: api.lastRefresh ? "Оновлено о " + api.lastRefresh : "Синхронізація…";
                        font.pixelSize: 11; color: root.muted }
                 Rectangle { width: 1; height: 27; color: root.line }
@@ -196,7 +195,7 @@ ApplicationWindow {
         }
         Rectangle { Layout.fillWidth:true; Layout.preferredHeight:1; color:root.line }
         Rectangle {
-            Layout.fillWidth:true; Layout.preferredHeight:66; color:"#fffdf7"
+            Layout.fillWidth:true; Layout.preferredHeight:66; color:"#CCD0CF"
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin:28; anchors.rightMargin:28; spacing:15
                 Rectangle { width:7; height:7; radius:4; color:api.shift.open ? "#2e865b" : "#c7a045" }
@@ -233,7 +232,7 @@ ApplicationWindow {
                         }
                     }
                     Item { Layout.fillHeight: true }
-                    Text { text: "SOLVIA · LemvoriLab"; color:root.muted; font.pixelSize:11; Layout.leftMargin:10 }
+                    Text { text: "Lemvori Care · LemvoriLab"; color:root.muted; font.pixelSize:11; Layout.leftMargin:10 }
                     Item { Layout.preferredHeight:10 }
                 }
             }
@@ -290,7 +289,7 @@ ApplicationWindow {
                                     model: api.overview.next || []
                                     delegate: Rectangle {
                                         required property var modelData
-                                        Layout.fillWidth:true; implicitHeight:54; radius:8; color:"#f8f8f5"
+                                        Layout.fillWidth:true; implicitHeight:54; radius:8; color:"#DEE2E2"
                                         RowLayout { anchors.fill:parent; anchors.margins:12
                                             Text { text:String(modelData.start||"").slice(11,16); font.bold:true; color:root.ink }
                                             Text { text:modelData.patient||""; Layout.fillWidth:true; color:root.ink }
@@ -316,7 +315,7 @@ ApplicationWindow {
                                 panelContent: [
                                     RowLayout {
                                         Layout.fillWidth:true; spacing:14
-                                        Text { text:String(modelData.start||"").slice(11,16); color:root.gold; font.bold:true; font.pixelSize:17 }
+                                        Text { text:String(modelData.start||"").slice(11,16); color:root.accent; font.bold:true; font.pixelSize:17 }
                                         ColumnLayout {
                                             Layout.fillWidth:true; spacing:4
                                             Text { text:modelData.patient||"Пацієнт"; color:root.ink; font.pixelSize:15; font.bold:true }
@@ -434,7 +433,7 @@ ApplicationWindow {
                                     RowLayout {
                                         Layout.fillWidth:true
                                         Text { text:String(modelData.start||"").slice(11,16)+" — "+String(modelData.end||"").slice(11,16);
-                                               font.bold:true; color:root.gold }
+                                               font.bold:true; color:root.accent }
                                         ColumnLayout {
                                             Layout.fillWidth:true
                                             Text { text:modelData.psychologist||""; color:root.ink; font.bold:true }
@@ -454,7 +453,7 @@ ApplicationWindow {
                         Panel {
                             Layout.fillWidth:true
                             panelContent: [
-                                Text { text:"Сервер SOLVIA"; font.pixelSize:18; color:root.ink; font.bold:true },
+                                Text { text:"Сервер Lemvori Care"; font.pixelSize:18; color:root.ink; font.bold:true },
                                 Text { text:api.serverUrl; color:root.muted; font.pixelSize:13 },
                                 Text { text:"Стан HTTPS: "+(api.connected?"підключено":"немає з'єднання"); color:root.ink },
                                 Text { text: "PostgreSQL: " + (api.system.database ? (api.system.database.name || "—") : "—");

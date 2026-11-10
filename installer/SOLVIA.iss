@@ -1,4 +1,4 @@
-#define MyAppName "SOLVIA by LemvoriLab"
+#define MyAppName "Lemvori Care by LemvoriLab"
 #define MyAppVersion "3.1.1"
 #define MyAppPublisher "LemvoriLab"
 #define MyAppExeName "Solvia.exe"
@@ -9,7 +9,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\LemvoriLab\SOLVIA
-DefaultGroupName=SOLVIA
+DefaultGroupName=Lemvori Care
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -29,9 +29,9 @@ Name: "console"; Description: "Лише Server Console — керування н
 Name: "full"; Description: "Сервер + робоче місце"; Flags: iscustom
 
 [Components]
-Name: "client"; Description: "SOLVIA Center — робоча програма"; Types: client full
-Name: "server"; Description: "SOLVIA Server — API та база даних"; Types: server full
-Name: "console"; Description: "SOLVIA Server Console — оновлення та налаштування"; Types: console server full
+Name: "client"; Description: "Lemvori Care — робоча програма"; Types: client full
+Name: "server"; Description: "Lemvori Care Server — API та база даних"; Types: server full
+Name: "console"; Description: "Lemvori Care Server Console — оновлення та налаштування"; Types: console server full
 
 [Files]
 Source: "Trust-Server-Certificate.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; Components: client console
@@ -49,17 +49,17 @@ Source: "..\out\SOLVIA\licenses\*"; DestDir: "{app}\licenses"; Flags: ignorevers
 Source: "..\out\SOLVIA\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\SOLVIA Center"; Filename: "{app}\Solvia.exe"; Components: client
-Name: "{autodesktop}\SOLVIA Center"; Filename: "{app}\Solvia.exe"; Components: client
-Name: "{autoprograms}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: console server
-Name: "{autodesktop}\SOLVIA Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: console server
-Name: "{autoprograms}\Налаштувати SOLVIA Server"; Filename: "{app}\installer\Configure-SOLVIA.cmd"; Components: server
+Name: "{autoprograms}\Lemvori Care"; Filename: "{app}\Solvia.exe"; Components: client
+Name: "{autodesktop}\Lemvori Care"; Filename: "{app}\Solvia.exe"; Components: client
+Name: "{autoprograms}\Lemvori Care Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: console server
+Name: "{autodesktop}\Lemvori Care Server Console"; Filename: "{app}\SolviaServerConsole.exe"; Components: console server
+Name: "{autoprograms}\Налаштувати Lemvori Care Server"; Filename: "{app}\installer\Configure-SOLVIA.cmd"; Components: server
 
-Name: "{autoprograms}\Довірити сертифікат сервера SOLVIA"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Trust-Server-Certificate.ps1"""; Components: client console
+Name: "{autoprograms}\Довірити сертифікат сервера Lemvori Care"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Trust-Server-Certificate.ps1"""; Components: client console
 
 [Run]
-Filename: "{app}\Solvia.exe"; Description: "Запустити SOLVIA Center"; Flags: nowait postinstall skipifsilent; Components: client; Check: IsServerConfigured
-Filename: "{app}\SolviaServerConsole.exe"; Description: "Відкрити SOLVIA Server Console"; Flags: nowait postinstall skipifsilent; Components: console server; Check: IsServerConfigured
+Filename: "{app}\Solvia.exe"; Description: "Запустити Lemvori Care"; Flags: nowait postinstall skipifsilent; Components: client; Check: IsServerConfigured
+Filename: "{app}\SolviaServerConsole.exe"; Description: "Відкрити Lemvori Care Server Console"; Flags: nowait postinstall skipifsilent; Components: console server; Check: IsServerConfigured
 
 [UninstallRun]
 Filename: "schtasks.exe"; Parameters: "/Delete /TN ""SOLVIA Local Server"" /F"; Flags: runhidden; Components: server
@@ -102,14 +102,14 @@ begin
   Configured := False;
   ConnectionPage := CreateInputQueryPage(wpSelectComponents, 'Підключення до Linux-сервера',
     'Адреса сервера центру',
-    'Укажіть HTTPS-адресу, яку показав Linux-інсталятор, наприклад https://192.168.1.105:8443. Поле можна залишити порожнім і налаштувати при вході. Після встановлення імпортуйте сертифікат сервера через ярлик «Довірити сертифікат сервера SOLVIA».');
+    'Укажіть HTTPS-адресу, яку показав Linux-інсталятор, наприклад https://192.168.1.105:8443. Поле можна залишити порожнім і налаштувати при вході. Після встановлення імпортуйте сертифікат сервера через ярлик «Довірити сертифікат сервера Lemvori Care».');
   ConnectionPage.Add('Адреса HTTPS:', False);
-  AccountPage := CreateInputQueryPage(ConnectionPage.ID, 'SOLVIA 2.4 — налаштування центру',
+  AccountPage := CreateInputQueryPage(ConnectionPage.ID, 'Lemvori Care — налаштування центру',
     'Обліковий запис адміністратора',
-    'Для першого встановлення створіть адміністратора. При оновленні наявні облікові записи зберігаються. Пароль postgres потрібен лише для підключення до вже встановленого PostgreSQL без конфігурації SOLVIA.');
+    'Для першого встановлення створіть адміністратора. При оновленні наявні облікові записи зберігаються. Пароль postgres потрібен лише для підключення до вже встановленого PostgreSQL без конфігурації Lemvori Care.');
   AccountPage.Add('Логін адміністратора (латиниця, цифри, . _ -):', False);
-  AccountPage.Add('Пароль SOLVIA (12–128 символів):', True);
-  AccountPage.Add('Повторіть пароль SOLVIA:', True);
+  AccountPage.Add('Пароль Lemvori Care (12–128 символів):', True);
+  AccountPage.Add('Повторіть пароль Lemvori Care:', True);
   AccountPage.Add('Пароль наявного PostgreSQL (користувач postgres):', True);
 end;
 
@@ -142,7 +142,7 @@ begin
       Exit;
     end;
     if IsServerSelected and ExistingPostgreSQL and (Length(AccountPage.Values[3]) = 0) then begin
-      MsgBox('На цьому ПК уже встановлено PostgreSQL 17. Введіть пароль користувача postgres у останньому полі. Це пароль PostgreSQL, а не пароль адміністратора SOLVIA.', mbError, MB_OK);
+      MsgBox('На цьому ПК уже встановлено PostgreSQL 17. Введіть пароль користувача postgres у останньому полі. Це пароль PostgreSQL, а не пароль адміністратора Lemvori Care.', mbError, MB_OK);
       Result := False;
       Exit;
     end;
@@ -163,7 +163,7 @@ begin
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\Stop-Server.ps1') + '" -InstallDir "' + ExpandConstant('{app}') + '"',
       '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
-      RaiseException('Cannot stop the previous SOLVIA server. Restart Windows and retry setup.');
+      RaiseException('Cannot stop the previous Lemvori Care server. Restart Windows and retry setup.');
     if ExitCode <> 0 then
       RaiseException('Previous SOLVIA server did not stop. Restart Windows and retry setup.');
     Exit;
@@ -183,7 +183,7 @@ begin
   InputDir := ExpandConstant('{tmp}\solvia-private');
   InputPath := InputDir + '\setup-input.txt';
   LogPath := ExpandConstant('{commonappdata}\QureMed\SOLVIA\install.log');
-  Progress := CreateOutputMarqueeProgressPage('Налаштування SOLVIA 2.4', 'Встановлення PostgreSQL та запуск сервера можуть тривати кілька хвилин.');
+  Progress := CreateOutputMarqueeProgressPage('Налаштування Lemvori Care', 'Встановлення PostgreSQL та запуск сервера можуть тривати кілька хвилин.');
   repeat
     Retry := False;
     Progress.Show;
@@ -208,13 +208,13 @@ begin
       Progress.Hide;
     end;
     if not Configured and not WizardSilent then
-      Retry := MsgBox('Налаштування не завершено. SOLVIA не буде запущено.' + #13#10 + 'Журнал: ' + LogPath + #13#10 + 'Повторити спробу? Пізніше можна запустити «Налаштувати SOLVIA» від імені адміністратора.', mbError, MB_RETRYCANCEL) = IDRETRY;
+      Retry := MsgBox('Налаштування не завершено. Lemvori Care не буде запущено.' + #13#10 + 'Журнал: ' + LogPath + #13#10 + 'Повторити спробу? Пізніше можна запустити «Налаштувати Lemvori Care Server» від імені адміністратора.', mbError, MB_RETRYCANCEL) = IDRETRY;
   until not Retry;
   AccountPage.Values[1] := '';
   AccountPage.Values[2] := '';
   AccountPage.Values[3] := '';
   if not Configured then begin
-    WizardForm.FinishedHeadingLabel.Caption := 'SOLVIA потребує налаштування';
+    WizardForm.FinishedHeadingLabel.Caption := 'Lemvori Care потребує налаштування';
     WizardForm.FinishedLabel.Caption := 'Файли встановлено, але сервер не налаштовано. Журнал: ' + LogPath;
   end;
 end;

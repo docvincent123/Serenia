@@ -10,6 +10,7 @@ int main(int argc, char **argv) {
     QGuiApplication app(argc, argv);
     app.setOrganizationName("LemvoriLab");
     app.setApplicationName("SOLVIA");
+    app.setApplicationDisplayName("Lemvori Care");
     app.setWindowIcon(QIcon(":/brand.svg"));
     QQuickStyle::setStyle("Basic");
 

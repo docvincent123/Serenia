@@ -482,6 +482,9 @@ class Scenario(unittest.TestCase):
         self.assertEqual(mobile_config['server_id'],health['server_id'])
         self.assertEqual(len(health['server_id']),64)
         self.api(admin,'GET','/api/mobile-config?stable=1',status=409)
+        lan_config=self.api(admin,'GET','/api/mobile-config?lan=1')
+        self.assertEqual(lan_config['https_url'],mobile_config['https_url'])
+        self.assertEqual(lan_config['server_id'],mobile_config['server_id'])
         access=self.api(admin,'GET','/api/license')
         self.assertEqual(access['status'],'unmanaged')
         self.assertTrue(access['write_allowed'])
@@ -504,6 +507,7 @@ class Scenario(unittest.TestCase):
         self.api(admin,'PATCH','/api/settings/center',good_vps)
         self.assertEqual(self.api(admin,'GET','/api/settings/center')['connection_mode'],'vps')
         self.assertEqual(self.api(admin,'GET','/api/mobile-config?stable=1')['api_url'],'https://solvia.example.test')
+        self.api(admin,'GET','/api/mobile-config?lan=1',status=409)
         search=self.api(admin,'GET','/api/search?q='+urllib.parse.quote('Тестовий'))
         self.assertTrue(any(x['id']==pid for x in search['patients']))
         rid=self.api(admin,'POST','/api/rooms',{'name':'Тестова кімната','code':'T1','type':'family','capacity':4,'description':'Тест'})['id']

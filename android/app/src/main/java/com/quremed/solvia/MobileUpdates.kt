@@ -35,10 +35,10 @@ class MobileUpdates(private val activity: Activity, private val server: () -> St
     private var progress: AlertDialog?=null
     private fun message(text: String) = Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
     fun close() { progress?.dismiss();progress=null;io.shutdownNow() }
-    fun check(manual: Boolean = false) {
+    fun check() {
         if(checking || downloading || token().isBlank() || server().isBlank()) return
         val now = System.currentTimeMillis()
-        if(!manual && (now-lastCheck < 60*1000 || !canPrompt())) return
+        if(now-lastCheck < 60*1000 || !canPrompt()) return
         checking = true; lastCheck = now
         val base = server(); val auth = token()
         io.execute {
@@ -54,18 +54,15 @@ class MobileUpdates(private val activity: Activity, private val server: () -> St
                 activity.runOnUiThread {
                     checking = false
                     if(activity.isDestroyed || server()!=base || token()!=auth) return@runOnUiThread
-                    if(!available(info, activity.packageName, BuildConfig.VERSION_CODE)) {
-                        if(manual) message(if(info.optBoolean("available")) "Оновлення для цього пакета відсутнє" else "Адміністратор ще не завантажив новий APK на сервер")
-                        return@runOnUiThread
-                    }
+                    if(!available(info, activity.packageName, BuildConfig.VERSION_CODE)) return@runOnUiThread
                     val key = "$base|${info.getInt("version_code")}"
-                    if(!manual && (now-prefs.getLong(key,0) < 24*60*60*1000L || !canPrompt())) return@runOnUiThread
+                    if(now-prefs.getLong(key,0) < 24*60*60*1000L || !canPrompt()) return@runOnUiThread
                     prefs.edit().putLong(key,now).apply()
-                    AlertDialog.Builder(activity).setTitle("Потрібно оновити SOLVIA")
+                    AlertDialog.Builder(activity).setTitle("Потрібно оновити Lemvori Care")
                         .setMessage("Версія ${info.getString("version_name")}\n\n${info.optString("release_notes")}\n\nДані та адреса сервера зберігаються.")
                         .setNegativeButton("Пізніше",null).setPositiveButton("Оновити") { _,_ -> download(base,auth,info) }.show()
                 }
-            } catch(e: Exception) { activity.runOnUiThread { checking=false; if(manual && !activity.isDestroyed) message(e.message ?: "Не вдалося перевірити оновлення") } }
+            } catch(_: Exception) { activity.runOnUiThread { checking=false } }
         }
     }
     private fun connection(base: String, auth: String, path: String) = (URL(base+path).openConnection() as HttpURLConnection).apply {
@@ -147,7 +144,7 @@ class UpdateFileProvider : ContentProvider() {
     override fun getType(uri: Uri)="application/vnd.android.package-archive"
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor { if(mode!="r") throw FileNotFoundException(); return ParcelFileDescriptor.open(file(uri),ParcelFileDescriptor.MODE_READ_ONLY) }
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor {
-        val apk=file(uri); return MatrixCursor(arrayOf(OpenableColumns.DISPLAY_NAME,OpenableColumns.SIZE)).apply { addRow(arrayOf("SOLVIA-update.apk",apk.length())) }
+        val apk=file(uri); return MatrixCursor(arrayOf(OpenableColumns.DISPLAY_NAME,OpenableColumns.SIZE)).apply { addRow(arrayOf("Lemvori-Care-update.apk",apk.length())) }
     }
     override fun insert(uri: Uri, values: ContentValues?): Uri?=throw UnsupportedOperationException()
     override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<out String>?): Int=throw UnsupportedOperationException()

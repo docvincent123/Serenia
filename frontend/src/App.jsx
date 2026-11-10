@@ -2700,17 +2700,17 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
     } catch (e) { setError(e.message); }
   }
 
-  async function downloadMobileConfig() {
+  async function downloadMobileConfig(localOnly = false) {
     try {
-      const config = await api('GET', '/api/mobile-config?stable=1');
+      const config = await api('GET', localOnly ? '/api/mobile-config?lan=1' : '/api/mobile-config?stable=1');
       if (config.format !== 'quremed.solvia.mobile' || !config.api_url) throw new Error('Сервер не створив файл підключення.');
       const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/vnd.solvia.connection+json' });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = href; link.download = 'SOLVIA-Mobile.solvia';
+      link.href = href; link.download = localOnly ? 'Lemvori-Care-LAN.solvia' : 'Lemvori-Care-Mobile.solvia';
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(href), 1000);
-      setConnectionTest({ state: 'ok', message: 'Файл створено сервером зі збережених налаштувань. Відкрийте його на телефоні у Lemvori Care.' });
+      setConnectionTest({ state: 'ok', message: localOnly ? 'Файл для мережі центру готовий. Підключіть телефон до Wi-Fi центру й відкрийте файл у Lemvori Care.' : 'Файл створено зі збережених налаштувань. Відкрийте його на телефоні або ПК у Lemvori Care.' });
     } catch (e) { setConnectionTest({ state: 'error', message: e.message }); }
   }
 
@@ -2862,7 +2862,8 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
                 <div className="form-actions full-span split-actions">
                   <Button type="button" variant="secondary" onClick={testConnection} disabled={connectionTest.state === 'busy'}>Перевірити з’єднання</Button>
                   <div>
-                    <Button type="button" variant="secondary" onClick={downloadMobileConfig}>Файл для Android / ПК</Button>
+                    <Button type="button" variant="secondary" onClick={() => downloadMobileConfig()}>Файл для Android / ПК</Button>
+                    {form.connection_mode === 'local' && <Button type="button" variant="secondary" onClick={() => downloadMobileConfig(true)}>Файл для Wi-Fi центру</Button>}
                     <Button type="submit" variant="secondary">Зберегти профіль</Button>
                     <Button type="button" onClick={applyConnection}>Підключити цей ПК</Button>
                   </div>
@@ -2870,8 +2871,8 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
               </form>
 
               <div className="security-callout">
-                <strong>VPS працює тільки через HTTPS</strong>
-                <p>Lemvori Care не зберігає пароль від VPS. У налаштуваннях зберігається лише адреса API. Авторизація користувачів залишається через персональні облікові записи Lemvori Care.</p>
+                <strong>Підключення телефона</strong>
+                <p>Збережіть профіль сервера й завантажте файл. Для постійної адреси використайте DNS-ім’я. У локальному режимі можна видати файл із HTTPS-адресою для Wi-Fi центру. Якщо IP сервера зміниться, такий файл треба видати повторно. Телефон має довіряти сертифікату сервера.</p>
               </div>
             </section>
           )}

@@ -18,7 +18,7 @@ export default function ServerReadiness({api}){
  const diskWarning=res.disk_available&&Number(res.disk_used_percent)>=90;
  const jobs=(data?.backup_jobs||[]).filter(x=>x.state==='pending'||x.state==='running'||x.state==='failed');
  return <section className="surface server-readiness" aria-label="Технічна готовність сервера">
-  <header><div><div className="eyebrow">СЕРВЕР SOLVIA</div><h2>Технічний стан</h2><p>Ресурси Linux, копії та черга резервування. Дані оновлюються автоматично.</p></div></header>
+  <header><div><div className="eyebrow">Сервер Lemvori Care</div><h2>Технічний стан</h2><p>Ресурси Linux, копії та черга резервування. Дані оновлюються автоматично.</p></div></header>
   {loading&&<p>Читаємо стан сервера…</p>}
   {error&&<div role="alert" className="alert error">Діагностика недоступна: {error}</div>}
   {data&&<><div className="server-readiness-grid">

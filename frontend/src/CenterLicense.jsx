@@ -8,7 +8,7 @@ export default function CenterLicense({api}) {
   await api('POST','/api/license',JSON.parse(await file.text()));await load();setMessage('Право користування підтверджено.');
  }catch(e){setMessage(e.message);}finally{setBusy(false);}}
  const labels={unmanaged:'Ліцензування ще не налаштоване видавцем',activation_required:'Потрібна активація',active:'Право користування активне',expired:'Строк користування завершився',invalid:'Ліцензія потребує перевірки'};
- return <section className="surface settings-panel"><h2>Право користування SOLVIA</h2>
+ return <section className="surface settings-panel"><h2>Право користування Lemvori Care</h2>
  <p>{status?labels[status.status]:'Завантаження…'}</p>
  {status&&<><p>Ідентифікатор сервера: <code style={{overflowWrap:'anywhere'}}>{status.server_id}</code></p>
  {status.center&&<p>{status.center} · до {new Date(status.expires_at*1000).toLocaleString('uk-UA')}</p>}

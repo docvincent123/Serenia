@@ -1,20 +1,20 @@
-# SOLVIA 3.1.0
+# Lemvori Care 3.1.1
 
-Єдина версія сервера, Windows, Linux, Server Console та Android. Android versionCode: 42; встановлюйте APK з тим самим підписом поверх попереднього. Деталі: [версія 3.0](docs/RELEASE-3.0.md), [TV-табло для Smart TV](docs/TV-DISPLAY.md).
+Єдина версія сервера, Windows, Linux, Server Console та Android. Android versionCode: 46; встановлюйте APK з тим самим підписом поверх попереднього. Деталі: [версія 3.0](docs/RELEASE-3.0.md), [TV-табло для Smart TV](docs/TV-DISPLAY.md).
 
-## Можливості SOLVIA
+## Можливості Lemvori Care
 
-SOLVIA — локальна система для приватного психологічного реабілітаційного центру. Репозиторій має назву Serenia; назва продукту в інтерфейсі — **SOLVIA by LemvoriLab**. Поточне оновлення 3.1.1: [назва компанії, сумісність та завершені сценарії](docs/LEMVORILAB-3.1.1.md).
+Lemvori Care — робоча система реабілітаційно-психологічного центру від LemvoriLab. Реєстратура веде прийоми на ПК, а психолог працює зі своєю зміною в Android. Сервер підтримує [локальне або VPS-підключення](docs/CENTER-ACCESS.md), а [Server Console](docs/SERVER-CONSOLE-RESTORE.md) керує резервним копіюванням і відновленням PostgreSQL.
 
 ## Linux-сервер + робочі ПК
 
 Основний варіант встановлення: **Ubuntu 24.04 / elementary OS 8 x86_64 → Windows-клієнти та Android у LAN**. Покроково: [docs/LINUX.md](docs/LINUX.md).
 
-- Linux artifact: **SOLVIA-3.1.0-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **SOLVIA Admin** у меню Linux.
-- Windows artifact: **SOLVIA-3.1.0-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
+- Linux artifact: **SOLVIA-3.1.1-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **Lemvori Care** у меню Linux.
+- Windows artifact: **SOLVIA-3.1.1-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
 - Сервер: C++20, PostgreSQL, HTTPS/8443, systemd, щоденні резервні копії.
 - Linux Admin: окремий desktop launcher з ізольованим вікном браузера, автоматичною перевіркою локального API та імпортом локального CA у NSS-сховище користувача.
-- Linux updater: `sudo solvia-admin check-update` / `sudo solvia-admin update` або дія «Оновити SOLVIA» у меню програми; оновлення береться з перевіреного GitHub Release зі SHA-256 і pre-update backup.
+- Linux updater: `sudo solvia-admin check-update` / `sudo solvia-admin update` або вкладка оновлень у Lemvori Care Server Console; оновлення береться з перевіреного GitHub Release зі SHA-256 і pre-update backup.
 - Windows: Win32/WebView2 + React, без PostgreSQL на клієнтському ПК.
 - Android: окремий Kotlin-клієнт тієї самої бази через API.
 - Старий режим Windows-сервера залишається додатковим варіантом інсталятора; він не потрібен для Linux.
@@ -45,20 +45,13 @@ SOLVIA — локальна система для приватного псих�
 GitHub Actions створює artifact **SOLVIA-Android-test-APK**.
 
 Перший запуск:
-1. підключіть планшет/телефон до Wi-Fi центру;
-2. встановіть `LemvoriLab-Local-CA.crt` із серверного ПК як довірений CA-сертифікат Android;
-3. відкрийте SOLVIA;
-4. введіть `https://<IP серверного ПК>:8443`;
-5. після успішного підключення адреса запам’ятовується.
 
-Android-клієнт:
-- не дозволяє HTTP;
-- не ігнорує TLS-помилки;
-- блокує сторонні origin;
-- використовує `FLAG_SECURE` проти звичайних скріншотів/запису екрана;
-- працює з тим самим React UI, оптимізованим під телефон і планшет.
+1. У Server Console відкрийте «Налаштування сервера» → «Підключення» та збережіть локальний або VPS-профіль.
+2. Для DNS-адреси завантажте «Файл для Android / ПК». Для локального HTTPS завантажте «Файл для Wi-Fi центру» й підключіть телефон до мережі центру.
+3. Якщо сервер використовує локальний CA, встановіть його сертифікат на телефон. Відкрийте файл у Lemvori Care та увійдіть обліковим записом психолога. Адреса збережеться після перевірки сервера.
+4. Дозвольте сповіщення для нових прийомів і подій зміни.
 
-Якщо IP серверного ПК змінився, на сервері запустіть `installer\Repair-Network.ps1` від адміністратора, після чого введіть нову адресу в Android.
+На відкритій зміні Android показує активні консультації та архів. Якщо зв’язок зникає, чернетки залишаються в зашифрованому сховищі телефона. Деталі — у [налаштуваннях підключення](docs/CENTER-ACCESS.md).
 
 ## Головний сценарій
 

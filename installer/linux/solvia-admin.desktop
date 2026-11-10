@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=SOLVIA
-GenericName=Робочий простір SOLVIA
-Comment=Окреме вікно SOLVIA для працівників центру
+Name=Lemvori Care
+GenericName=Робочий простір Lemvori Care
+Comment=Окреме вікно Lemvori Care для працівників центру
 Exec=/usr/local/bin/solvia-admin-app
 Icon=solvia-admin
 Terminal=false
 Categories=Utility;
 StartupNotify=true
 StartupWMClass=SOLVIAAdmin
-Keywords=SOLVIA;LemvoriLab;пацієнти;реєстратура;психологія;
+Keywords=Lemvori Care;LemvoriLab;пацієнти;реєстратура;психологія;

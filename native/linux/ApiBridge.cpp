@@ -64,7 +64,7 @@ void ApiBridge::clearSession() {
 void ApiBridge::request(const QByteArray &method, const QString &path,
                         const QJsonObject &body, Callback completed, bool quiet) {
     if (!origin_.startsWith("https://")) {
-        if (!quiet) issue("Спочатку підключіть HTTPS-сервер SOLVIA.");
+        if (!quiet) issue("Спочатку підключіть HTTPS-сервер Lemvori Care.");
         return;
     }
     // All paths are application-owned. Only already encoded search terms are appended.
@@ -164,7 +164,7 @@ void ApiBridge::configureServer(const QString &value) {
         settings.setValue("server/identity", id);
         pinnedId_ = id;
         connected_ = true;
-        notify("Сервер SOLVIA підтверджено. Увійдіть до свого кабінету.");
+        notify("Сервер Lemvori Care підтверджено. Увійдіть до свого кабінету.");
     });
 }
 
@@ -199,7 +199,7 @@ void ApiBridge::login(const QString &username, const QString &password) {
                 issue("Це робоче місце призначене для адміністрації. Для психолога використайте Android.");
                 return;
             }
-            notify("Вітаємо в SOLVIA!");
+            notify("Вітаємо в Lemvori Care!");
             refresh();
         });
     });
@@ -279,7 +279,7 @@ void ApiBridge::checkServer() {
     request("GET","/api/health",{},[this](const QJsonValue &v){
         const auto health=v.toObject();
         if (!health.value("ok").toBool() || health.value("server_id").toString()!=pinnedId_) {
-            issue("Сервер не підтвердив відомий ідентифікатор SOLVIA.");
+            issue("Сервер не підтвердив відомий ідентифікатор Lemvori Care.");
             return;
         }
         notify("HTTPS-з'єднання та сервер перевірено.");
