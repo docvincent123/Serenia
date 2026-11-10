@@ -75,7 +75,8 @@ int main(int argc, char **argv) {
     verify(waitFor([&] { return admin.role() == "admin"; }), "Admin sign-in failed");
     admin.loadAdminSection("team");
     verify(waitFor([&] { return admin.adminRows().size() == 1; }), "Admin team did not load");
-    admin.saveAdminEntry("team", 4, {{"name", "Test Staff"}, {"role", "reception"}, {"active", true}});
+    verify(waitFor([&] { return admin.serviceChoices().size() == 1; }), "Service options did not load");
+    admin.saveAdminEntry("team", 4, {{"name", "Test Staff"}, {"role", "reception"}, {"active", true}, {"primary_service_code", "art"}});
     verify(waitFor([&] { return admin.notice().contains("Зміни збережено"); }), "Admin team change failed");
     const auto profile = QUrl::fromLocalFile(config.filePath("test.solvia"));
     admin.exportProfile(profile, true);
