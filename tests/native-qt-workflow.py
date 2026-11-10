@@ -75,6 +75,10 @@ class Center(BaseHTTPRequestHandler):
         self.requests.append((self.path, self.body()))
         self.respond({"ok": True})
 
+    def do_DELETE(self):
+        self.requests.append((self.path, {}))
+        self.respond({"ok": True})
+
 
 with tempfile.TemporaryDirectory() as temporary:
     tmp = pathlib.Path(temporary)
@@ -104,3 +108,5 @@ assert bookings[0]["start"] == "2026-11-11T10:15" and bookings[0]["end"] == "202
 assert ("/api/discharges/9/workflow", {"action": "return", "revision": 2, "reason": "Уточнити рекомендації"}) in Center.requests
 assert ("/api/users/4", {"name": "Test Staff", "role": "reception", "active": True, "primary_service_code": "art"}) in Center.requests
 print("PASS: native HTTPS and profile binding, distinct staff/admin roles, slot booking with duplicate-submit protection, director review, and team editing")
+
+assert ("/api/users/4/sessions", {}) in Center.requests, "Admin did not revoke selected employee sessions"
