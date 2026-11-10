@@ -11,7 +11,7 @@ const server=createServer(async(req,res)=>{try{
   const pathname=new URL(req.url,'http://localhost').pathname;
   const path=resolve(root,pathname==='/tv'?'tv/index.html':'.'+pathname);
   if(!path.startsWith(root+'/')){res.writeHead(403).end();return;}
-  res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png'})[extname(path)]||'application/octet-stream');
+  res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml'})[extname(path)]||'application/octet-stream');
   res.end(await readFile(path));
 }catch{res.writeHead(404).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));

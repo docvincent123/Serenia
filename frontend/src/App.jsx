@@ -3574,7 +3574,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         }
       }}>
         <div className="sidebar-brand">
-          <div className="product-mark inverse motion-brand-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></div>
+          <img className="care-sidebar-mark" src="/lemvori-care.svg" alt="" />
           <div><strong>Lemvori Care</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · LemvoriLab</small></div>
         </div>
 
@@ -3583,7 +3583,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
-          <button aria-label="Налаштування профілю" title="Налаштування профілю" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Налаштування профілю</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
+          <button aria-label="Налаштування профілю" title="Налаштування профілю" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span>Мій профіль</span></button>
           <button className="nav-item" aria-label="Вийти" title="Вийти" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
         </div>
         <div className="sidebar-support">

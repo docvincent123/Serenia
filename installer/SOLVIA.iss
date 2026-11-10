@@ -1,5 +1,5 @@
 #define MyAppName "Lemvori Care by LemvoriLab"
-#define MyAppVersion "3.1.1"
+#define MyAppVersion "3.1.2"
 #define MyAppPublisher "LemvoriLab"
 #define MyAppExeName "Solvia.exe"
 
@@ -47,6 +47,12 @@ Source: "..\out\SOLVIA\bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recurs
 Source: "..\out\SOLVIA\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "..\out\SOLVIA\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "..\out\SOLVIA\README.md"; DestDir: "{app}"; Flags: ignoreversion
+
+[InstallDelete]
+Type: files; Name: "{autoprograms}\SOLVIA Center.lnk"; Components: client
+Type: files; Name: "{autodesktop}\SOLVIA Center.lnk"; Components: client
+Type: files; Name: "{autoprograms}\SOLVIA Server Console.lnk"; Components: console server
+Type: files; Name: "{autodesktop}\SOLVIA Server Console.lnk"; Components: console server
 
 [Icons]
 Name: "{autoprograms}\Lemvori Care"; Filename: "{app}\Solvia.exe"; Components: client

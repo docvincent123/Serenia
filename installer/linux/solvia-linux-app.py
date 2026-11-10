@@ -65,7 +65,7 @@ def run(on_ready=None):
             self.admin_busy = False
             self.window = None
             self.origin = ''
-            self.window = Gtk.ApplicationWindow(application=application, title='Lemvori Care Server Console 3.1.1' if console else 'Lemvori Care 3.1.1')
+            self.window = Gtk.ApplicationWindow(application=application, title='Lemvori Care Server Console 3.1.2' if console else 'Lemvori Care 3.1.2')
             display = Gdk.Display.get_default()
             monitor = display.get_primary_monitor() or display.get_monitor(0)
             area = monitor.get_workarea()
@@ -86,7 +86,7 @@ def run(on_ready=None):
                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             self.window.set_wmclass('SOLVIAServerConsole' if console else 'SOLVIAAdmin', 'SOLVIAAdmin')
             self.window.set_icon_name('solvia-admin')
-            header = Gtk.HeaderBar(title='Lemvori Care Server Console 3.1.1' if console else 'Lemvori Care 3.1.1', show_close_button=True)
+            header = Gtk.HeaderBar(title='Lemvori Care Server Console 3.1.2' if console else 'Lemvori Care 3.1.2', show_close_button=True)
             self.window.set_titlebar(header)
             self.spinner = Gtk.Spinner()
             header.pack_start(self.spinner)

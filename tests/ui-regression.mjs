@@ -12,7 +12,7 @@ const server = createServer(async (req,res) => {
     const path = resolve(root, '.' + new URL(req.url, 'http://localhost').pathname);
     if (!path.startsWith(root + '/') && path !== root) { res.writeHead(403).end(); return; }
     const file = path === root || path.endsWith('/') ? resolve(root, 'index.html') : path;
-    res.setHeader('Content-Type', ({'.js':'application/javascript','.css':'text/css','.png':'image/png','.html':'text/html'})[extname(file)] || 'application/octet-stream');
+    res.setHeader('Content-Type', ({'.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.html':'text/html'})[extname(file)] || 'application/octet-stream');
     res.end(await readFile(file));
   } catch { res.writeHead(404).end(); }
 });

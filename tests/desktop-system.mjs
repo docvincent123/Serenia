@@ -9,7 +9,7 @@ const expected={admin:['dashboard','shift-workspace','handover','calendar','wait
 for(const [role,keys] of Object.entries(expected)){const nav=navFor(role).map(([key])=>key);assert.deepEqual(nav,keys,`Preserve every ${role} module and its order`);for(const key of nav)assert.equal(navigationGroups.filter(([, ,members])=>members.includes(key)).length,1,`Exactly one navigation group for ${key}`);}
 assert.deepEqual(navFor('unknown'),[]);
 const require=createRequire(import.meta.url),{chromium}=require(process.env.SOLVIA_PLAYWRIGHT_MODULE||'playwright');
-const root=resolve('frontend/dist'),server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(path!==root&&!path.startsWith(root+'/')){res.writeHead(403).end();return;}const file=path===root?resolve(root,'index.html'):path;res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png'})[extname(file)]||'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
+const root=resolve('frontend/dist'),server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(path!==root&&!path.startsWith(root+'/')){res.writeHead(403).end();return;}const file=path===root?resolve(root,'index.html'):path;res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml'})[extname(file)]||'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,...(process.env.SOLVIA_CHROMIUM_EXECUTABLE?{executablePath:process.env.SOLVIA_CHROMIUM_EXECUTABLE,args:['--no-sandbox','--disable-dev-shm-usage']}:{})});
 try{
@@ -83,6 +83,20 @@ try{
   assert.equal(await page.locator('.flow-desk-shortcut').count(),6);
   assert.equal(await nav.getByRole('button').count(),6,'The main admin navigation is deliberately short');
   assert.equal(await page.locator('.flow-desk-metric').count(),3);
+  for(const [width,height] of [[1440,1000],[1280,688],[1024,600],[1024,480]]){
+    await page.setViewportSize({width,height});
+    const sidebar=await page.locator('.sidebar').evaluate(el=>{
+      const buttons=[...el.querySelectorAll('.focus-navigation button,.studio-rail-directory,.sidebar-actions button')];
+      const bounds=buttons.map(button=>button.getBoundingClientRect());
+      return {overlap:bounds.some((rect,index)=>index>0&&rect.top<bounds[index-1].bottom),
+        background:getComputedStyle(el).backgroundColor,
+        active:getComputedStyle(el.querySelector('[aria-current=page]')).backgroundColor,
+        profile:el.querySelector('button[aria-label="Налаштування профілю"]').textContent.trim()};
+    });
+    assert.deepEqual(sidebar,{overlap:false,background:'rgb(74, 92, 106)',active:'rgb(204, 208, 207)',profile:'Мій профіль'});
+    assert.equal(await page.locator('.care-sidebar-mark').evaluate(img=>img.complete&&img.naturalWidth>0),true);
+  }
+  await page.setViewportSize({width:1440,height:1000});
   await capture('admin-overview');
   await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
   await page.getByRole('heading',{name:'Усі розділи',exact:true}).waitFor();

@@ -11,7 +11,7 @@ const server=createServer(async(req,res)=>{
   const path=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);
   if(path!==root&&!path.startsWith(root+'/')){res.writeHead(403).end();return;}
   const file=path===root?resolve(root,'index.html'):path;
-  res.setHeader('Content-Type',({'.js':'application/javascript','.css':'text/css','.html':'text/html','.png':'image/png'})[extname(file)]||'application/octet-stream');
+  res.setHeader('Content-Type',({'.js':'application/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.svg':'image/svg+xml'})[extname(file)]||'application/octet-stream');
   res.end(await readFile(file));
  }catch{res.writeHead(404).end();}
 });
@@ -46,7 +46,7 @@ try{
  await mkdir('out/design',{recursive:true});
  const primary=page.locator('.focus-nav-primary');
  await page.goto(`http://127.0.0.1:${server.address().port}`);
- await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+ await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
  await primary.getByRole('button',{name:'Пацієнти',exact:true}).click();
  await page.getByRole('button',{name:'Картка',exact:true}).click();
  const tabs=page.getByRole('navigation',{name:'Розділи картки'});

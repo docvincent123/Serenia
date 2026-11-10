@@ -345,9 +345,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         0,
         wc.lpszClassName,
 #ifdef SOLVIA_SERVER_CONSOLE
-        L"Lemvori Care Server Console 3.1.1 • LemvoriLab",
+        L"Lemvori Care Server Console 3.1.2 • LemvoriLab",
 #else
-        L"Lemvori Care 3.1.1 by LemvoriLab • Центр психологічної реабілітації",
+        L"Lemvori Care 3.1.2 by LemvoriLab • Центр психологічної реабілітації",
 #endif
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,

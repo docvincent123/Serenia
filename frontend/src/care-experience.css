@@ -55,6 +55,10 @@
   .studio-shell .sidebar-brand span{color:#b4bfca!important;font-size:11px!important}
   .studio-shell .sidebar-brand small{color:#84919d!important;font-size:10px!important}
   .studio-shell .sidebar .product-mark{margin:0!important;flex:0 0 44px!important;width:44px!important;height:44px!important}
+  .studio-shell .sidebar > :is(.sidebar-brand,.focus-navigation,.studio-rail-directory,.sidebar-actions,.user-card){
+    position:static!important;flex:none!important;order:0!important
+  }
+  .studio-shell .sidebar .sidebar-spacer{flex:1 0 8px!important;order:0!important}
   .studio-shell .sidebar nav,.studio-shell .sidebar .focus-nav-primary{
     display:flex!important;flex-direction:column!important;align-items:stretch!important;
     gap:5px!important;width:100%!important;padding:0!important;margin:0!important;overflow:visible!important
@@ -206,6 +210,9 @@ body {background:#9BA8AB!important}
 .app-shell.studio-shell .sidebar {
   background:#4A5C6A!important;color:#CCD0CF!important;
   border-color:#4A5C6A!important;box-shadow:none!important
+}
+.studio-shell .sidebar-brand .care-sidebar-mark{
+  width:44px;height:44px;flex:0 0 44px;border-radius:12px;object-fit:contain
 }
 .app-shell.studio-shell .sidebar-brand strong,
 .app-shell.studio-shell .sidebar .user-copy strong {color:#CCD0CF!important}
@@ -360,6 +367,18 @@ body {background:#9BA8AB!important}
   background:#CCD0CF!important;color:#11212D!important;
   border-color:#9BA8AB!important;border-radius:27px!important
 }
+.login-screen.studio-login .login-card{
+  max-width:452px;padding:clamp(18px,3vw,32px);border:1px solid #9BA8AB;
+  box-shadow:0 8px 28px rgba(17,33,45,.10)
+}
+.login-screen.studio-login :is(.eyebrow,.login-brand-copy h1>span,.login-brand-copy>p,.login-access-help,.login-foot,.connection-recovery,.studio-login-label,.login-copy p,.login-care-scene small){
+  color:#4A5C6A
+}
+.login-screen.studio-login .login-care-orbit{background:#B9C2C4;border-color:#CCD0CF}
+.login-screen.studio-login :is(.login-care-icon,.login-care-note>span,.login-care-window-foot,.password-control button){
+  background:#DEE2E2;color:#253745
+}
+.login-screen.studio-login :is(button,summary,input):focus-visible{outline-color:#253745}
 .login-screen.studio-login :is(h1,h2,strong,.login-brand-signature strong,.login-brand-copy h1){
   color:#11212D!important
 }
