@@ -65,6 +65,7 @@ void ApiBridge::clearSession() {
     working_ = false;
     shift_.clear(); overview_.clear(); system_.clear(); visits_.clear();
     patients_.clear(); appointments_.clear(); roster_.clear();
+    patientQuery_.clear(); patientPage_ = 1; patientTotal_ = 0; patientsLoading_ = false;
     psychologists_.clear(); rooms_.clear();
     rosterSupported_ = false;
     rosterConfigured_ = false;
@@ -360,15 +361,36 @@ void ApiBridge::refresh() {
     emit stateChanged();
 }
 void ApiBridge::searchPatients(const QString &text) {
-    if (!authenticated() || role_ == "director") return;
+    if (!authenticated() || !canWrite()) return;
+    patientQuery_ = text.trimmed();
+    patientPage_ = 1;
+    patientTotal_ = 0;
+    loadPatientPage(1);
+}
+
+void ApiBridge::loadPatientPage(int page) {
+    if (!authenticated() || !canWrite() || page < 1 ||
+        (patientTotal_ > 0 && page > 1 && (page - 1) * 25 >= patientTotal_)) return;
     const int generation = ++patientGeneration_;
-    const QString path = "/api/patient-directory?page=1&page_size=25&q="
-        + QString::fromUtf8(QUrl::toPercentEncoding(text.trimmed()));
-    request("GET", path, {}, [this,generation](const QJsonValue &v){
+    patientsLoading_ = true;
+    patients_.clear();
+    emit dataChanged();
+    const QString path = QString("/api/patient-directory?page=%1&page_size=25&q=").arg(page)
+        + QString::fromUtf8(QUrl::toPercentEncoding(patientQuery_));
+    request("GET", path, {}, [this,generation](const QJsonValue &v) {
         if (generation != patientGeneration_) return;
-        patients_ = v.toObject().value("items").toArray().toVariantList();
+        const auto response = v.toObject();
+        patients_ = response.value("items").toArray().toVariantList();
+        patientPage_ = response.value("page").toInt(1);
+        patientTotal_ = response.value("total").toInt(0);
+        patientsLoading_ = false;
         emit dataChanged();
-    }, true);
+    }, true, [this,generation](const QString &reason) {
+        if (generation != patientGeneration_) return;
+        patientsLoading_ = false;
+        issue("Не вдалося завантажити пацієнтів: " + reason);
+        emit dataChanged();
+    });
 }
 QVariantList ApiBridge::bookingPsychologists() const {
     if (!rosterSupported_ || !rosterConfigured_ ||
