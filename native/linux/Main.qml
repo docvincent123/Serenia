@@ -503,15 +503,17 @@ ApplicationWindow {
                                 onClicked: root.openPatientDirectory(quickPatientSearch.text)
                             }
                         }
-                        RowLayout {
-                            Layout.fillWidth:true; spacing:12
+                        GridLayout {
+                            Layout.fillWidth:true; columns: root.width < 1130 ? 2 : 4
+                            columnSpacing:12; rowSpacing:12
                             MetricTile { Layout.fillWidth:true; figure:String(api.role === "director" ? (api.overview.total_patients ?? "—") : (api.overview.counts ? api.overview.counts.waiting : "—")); heading:api.role === "director" ? "Пацієнти центру" : "Очікують прийому" }
                             MetricTile { Layout.fillWidth:true; figure:String(api.role === "director" ? (api.overview.consultations ?? "—") : (api.overview.counts ? api.overview.counts.arrived : "—")); heading:api.role === "director" ? "Консультації за місяць" : "Прибули" }
                             MetricTile { Layout.fillWidth:true; figure:String(api.role === "director" ? (api.overview.active_courses ?? "—") : (api.overview.counts ? api.overview.counts.completed : "—")); heading:api.role === "director" ? "Активні курси" : "Завершені прийоми" }
                             MetricTile { Layout.fillWidth:true; figure:String((api.overview.active_patients !== undefined ? api.overview.active_patients : "—")); heading:"Активні пацієнти" }
                         }
-                        RowLayout {
-                            spacing:12; Layout.fillWidth:true
+                        Flow {
+                            Layout.fillWidth:true; Layout.preferredHeight: childrenRect.height
+                            spacing:12
                             SolviaButton { text:"+ Новий запис"; visible: api.role !== "director"; primary:true; onClicked:root.openPatientDirectory("") }
                             SolviaButton { text:"Прийоми сьогодні"; visible: api.role !== "director"; onClicked:root.showPage("Прийоми") }
                             SolviaButton { text:"Психологи на зміні"; onClicked:root.showPage("Психологи") }
