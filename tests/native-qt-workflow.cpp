@@ -83,6 +83,8 @@ int main(int argc, char **argv) {
     verify(waitFor([&] { return admin.serviceChoices().size() == 1; }), "Service options did not load");
     admin.saveAdminEntry("team", 4, {{"name", "Test Staff"}, {"role", "reception"}, {"active", true}, {"primary_service_code", "art"}});
     verify(waitFor([&] { return admin.notice().contains("Зміни збережено"); }), "Admin team change failed");
+    admin.endUserSessions(4);
+    verify(waitFor([&] { return admin.notice().contains("Сеанси працівника завершено"); }), "Employee session revocation failed");
     const auto profile = QUrl::fromLocalFile(config.filePath("test.solvia"));
     admin.exportProfile(profile, true);
     verify(waitFor([&] { return QFile::exists(profile.toLocalFile()); }), "Admin profile export failed");
