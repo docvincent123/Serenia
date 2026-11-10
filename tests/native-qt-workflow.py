@@ -40,6 +40,7 @@ class Center(BaseHTTPRequestHandler):
             "/api/slots": ["10:15", "14:15"],
             "/api/users": [{"id": 4, "name": "Synthetic staff", "active": True}],
             "/api/services": [{"id": 2, "code": "art", "name": "Арттерапія", "category": "creative", "active": True}],
+            "/api/admin/module-permissions": [{"id":4,"name":"Synthetic staff","role":"reception","blocked_modules":[]}],
             "/api/discharges": [{"id": 9, "revision": 2, "workflow_status": "review"}],
             "/api/stats": {"total_patients": 15},
             "/api/mobile-config": {
@@ -110,3 +111,4 @@ assert ("/api/users/4", {"name": "Test Staff", "role": "reception", "active": Tr
 print("PASS: native HTTPS and profile binding, distinct staff/admin roles, slot booking with duplicate-submit protection, director review, and team editing")
 
 assert ("/api/users/4/sessions", {}) in Center.requests, "Admin did not revoke selected employee sessions"
+assert ("/api/admin/module-permissions", {"user_id":4,"blocked_modules":["documents","clinical"]}) in Center.requests, "Qt access editor did not send selected restrictions"
