@@ -55,7 +55,7 @@ void ApiBridge::clearSession() {
     ++adminGeneration_;
     ++slotsGeneration_;
     ++calendarGeneration_;
-    adminRows_.clear(); adminDetails_.clear(); adminSection_.clear(); dischargeRows_.clear();
+    adminRows_.clear(); adminDetails_.clear(); adminSection_.clear(); dischargeRows_.clear(); serviceChoices_.clear();
     loadingSlots_ = false; slots_.clear(); slotError_.clear();
     pendingBooking_ = {}; bookingKey_.clear();
     emit slotsChanged();
@@ -569,6 +569,13 @@ void ApiBridge::loadAdminSection(const QString &section) {
         adminSection_ = section;
         adminRows_.clear(); adminDetails_.clear();
         emit dataChanged();
+    }
+    if (section == "team") {
+        request("GET", "/api/services", {}, [this, generation](const QJsonValue &result) {
+            if (generation != adminGeneration_) return;
+            serviceChoices_ = result.toArray().toVariantList();
+            emit dataChanged();
+        }, true);
     }
     request("GET", adminEndpoints.value(section), {}, [this, generation](const QJsonValue &result) {
         if (generation != adminGeneration_) return;
