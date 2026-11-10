@@ -36,6 +36,15 @@ Item {
         {key:"audit", label:"Журнал дій", detail:"Історія дій працівників у системі"},
         {key:"database", label:"База та копії", detail:"Резервне копіювання та відновлення PostgreSQL"}
     ]
+    readonly property var serviceOptions: {
+        const items = [{key: "", label: "Без прив’язки до напрямку"}]
+        const services = bridge.serviceChoices || []
+        for (let i = 0; i < services.length; i++) {
+            const item = services[i]
+            items.push({key: item.code, label: item.name + (item.active ? "" : " (неактивний)")})
+        }
+        return items
+    }
     readonly property var roles: [
         {key:"reception", label:"Реєстратура"}, {key:"psychologist", label:"Психолог"},
         {key:"director", label:"Керівник"}, {key:"admin", label:"Адміністратор"}
@@ -55,7 +64,8 @@ Item {
     readonly property var schema: ({
         team:[
             {key:"name", label:"ПІБ"}, {key:"login", label:"Логін", createOnly:true},
-            {key:"role", label:"Роль", options:roles, initial:"reception"},
+            {key:"role", label:"Роль доступу", options:roles, initial:"reception"},
+            {key:"primary_service_code", label:"Професійний напрямок", options:root.serviceOptions, initial:""},
             {key:"phone", label:"Телефон"},
             {key:"password", label:"Пароль", type:"password"},
             {key:"active", label:"Обліковий запис активний", type:"check", initial:true, editOnly:true}
@@ -186,7 +196,7 @@ Item {
                         Label { text: root.currentSection.label; color: root.ink; font.pixelSize: 26; font.bold: true; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                         Label { text: root.currentSection.detail; color: root.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                     }
-                    Action { text: "+ Додати"; primary: true; visible: root.listEditable; enabled: !root.bridge.working; onClicked: root.edit({}) }
+                    Action { text: "+ Додати"; primary: true; visible: root.listEditable; enabled: !root.bridge.working && (root.section !== "team" || root.bridge.serviceChoices.length > 0); onClicked: root.edit({}) }
                     Action { text: "Редагувати"; primary: true; visible: root.detailsEditable; enabled: !root.bridge.working && Object.keys(root.bridge.adminDetails).length > 0; onClicked: root.edit(root.bridge.adminDetails) }
                 }
                 Label {
@@ -251,6 +261,11 @@ Item {
                     text: root.searchText ? "За цим запитом нічого не знайдено." : "У цьому розділі поки немає записів."
                 }
                 Label {
+                    visible: root.section === "team" && root.bridge.serviceChoices.length === 0
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
+                    text: "Завантажуємо перелік напрямків для працівників…"
+                }
+                Label {
                     visible: root.section === "services"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: "Напрямки — це послуги центру. Права доступу працівника задаються окремою роллю; спеціалізація не надає доступ до чужих медичних записів."
@@ -273,7 +288,7 @@ Item {
                                 Label {
                                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                                     text: {
-                                        if (root.section === "team") return [modelData.login, root.readable(root.roles,modelData.role), modelData.active ? "Активний" : "Вимкнений"].filter(Boolean).join(" · ")
+                                        if (root.section === "team") return [modelData.login, root.readable(root.roles,modelData.role), modelData.primary_service_name, modelData.active ? "Активний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "rooms") return [modelData.code, root.readable(root.roomTypes,modelData.type), modelData.capacity + " місць", modelData.active ? "Доступний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "services") return root.readable(root.categories,modelData.category) + (modelData.active ? "" : " · Вимкнено")
                                         if (root.section === "sessions") return [modelData.login || modelData.user_name || modelData.user, modelData.device_name || modelData.platform, modelData.last_seen, modelData.online ? "Онлайн" : "Офлайн"].filter(Boolean).join(" · ")
@@ -281,7 +296,7 @@ Item {
                                     }
                                 }
                             }
-                            Action { text: "Редагувати"; visible: root.listEditable; enabled: !root.bridge.working; onClicked: root.edit(modelData) }
+                            Action { text: "Редагувати"; visible: root.listEditable; enabled: !root.bridge.working && (root.section !== "team" || root.bridge.serviceChoices.length > 0); onClicked: root.edit(modelData) }
                             Action { text: "Завершити сеанс"; visible: root.section === "sessions"; enabled: !root.bridge.working; onClicked: { endSession.sessionId = modelData.session_id; endSession.open() } }
                         }
                     }
