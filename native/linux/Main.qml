@@ -47,6 +47,13 @@ ApplicationWindow {
         if (next === "Пацієнти") api.searchPatients(patientSearch.text)
         if (next === "Психологи" || next === "Прийоми" || next === "Календар") api.refresh()
     }
+    // Start a real booking flow by selecting a patient from the live directory.
+    // The server performs the actual slot and conflict checks in beginBooking().
+    function openPatientDirectory(query) {
+        patientSearch.text = String(query || "")
+        showPage("Пацієнти")
+        patientSearch.forceActiveFocus()
+    }
     function beginBooking(patient) {
         bookingOriginal = ({})
         bookingPatientId = Number(patient.id)
@@ -176,9 +183,9 @@ ApplicationWindow {
         property string heading: ""
         implicitWidth: 160
         implicitHeight: 114
-        radius: 14
+        radius: 18
         color: "#ffffff"
-        border.color: root.line
+        border.color: "#D9DEDF"
         Column {
             anchors.fill: parent; anchors.margins: 18; spacing: 9
             Text { text: figure; color: root.ink; font.pixelSize: 29; font.bold: true }
@@ -341,8 +348,8 @@ ApplicationWindow {
         RowLayout {
             Layout.fillWidth: true; Layout.fillHeight: true; spacing:0
             Rectangle {
-                Layout.fillHeight: true; Layout.preferredWidth: 192
-                color: "#4A5C6A"
+                Layout.fillHeight: true; Layout.preferredWidth: 224
+                color: "#344957"
                 ScrollView {
                     anchors.fill: parent
                     padding: 12
@@ -353,7 +360,7 @@ ApplicationWindow {
                         width: parent.width
                         spacing: 5
                         Label {
-                            text: "РОБОЧЕ МЕНЮ"; color: "#E0E5E5"
+                            text: api.role === "admin" ? "НАВІГАЦІЯ АДМІНІСТРАТОРА" : "РОБОЧЕ МЕНЮ"; color: "#E0E5E5"
                             font.pixelSize: 10; font.letterSpacing: 1.2
                             Layout.topMargin: 6; Layout.bottomMargin: 7; Layout.leftMargin: 14
                         }
@@ -418,6 +425,55 @@ ApplicationWindow {
                     ColumnLayout {
                         visible: root.page === "Головна"
                         Layout.fillWidth:true; spacing:18
+                        Rectangle {
+                            Layout.fillWidth: true; Layout.preferredHeight: 138
+                            radius: 20; color: "#253745"
+                            RowLayout {
+                                anchors.fill: parent; anchors.margins: 22; spacing: 18
+                                ColumnLayout {
+                                    Layout.fillWidth: true; spacing: 7
+                                    Label {
+                                        text: api.role === "director" ? "КЕРУВАННЯ ЦЕНТРОМ" : "РОБОЧИЙ ПРОСТІР"
+                                        color: "#C8D4DC"; font.pixelSize: 10; font.letterSpacing: 1.5
+                                    }
+                                    Label {
+                                        text: api.role === "director" ? "Огляд роботи центру" : "Усе для щоденного прийому"
+                                        color: "#FFFFFF"; font.bold: true; font.pixelSize: 23
+                                    }
+                                    Label {
+                                        text: api.role === "director" ? "Дані центру та навантаження команди" : "Знайдіть пацієнта, перевірте час та створіть запис"
+                                        color: "#E0E8EC"; font.pixelSize: 13; wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                    }
+                                }
+                                SolviaButton {
+                                    visible: api.role !== "director"
+                                    text: "+ Записати на прийом"
+                                    Accessible.name: "Відкрити пошук пацієнта для запису"
+                                    onClicked: root.openPatientDirectory("")
+                                }
+                                SolviaButton {
+                                    visible: api.role === "director"
+                                    text: "Переглянути виписки"
+                                    onClicked: root.showPage("Виписки")
+                                }
+                            }
+                        }
+                        RowLayout {
+                            visible: api.role !== "director"; Layout.fillWidth: true; spacing: 10
+                            CareField {
+                                id: quickPatientSearch
+                                Layout.fillWidth: true; Layout.preferredHeight: 46
+                                Accessible.name: "Швидкий пошук пацієнта"
+                                placeholderText: "Знайти пацієнта за ПІБ, телефоном або номером картки"
+                                selectByMouse: true
+                                onAccepted: root.openPatientDirectory(text)
+                            }
+                            SolviaButton {
+                                text: "Знайти й записати"; primary: true
+                                onClicked: root.openPatientDirectory(quickPatientSearch.text)
+                            }
+                        }
                         RowLayout {
                             Layout.fillWidth:true; spacing:12
                             MetricTile { Layout.fillWidth:true; figure:String(api.role === "director" ? (api.overview.total_patients ?? "—") : (api.overview.counts ? api.overview.counts.waiting : "—")); heading:api.role === "director" ? "Пацієнти центру" : "Очікують прийому" }
@@ -427,7 +483,7 @@ ApplicationWindow {
                         }
                         RowLayout {
                             spacing:12; Layout.fillWidth:true
-                            SolviaButton { text:"+ Новий запис"; visible: api.role !== "director"; primary:true; onClicked:root.showPage("Пацієнти") }
+                            SolviaButton { text:"+ Новий запис"; visible: api.role !== "director"; primary:true; onClicked:root.openPatientDirectory("") }
                             SolviaButton { text:"Прийоми сьогодні"; visible: api.role !== "director"; onClicked:root.showPage("Прийоми") }
                             SolviaButton { text:"Психологи на зміні"; onClicked:root.showPage("Психологи") }
                             SolviaButton { text:"Виписки"; visible:api.role==="director"; onClicked:root.showPage("Виписки") }
@@ -465,7 +521,8 @@ ApplicationWindow {
                                         }
                                     }
                                 },
-                                Text { visible:!(api.overview.next||[]).length; text:"Найближчих прийомів немає."; color:root.muted; font.pixelSize:13 }
+                                Text { visible:!(api.overview.next||[]).length; text:"Найближчих прийомів немає."; color:root.muted; font.pixelSize:13 },
+                                SolviaButton { text: "Відкрити всі прийоми"; onClicked: root.showPage("Прийоми") }
                             ]
                         }
                     }
@@ -536,7 +593,7 @@ ApplicationWindow {
                                 ]
                             }
                         }
-                        Text { visible:api.patients.length===0; text:"Пацієнтів не знайдено."; color:root.muted }
+                        Text { visible:api.patients.length===0; text:"Немає результатів. Уточніть ПІБ або номер телефону."; color:root.muted; wrapMode: Text.WordWrap }
                     }
 
                     // Roster endpoint is optional until the server-side PR is merged.
