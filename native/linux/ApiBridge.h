@@ -37,6 +37,9 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QVariantMap overview READ overview NOTIFY dataChanged)
     Q_PROPERTY(QVariantList visits READ visits NOTIFY dataChanged)
     Q_PROPERTY(QVariantList patients READ patients NOTIFY dataChanged)
+    Q_PROPERTY(int patientPage READ patientPage NOTIFY dataChanged)
+    Q_PROPERTY(int patientTotal READ patientTotal NOTIFY dataChanged)
+    Q_PROPERTY(bool patientsLoading READ patientsLoading NOTIFY dataChanged)
     Q_PROPERTY(QVariantList appointments READ appointments NOTIFY dataChanged)
     Q_PROPERTY(QVariantList roster READ roster NOTIFY dataChanged)
     Q_PROPERTY(QVariantList psychologists READ psychologists NOTIFY bookingOptionsChanged)
@@ -69,6 +72,9 @@ public:
     QVariantMap overview() const { return overview_; }
     QVariantList visits() const { return visits_; }
     QVariantList patients() const { return patients_; }
+    int patientPage() const { return patientPage_; }
+    int patientTotal() const { return patientTotal_; }
+    bool patientsLoading() const { return patientsLoading_; }
     QVariantList appointments() const { return appointments_; }
     QVariantList roster() const { return roster_; }
     QVariantList psychologists() const { return psychologists_; }
@@ -99,6 +105,7 @@ public:
     Q_INVOKABLE void checkServer();
     Q_INVOKABLE bool psychologistBookable(int id, const QString &date) const;
     Q_INVOKABLE void searchPatients(const QString &text);
+    Q_INVOKABLE void loadPatientPage(int page);
     Q_INVOKABLE void markArrived(int appointmentId, int patientId);
     Q_INVOKABLE void setShift(bool open);
     Q_INVOKABLE void assignPsychologist(int id, bool onShift);
@@ -137,7 +144,9 @@ private:
     bool requireStaffRole() const;
     QNetworkAccessManager network_;
     const bool adminEdition_;
-    bool loadingSlots_ = false, databaseWorking_ = false;
+    bool loadingSlots_ = false, databaseWorking_ = false, patientsLoading_ = false;
+    int patientPage_ = 1, patientTotal_ = 0;
+    QString patientQuery_;
     int slotsGeneration_ = 0, adminGeneration_ = 0;
     QStringList slots_;
     QString slotError_, adminSection_, bookingKey_;
