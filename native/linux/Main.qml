@@ -567,14 +567,14 @@ ApplicationWindow {
                             panelContent: [
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: 10
-                                    Text { text:"Реєстр прийомів"; color:root.ink; font.bold:true; font.pixelSize:18 },
+                                    Text { text:"Реєстр прийомів"; color:root.ink; font.bold:true; font.pixelSize:18 }
                                     CareField {
                                         Layout.fillWidth: true; text: root.visitQuery
                                         Accessible.name: "Пошук серед прийомів поточного дня"
                                         placeholderText: "Пошук пацієнта, психолога, кабінету або номера картки"
                                         selectByMouse: true
                                         onTextEdited: root.visitQuery = text
-                                    },
+                                    }
                                     RowLayout {
                                         Layout.fillWidth: true; spacing: 7
                                         Repeater {
@@ -594,7 +594,7 @@ ApplicationWindow {
                                             }
                                         }
                                         Item { Layout.fillWidth: true }
-                                    },
+                                    }
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label { text: "Показано " + root.visibleVisits.length + " із " + api.visits.length + " прийомів"; color:root.muted; font.pixelSize:12 }
