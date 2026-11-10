@@ -44,7 +44,7 @@ SELECT count(*) FROM appointments;
 SELECT count(*) FROM consultations;
 SELECT server_id FROM installation_identity WHERE id=1;
 SELECT center_name FROM center_settings WHERE id=1;
-DO $ BEGIN
+DO $$ BEGIN
  IF EXISTS (SELECT 1 FROM pg_constraint WHERE connamespace='public'::regnamespace AND NOT convalidated)
  THEN RAISE EXCEPTION 'Unvalidated constraints in backup'; END IF;
 END $$;
