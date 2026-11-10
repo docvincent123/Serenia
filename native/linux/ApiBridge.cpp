@@ -580,7 +580,8 @@ namespace {
 const QHash<QString, QString> adminEndpoints{
     {"team", "/api/users"}, {"rooms", "/api/rooms"}, {"services", "/api/services"},
     {"access", "/api/reception-access"}, {"workflow", "/api/settings/workflow"},
-    {"center", "/api/settings/center"}, {"sessions", "/api/admin/sessions"}, {"audit", "/api/audit"}
+    {"center", "/api/settings/center"}, {"sessions", "/api/admin/sessions"}, {"audit", "/api/audit"},
+    {"permissions", "/api/admin/module-permissions"}
 };
 }
 
@@ -624,6 +625,21 @@ void ApiBridge::saveAdminEntry(const QString &section, int id, const QVariantMap
         emit operationCompleted("admin");
         loadAdminSection(section);
         refresh();
+    });
+}
+
+void ApiBridge::saveModulePermissions(int userId, const QVariantList &blockedModules) {
+    if (!adminEdition_ || role_ != "admin" || working_ || userId <= 0) return;
+    working_ = true;
+    error_.clear();
+    emit stateChanged();
+    request("POST", "/api/admin/module-permissions",
+            {{"user_id",userId}, {"blocked_modules",QJsonArray::fromVariantList(blockedModules)}},
+            [this](const QJsonValue &) {
+        working_ = false;
+        notify("Права працівника оновлено. Обмеження перевіряються сервером.");
+        emit operationCompleted("permissions");
+        loadAdminSection("permissions");
     });
 }
 
