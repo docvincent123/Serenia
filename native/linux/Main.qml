@@ -19,6 +19,22 @@ ApplicationWindow {
     property string selectedSlot: ""
     property var bookingOriginal: ({})
     property string calendarDay: today
+    property string visitQuery: ""
+    property string visitFilter: "all"
+    readonly property bool shiftDateMismatch: api.shift.open === true &&
+        !!api.shift.shift_date && api.shift.shift_date !== today
+    readonly property var visibleVisits: {
+        const needle = visitQuery.trim().toLowerCase()
+        const items = api.visits || []
+        return items.filter(function(item) {
+            const status = root.visitStatus(item)
+            if (root.visitFilter !== "all" && status !== root.visitFilter) return false
+            if (!needle) return true
+            const text = [item.patient, item.patient_no, item.phone, item.psychologist,
+                          item.room, item.category].map(function(value) { return String(value || "") }).join(" ").toLowerCase()
+            return text.includes(needle)
+        })
+    }
     readonly property color ink: "#11212D"
     readonly property color muted: "#4A5C6A"
     readonly property color accent: "#253745"
@@ -36,6 +52,13 @@ ApplicationWindow {
     })
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
 
+    function visitStatus(item) {
+        if (item.completed_at || item.visit_status === "completed") return "completed"
+        if (item.visit_status) return "other"
+        if (item.started_at) return "busy"
+        if (item.arrived_at) return "arrived"
+        return "waiting"
+    }
     function updateBookingSlots() {
         selectedSlot = ""
         if (bookingDialog.opened) slotDebounce.restart()
@@ -337,7 +360,13 @@ ApplicationWindow {
                 Rectangle { width:7; height:7; radius:4; color:api.shift.open ? "#2e865b" : "#c7a045" }
                 Text { text: api.shift.open ? "Зміна відкрита" : "Зміна не відкрита";
                        font.bold:true; color:root.ink; font.pixelSize:14 }
-                Text { text: api.shift.shift_date || root.today; color:root.muted; font.pixelSize:12 }
+                Text {
+                    text: root.shiftDateMismatch
+                          ? "Відкрита з " + api.shift.shift_date + " — перевірте дату зміни"
+                          : api.shift.shift_date || root.today
+                    color: root.shiftDateMismatch ? "#99611D" : root.muted
+                    font.pixelSize: 12; font.bold: root.shiftDateMismatch
+                }
                 Item { Layout.fillWidth:true }
                 SolviaButton { text: api.shift.open ? "Закрити зміну" : "Відкрити зміну";
                     visible: api.role === "admin"
@@ -486,6 +515,8 @@ ApplicationWindow {
                             SolviaButton { text:"+ Новий запис"; visible: api.role !== "director"; primary:true; onClicked:root.openPatientDirectory("") }
                             SolviaButton { text:"Прийоми сьогодні"; visible: api.role !== "director"; onClicked:root.showPage("Прийоми") }
                             SolviaButton { text:"Психологи на зміні"; onClicked:root.showPage("Психологи") }
+                            SolviaButton { text:"+ Новий пацієнт"; visible:api.role!=="director"; onClicked:newPatientDialog.open() }
+                            SolviaButton { text:"Календар"; visible:api.role!=="director"; onClicked:root.showPage("Календар") }
                             SolviaButton { text:"Виписки"; visible:api.role==="director"; onClicked:root.showPage("Виписки") }
                         }
                         ColumnLayout {
@@ -531,9 +562,54 @@ ApplicationWindow {
                     ColumnLayout {
                         visible: root.page === "Прийоми"
                         Layout.fillWidth:true; spacing:12
-                        Text { text:"Пацієнти та консультації поточної зміни"; color:root.muted; font.pixelSize:12 }
+                        Panel {
+                            Layout.fillWidth: true
+                            panelContent: [
+                                ColumnLayout {
+                                    Layout.fillWidth: true; spacing: 10
+                                    Text { text:"Реєстр прийомів"; color:root.ink; font.bold:true; font.pixelSize:18 },
+                                    CareField {
+                                        Layout.fillWidth: true; text: root.visitQuery
+                                        Accessible.name: "Пошук серед прийомів поточного дня"
+                                        placeholderText: "Пошук пацієнта, психолога, кабінету або номера картки"
+                                        selectByMouse: true
+                                        onTextEdited: root.visitQuery = text
+                                    },
+                                    RowLayout {
+                                        Layout.fillWidth: true; spacing: 7
+                                        Repeater {
+                                            model: [
+                                                {key:"all", title:"Усі"},
+                                                {key:"waiting", title:"Очікують"},
+                                                {key:"arrived", title:"Прибули"},
+                                                {key:"busy", title:"На прийомі"},
+                                                {key:"completed", title:"Завершені"}
+                                            ]
+                                            delegate: SolviaButton {
+                                                required property var modelData
+                                                implicitWidth: 90
+                                                text: modelData.title
+                                                primary: root.visitFilter === modelData.key
+                                                onClicked: root.visitFilter = modelData.key
+                                            }
+                                        }
+                                        Item { Layout.fillWidth: true }
+                                    },
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label { text: "Показано " + root.visibleVisits.length + " із " + api.visits.length + " прийомів"; color:root.muted; font.pixelSize:12 }
+                                        Item { Layout.fillWidth: true }
+                                        SolviaButton {
+                                            text: "Скинути фільтри"; subtle: true
+                                            visible: root.visitFilter !== "all" || root.visitQuery.length > 0
+                                            onClicked: { root.visitFilter = "all"; root.visitQuery = "" }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
                         Repeater {
-                            model: api.visits
+                            model: root.visibleVisits
                             delegate: Panel {
                                 required property var modelData
                                 Layout.fillWidth:true
@@ -561,7 +637,25 @@ ApplicationWindow {
                                 ]
                             }
                         }
-                        Text { visible:api.visits.length===0; text:"Записів за сьогодні немає."; color:root.muted }
+                        Panel {
+                            visible: root.visibleVisits.length === 0
+                            Layout.fillWidth: true
+                            panelContent: [
+                                Text {
+                                    text: api.visits.length === 0 ? "На сьогодні прийомів поки немає." : "За вибраними фільтрами прийомів не знайдено."
+                                    color: root.ink; font.pixelSize: 15; font.bold: true
+                                },
+                                Text {
+                                    text: api.visits.length === 0 ? "Створіть новий запис через пошук пацієнта." : "Спробуйте інший статус або пошуковий запит."
+                                    color: root.muted; font.pixelSize: 13
+                                },
+                                SolviaButton {
+                                    text: "Записати пацієнта"; primary: true
+                                    visible: api.visits.length === 0
+                                    onClicked: root.openPatientDirectory("")
+                                }
+                            ]
+                        }
                     }
 
                     // Native patient directory, limited to the requested search results.
@@ -593,7 +687,15 @@ ApplicationWindow {
                                 ]
                             }
                         }
-                        Text { visible:api.patients.length===0; text:"Немає результатів. Уточніть ПІБ або номер телефону."; color:root.muted; wrapMode: Text.WordWrap }
+                        Panel {
+                            visible: api.patients.length===0
+                            Layout.fillWidth: true
+                            panelContent: [
+                                Text { text: "Нічого не знайдено"; color:root.ink; font.pixelSize:17; font.bold:true },
+                                Text { text: "Перевірте ПІБ, номер картки або телефон. Якщо людина звернулася вперше — створіть картку."; color:root.muted; wrapMode:Text.WordWrap },
+                                SolviaButton { text: "+ Створити картку пацієнта"; primary:true; onClicked: newPatientDialog.open() }
+                            ]
+                        }
                     }
 
                     // Roster endpoint is optional until the server-side PR is merged.
