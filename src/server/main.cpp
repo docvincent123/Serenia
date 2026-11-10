@@ -194,6 +194,35 @@ std::string patientNumber(DB&d){
     throw std::runtime_error("Cannot allocate patient number");
 }
 
+// Additional per-user restrictions only DENY existing rights. They can never
+// grant access beyond the server's current allow() role checks.
+const std::vector<std::string>& accessModules(){
+ static const std::vector<std::string> modules{
+  "patients","appointments","clinical","rehabilitation",
+  "documents","reports","messages","roster"
+ };
+ return modules;
+}
+std::string moduleForApi(const std::string&path){
+ auto starts=[&](const char*prefix){return path.rfind(prefix,0)==0;};
+ if(starts("/api/consultations")||starts("/api/assessments")||starts("/api/consultation-drafts")
+    ||starts("/api/clinical"))return "clinical";
+ if(starts("/api/discharges")||starts("/api/document-templates")
+    ||starts("/api/patient-documents")||starts("/api/documents")
+    ||starts("/api/document-export"))return "documents";
+ if(starts("/api/patient-courses")||starts("/api/rehabilitation")
+    ||starts("/api/patient-referrals")||starts("/api/courses"))return "rehabilitation";
+ if(path=="/api/patients"||starts("/api/patients/")||path=="/api/patient-directory"
+    ||path=="/api/families"||starts("/api/families/"))return "patients";
+ if(starts("/api/appointments")||path=="/api/shift-workspace"
+    ||path=="/api/workday/home"||path=="/api/slots"
+    ||starts("/api/waiting-list")||starts("/api/reminders"))return "appointments";
+ if(path=="/api/stats"||starts("/api/reports")
+    ||starts("/api/shift-reports")||starts("/api/report-"))return "reports";
+ if(starts("/api/staff-messages")||starts("/api/messages"))return "messages";
+ if(starts("/api/shift-psychologists")||starts("/api/psychologists"))return "roster";
+ return "";
+}
 void allow(const J&u,std::initializer_list<std::string> roles){check(std::find(roles.begin(),roles.end(),u.at("role").get<std::string>())!=roles.end(),"Недостатньо прав",403);}
 void audit(DB&d,const J&u,const std::string&event,const std::string&entity,int id){d.query("INSERT INTO audit(user_id,event,entity,entity_id,created) VALUES(?,?,?,?,?)",{u.at("id"),event,entity,id,now()});}
 J getPatient(DB&d,const J&u,int id){allow(u,{"admin","reception","psychologist"});auto rows=d.query("SELECT p.*,f.name family FROM patients p LEFT JOIN families f ON f.id=p.family_id WHERE p.id=?",{id});check(!rows.empty(),"Пацієнта не знайдено",404);auto p=rows[0];check(u["role"]!="psychologist"||p["psychologist_id"]==u["id"],"Недостатньо прав",403);if(u["role"]!="admin")p.erase("admin_note");return p;}
@@ -329,6 +358,50 @@ db.query("DELETE FROM sessions WHERE user_id=? AND ((shift_date='' AND expires<=
 check(db.query("SELECT token FROM sessions WHERE user_id=?",{u["id"]}).empty(),"Цей обліковий запис уже використовується на іншому пристрої. Спочатку завершіть попередній сеанс або зверніться до системного адміністратора.",409);db.query("INSERT INTO sessions(token,user_id,csrf,expires,platform,device_id,device_name,ip_address,created,last_seen) VALUES(?,?,?,?,?,?,?,?,?,?)",{digest(token),u["id"],"",epoch()+workflow(db)["session_hours"].get<int>()*3600,platform,deviceId,deviceName,clientIp,now(),now()});db.query("UPDATE sessions SET shift_date=? WHERE token=?",{shiftDate,digest(token)});audit(db,u,"login","user",u["id"]);return {{"token",token},{"user",mobileProfile(db,{{"id",u["id"]},{"name",u["name"]},{"role",u["role"]},{"phone",u["phone"]}},digest(token))}};}
 if(path.rfind("/api/respond/",0)==0){auto token=path.substr(13);check(token.size()==64,"Недійсне посилання",404);auto rows=db.query("SELECT * FROM assessments WHERE token=? AND expires>? AND completed IS NULL",{digest(token),epoch()});check(!rows.empty(),"Посилання недійсне, прострочене або використане",404);if(method=="GET")return {{"questions",questions},{"title","Самопочуття сьогодні"},{"description","Авторська анкета самоспостереження, не діагностична шкала. 0 — найнижче, 10 — найвище."}};check(method=="POST","Метод не дозволений",405);check(b.contains("answers")&&b["answers"].is_array()&&b["answers"].size()==3,"Потрібно три відповіді");int score=0;for(auto&a:b["answers"]){check(a.is_number_integer()&&a>=0&&a<=10,"Відповіді: 0–10");score+=a.get<int>();}db.query("UPDATE assessments SET answers=?,score=?,completed=? WHERE id=?",{b["answers"].dump(),score,now(),rows[0]["id"]});return {{"ok",true}};}
 auto bearer=r.get_header_value("Authorization");check(bearer.rfind("Bearer ",0)==0,"Увійдіть у систему",401);auto token=digest(bearer.substr(7));auto rows=db.query("SELECT u.id,u.name,u.role,u.phone FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND (s.expires>? OR s.shift_date<>'') AND (s.shift_date='' OR EXISTS(SELECT 1 FROM shift_days WHERE shift_date=s.shift_date AND closed_at IS NULL)) AND u.active=TRUE",{token,epoch()});check(!rows.empty(),"Сесія завершилася. Увійдіть знову.",401);auto u=rows[0];db.query("UPDATE sessions SET last_seen=? WHERE token=?",{now(),token});
+if(u["role"]!="admin"){
+ const auto module=moduleForApi(path);
+ if(!module.empty())check(db.query("SELECT 1 FROM user_module_blocks WHERE user_id=? AND module=?",{u["id"],module}).empty(),
+    "Адміністратор обмежив доступ до цього розділу",403);
+}
+if(path=="/api/admin/module-permissions"){
+ allow(u,{"admin"});
+ if(method=="GET"){
+  auto users=db.query("SELECT id,name,login,role,job_title,primary_service_code,active FROM users ORDER BY name");
+  for(auto&person:users){
+   person["blocked_modules"]=J::array();
+   auto denied=db.query("SELECT module FROM user_module_blocks WHERE user_id=? ORDER BY module",{person["id"]});
+   for(const auto&entry:denied)person["blocked_modules"].push_back(entry["module"]);
+  }
+  return users;
+ }
+ check(method=="POST","Метод не дозволений",405);
+ const int userId=num(b,"user_id");
+ const auto target=db.query("SELECT role FROM users WHERE id=?",{userId});
+ check(!target.empty(),"Працівника не знайдено",404);
+ check(target[0]["role"]!="admin","Права системного адміністратора тут не змінюються",403);
+ check(b.contains("blocked_modules")&&b["blocked_modules"].is_array()
+      &&b["blocked_modules"].size()<=accessModules().size(),"Некоректний перелік обмежень",422);
+ std::vector<std::string> unique;
+ for(const auto&item:b["blocked_modules"]){
+  check(item.is_string(),"Некоректний модуль",422);
+  auto name=item.get<std::string>();
+  check(std::find(accessModules().begin(),accessModules().end(),name)!=accessModules().end(),"Невідомий модуль",422);
+  check(std::find(unique.begin(),unique.end(),name)==unique.end(),"Повторений модуль",422);
+  unique.push_back(name);
+ }
+ db.query("DELETE FROM user_module_blocks WHERE user_id=?",{userId});
+ for(const auto&name:unique)db.query(
+   "INSERT INTO user_module_blocks(user_id,module,blocked_at,blocked_by) VALUES(?,?,?,?)",
+   {userId,name,now(),u["id"]});
+ audit(db,u,"update_permissions","user",userId);
+ return {{"ok",true},{"user_id",userId},{"blocked_modules",unique}};
+}
+if(path=="/api/my-module-permissions"&&method=="GET"){
+ J denied=J::array();
+ auto rows=db.query("SELECT module FROM user_module_blocks WHERE user_id=? ORDER BY module",{u["id"]});
+ for(const auto&entry:rows)denied.push_back(entry["module"]);
+ return {{"role",u["role"]},{"blocked_modules",denied}};
+}
 if(path=="/api/license"){
  if(method=="GET")return centerAccess(db);
  allow(u,{"admin"});check(method=="POST","Метод не дозволений",405);
@@ -439,8 +512,8 @@ if(path=="/api/shift-day"){
     allow(u,{"admin"});check(method=="POST","Метод не дозволений",405);auto action=str(b,"action",20);if(action=="open"){db.query("INSERT INTO shift_days(shift_date,opened_by,opened_at,closed_by,closed_at) VALUES(?,?,?,NULL,NULL) ON CONFLICT(shift_date) DO UPDATE SET opened_by=EXCLUDED.opened_by,opened_at=EXCLUDED.opened_at,closed_by=NULL,closed_at=NULL",{day,u["id"],now()});db.query("INSERT INTO reception_access(access_date,starts_at,granted_by,granted_at,enabled) VALUES(?,?,?,?,TRUE) ON CONFLICT(access_date) DO UPDATE SET starts_at=EXCLUDED.starts_at,granted_by=EXCLUDED.granted_by,granted_at=EXCLUDED.granted_at,enabled=TRUE",{now().substr(0,10),now().substr(0,10)+"T00:00",u["id"],now()});audit(db,u,"open","shift",0);return {{"shift_date",day},{"open",true}};}check(action=="close","Дія: open або close");auto existing=db.query("SELECT shift_date FROM shift_days WHERE shift_date=? AND closed_at IS NULL",{day});check(!existing.empty(),"Зміна сьогодні ще не відкрита або вже закрита",409);auto readiness=shiftReadiness(db,u,day);check(readiness["ready"].get<bool>(),"Зміна не готова: перевірте незавершені прийоми та синхронізацію телефонів",409);db.query("UPDATE shift_days SET closed_by=?,closed_at=? WHERE shift_date=?",{u["id"],now(),day});db.query("INSERT INTO shift_backup_jobs(shift_date,closed_at) VALUES(?,?)",{day,now()});db.query("DELETE FROM sessions WHERE user_id<>?",{u["id"]});db.query("DELETE FROM shift_device_bindings WHERE shift_date=?",{day});audit(db,u,"close","shift",0);return {{"shift_date",day},{"open",false},{"sessions_terminated",true},{"backup_queued",true}};
 }
 if(path=="/api/meta"&&method=="GET")return {{"workflow",workflow(db)},{"psychologists",db.query("SELECT id,name FROM users WHERE role='psychologist' AND active=TRUE")},{"rooms",db.query("SELECT * FROM rooms WHERE active=TRUE ORDER BY name")},{"categories",categories},{"consultation_types",J::array({"primary","repeat","crisis","individual","family","child","group"})},{"risk_levels",J::array({"low","moderate","high","critical"})}};
-if(path=="/api/users"){allow(u,{"admin"});if(method=="GET"){db.query("DELETE FROM sessions WHERE expires<? AND (shift_date='' OR NOT EXISTS(SELECT 1 FROM shift_days WHERE shift_date=sessions.shift_date AND closed_at IS NULL))",{epoch()});return db.query("SELECT u.id,u.name,u.login,u.role,u.phone,u.active,u.primary_service_code,coalesce(cs.name,'') primary_service_name,coalesce(s.active_sessions,0) active_sessions,coalesce(s.platforms,'') platforms FROM users u LEFT JOIN center_services cs ON cs.code=u.primary_service_code LEFT JOIN (SELECT user_id,count(*) active_sessions,string_agg(DISTINCT NULLIF(platform,''),', ') platforms FROM sessions GROUP BY user_id) s ON s.user_id=u.id ORDER BY u.name");}check(method=="POST","Метод не дозволений",405);auto role=str(b,"role",20);check(role=="admin"||role=="reception"||role=="psychologist"||role=="director","Невідома роль");auto serviceCode=str(b,"primary_service_code",80,false);if(!serviceCode.empty())check(!db.query("SELECT id FROM center_services WHERE code=? AND active=TRUE",{serviceCode}).empty(),"Оберіть активний напрямок центру",422);auto pw=str(b,"password",256);check(pw.size()>=1,"Введіть пароль");db.query("INSERT INTO users(name,login,password,role,phone,primary_service_code) VALUES(?,?,?,?,?,?)",{str(b,"name",150),str(b,"login",100),hashPassword(pw),role,str(b,"phone",40,false),serviceCode});auto id=db.id();audit(db,u,"create","user",id);return {{"id",id}};}
-if(std::regex_match(path,std::regex("/api/users/[0-9]+"))&&method=="PATCH"){allow(u,{"admin"});int id=std::stoi(path.substr(11));auto target=db.query("SELECT id,name,login,role,phone,active,primary_service_code FROM users WHERE id=?",{id});check(!target.empty(),"Працівника не знайдено",404);auto current=target[0];auto role=b.contains("role")?str(b,"role",20):current["role"].get<std::string>();check(role=="admin"||role=="reception"||role=="psychologist"||role=="director","Невідома роль");bool active=b.contains("active")?(check(b["active"].is_boolean(),"Некоректний статус"),b["active"].get<bool>()):current["active"].get<bool>();auto name=b.contains("name")?str(b,"name",150):current["name"].get<std::string>();auto phone=b.contains("phone")?str(b,"phone",40,false):current["phone"].get<std::string>();auto serviceCode=b.contains("primary_service_code")?str(b,"primary_service_code",80,false):current["primary_service_code"].get<std::string>();if(serviceCode!=current["primary_service_code"].get<std::string>()&&!serviceCode.empty())check(!db.query("SELECT id FROM center_services WHERE code=? AND active=TRUE",{serviceCode}).empty(),"Оберіть активний напрямок центру",422);if(current["role"]=="admin"&&(role!="admin"||!active)){auto count=db.query("SELECT count(*) n FROM users WHERE role='admin' AND active=TRUE")[0]["n"].get<long long>();check(count>1,"Не можна вимкнути або змінити роль останнього адміністратора",409);}check(!(id==u["id"].get<int>()&&!active),"Не можна вимкнути власний обліковий запис",409);db.query("UPDATE users SET name=?,role=?,phone=?,active=?,primary_service_code=? WHERE id=?",{name,role,phone,active,serviceCode,id});if(b.contains("password")){auto pw=str(b,"password",256,false);if(!pw.empty()){check(pw.size()>=1,"Введіть пароль");db.query("UPDATE users SET password=? WHERE id=?",{hashPassword(pw),id});db.query("DELETE FROM sessions WHERE user_id=?",{id});}}if(role!=current["role"].get<std::string>()||!active)db.query("DELETE FROM sessions WHERE user_id=?",{id});audit(db,u,"update","user",id);return {{"ok",true}};}
+if(path=="/api/users"){allow(u,{"admin"});if(method=="GET"){db.query("DELETE FROM sessions WHERE expires<? AND (shift_date='' OR NOT EXISTS(SELECT 1 FROM shift_days WHERE shift_date=sessions.shift_date AND closed_at IS NULL))",{epoch()});return db.query("SELECT u.id,u.name,u.login,u.role,u.phone,u.active,u.primary_service_code,u.job_title,coalesce(cs.name,'') primary_service_name,coalesce(s.active_sessions,0) active_sessions,coalesce(s.platforms,'') platforms FROM users u LEFT JOIN center_services cs ON cs.code=u.primary_service_code LEFT JOIN (SELECT user_id,count(*) active_sessions,string_agg(DISTINCT NULLIF(platform,''),', ') platforms FROM sessions GROUP BY user_id) s ON s.user_id=u.id ORDER BY u.name");}check(method=="POST","Метод не дозволений",405);auto role=str(b,"role",20);check(role=="admin"||role=="reception"||role=="psychologist"||role=="director","Невідома роль");auto jobTitle=str(b,"job_title",100,false);auto serviceCode=str(b,"primary_service_code",80,false);if(!serviceCode.empty())check(!db.query("SELECT id FROM center_services WHERE code=? AND active=TRUE",{serviceCode}).empty(),"Оберіть активний напрямок центру",422);auto pw=str(b,"password",256);check(pw.size()>=1,"Введіть пароль");db.query("INSERT INTO users(name,login,password,role,phone,primary_service_code,job_title) VALUES(?,?,?,?,?,?,?)",{str(b,"name",150),str(b,"login",100),hashPassword(pw),role,str(b,"phone",40,false),serviceCode,jobTitle});auto id=db.id();audit(db,u,"create","user",id);return {{"id",id}};}
+if(std::regex_match(path,std::regex("/api/users/[0-9]+"))&&method=="PATCH"){allow(u,{"admin"});int id=std::stoi(path.substr(11));auto target=db.query("SELECT id,name,login,role,phone,active,primary_service_code,job_title FROM users WHERE id=?",{id});check(!target.empty(),"Працівника не знайдено",404);auto current=target[0];auto role=b.contains("role")?str(b,"role",20):current["role"].get<std::string>();check(role=="admin"||role=="reception"||role=="psychologist"||role=="director","Невідома роль");bool active=b.contains("active")?(check(b["active"].is_boolean(),"Некоректний статус"),b["active"].get<bool>()):current["active"].get<bool>();auto name=b.contains("name")?str(b,"name",150):current["name"].get<std::string>();auto phone=b.contains("phone")?str(b,"phone",40,false):current["phone"].get<std::string>();auto jobTitle=b.contains("job_title")?str(b,"job_title",100,false):current["job_title"].get<std::string>();auto serviceCode=b.contains("primary_service_code")?str(b,"primary_service_code",80,false):current["primary_service_code"].get<std::string>();if(serviceCode!=current["primary_service_code"].get<std::string>()&&!serviceCode.empty())check(!db.query("SELECT id FROM center_services WHERE code=? AND active=TRUE",{serviceCode}).empty(),"Оберіть активний напрямок центру",422);if(current["role"]=="admin"&&(role!="admin"||!active)){auto count=db.query("SELECT count(*) n FROM users WHERE role='admin' AND active=TRUE")[0]["n"].get<long long>();check(count>1,"Не можна вимкнути або змінити роль останнього адміністратора",409);}check(!(id==u["id"].get<int>()&&!active),"Не можна вимкнути власний обліковий запис",409);db.query("UPDATE users SET name=?,role=?,phone=?,active=?,primary_service_code=?,job_title=? WHERE id=?",{name,role,phone,active,serviceCode,jobTitle,id});if(b.contains("password")){auto pw=str(b,"password",256,false);if(!pw.empty()){check(pw.size()>=1,"Введіть пароль");db.query("UPDATE users SET password=? WHERE id=?",{hashPassword(pw),id});db.query("DELETE FROM sessions WHERE user_id=?",{id});}}if(role!=current["role"].get<std::string>()||!active)db.query("DELETE FROM sessions WHERE user_id=?",{id});audit(db,u,"update","user",id);return {{"ok",true}};}
 if(std::regex_match(path,std::regex("/api/users/[0-9]+/sessions"))&&method=="DELETE"){allow(u,{"admin"});int id=std::stoi(path.substr(11));check(id!=u["id"].get<int>(),"Власну сесію завершіть кнопкою «Вийти»",409);auto target=db.query("SELECT id FROM users WHERE id=?",{id});check(!target.empty(),"Працівника не знайдено",404);db.query("DELETE FROM sessions WHERE user_id=?",{id});audit(db,u,"terminate_sessions","user",id);return {{"ok",true}};}
 if(path=="/api/rooms"){allow(u,{"admin"});if(method=="GET")return db.query("SELECT * FROM rooms ORDER BY active DESC,name");check(method=="POST","Метод не дозволений",405);auto name=str(b,"name",100);auto code=str(b,"code",30,false),type=str(b,"type",40,false),description=str(b,"description",1000,false);int capacity=b.value("capacity",1);check(capacity>=1&&capacity<=100,"Місткість: 1–100");db.query("INSERT INTO rooms(name,code,type,capacity,description,active) VALUES(?,?,?,?,?,TRUE)",{name,code,type.empty()?"individual":type,capacity,description});auto id=db.id();audit(db,u,"create","room",id);return {{"id",id}};}
 if(std::regex_match(path,std::regex("/api/rooms/[0-9]+"))){allow(u,{"admin"});int id=std::stoi(path.substr(11));auto rows=db.query("SELECT * FROM rooms WHERE id=?",{id});check(!rows.empty(),"Кабінет не знайдено",404);if(method=="PATCH"){auto cur=rows[0];auto name=b.contains("name")?str(b,"name",100):cur["name"].get<std::string>();auto code=b.contains("code")?str(b,"code",30,false):cur["code"].get<std::string>();auto type=b.contains("type")?str(b,"type",40,false):cur["type"].get<std::string>();auto description=b.contains("description")?str(b,"description",1000,false):cur["description"].get<std::string>();int capacity=b.value("capacity",cur["capacity"].get<int>());bool active=b.value("active",cur["active"].get<bool>());check(capacity>=1&&capacity<=100,"Місткість: 1–100");db.query("UPDATE rooms SET name=?,code=?,type=?,capacity=?,description=?,active=? WHERE id=?",{name,code,type,capacity,description,active,id});audit(db,u,"update","room",id);return {{"ok",true}};}if(method=="DELETE"){check(db.query("SELECT id FROM appointments WHERE room_id=? AND status NOT IN ('cancelled','completed') LIMIT 1",{id}).empty(),"Кабінет має активні записи. Спочатку перенесіть або скасуйте їх.",409);db.query("DELETE FROM rooms WHERE id=?",{id});audit(db,u,"delete","room",id);return {{"ok",true}};}throw Error(405,"Метод не дозволений");}
