@@ -33,7 +33,7 @@ export const navigationGroups = [
   ['overview', 'Огляд', ['dashboard','module-directory']],
   ['appointments', 'Прийоми', ['shift-workspace', 'handover', 'calendar', 'waiting-list', 'tv-calls']],
   ['patients', 'Пацієнти та супровід', ['patients', 'families', 'archive']],
-  ['team', 'Команда та кабінети', ['team', 'psychologist-roster', 'rooms', 'supervisions', 'staff-messages']],
+  ['team', 'Команда та кабінети', ['team', 'services', 'psychologist-roster', 'rooms', 'supervisions', 'staff-messages']],
   ['reports', 'Звіти та аналітика', ['reports', 'workload', 'discharges']],
   ['administration', 'Адміністрування', ['devices', 'audit']]
 ];

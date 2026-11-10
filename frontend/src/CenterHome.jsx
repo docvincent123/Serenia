@@ -117,7 +117,7 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
           <span className="flow-desk-shortcut-copy"><strong>{title}</strong><small>{subtitle}</small></span>
           <AppIcon name="arrow-right" size={16}/>
         </button>)}</div>
-        <div className="flow-desk-panel-note"><AppIcon name="check" size={16}/><span>Статуси й прийоми надходять із сервера. Для оновлення натисніть «Оновити».</span></div>
+        <div className="flow-desk-panel-note"><AppIcon name="check" size={16}/><span>Статуси й прийоми оновлюються автоматично.</span></div>
       </aside>
     </div>
   </div>;
