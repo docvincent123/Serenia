@@ -43,8 +43,8 @@ try {
   const base=`http://127.0.0.1:${server.address().port}`;
   await page.addInitScript(()=>localStorage.setItem('solvia_api',location.origin));
   await page.goto(base);await page.getByPlaceholder('Ваш логін').fill('admin');await page.getByPlaceholder('Введіть пароль').fill('test-password');await page.getByRole('button',{name:'Увійти до Lemvori Care',exact:true}).click();
-  await page.getByRole('button',{name:'Налаштування центру',exact:true}).click();
-  assert.equal(await page.locator('.settings-nav').getByRole('button',{name:/Оновлення/}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Employee workspace must not expose server settings');
+  assert.equal(await page.getByRole('button',{name:'Завантажити оновлення',exact:true}).count(),0,'Employee workspace cannot install updates');
   await page.goto(base+'/?mode=server');
   await page.setViewportSize({width:1024,height:600});
   await page.getByText('Lemvori Care Server Console 3.1.1',{exact:true}).waitFor();
@@ -66,10 +66,12 @@ try {
   await page.getByRole('status').filter({hasText:'Оновлення опубліковано.'}).waitFor();
   await page.close();page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base);await page.getByRole('button',{name:'Вийти',exact:true}).waitFor();assert.equal(logins,1,'A reopened program restores the same token instead of creating another session');
-  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Завантажити оновлення',exact:true}).click();const saved=await download;
-  assert.equal(saved.suggestedFilename(),'SOLVIA-3.1.2-Windows-x64.exe');assert.equal((await readFile(await saved.path())).toString(),bytes.toString());
+  await page.getByRole('region',{name:'Доступна нова версія програми'}).waitFor();
+  await page.getByText('Доступне оновлення Lemvori Care · 3.1.2',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Завантажити оновлення',exact:true}).count(),0,'Staff can see the release but cannot download or install it');
+  assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Server settings stay in dedicated console');
   await page.goto(base+'/?mode=server');await page.getByRole('button',{name:'Оновлення Android',exact:true}).click();await page.getByRole('heading',{name:'Оновлення Android',exact:true}).waitFor();assert.equal(logins,1);
   assert.deepEqual(errors,[]);
-  console.log('PASS: separate main/Server Console, PC publishing/download and session survival after closing and reopening');
+  console.log('PASS: separate main/Server Console, admin-only PC publishing, passive staff notification and restored session');
   await context.close();
 }finally{await browser.close();await new Promise(r=>server.close(r));}
