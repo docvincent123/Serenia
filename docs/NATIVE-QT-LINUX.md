@@ -19,7 +19,7 @@ Lemvori Care використовує нативні вікна Qt Quick. Оби
 GitHub Actions **Lemvori Care native desktop** збирає пакет у `lemvori-care-native-linux-x64`. Розпакуйте ZIP і виконайте:
 
 ```bash
-sudo apt install ./solvia-native_3.2.0~preview3_amd64.deb
+sudo apt install ./solvia-native_3.2.0~preview4_amd64.deb
 ```
 
 Пакет встановлює два ярлики та Qt-клієнт для Ubuntu 24.04 amd64 і сумісної бази Linux Mint. Встановлення не мігрує PostgreSQL. Перед використанням у центрі перевірте обидва ярлики, з’єднання з CA, реєстрацію, запис із вибором часу, надходження прийому в Android і рольові обмеження на тестових даних.

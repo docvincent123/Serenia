@@ -11,11 +11,18 @@ Item {
     readonly property color muted: "#4A5C6A"
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
     readonly property var sections: [
-        {key:"team", label:"Працівники"}, {key:"rooms", label:"Кабінети"},
-        {key:"services", label:"Напрямки"}, {key:"access", label:"Доступ реєстратури"},
-        {key:"workflow", label:"Правила запису"}, {key:"center", label:"Дані центру"},
-        {key:"sessions", label:"Сеанси"}, {key:"audit", label:"Журнал дій"},
-        {key:"database", label:"База та копії"}
+        {label:"ЦЕНТР"},
+        {key:"team", label:"Працівники", detail:"Облікові записи, ролі та доступ працівників центру"},
+        {key:"rooms", label:"Кабінети", detail:"Типи, номери та місткість кабінетів"},
+        {key:"services", label:"Напрямки", detail:"Перелік послуг і категорій центру"},
+        {label:"ОРГАНІЗАЦІЯ"},
+        {key:"access", label:"Доступ реєстратури", detail:"Коли реєстратура може працювати з прийомами"},
+        {key:"workflow", label:"Правила запису", detail:"Робочі дні, крок розкладу та тривалість прийомів"},
+        {key:"center", label:"Дані центру", detail:"Контакти, реквізити та файли підключення"},
+        {label:"СИСТЕМА"},
+        {key:"sessions", label:"Сеанси", detail:"Пристрої працівників і час останньої активності"},
+        {key:"audit", label:"Журнал дій", detail:"Історія дій працівників у системі"},
+        {key:"database", label:"База та копії", detail:"Резервне копіювання та відновлення PostgreSQL"}
     ]
     readonly property var roles: [
         {key:"reception", label:"Реєстратура"}, {key:"psychologist", label:"Психолог"},
@@ -32,7 +39,7 @@ Item {
     ]
     readonly property bool listEditable: ["team","rooms","services"].includes(section)
     readonly property bool detailsEditable: ["access","workflow","center"].includes(section)
-    readonly property string heading: sections.find(item => item.key === section).label
+    readonly property var currentSection: sections.find(item => item.key === section)
     readonly property var schema: ({
         team:[
             {key:"name", label:"ПІБ"}, {key:"login", label:"Логін", createOnly:true},
@@ -101,52 +108,71 @@ Item {
     component Action: Button {
         id: action
         property bool primary: false
-        implicitHeight: 42
+        property bool onRail: false
+        implicitHeight: onRail ? 35 : 42
         leftPadding: 16; rightPadding: 16
         contentItem: Label {
-            text: action.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-            color: action.primary ? "#F1F3F3" : root.ink; font.bold: action.primary
+            text: action.text; horizontalAlignment: action.onRail ? Text.AlignLeft : Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+            color: action.onRail ? root.ink : action.primary ? "#F1F3F3" : root.ink
+            font.bold: action.primary; elide: Text.ElideRight
         }
         background: Rectangle {
-            radius: height/2
-            color: action.primary ? (action.hovered ? "#11212D" : "#253745") : (action.hovered ? "#B9C2C4" : "#DEE2E2")
-            border.color: action.visualFocus ? root.ink : "#9BA8AB"
+            radius: action.onRail ? 9 : height/2
+            color: action.onRail ? (action.primary ? "#CCD0CF" : action.hovered ? "#EDF0F0" : "transparent")
+                 : action.primary ? (action.hovered ? "#11212D" : "#253745") : (action.hovered ? "#B9C2C4" : "#DEE2E2")
+            border.color: action.visualFocus ? root.ink : action.onRail ? "transparent" : "#9BA8AB"
             opacity: action.enabled ? 1 : .55
         }
     }
 
     RowLayout {
-        anchors.fill: parent; spacing: 18
+        anchors.fill: parent; anchors.margins: 18; spacing: 14
         Rectangle {
-            Layout.fillHeight: true; Layout.preferredWidth: 208
-            color: "#4A5C6A"
+            Layout.fillHeight: true; Layout.preferredWidth: 178
+            color: "#F8FAFA"; border.color: "#CCD0CF"; radius: 13
             ScrollView {
-                anchors.fill: parent; anchors.margins: 10
+                id: adminRail
+                anchors.fill: parent; anchors.margins: 8; clip: true
                 contentWidth: availableWidth
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 ColumnLayout {
-                    width: parent.width; spacing: 7
+                    width: adminRail.availableWidth; spacing: 3
                     Repeater {
                         model: root.sections
-                        delegate: Action {
+                        delegate: ColumnLayout {
                             required property var modelData
                             Layout.fillWidth: true
-                            text: modelData.label
-                            primary: root.section === modelData.key
-                            enabled: !root.bridge.working
-                            onClicked: root.select(modelData.key)
+                            Label {
+                                visible: !modelData.key; text: modelData.label; color: root.muted
+                                font.pixelSize: 10; font.letterSpacing: 1
+                                Layout.topMargin: 9; Layout.bottomMargin: 3; Layout.leftMargin: 12
+                            }
+                            Action {
+                                visible: !!modelData.key; text: modelData.label
+                                Layout.fillWidth: true
+                                onRail: true; primary: root.section === modelData.key
+                                enabled: !root.bridge.working
+                                onClicked: root.select(modelData.key)
+                            }
                         }
                     }
                 }
             }
         }
         ScrollView {
-            Layout.fillWidth: true; Layout.fillHeight: true
+            id: adminContent
+            Layout.fillWidth: true; Layout.fillHeight: true; clip: true
             contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             ColumnLayout {
-                width: parent.width; spacing: 14
+                width: adminContent.availableWidth; spacing: 14
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: root.heading; color: root.ink; font.pixelSize: 26; font.bold: true; Layout.fillWidth: true }
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 4
+                        Label { text: root.currentSection.label; color: root.ink; font.pixelSize: 26; font.bold: true; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        Label { text: root.currentSection.detail; color: root.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                    }
                     Action { text: "+ Додати"; primary: true; visible: root.listEditable; enabled: !root.bridge.working; onClicked: root.edit({}) }
                     Action { text: "Редагувати"; primary: true; visible: root.detailsEditable; enabled: !root.bridge.working && Object.keys(root.bridge.adminDetails).length > 0; onClicked: root.edit(root.bridge.adminDetails) }
                 }
@@ -181,7 +207,7 @@ Item {
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true; implicitHeight: row.implicitHeight + 22
-                        color: "#CCD0CF"; radius: 16; border.color: "#9BA8AB"
+                        color: "#FFFFFF"; radius: 13; border.color: "#CCD0CF"
                         RowLayout {
                             id: row
                             anchors.fill: parent; anchors.margins: 11
@@ -194,7 +220,7 @@ Item {
                                 Label {
                                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                                     text: {
-                                        if (root.section === "team") return [modelData.login, root.readable(root.roles,modelData.role), modelData.active ? "Активний" : "Вимкнений"].join(" · ")
+                                        if (root.section === "team") return [modelData.login, root.readable(root.roles,modelData.role), modelData.active ? "Активний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "rooms") return [modelData.code, root.readable(root.roomTypes,modelData.type), modelData.capacity + " місць", modelData.active ? "Доступний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "services") return root.readable(root.categories,modelData.category) + (modelData.active ? "" : " · Вимкнено")
                                         if (root.section === "sessions") return [modelData.device_name || modelData.platform, modelData.last_seen, modelData.online ? "Онлайн" : "Офлайн"].filter(Boolean).join(" · ")
@@ -239,7 +265,7 @@ Item {
         id: form
         property int recordId: 0
         property var values: ({})
-        title: root.heading
+        title: root.currentSection.label
         modal: true; anchors.centerIn: Overlay.overlay
         width: Math.min(530, root.width - 30)
         height: Math.min(600, root.height - 32)
