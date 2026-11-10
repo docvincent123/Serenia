@@ -85,6 +85,11 @@ int main(int argc, char **argv) {
     verify(waitFor([&] { return admin.notice().contains("Зміни збережено"); }), "Admin team change failed");
     admin.endUserSessions(4);
     verify(waitFor([&] { return admin.notice().contains("Сеанси працівника завершено"); }), "Employee session revocation failed");
+    admin.loadAdminSection("permissions");
+    verify(waitFor([&] { return admin.adminRows().size() == 1; }), "Admin permissions did not load");
+    admin.saveModulePermissions(4, QVariantList{"documents","clinical"});
+    verify(waitFor([&] { return admin.notice().contains("Права працівника оновлено"); }), "Admin permission update failed");
+
     const auto profile = QUrl::fromLocalFile(config.filePath("test.solvia"));
     admin.exportProfile(profile, true);
     verify(waitFor([&] { return QFile::exists(profile.toLocalFile()); }), "Admin profile export failed");
