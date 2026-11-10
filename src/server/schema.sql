@@ -841,3 +841,8 @@ INSERT INTO center_services(code,name,category,active) VALUES
  ('speech','Логопедія','rehabilitation',TRUE),
  ('social','Соціальний супровід','other',TRUE)
 ON CONFLICT(code) DO NOTHING;
+
+-- Professional service association is descriptive; it NEVER changes RBAC or clinical permissions.
+-- Blank means the employee is not assigned to a primary service.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_service_code TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_users_primary_service_code ON users(primary_service_code);
