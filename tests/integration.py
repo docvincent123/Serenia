@@ -65,6 +65,67 @@ class Scenario(unittest.TestCase):
         code, result=self.call(method,path,body,self.tokens.get(role))
         self.assertEqual(code,status,result)
         return result
+    def test_a01_module_restrictions_are_server_enforced(self):
+        """Explicit denies are enforced by API, with no cross-role grant."""
+        created = self.api('admin','POST','/api/users',{
+            'name': 'Тестова фахівчиня',
+            'login': 'ci-module-limits',
+            'password': 'ci-module-limits-test',
+            'role': 'reception',
+            'job_title': 'physical_therapist',
+            'primary_service_code': 'rehabilitation',
+        })
+        uid = created['id']
+        def direct_sql(statement):
+            return subprocess.check_output([
+                'psql', self.database, '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', statement
+            ], text=True).strip()
+        try:
+            users = self.api('admin','GET','/api/users')
+            account = next(x for x in users if x['id'] == uid)
+            self.assertEqual(account['job_title'], 'physical_therapist')
+            self.assertEqual(account['primary_service_code'], 'rehabilitation')
+            code, signed = self.call('POST','/api/login',{
+                'login':'ci-module-limits', 'password':'ci-module-limits-test', 'platform':'CI'
+            })
+            self.assertEqual(code, 200, signed)
+            token = signed['token']
+            self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],200)
+            self.assertEqual(self.call('GET','/api/my-module-permissions',token=token)[1]['blocked_modules'],[])
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':uid,
+                'blocked_modules':['appointments','clinical','documents','reports'],
+            })
+            self.assertEqual(self.call('GET','/api/shift-workspace',token=token)[0],403)
+            self.assertEqual(self.call('GET','/api/patients/1',token=token)[0],403,
+                             'Patient-detail projection must not expose private content when clinical is blocked')
+            self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],200,
+                             'Unrestricted patient-directory search must remain available')
+            self.assertEqual(self.call('GET','/api/me',token=token)[0],200)
+            self.assertEqual(self.call('GET','/api/admin/module-permissions',token=token)[0],403)
+            self.assertEqual(self.call('POST','/api/admin/module-permissions',{
+                'user_id':uid,'blocked_modules':[]
+            },token=token)[0],403)
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':uid,'blocked_modules':['patients']
+            })
+            self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],403)
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':uid,'blocked_modules':['invalid-module']
+            },status=422)
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':1,'blocked_modules':['patients']
+            },status=403)
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':uid,'blocked_modules':[]
+            })
+            self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],200)
+            entry = next(x for x in self.api('admin','GET','/api/admin/module-permissions') if x['id'] == uid)
+            self.assertEqual(entry['blocked_modules'],[])
+        finally:
+            self.api('admin','DELETE',f'/api/users/{uid}/sessions',{})
+            direct_sql(f'DELETE FROM audit WHERE user_id={uid}; DELETE FROM users WHERE id={uid}')
+ 
     def test_a0_live_workflow_events_and_tv(self):
         def sql(statement):
             return subprocess.check_output(['psql',self.database,'-X','-qAt','-v','ON_ERROR_STOP=1','-c',statement],text=True).strip()
