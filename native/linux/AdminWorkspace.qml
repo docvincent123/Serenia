@@ -345,13 +345,34 @@ Item {
         property var values: ({})
         title: root.currentSection.label
         modal: true; anchors.centerIn: Overlay.overlay
-        width: Math.min(530, root.width - 30)
-        height: Math.min(600, root.height - 32)
+        width: Math.min(590, root.width - 30)
+        height: Math.min(650, root.height - 32)
+        padding: 0
         closePolicy: root.bridge.working ? Popup.NoAutoClose : Popup.CloseOnEscape
-        contentItem: ScrollView {
-            contentWidth: availableWidth
+        background: Rectangle {
+            radius: 24; color: "#F8FAFA"
+            border.color: "#CCD0CF"; border.width: 1
+        }
+        header: Rectangle {
+            implicitHeight: 76
+            color: "transparent"
             ColumnLayout {
-                width: parent.width; spacing: 9
+                anchors.fill: parent
+                anchors.leftMargin: 24; anchors.rightMargin: 24
+                anchors.topMargin: 14; anchors.bottomMargin: 8
+                spacing: 2
+                Label { text: form.recordId > 0 ? "Редагування" : "Новий запис"; color: root.muted; font.pixelSize: 12 }
+                Label { text: form.title; color: root.ink; font.pixelSize: 23; font.bold: true }
+            }
+        }
+        contentItem: ScrollView {
+            clip: true
+            leftPadding: 24; rightPadding: 24
+            topPadding: 12; bottomPadding: 12
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ColumnLayout {
+                width: parent.width; spacing: 14
                 Repeater {
                     id: editorFields
                     model: form.visible ? (root.schema[root.section] || []).filter(field =>
@@ -361,7 +382,8 @@ Item {
                         readonly property var original: form.values[modelData.key] ?? modelData.initial ?? ""
                         readonly property var fieldValue: editor.item ? editor.item.fieldValue : original
                         Layout.fillWidth: true
-                        Label { text: modelData.label; color: root.ink }
+                        spacing: 7
+                        Label { text: modelData.label; color: root.ink; font.pixelSize: 13; font.bold: true }
                         Loader {
                             id: editor
                             Layout.fillWidth: true
@@ -369,35 +391,134 @@ Item {
                             Component {
                                 id: comboEditor
                                 ComboBox {
+                                    id: selection
                                     readonly property var fieldValue: currentValue
                                     model: modelData.options; textRole: "label"; valueRole: "key"
+                                    implicitHeight: 50
+                                    leftPadding: 16; rightPadding: 38
+                                    font.pixelSize: 14
                                     Component.onCompleted: {
                                         const index = indexOfValue(original)
                                         currentIndex = index >= 0 ? index : 0
                                     }
+                                    contentItem: Text {
+                                        text: selection.displayText
+                                        color: root.ink
+                                        font.pixelSize: 14
+                                        leftPadding: 16; rightPadding: 36
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                    }
+                                    indicator: Label {
+                                        text: "⌄"; font.pixelSize: 22
+                                        color: root.muted
+                                        anchors.right: parent.right; anchors.rightMargin: 17
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    background: Rectangle {
+                                        radius: 15; color: "#FFFFFF"
+                                        border.color: selection.activeFocus ? "#253745" : "#C7D0D3"
+                                        border.width: selection.activeFocus ? 2 : 1
+                                    }
+                                    delegate: ItemDelegate {
+                                        width: selection.width - 14
+                                        implicitHeight: 42
+                                        text: selection.textRole ? model[selection.textRole] : modelData
+                                        highlighted: selection.highlightedIndex === index
+                                        background: Rectangle {
+                                            radius: 11
+                                            color: parent.highlighted ? "#E5ECEF" : parent.hovered ? "#F1F4F5" : "#FFFFFF"
+                                        }
+                                    }
+                                    popup: Popup {
+                                        y: selection.height + 4; width: selection.width
+                                        padding: 7
+                                        implicitHeight: Math.min(popupList.contentHeight + 14, 250)
+                                        background: Rectangle {
+                                            radius: 16; color: "#FFFFFF"
+                                            border.color: "#C7D0D3"
+                                        }
+                                        contentItem: ListView {
+                                            id: popupList
+                                            clip: true; implicitHeight: contentHeight
+                                            model: selection.delegateModel
+                                            currentIndex: selection.highlightedIndex
+                                            ScrollIndicator.vertical: ScrollIndicator { }
+                                        }
+                                    }
                                 }
                             }
-                            Component { id: checkEditor; CheckBox { readonly property bool fieldValue: checked; checked: Boolean(original); text: "Увімкнено" } }
-                            Component { id: numericEditor; SpinBox { readonly property int fieldValue: value; from: modelData.from; to: modelData.to; value: Number(original); editable: true } }
-                            Component { id: textEditor; TextField { readonly property string fieldValue: text; text: String(original); echoMode: modelData.type === "password" ? TextInput.Password : TextInput.Normal; selectByMouse: true } }
+                            Component {
+                                id: checkEditor
+                                Switch {
+                                    readonly property bool fieldValue: checked
+                                    checked: Boolean(original)
+                                    text: checked ? "Увімкнено" : "Вимкнено"
+                                    implicitHeight: 48; font.pixelSize: 14
+                                }
+                            }
+                            Component {
+                                id: numericEditor
+                                SpinBox {
+                                    id: numeric
+                                    readonly property int fieldValue: value
+                                    from: modelData.from; to: modelData.to
+                                    value: Number(original); editable: true
+                                    implicitHeight: 50
+                                    background: Rectangle {
+                                        radius: 15; color: "#FFFFFF"
+                                        border.color: numeric.activeFocus ? "#253745" : "#C7D0D3"
+                                    }
+                                }
+                            }
+                            Component {
+                                id: textEditor
+                                TextField {
+                                    id: input
+                                    readonly property string fieldValue: text
+                                    text: String(original)
+                                    echoMode: modelData.type === "password" ? TextInput.Password : TextInput.Normal
+                                    selectByMouse: true
+                                    implicitHeight: 50; font.pixelSize: 14
+                                    leftPadding: 16; rightPadding: 16
+                                    background: Rectangle {
+                                        radius: 15; color: "#FFFFFF"
+                                        border.color: input.activeFocus ? "#253745" : "#C7D0D3"
+                                        border.width: input.activeFocus ? 2 : 1
+                                    }
+                                }
+                            }
                         }
                     }
                 }
                 Label { Layout.fillWidth: true; visible: !!root.bridge.error; text: root.bridge.error; color: "#8C3632"; wrapMode: Text.WordWrap }
             }
         }
-        footer: DialogButtonBox {
-            Action { text: "Скасувати"; enabled: !root.bridge.working; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole; onClicked: form.close() }
-            Action {
-                text: "Зберегти"; primary: true; enabled: !root.bridge.working
-                DialogButtonBox.buttonRole: DialogButtonBox.ActionRole
-                onClicked: {
-                    const body = {}
-                    for (let i=0; i<editorFields.count; i++) {
-                        const field = editorFields.itemAt(i)
-                        body[field.modelData.key] = field.fieldValue
+        footer: Rectangle {
+            implicitHeight: 82
+            color: "transparent"
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 24; anchors.rightMargin: 24
+                anchors.topMargin: 12; anchors.bottomMargin: 18
+                spacing: 12
+                Action {
+                    Layout.fillWidth: true
+                    text: "Зберегти"; primary: true; enabled: !root.bridge.working
+                    onClicked: {
+                        const body = {}
+                        for (let i=0; i<editorFields.count; i++) {
+                            const field = editorFields.itemAt(i)
+                            body[field.modelData.key] = field.fieldValue
+                        }
+                        root.bridge.saveAdminEntry(root.section, form.recordId, body)
                     }
-                    root.bridge.saveAdminEntry(root.section, form.recordId, body)
+                }
+                Action {
+                    Layout.fillWidth: true
+                    text: "Скасувати"
+                    enabled: !root.bridge.working
+                    onClicked: form.close()
                 }
             }
         }
