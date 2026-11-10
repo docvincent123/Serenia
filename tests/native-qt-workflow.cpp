@@ -73,6 +73,11 @@ int main(int argc, char **argv) {
     verify(waitFor([&] { return admin.error().contains("лише адміністраторам"); }), "Admin app accepted reception");
     admin.login("admin", "test");
     verify(waitFor([&] { return admin.role() == "admin"; }), "Admin sign-in failed");
+    admin.searchPatients(QString());
+    verify(waitFor([&] { return admin.patientTotal() == 41 && admin.patientPage() == 1 && admin.patients().size() == 1; }), "Patient register first page failed");
+    admin.loadPatientPage(2);
+    verify(waitFor([&] { return admin.patientPage() == 2 && admin.patients().size() == 1; }), "Patient register second page failed");
+    verify(admin.patients().front().toMap().value("id").toInt() == 2, "Patient register page content mismatch");
     admin.loadAdminSection("team");
     verify(waitFor([&] { return admin.adminRows().size() == 1; }), "Admin team did not load");
     verify(waitFor([&] { return admin.serviceChoices().size() == 1; }), "Service options did not load");
