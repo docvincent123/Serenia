@@ -12,7 +12,7 @@ Item {
         const rows = bridge.adminRows || []
         const needle = searchText.trim().toLowerCase()
         if (!needle) return rows
-        const fields = ["name", "login", "role", "code", "type", "category", "device_name", "platform", "event", "entity", "actor", "ip_address"]
+        const fields = ["name", "login", "role", "job_title", "primary_service_name", "code", "type", "category", "device_name", "platform", "event", "entity", "actor", "ip_address"]
         return rows.filter(function(record) {
             return fields.some(function(key) {
                 return String(record[key] ?? "").toLowerCase().includes(needle)
@@ -27,6 +27,7 @@ Item {
         {key:"team", label:"Працівники", detail:"Облікові записи, ролі та доступ працівників центру"},
         {key:"rooms", label:"Кабінети", detail:"Типи, номери та місткість кабінетів"},
         {key:"services", label:"Напрямки", detail:"Перелік послуг і категорій центру"},
+        {key:"permissions", label:"Права за модулями", detail:"Індивідуальні обмеження доступу без розширення базових прав ролі"},
         {label:"ОРГАНІЗАЦІЯ"},
         {key:"access", label:"Доступ реєстратури", detail:"Коли реєстратура може працювати з прийомами"},
         {key:"workflow", label:"Правила запису", detail:"Робочі дні, крок розкладу та тривалість прийомів"},
@@ -45,6 +46,31 @@ Item {
         }
         return items
     }
+    readonly property var moduleChoices: [
+        {key:"patients", label:"Пацієнти та реєстр"},
+        {key:"appointments", label:"Прийоми та календар"},
+        {key:"clinical", label:"Клінічні консультації"},
+        {key:"rehabilitation", label:"Реабілітаційні записи"},
+        {key:"documents", label:"Виписки та документи"},
+        {key:"reports", label:"Звіти й аналітика"},
+        {key:"messages", label:"Повідомлення"},
+        {key:"roster", label:"Працівники на зміні"}
+    ]
+    readonly property var positions: [
+        {key:"", label:"Не вказано"},
+        {key:"registrar", label:"Реєстратор"},
+        {key:"psychologist", label:"Психолог"},
+        {key:"psychiatrist", label:"Психіатр"},
+        {key:"physician", label:"Лікар"},
+        {key:"nurse", label:"Медична сестра / брат"},
+        {key:"physical_therapist", label:"Фізичний терапевт"},
+        {key:"occupational_therapist", label:"Ерготерапевт"},
+        {key:"speech_therapist", label:"Логопед"},
+        {key:"art_therapist", label:"Арттерапевт"},
+        {key:"social_worker", label:"Соціальний працівник"},
+        {key:"head", label:"Керівник"},
+        {key:"other", label:"Інша посада"}
+    ]
     readonly property var roles: [
         {key:"reception", label:"Реєстратура"}, {key:"psychologist", label:"Психолог"},
         {key:"director", label:"Керівник"}, {key:"admin", label:"Адміністратор"}
@@ -65,6 +91,7 @@ Item {
         team:[
             {key:"name", label:"ПІБ"}, {key:"login", label:"Логін", createOnly:true},
             {key:"role", label:"Роль доступу", options:roles, initial:"reception"},
+            {key:"job_title", label:"Посада (не змінює права)", options:positions, initial:""},
             {key:"primary_service_code", label:"Професійний напрямок", options:root.serviceOptions, initial:""},
             {key:"phone", label:"Телефон"},
             {key:"password", label:"Пароль", type:"password"},
@@ -121,6 +148,12 @@ Item {
             form.values.enabled = record.enabled === undefined ? true : record.enabled
         }
         form.open()
+    }
+
+    function openPermissions(record) {
+        permissionsDialog.person = Object.assign({}, record)
+        permissionsDialog.blocked = (record.blocked_modules || []).slice()
+        permissionsDialog.open()
     }
 
     function readable(options, key) {
@@ -226,7 +259,7 @@ Item {
                     }
                 }
                 ColumnLayout {
-                    visible: root.listEditable || root.section === "sessions" || root.section === "audit"
+                    visible: root.listEditable || root.section === "permissions" || root.section === "sessions" || root.section === "audit"
                     Layout.fillWidth: true; spacing: 8
                     RowLayout {
                         Layout.fillWidth: true; spacing: 10
@@ -255,7 +288,7 @@ Item {
                     }
                 }
                 Label {
-                    visible: (root.listEditable || root.section === "sessions" || root.section === "audit") &&
+                    visible: (root.listEditable || root.section === "permissions" || root.section === "sessions" || root.section === "audit") &&
                              root.filteredRows.length === 0 && !root.bridge.working
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: root.searchText ? "За цим запитом нічого не знайдено." : "У цьому розділі поки немає записів."
@@ -266,12 +299,22 @@ Item {
                     text: "Завантажуємо перелік напрямків для працівників…"
                 }
                 Label {
+                    visible: root.section === "permissions"
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
+                    text: "Базова роль визначає максимальні права. Нижче можна лише обмежити окремі модулі працівника. Заборонений базовою роллю доступ увімкнути тут неможливо; зміни перевіряє сервер і записує в журнал."
+                }
+                Label {
+                    visible: root.section === "team"
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
+                    text: "Роль доступу контролює дозволені дії. Посада й професійний напрямок відображають спеціалізацію, але не відкривають чужі картки пацієнтів."
+                }
+                Label {
                     visible: root.section === "services"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: "Напрямки — це послуги центру. Права доступу працівника задаються окремою роллю; спеціалізація не надає доступ до чужих медичних записів."
                 }
                 Repeater {
-                    model: root.listEditable || root.section === "sessions" || root.section === "audit" ? root.filteredRows : []
+                    model: root.listEditable || root.section === "permissions" || root.section === "sessions" || root.section === "audit" ? root.filteredRows : []
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true; implicitHeight: row.implicitHeight + 22
@@ -288,13 +331,20 @@ Item {
                                 Label {
                                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                                     text: {
-                                        if (root.section === "team") return [modelData.login, root.readable(root.roles,modelData.role), modelData.primary_service_name, modelData.active ? "Активний" : "Вимкнений"].filter(Boolean).join(" · ")
+                                        if (root.section === "team") return [modelData.login, root.readable(root.roles,modelData.role), root.readable(root.positions,modelData.job_title), modelData.primary_service_name, modelData.active ? "Активний" : "Вимкнений"].filter(Boolean).join(" · ")
+                                        if (root.section === "permissions") return [modelData.login, root.readable(root.roles,modelData.role), "Обмежено модулів: " + (modelData.blocked_modules || []).length].filter(Boolean).join(" · ")
                                         if (root.section === "rooms") return [modelData.code, root.readable(root.roomTypes,modelData.type), modelData.capacity + " місць", modelData.active ? "Доступний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "services") return root.readable(root.categories,modelData.category) + (modelData.active ? "" : " · Вимкнено")
                                         if (root.section === "sessions") return [modelData.login || modelData.user_name || modelData.user, modelData.device_name || modelData.platform, modelData.last_seen, modelData.online ? "Онлайн" : "Офлайн"].filter(Boolean).join(" · ")
                                         return [modelData.actor, modelData.created].filter(Boolean).join(" · ")
                                     }
                                 }
+                            }
+                            Action {
+                                text: modelData.role === "admin" ? "Системні права" : "Налаштувати права"
+                                visible: root.section === "permissions"
+                                enabled: !root.bridge.working && modelData.role !== "admin"
+                                onClicked: root.openPermissions(modelData)
                             }
                             Action { text: "Редагувати"; visible: root.listEditable; enabled: !root.bridge.working && (root.section !== "team" || root.bridge.serviceChoices.length > 0); onClicked: root.edit(modelData) }
                             Action {
@@ -336,7 +386,10 @@ Item {
     Connections {
         target: root.bridge
         function onStateChanged() { if (!root.bridge.authenticated) form.close() }
-        function onOperationCompleted(operation) { if (operation === "admin") form.close() }
+        function onOperationCompleted(operation) {
+            if (operation === "admin") form.close()
+            if (operation === "permissions") permissionsDialog.close()
+        }
     }
 
     Dialog {
@@ -520,6 +573,72 @@ Item {
                     enabled: !root.bridge.working
                     onClicked: form.close()
                 }
+            }
+        }
+    }
+    Dialog {
+        id: permissionsDialog
+        property var person: ({})
+        property var blocked: ([])
+        title: "Доступ працівника"
+        modal: true; anchors.centerIn: Overlay.overlay
+        width: Math.min(550, root.width - 30)
+        height: Math.min(630, root.height - 30)
+        padding: 0
+        closePolicy: root.bridge.working ? Popup.NoAutoClose : Popup.CloseOnEscape
+        background: Rectangle { radius: 24; color: "#F8FAFA"; border.color: "#CCD0CF" }
+        header: Rectangle {
+            implicitHeight: 100; color: "transparent"
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 22; spacing: 5
+                Label { text: permissionsDialog.person.name || "Працівник"; font.pixelSize: 21; font.bold: true; color: root.ink }
+                Label { text: "Базова роль: " + root.readable(root.roles, permissionsDialog.person.role); font.pixelSize: 13; color: root.muted }
+                Label { text: "Перемикачі можуть лише обмежувати доступ"; font.pixelSize: 12; color: root.muted }
+            }
+        }
+        contentItem: ScrollView {
+            clip: true; contentWidth: availableWidth
+            leftPadding: 22; rightPadding: 22
+            ColumnLayout {
+                width: parent.width; spacing: 8
+                Repeater {
+                    model: root.moduleChoices
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true; implicitHeight: 58
+                        radius: 16; color: "#FFFFFF"; border.color: "#D4DCDE"
+                        RowLayout {
+                            anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 14
+                            Label { text: modelData.label; Layout.fillWidth: true; color: root.ink; font.pixelSize: 14 }
+                            Switch {
+                                checked: !permissionsDialog.blocked.includes(modelData.key)
+                                Accessible.name: "Дозволити " + modelData.label
+                                onToggled: {
+                                    const copy = permissionsDialog.blocked.slice()
+                                    const i = copy.indexOf(modelData.key)
+                                    if (checked && i >= 0) copy.splice(i, 1)
+                                    if (!checked && i < 0) copy.push(modelData.key)
+                                    permissionsDialog.blocked = copy
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        footer: Rectangle {
+            implicitHeight: 78; color: "transparent"
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 22; anchors.rightMargin: 22
+                anchors.topMargin: 10; anchors.bottomMargin: 16
+                spacing: 12
+                Action {
+                    Layout.fillWidth: true; text: "Зберегти права"; primary: true
+                    enabled: !root.bridge.working
+                    onClicked: root.bridge.saveModulePermissions(Number(permissionsDialog.person.id), permissionsDialog.blocked)
+                }
+                Action { Layout.fillWidth: true; text: "Скасувати"; enabled: !root.bridge.working; onClicked: permissionsDialog.close() }
             }
         }
     }
