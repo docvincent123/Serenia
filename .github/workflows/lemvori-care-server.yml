@@ -20,6 +20,7 @@ jobs:
           bash -n deploy/lemvori-care/network-tls.sh
           bash -n deploy/lemvori-care/lemvori-carectl
           bash -n deploy/lemvori-care/restore.sh
+          bash -n deploy/lemvori-care/verify-host.sh
           bash -n tests/lemvori-restore-e2e.sh
           python3 -m py_compile deploy/lemvori-care/network-address.py
           python3 tests/lemvori-care-network.py
