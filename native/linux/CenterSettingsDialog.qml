@@ -14,9 +14,17 @@ Dialog {
     title:mode==="license"?"Ліцензія центру":mode==="modules"?"Модулі центру":"Обов’язкові згоди"
     modal:true;anchors.centerIn:Overlay.overlay;width:Math.min(780,Overlay.overlay.width-40);height:Math.min(730,Overlay.overlay.height-40)
     closePolicy:bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
+    background:Rectangle{radius:22;color:"#F5F7F7";border.color:"#CCD0CF"}
+    header:Rectangle{
+        color:"transparent";implicitHeight:78
+        ColumnLayout{anchors.fill:parent;anchors.leftMargin:24;anchors.rightMargin:24;spacing:4
+            Label{text:"LEMVORI CARE · АДМІНІСТРУВАННЯ";font.pixelSize:11;font.bold:true;color:"#4A5C6A"}
+            Label{text:root.title;font.pixelSize:22;font.bold:true;color:"#11212D"}
+        }
+    }
     component Action:Button { id:b;implicitHeight:42;leftPadding:16;rightPadding:16;contentItem:Text{textFormat:Text.PlainText;text:b.text;color:b.enabled?"#11212D":"#9BA8AB";font.bold:true;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter} background:Rectangle{radius:21;color:b.hovered?"#CCD0CF":"white";border.color:"#CCD0CF"} }
     contentItem:ScrollView {
-        id:scroll;contentWidth:availableWidth;clip:true
+        id:scroll;contentWidth:availableWidth;clip:true;leftPadding:24;rightPadding:24;topPadding:8;bottomPadding:12
         ColumnLayout {
             width:scroll.availableWidth;spacing:12
             ColumnLayout {
@@ -54,8 +62,14 @@ Dialog {
                         readonly property var edited:({document_type:modelData.document_type,title:heading.text,content:body.text,required:consentRequired.checked})
                         Layout.fillWidth:true
                         CheckBox { id:consentRequired;text:"Обов’язкова · версія "+modelData.version;checked:modelData.required;onClicked:root.dirty=true }
-                        TextField { id:heading;Layout.fillWidth:true;text:modelData.title;onTextEdited:root.dirty=true }
-                        TextArea { id:body;Layout.fillWidth:true;implicitHeight:180;text:modelData.content;wrapMode:TextEdit.Wrap;selectByMouse:true;placeholderText:"Затверджений текст згоди";onTextChanged:{if(activeFocus)root.dirty=true} }
+                        TextField { id:heading;Layout.fillWidth:true;text:modelData.title;onTextEdited:root.dirty=true
+    implicitHeight:46;leftPadding:14;selectByMouse:true
+    background:Rectangle{radius:12;color:"white";border.color:heading.activeFocus?"#253745":"#CCD0CF"}
+}
+                        TextArea { id:body;Layout.fillWidth:true;implicitHeight:190;text:modelData.content;wrapMode:TextEdit.Wrap;selectByMouse:true;placeholderText:"Затверджений текст згоди";onTextChanged:{if(activeFocus)root.dirty=true}
+    leftPadding:14;topPadding:12
+    background:Rectangle{radius:12;color:"white";border.color:body.activeFocus?"#253745":"#CCD0CF"}
+}
                     }
                 }
             }
