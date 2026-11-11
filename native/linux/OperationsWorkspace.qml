@@ -175,6 +175,7 @@ Item {
         Connections { target:root.bridge; function onStateChanged(){if(!root.bridge.authenticated)familyDialog.close()} }
     }
     FileDialog { id:cardPicker; property bool clinical:false; title:"Зберегти картку PDF";fileMode:FileDialog.SaveFile;defaultSuffix:"pdf";nameFilters:["PDF (*.pdf)"];onAccepted:root.bridge.exportPatientCard(selectedFile,clinical) }
+    FileDialog { id:ticketPicker; title:"Зберегти талон на найближчий прийом";fileMode:FileDialog.SaveFile;defaultSuffix:"pdf";nameFilters:["PDF (*.pdf)"];onAccepted:root.bridge.exportAppointmentTicket(selectedFile) }
     DocumentsDialog { id:documents; bridge:root.bridge }
     RecoveryDialog { id:recovery; bridge:root.bridge }
     Dialog {
@@ -420,6 +421,8 @@ Item {
                         Action {objectName:"patient-visits-history";text:"Історія";primary:root.bridge.patientVisitsPeriod==="history";onClicked:root.bridge.loadPatientVisits("history",1)}
                         Item {Layout.fillWidth:true}
                         Label {color:root.muted;text:"Усього: "+root.bridge.patientVisitsTotal}
+                        Action {text:"Талон PDF";visible:root.bridge.patientVisitsPeriod==="upcoming"&&root.bridge.patientVisits.length>0
+                            enabled:!root.bridge.patientVisitsLoading;onClicked:ticketPicker.open()}
                     }
                     Label {visible:root.bridge.patientVisitsLoading;text:"Завантажуємо прийоми…";color:root.muted}
                     Label {visible:!!root.bridge.patientVisitsError;textFormat:Text.PlainText;Layout.fillWidth:true
