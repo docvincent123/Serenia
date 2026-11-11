@@ -739,7 +739,7 @@ server.Get("/assessment",[](const auto&,auto&res){res.set_content(assessmentHtml
 server.Get("/assessment.js",[](const auto&,auto&res){res.set_content(assessmentJs,"text/javascript; charset=utf-8");});
 server.Get("/assessment.css",[](const auto&,auto&res){res.set_content("body{font:18px system-ui;color:#173c34;background:#f3f5f1;margin:0}main{max-width:540px;margin:7vh auto;padding:40px;background:white;border-radius:24px}small{letter-spacing:3px}h1{font-size:38px}p{line-height:1.7;color:#63756f}label{display:block;margin:24px 0}select,button{display:block;box-sizing:border-box;width:100%;padding:14px;margin-top:12px;border:1px solid #c8d4cd;border-radius:10px;font:inherit}button{background:#195844;color:white;cursor:pointer}","text/css");});
 if(!uiDir.empty()&&std::filesystem::exists(std::filesystem::path(uiDir)/"index.html")){server.set_mount_point("/",uiDir);}
-std::cout<<"SOLVIA server: "<<host<<":"<<port<<std::endl;if(!server.listen(host,port))throw std::runtime_error("Cannot start listener");}
+std::cout<<"Lemvori Care API: "<<host<<":"<<port<<std::endl;if(!server.listen(host,port))throw std::runtime_error("Cannot start listener");}
 int main(int argc,char**argv){try{
 std::map<std::string,std::string> args;
 for(int i=1;i<argc;++i){std::string k=argv[i];if(k=="--init"||k=="--demo")args[k]="1";else if(i+1<argc)args[k]=argv[++i];else throw std::runtime_error("Missing argument");}
@@ -761,10 +761,10 @@ if(args.count("--init")||args.count("--demo")){
     }else{
         auto login=environmentUtf8("LEMVORI_ADMIN_LOGIN");
         if(login.empty())login=environmentUtf8("SOLVIA_ADMIN_LOGIN");
-        check(std::regex_match(login,std::regex("[A-Za-z0-9._-]{3,64}")),"SOLVIA_ADMIN_LOGIN must contain 3-64 safe characters");
+        check(std::regex_match(login,std::regex("[A-Za-z0-9._-]{3,64}")),"LEMVORI_ADMIN_LOGIN must contain 3-64 safe characters");
         auto pw=environmentUtf8("LEMVORI_ADMIN_PASSWORD");
         if(pw.empty())pw=environmentUtf8("SOLVIA_ADMIN_PASSWORD");
-        check(pw.size()>=12&&pw.size()<=128&&pw.find('\n')==std::string::npos&&pw.find('\r')==std::string::npos,"SOLVIA_ADMIN_PASSWORD must contain 12-128 characters");
+        check(pw.size()>=12&&pw.size()<=128&&pw.find('\n')==std::string::npos&&pw.find('\r')==std::string::npos,"LEMVORI_ADMIN_PASSWORD must contain 12-128 characters");
         auto name=environmentUtf8("LEMVORI_ADMIN_NAME");
         if(name.empty())name=environmentUtf8("SOLVIA_ADMIN_NAME");
         if(name.empty())name="Administrator";
@@ -772,9 +772,9 @@ if(args.count("--init")||args.count("--demo")){
     }
     for(auto n:{"Кабінет 1","Кабінет 2","Групова зала"})app.db.query("INSERT INTO rooms(name) VALUES(?)",{n});
     for(auto n:{"payments","reminders","consents","patient_portal","rehaflow"})app.db.query("INSERT INTO module_settings(name) VALUES(?)",{n});
-    tx.commit();std::cout<<"SOLVIA database initialized.\n";return 0;
+    tx.commit();std::cout<<"Lemvori Care database initialized.\n";return 0;
 }
-check(!app.db.query("SELECT id FROM users").empty(),"Run SolviaServer --init first");
+check(!app.db.query("SELECT id FROM users").empty(),"Run Lemvori Care API --init first");
 auto host=args.count("--host")?args["--host"]:"127.0.0.1";
 int port=args.count("--port")?std::stoi(args["--port"]):8765;
 auto ui=args.count("--ui")?args["--ui"]:"ui";
