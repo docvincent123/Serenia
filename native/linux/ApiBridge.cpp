@@ -937,11 +937,11 @@ void ApiBridge::openPatient(int id) {
     patientVisitsPage_=1; patientVisitsPeriod_="upcoming"; patientVisitsError_.clear(); patientVisitsLoading_=false;
     emit patientRecordChanged();
     rehabilitationGoals_.clear();
-    if (role_ == "admin") request("GET", "/api/patients/" + QString::number(id) + "/rehab-goals", {}, [this, generation](const QJsonValue &value) {
+    if (role_ == "admin" && moduleEnabled("rehabilitation")) request("GET", "/api/patients/" + QString::number(id) + "/rehab-goals", {}, [this, generation](const QJsonValue &value) {
         if (generation != recordGeneration_) return;
         rehabilitationGoals_ = value.toArray().toVariantList(); emit patientRecordChanged();
     });
-    request("GET", "/api/document-templates", {}, [this, generation](const QJsonValue &value) {
+    if (moduleEnabled("documents")) request("GET", "/api/document-templates", {}, [this, generation](const QJsonValue &value) {
         if (generation != recordGeneration_) return;
         documentTemplates_ = value.toArray().toVariantList(); emit patientRecordChanged();
     });
