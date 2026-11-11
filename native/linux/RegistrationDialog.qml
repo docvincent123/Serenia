@@ -23,20 +23,35 @@ Dialog {
     title:"Реєстрація пацієнта та згоди"; modal:true; anchors.centerIn:Overlay.overlay
     width:Math.min(780,Overlay.overlay.width-40);height:Math.min(740,Overlay.overlay.height-40)
     closePolicy:bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
+    background:Rectangle{radius:22;color:"#F5F7F7";border.color:"#CCD0CF"}
+    header:Rectangle{
+        color:"transparent";implicitHeight:82
+        ColumnLayout{anchors.fill:parent;anchors.leftMargin:22;anchors.rightMargin:22;spacing:3
+            Label{text:bridge.centerConfiguration.center_name || "LEMVORI CARE";font.pixelSize:12;color:"#4A5C6A"}
+            Label{text:root.title;font.pixelSize:22;font.bold:true;color:"#11212D"}
+        }
+    }
     onOpened:{scans=({});printedSnapshot="";bridge.loadCenterConfiguration()}
     onClosed:{name.clear();phone.clear();dob.clear();scans=({});printedSnapshot=""}
     component Action:Button { id:b;implicitHeight:42;leftPadding:16;rightPadding:16;contentItem:Text{textFormat:Text.PlainText;text:b.text;color:b.enabled?"#11212D":"#9BA8AB";font.bold:true;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter} background:Rectangle{radius:21;color:b.hovered?"#CCD0CF":"white";border.color:"#CCD0CF"} }
-    component Field:TextField { implicitHeight:42;leftPadding:12;rightPadding:12;selectByMouse:true;background:Rectangle{radius:10;color:"white";border.color:"#CCD0CF"} }
+    component Field:TextField { implicitHeight:48;leftPadding:14;rightPadding:14;selectByMouse:true;background:Rectangle{radius:12;color:"white";border.color:parent.activeFocus?"#253745":"#CCD0CF"} }
     contentItem:ScrollView {
-        id:scroll;contentWidth:availableWidth;clip:true
+        id:scroll;contentWidth:availableWidth;clip:true;leftPadding:22;rightPadding:22;topPadding:8;bottomPadding:12
         ColumnLayout {
             width:scroll.availableWidth;spacing:12
             Label { textFormat:Text.PlainText;text:"1. Реєстраційні дані";font.bold:true;font.pixelSize:18 }
-            Field { id:name;Layout.fillWidth:true;placeholderText:"Прізвище, ім’я та по батькові" }
+            Label { text:"ПІБ пацієнта *";font.bold:true;color:"#11212D" }
+            Field { id:name;Layout.fillWidth:true;placeholderText:"Прізвище, ім’я та по батькові";Accessible.name:"ПІБ пацієнта" }
             RowLayout {
-                Layout.fillWidth:true
-                Field { id:phone;Layout.fillWidth:true;placeholderText:"Номер телефону" }
-                Field { id:dob;Layout.fillWidth:true;placeholderText:"Дата народження: РРРР-ММ-ДД";inputMask:"9999-99-99" }
+                Layout.fillWidth:true;spacing:14
+                ColumnLayout{Layout.fillWidth:true;spacing:5
+                    Label{text:"Телефон *";font.bold:true;color:"#11212D"}
+                    Field { id:phone;Layout.fillWidth:true;placeholderText:"+380…";Accessible.name:"Телефон" }
+                }
+                ColumnLayout{Layout.fillWidth:true;spacing:5
+                    Label{text:"Дата народження *";font.bold:true;color:"#11212D"}
+                    Field { id:dob;Layout.fillWidth:true;placeholderText:"РРРР-ММ-ДД";inputMask:"9999-99-99";Accessible.name:"Дата народження" }
+                }
             }
             Label { textFormat:Text.PlainText;text:"Категорія та відповідальний психолог" }
             RowLayout {

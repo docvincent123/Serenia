@@ -11,7 +11,8 @@ ApplicationWindow {
     height: 890
     minimumWidth: 920
     minimumHeight: 640
-    title: api.adminEdition ? "Lemvori Care Admin" : "Lemvori Care"
+    readonly property string centerName: String(api.centerConfiguration.center_name || api.licenseStatus.center || "Lemvori Care")
+    title: (api.adminEdition ? "Lemvori Care Admin" : "Lemvori Care") + (api.authenticated ? " · " + centerName : "")
     color: "#EDF0F0"
     property string page: "Головна"
     property int bookingPatientId: 0
@@ -376,7 +377,11 @@ ApplicationWindow {
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 26; anchors.rightMargin: 26; spacing: 15
                 Image { source: "qrc:/brand.png"; Layout.preferredWidth: 38; Layout.preferredHeight: 38; fillMode: Image.PreserveAspectFit }
-                Text { textFormat:Text.PlainText; text: root.title; font.pixelSize: 21; font.bold: true; color: root.ink }
+                ColumnLayout {
+                    spacing: 1
+                    Label { textFormat:Text.PlainText; text: root.centerName; font.pixelSize: 19; font.bold: true; color: root.ink; elide: Text.ElideRight; Layout.maximumWidth: 340 }
+                    Label { textFormat:Text.PlainText; text: api.adminEdition ? "Lemvori Care Admin · Адміністрування" : "Lemvori Care · Робоче місце"; font.pixelSize: 11; color: root.muted }
+                }
                 Rectangle { width: 1; height: 25; color: root.line }
                 Text { textFormat:Text.PlainText; text: root.roleLabel; color: root.muted; font.pixelSize: 13 }
                 Item { Layout.fillWidth: true }
@@ -1314,4 +1319,10 @@ ApplicationWindow {
         }
     }
     RegistrationDialog { id:newPatientDialog; bridge:api }
+    LicenseOnboarding {
+        id: licenseOnboarding
+        bridge: api
+        visible: api.adminEdition && api.authenticated &&
+                 ["activation_required", "publisher_key_required"].includes(String(api.licenseStatus.status || ""))
+    }
 }

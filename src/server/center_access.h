@@ -14,9 +14,17 @@ std::string licenseBytes(const std::string& text) {
     if(text.size()>1 && text[text.size()-2]=='=')--n;
     check(n>0,"Порожня ліцензія");bytes.resize(n);return bytes;
 }
+std::string lemvoriLicenseVerifierPath() {
+    auto path=environmentUtf8("LEMVORI_LICENSE_PUBLIC_KEY");
+    return path.empty()?environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY"):path;
+}
+bool lemvoriLicenseRequired() {
+    return environmentUtf8("LEMVORI_LICENSE_REQUIRED")=="1" ||
+           environmentUtf8("SOLVIA_LICENSE_REQUIRED")=="1";
+}
 J verifyCenterLicense(const J& envelope,const std::string& serverId) {
     check(str(envelope,"format",80)=="quremed.solvia.license","Це не ліцензія SOLVIA");
-    auto keyPath=environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY");
+    auto keyPath=lemvoriLicenseVerifierPath();
     check(!keyPath.empty(),"Видавець ще не налаштував ключ перевірки ліцензій",409);
     std::unique_ptr<BIO,decltype(&BIO_free)> input(BIO_new_file(keyPath.c_str(),"r"),BIO_free);
     check(input!=nullptr,"Ключ перевірки ліцензії недоступний",503);
@@ -67,8 +75,11 @@ J centerAccess(DB& db) {
     // Legacy centers without any activation remain opt-in. Once activated,
     // losing the verifier configuration must never unlock an expired grant.
     auto rows=db.query("SELECT envelope FROM center_license WHERE id=1");
-    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty()&&(!rows.empty()||environmentUtf8("SOLVIA_LICENSE_REQUIRED")=="1"))return {{"status","publisher_key_required"},{"write_allowed",false},{"server_id",id}};
-    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty())return {{"status","unmanaged"},{"write_allowed",true},{"server_id",id}};
+    auto verifierPath=lemvoriLicenseVerifierPath();
+    bool configured=!verifierPath.empty() && std::filesystem::is_regular_file(verifierPath);
+    if(!configured && (!rows.empty() || lemvoriLicenseRequired()))
+        return {{"status","publisher_key_required"},{"write_allowed",false},{"server_id",id}};
+    if(!configured)return {{"status","unmanaged"},{"write_allowed",true},{"server_id",id}};
     if(rows.empty())return {{"status","activation_required"},{"write_allowed",false},{"server_id",id}};
     try {
         auto grant=verifyCenterLicense(J::parse(rows[0]["envelope"].get<std::string>()),id);

@@ -33,6 +33,7 @@ install -d -m 0750 -o lemvori-care -g lemvori-care /var/lib/lemvori-care
 install -d -m 0755 -o root -g root /opt/lemvori-care
 install -d -m 0750 -o root -g lemvori-care /etc/lemvori-care /etc/lemvori-care/tls
 install -d -m 0700 -o root -g root /etc/lemvori-care/ca
+install -d -m 0750 -o root -g lemvori-care /etc/lemvori-care/license
 
 pgpass=/etc/lemvori-care/pgpass
 if [[ ! -f $pgpass ]]; then
@@ -49,6 +50,8 @@ chmod 0600 "$pgpass"
 cat > /etc/lemvori-care/server.env <<'ENV'
 LEMVORI_DATABASE_URL="host=127.0.0.1 port=5432 dbname=lemvori_core user=lemvori_app"
 PGPASSFILE=/etc/lemvori-care/pgpass
+LEMVORI_LICENSE_REQUIRED=1
+LEMVORI_LICENSE_PUBLIC_KEY=/etc/lemvori-care/license/publisher.pem
 TZ=Europe/Kyiv
 ENV
 chown root:lemvori-care /etc/lemvori-care/server.env
@@ -113,4 +116,6 @@ lemvori-carectl address
 lemvori-carectl certificate
 lemvori-carectl health
 echo 'Management: sudo lemvori-carectl {status|logs|health|network|restart}'
+echo 'Publisher public key: sudo lemvori-carectl publisher-key /path/to/ed25519-public.pem'
+echo 'The first admin login will require the signed center license; never transfer the private signing key.'
 echo 'Import /etc/lemvori-care/ca/ca.crt on other Qt/Android devices. Restrict TCP 8443 to trusted LAN.'

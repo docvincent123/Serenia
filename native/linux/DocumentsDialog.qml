@@ -13,6 +13,14 @@ Dialog {
     modal:true; anchors.centerIn:Overlay.overlay
     width:Math.min(760,Overlay.overlay.width-40); height:Math.min(740,Overlay.overlay.height-40)
     closePolicy:bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
+    background:Rectangle{radius:22;color:"#F5F7F7";border.color:"#CCD0CF"}
+    header:Rectangle{
+        color:"transparent";implicitHeight:76
+        ColumnLayout{anchors.fill:parent;anchors.leftMargin:22;anchors.rightMargin:22;spacing:3
+            Label{text:bridge.centerConfiguration.center_name || "LEMVORI CARE";font.pixelSize:12;color:"#4A5C6A"}
+            Label{text:root.title;font.pixelSize:22;font.bold:true;color:"#11212D"}
+        }
+    }
     function create() { viewing=false;scanFile="";hasSignature=false;pad.reset=true;docTitle.text="";content.text="";signer.text="";paperSigned.checked=false;status.currentIndex=0;source.currentIndex=0;templateChoice.currentIndex=0;open();pad.requestPaint() }
     function showDocuments() { viewing=true;bridge.openDetail("documents",bridge.patientRecord.id);open() }
     Connections { target:root.bridge; function onOperationCompleted(operation){if(operation==="workspace")root.close()} function onStateChanged(){if(!root.bridge.authenticated)root.close()} function onDataChanged(){if(!root.bridge.workspaceAllowed("patient"))root.close()} }
@@ -23,7 +31,7 @@ Dialog {
         background:Rectangle { radius:20; color:control.hovered?"#CCD0CF":"white"; border.color:"#CCD0CF" }
     }
     contentItem:ScrollView {
-        id:scroll; contentWidth:availableWidth; clip:true
+        id:scroll; contentWidth:availableWidth; clip:true; leftPadding:22;rightPadding:22;topPadding:8;bottomPadding:12
         ColumnLayout {
             width:scroll.availableWidth; spacing:10
             ColumnLayout {
@@ -41,7 +49,7 @@ Dialog {
                 Label { textFormat:Text.PlainText; text:"Назва *" }
                 TextField { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:docTitle; Layout.fillWidth:true; placeholderText:"Назва документа"; selectByMouse:true; maximumLength:200 }
                 Label { textFormat:Text.PlainText; text:"Текст документа" }
-                TextArea { id:content; Layout.fillWidth:true; implicitHeight:130; wrapMode:TextEdit.Wrap; selectByMouse:true; placeholderText:"Повний текст, з яким ознайомлюється підписант" }
+                TextArea { id:content; Layout.fillWidth:true; implicitHeight:160; wrapMode:TextEdit.Wrap; selectByMouse:true; placeholderText:"Повний текст, з яким ознайомлюється підписант";leftPadding:14;topPadding:12;background:Rectangle{radius:12;color:"white";border.color:content.activeFocus?"#253745":"#CCD0CF"} }
                 RowLayout {
                     Layout.fillWidth:true
                     ComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:source; Layout.fillWidth:true; model:["Підпис на екрані","Скан паперового документа"] }

@@ -435,6 +435,9 @@ if(path=="/api/license"){
  auto verified=verifyCenterLicense(b,installationId(db));
  check((verified.value("version",1)==2&&verified.value("perpetual",false))||verified["expires_at"].get<long long>()>epoch(),"Ліцензія вже завершилася");
  db.query("INSERT INTO center_license(id,envelope) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET envelope=EXCLUDED.envelope",{b.dump()});
+ // Initialize the public center branding from the signed license only on a fresh site.
+ db.query("UPDATE center_settings SET center_name=?,short_name=? WHERE id=1 AND center_name='Lemvori Care'",
+          {verified["center"],verified["center"]});
  if(verified.contains("workflow")&&!verified["workflow"].empty())applyWorkflowPolicy(db,u,verified["workflow"]);
  audit(db,u,"activate","center_license",1);return centerAccess(db);
 }

@@ -33,11 +33,17 @@ ApiBridge::ApiBridge(bool adminEdition, QObject *parent) : QObject(parent), admi
     QSettings settings;
     // Company rename must retain the center URL and pinned identity on upgrade.
     if (!settings.contains("server/url")) {
-        QSettings legacy(QStringLiteral("QureMed"), QStringLiteral("SOLVIA"));
-        if (legacy.contains("server/url")) {
-            settings.setValue("server/url", legacy.value("server/url"));
-            settings.setValue("server/identity", legacy.value("server/identity"));
-            settings.sync();
+        // Preserve the pre-rename Qt application profile and the older QureMed profile.
+        const QList<QPair<QString,QString>> oldProfiles{
+            {QStringLiteral("LemvoriLab"),QStringLiteral("SOLVIA")},
+            {QStringLiteral("QureMed"),QStringLiteral("SOLVIA")}
+        };
+        for (const auto &profile: oldProfiles) {
+            QSettings legacy(profile.first,profile.second);
+            if (!legacy.contains("server/url")) continue;
+            settings.setValue("server/url",legacy.value("server/url"));
+            settings.setValue("server/identity",legacy.value("server/identity"));
+            settings.sync(); break;
         }
     }
     origin_ = settings.value("server/url", "https://localhost:8443").toString();
@@ -697,6 +703,7 @@ void ApiBridge::saveAdminEntry(const QString &section, int id, const QVariantMap
         notify("Зміни збережено.");
         emit operationCompleted("admin");
         loadAdminSection(section);
+        if (section == "center") loadCenterConfiguration();
         refresh();
     });
 }
@@ -743,7 +750,7 @@ void ApiBridge::endUserSessions(int userId) {
 bool ApiBridge::localDatabaseTools() const {
     const QString host = QUrl(origin_).host();
     return adminEdition_ && (host == "localhost" || host == "127.0.0.1" || host == "::1")
-        && QFileInfo("/usr/local/sbin/solvia-admin").isExecutable();
+        && QFileInfo("/usr/local/sbin/lemvori-carectl").isExecutable();
 }
 
 void ApiBridge::runDatabaseTool(const QStringList &arguments) {
@@ -765,16 +772,16 @@ void ApiBridge::runDatabaseTool(const QStringList &arguments) {
         if (generation != sessionGeneration_) return;
         working_ = false;
         if (status != QProcess::NormalExit || code != 0) {
-            issue(QString("Операцію PostgreSQL не завершено (код %1). Перевірте журнал solvia-admin.").arg(code));
+            issue(QString("Операцію PostgreSQL не завершено (код %1). Перевірте lemvori-carectl.").arg(code));
         } else if (arguments.first() == "restore-ui") {
             clearSession();
             notify("Базу відновлено. Увійдіть до центру повторно.");
         } else {
-            notify("Резервну копію збережено в каталозі /var/backups/solvia/.");
+            notify("Резервну копію збережено в каталозі /var/backups/lemvori-care/.");
             refresh();
         }
     });
-    process->start("/usr/bin/pkexec", QStringList{"/usr/local/sbin/solvia-admin"} + arguments);
+    process->start("/usr/bin/pkexec", QStringList{"/usr/local/sbin/lemvori-carectl"} + arguments);
 }
 
 void ApiBridge::databaseBackup() {
@@ -785,7 +792,7 @@ void ApiBridge::databaseRestore(const QUrl &file, const QString &confirmation) {
     const QString path = file.toLocalFile();
     if (confirmation.trimmed() != "ВІДНОВИТИ" || !QFileInfo(path).isFile() || !path.endsWith(".dump"))
         return issue("Оберіть файл .dump і введіть ВІДНОВИТИ.");
-    runDatabaseTool({"restore-ui", path});
+    issue("У новому сервері Lemvori Care відновлення з файлу ще не активовано. Поточна база не змінювалась.");
 }
 
 void ApiBridge::loadDischarges() {
@@ -1118,6 +1125,23 @@ void ApiBridge::importLicense(const QUrl&url){
  working_=true;error_.clear();emit stateChanged();
  request("POST","/api/license",envelope.object(),[this](const QJsonValue&){working_=false;notify("Ліцензію перевірено сервером і активовано.");loadCenterConfiguration();emit operationCompleted("license");});
 }
+void ApiBridge::activateLicenseText(const QString &signedJson) {
+ if(!adminEdition_ || role_!="admin" || working_)return;
+ const QByteArray bytes=signedJson.trimmed().toUtf8();
+ if(bytes.isEmpty() || bytes.size()>65536)return issue("Вставте підписаний JSON-файл ліцензії, не звичайний пароль.");
+ QJsonParseError parseError{};
+ const auto document=QJsonDocument::fromJson(bytes,&parseError);
+ if(parseError.error!=QJsonParseError::NoError || !document.isObject() ||
+    document.object().value("format").toString()!="quremed.solvia.license" ||
+    !document.object().value("payload").isString() ||
+    !document.object().value("signature").isString())
+   return issue("Потрібна підписана ліцензія від Lemvori Control у форматі JSON.");
+ working_=true;error_.clear();emit stateChanged();
+ request("POST","/api/license",document.object(),[this](const QJsonValue&){
+  working_=false;notify("Ліцензію перевірено і закріплено за цим сервером.");
+  loadCenterConfiguration();emit operationCompleted("license");
+ });
+}
 void ApiBridge::saveCenterModules(const QVariantList&enabled){
  if(!adminEdition_||role_!="admin"||working_)return;
  working_=true;error_.clear();emit stateChanged();
@@ -1128,6 +1152,80 @@ void ApiBridge::saveConsentPolicy(const QVariantMap&policy){
  working_=true;error_.clear();emit stateChanged();
  request("PATCH","/api/consent-policy",QJsonObject::fromVariantMap(policy),[this](const QJsonValue&value){working_=false;consentPolicy_=value.toObject().toVariantMap();emit configurationChanged();notify("Правила та версії згод збережено.");emit operationCompleted("consent-policy");});
 }
+void ApiBridge::exportBlankForm(const QUrl &file, const QString &formId) {
+ if (!adminEdition_ || role_ != "admin" || !file.isLocalFile() || working_) return;
+ if (centerConfiguration_.isEmpty()) return issue("Спочатку завантажте дані центру.");
+ const QStringList all{
+  "patient_request","informed_consent","data_processing","center_rules",
+  "family_consent","referral","visit_sheet","consultation_attendance","refusal","handover"};
+ if(!all.contains(formId))return issue("Невідомий тип бланка.");
+ const QHash<QString,QString> titles{
+  {"patient_request","Заява на отримання послуг"},
+  {"informed_consent","Інформована згода"},
+  {"data_processing","Згода на обробку персональних даних"},
+  {"center_rules","Ознайомлення з правилами центру"},
+  {"family_consent","Згода на сімейну консультацію"},
+  {"referral","Направлення до спеціаліста"},
+  {"visit_sheet","Лист відвідування"},
+  {"consultation_attendance","Підтвердження проведення консультації"},
+  {"refusal","Заява про відмову"},
+  {"handover","Акт передачі зміни"}};
+ const QString title=titles.value(formId);
+ const QString line="____________________________________________________________________";
+ const QString metadata="<p><b>Номер документа:</b> ____________________ &nbsp; "
+                        "<b>Дата:</b> ____________________</p>";
+ QString html="<html><body style='font-family:Sans Serif;color:#11212D;font-size:11pt'>";
+ html+="<h2>"+CarePdf::text(centerConfiguration_.value("center_name","Lemvori Care"))+"</h2>";
+ html+="<p>"+CarePdf::text(centerConfiguration_.value("address"))+" · "+
+       CarePdf::text(centerConfiguration_.value("phone"))+"</p><hr>";
+ html+="<h1>"+CarePdf::text(title)+"</h1>"+metadata;
+ html+="<p><b>Пацієнт:</b> "+line+"<br><b>Дата народження:</b> ____________________</p>";
+ if (formId == "informed_consent" || formId == "data_processing" ||
+     formId == "center_rules" || formId == "family_consent") {
+    bool found=false;
+    for(const auto &entry:consentPolicy_.value("templates").toList()) {
+      const auto rule=entry.toMap();
+      if(rule.value("document_type").toString()!=formId)continue;
+      const auto content=rule.value("content").toString();
+      if(content.trimmed().size()<20)
+        return issue("Адміністратор ще не затвердив текст згоди. Збереження заборонено.");
+      html+="<p><b>Редакція:</b> "+CarePdf::text(rule.value("version"))+"</p>";
+      html+="<p style='line-height:160%'>"+CarePdf::text(content)+"</p>";
+      found=true;break;
+    }
+    if(!found)return issue("Для цього бланка потрібно налаштувати згоду в розділі «Згоди пацієнтів».");
+ } else if(formId=="patient_request") {
+    html+="<p><b>Послуга / мета звернення:</b> "+line+"</p>";
+    html+="<p><b>Коментар заявника:</b><br><br>"+line+"<br><br>"+line+"</p>";
+ } else if(formId=="referral") {
+    html+="<p><b>Спеціаліст / установа:</b> "+line+"</p>";
+    html+="<p><b>Причина направлення:</b><br><br>"+line+"<br><br>"+line+"</p>";
+ } else if(formId=="visit_sheet") {
+    html+="<table width='100%' border='1' cellspacing='0' cellpadding='7'>";
+    html+="<tr><th>Дата</th><th>Час</th><th>Фахівець</th><th>Підпис</th></tr>";
+    for(int i=0;i<9;i++)html+="<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>";
+    html+="</table>";
+ } else if(formId=="consultation_attendance") {
+    html+="<p><b>Дата, час, кабінет:</b> "+line+"</p>";
+    html+="<p><b>Спеціаліст:</b> "+line+"</p>";
+    html+="<p><b>Примітки:</b><br><br>"+line+"<br><br>"+line+"</p>";
+ } else if(formId=="refusal") {
+    html+="<p><b>Опис відмови (заповнює заявник):</b><br><br>"+line+"<br><br>"+line+"<br><br>"+line+"</p>";
+ } else if(formId=="handover") {
+    html+="<p><b>Зміна / підрозділ:</b> "+line+"</p>";
+    html+="<p><b>Передані документи, матеріали й зауваження:</b><br><br>"+line+"<br><br>"+line+"<br><br>"+line+"</p>";
+ }
+ html+="<br><p><b>ПІБ заявника / представника:</b> "+line+"</p>";
+ html+="<p><b>Підпис заявника:</b> ____________________  <b>Дата:</b> ____________</p>";
+ html+="<p><b>Працівник центру:</b> "+line+"</p>";
+ html+="<p><b>Підпис працівника:</b> ____________________  <b>Дата:</b> ____________</p>";
+ html+="<p style='font-size:9pt;color:#4A5C6A'>"+
+       CarePdf::text(centerConfiguration_.value("document_footer"))+"</p></body></html>";
+ if(!CarePdf::save(file,title+" · "+centerConfiguration_.value("center_name").toString(),html))
+    return issue("Не вдалося створити PDF-бланк.");
+ notify("Бланк PDF збережено. Підписи ставляться на роздрукованому оригіналі.");
+}
+
 bool ApiBridge::printRegistration(const QUrl&file,const QVariantMap&fields){
  if(!requireStaffRole()||working_||centerConfiguration_.isEmpty()||consentPolicy_.isEmpty())return false;
  const auto birth=QDate::fromString(fields.value("dob").toString(),Qt::ISODate);
