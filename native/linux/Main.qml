@@ -993,10 +993,30 @@ ApplicationWindow {
                       : api.connected ? "HTTPS-з’єднання підтверджено." : "Сервер ще не підключено."
             }
             SolviaButton {
+                text: "Переприв’язати після перевстановлення БД"
+                subtle: true
+                enabled: !api.working && !api.connected
+                onClicked: rebindConfirm.open()
+            }
+            SolviaButton {
                 Layout.alignment: Qt.AlignRight
                 text: "Готово"
                 onClicked: connectionDialog.close()
             }
+        }
+    }
+    Dialog {
+        id: rebindConfirm
+        title: "Підключення до нового сервера?"
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        standardButtons: Dialog.Yes | Dialog.No
+        onAccepted: api.forgetServerBinding()
+        Label {
+            textFormat: Text.PlainText
+            text: "Використовуйте лише після перевстановлення бази вашого центру. Спочатку звірте відбиток сертифіката сервера."
+            wrapMode: Text.WordWrap
+            width: 360
         }
     }
     Connections {
