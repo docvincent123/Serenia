@@ -28,6 +28,13 @@ failed_db="lemvori_failed_$suffix"
 backup="/var/backups/lemvori-care/lemvori-core-pre-restore-$suffix.dump"
 tmpbackup=$(mktemp /var/backups/lemvori-care/.safety.XXXXXXXX)
 tmppass=$(mktemp /etc/lemvori-care/.pgpass-stage.XXXXXXXX)
+tmpdump=$(mktemp /etc/lemvori-care/.restore.XXXXXXXX)
+# PostgreSQL custom archives need seekable files, not stdin pipes.
+# Keep the source root-only; expose a read-only temporary copy just to
+# the unprivileged Lemvori service group during staged restore.
+cp -- "$source_path" "$tmpdump"
+chown root:lemvori-care "$tmpdump"
+chmod 0440 "$tmpdump"
 stage_created=0
 old_renamed=0
 new_promoted=0
@@ -83,7 +90,7 @@ finish() {
       pg_admin -c "DROP DATABASE $stage" || true
     fi
   fi
-  rm -f -- "$tmppass" "$tmpbackup"
+  rm -f -- "$tmppass" "$tmpbackup" "$tmpdump"
   (( status == 0 )) || echo 'Restore did not complete. Inspect service and backup logs.' >&2
   exit "$status"
 }
@@ -96,9 +103,9 @@ pg_admin -c "CREATE DATABASE $stage OWNER lemvori_app TEMPLATE template0"
 stage_created=1
 echo "Checking selected archive in isolated database: $stage"
 # Run restore as unprivileged app DB role, NOT PostgreSQL superuser.
-cat "$source_path" | runuser -u lemvori-care -- env PGPASSFILE="$tmppass" \
+runuser -u lemvori-care -- env PGPASSFILE="$tmppass" \
   pg_restore --exit-on-error --no-owner --no-privileges --single-transaction \
-    -h 127.0.0.1 -p 5432 -U lemvori_app -d "$stage"
+    -h 127.0.0.1 -p 5432 -U lemvori_app -d "$stage" "$tmpdump"
 
 for table in installation_identity center_settings users patients sessions center_license; do
   [[ $(pg_app "$stage" -Atc "SELECT to_regclass('public.$table') IS NOT NULL") == t ]] || {
