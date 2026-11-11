@@ -77,11 +77,11 @@ Item {
     Timer { interval:15000; repeat:true; running:root.visible && root.bridge.authenticated; onTriggered: { if (!form.opened && !patientDialog.opened && !root.bridge.workspaceLoading) root.load() } }
     ScrollView {
         id: scroll
-        anchors.fill:parent; padding:22; clip:true
+        anchors.fill:parent; padding:24; clip:true
         contentWidth:availableWidth; ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
         ColumnLayout {
             width:scroll.availableWidth; spacing:16
-            Label { textFormat:Text.PlainText; text:root.titles[root.section] || ""; font.pixelSize:26; font.bold:true; color:root.ink; Layout.fillWidth:true }
+            Label { textFormat:Text.PlainText; text:root.titles[root.section] || ""; font.pixelSize:27; font.bold:true; color:root.ink; Layout.fillWidth:true }
             Label { textFormat:Text.PlainText; text:root.descriptions[root.section] || ""; color:root.muted; wrapMode:Text.WordWrap; Layout.fillWidth:true }
             Label { textFormat:Text.PlainText; visible:!!root.bridge.error || !!root.bridge.notice; text:root.bridge.error || root.bridge.notice; color:root.bridge.error?"#8C3632":"#256540"; Layout.fillWidth:true; wrapMode:Text.WordWrap }
             RowLayout {
@@ -105,7 +105,7 @@ Item {
                 model:root.bridge.workspaceRows
                 delegate: Rectangle {
                     required property var modelData
-                    Layout.fillWidth:true; implicitHeight:row.implicitHeight+30; radius:16; color:"white"; border.color:"#DCE1E1"
+                    Layout.fillWidth:true; implicitHeight:row.implicitHeight+34; radius:18; color:"white"; border.color:"#D3DCDF"
                     ColumnLayout {
                         id:row; anchors.left:parent.left; anchors.right:parent.right; anchors.top:parent.top; anchors.margins:15; spacing:10
                         Label { textFormat:Text.PlainText; Layout.fillWidth:true; wrapMode:Text.WordWrap; color:root.ink; font.bold:true; font.pixelSize:15; text:modelData.summary || modelData.body || modelData.patient || modelData.psychologist || modelData.name || "Запис № "+modelData.id }
@@ -125,7 +125,14 @@ Item {
                     }
                 }
             }
-            Label { textFormat:Text.PlainText; visible:!root.bridge.workspaceLoading&&!root.bridge.workspaceError&&!root.bridge.workspaceRows.length; text:"Записів поки немає."; color:root.muted }
+            Rectangle {
+                visible:!root.bridge.workspaceLoading&&!root.bridge.workspaceError&&!root.bridge.workspaceRows.length
+                Layout.fillWidth:true; implicitHeight:116; radius:17;color:"#F7F9F9";border.color:"#DCE1E1"
+                ColumnLayout {anchors.centerIn:parent;spacing:8
+                    Label {text:"Записів поки немає";color:root.ink;font.bold:true;font.pixelSize:16;horizontalAlignment:Text.AlignHCenter}
+                    Label {text:root.section==="archive"?"Спробуйте інше ім’я або номер картки":"Нові записи з’являться тут";color:root.muted;font.pixelSize:12;horizontalAlignment:Text.AlignHCenter}
+                }
+            }
             RowLayout {
                 Layout.fillWidth:true; spacing:12
                 visible:root.section==="archive" && Number(root.bridge.workspaceDetails.total || 0)>100
