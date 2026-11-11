@@ -1677,6 +1677,10 @@ class Scenario(unittest.TestCase):
             self.api('admin','POST','/api/shift-day',{'action':'open'})
         active=sum(1 for user in self.api('admin','GET','/api/users') if user['active'])
         identity=self.api('admin','GET','/api/license')['server_id']
+        # Licensing is deliberately enabled only inside this scenario. Preserve
+        # the shared fixture's policy before issuing the restricted test grant.
+        self.assertEqual(self.api('admin','GET','/api/license')['status'],'unmanaged')
+        previous_workflow=self.api('admin','GET','/api/settings/workflow')
         previous={key:os.environ.get(key) for key in ['SOLVIA_LICENSE_PUBLIC_KEY','SOLVIA_LICENSE_REQUIRED']}
         with tempfile.TemporaryDirectory() as folder:
             private,public=create_keys('test publisher password')
@@ -1709,7 +1713,20 @@ class Scenario(unittest.TestCase):
                 for key,value in previous.items():
                     if value is None:os.environ.pop(key,None)
                     else:os.environ[key]=value
-                self.__class__.proc.terminate();self.__class__.proc.wait(timeout=10);self.__class__.start()
+                self.__class__.proc.terminate();self.__class__.proc.wait(timeout=10)
+                # The license envelope is persisted in PostgreSQL. Restoring
+                # environment variables alone leaves later integration tests
+                # read-only (HTTP 402), even after restarting the API process.
+                fields=('opening_time','closing_time','working_days',
+                        'slot_step_minutes','default_duration_minutes','session_hours')
+                def sql_literal(value):
+                    return "'" + value.replace("'", "''") + "'" if isinstance(value,str) else str(int(value))
+                settings=', '.join(f'{name}={sql_literal(previous_workflow[name])}' for name in fields)
+                subprocess.run(['psql',self.database,'-X','-v','ON_ERROR_STOP=1','-c',
+                                f'DELETE FROM center_license WHERE id=1; UPDATE workflow_settings SET {settings} WHERE id=1'],
+                               check=True,stdout=subprocess.DEVNULL)
+                self.__class__.start()
+                self.assertEqual(self.api('admin','GET','/api/license')['status'],'unmanaged')
                 subprocess.run(['psql',self.database,'-X','-v','ON_ERROR_STOP=1','-c',f'DELETE FROM audit WHERE user_id IN ({inactive},{phone}); DELETE FROM users WHERE id IN ({inactive},{phone})'],check=True,stdout=subprocess.DEVNULL)
 
 
