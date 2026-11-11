@@ -33,11 +33,17 @@ ApiBridge::ApiBridge(bool adminEdition, QObject *parent) : QObject(parent), admi
     QSettings settings;
     // Company rename must retain the center URL and pinned identity on upgrade.
     if (!settings.contains("server/url")) {
-        QSettings legacy(QStringLiteral("QureMed"), QStringLiteral("SOLVIA"));
-        if (legacy.contains("server/url")) {
-            settings.setValue("server/url", legacy.value("server/url"));
-            settings.setValue("server/identity", legacy.value("server/identity"));
-            settings.sync();
+        // Preserve the pre-rename Qt application profile and the older QureMed profile.
+        const QList<QPair<QString,QString>> oldProfiles{
+            {QStringLiteral("LemvoriLab"),QStringLiteral("SOLVIA")},
+            {QStringLiteral("QureMed"),QStringLiteral("SOLVIA")}
+        };
+        for (const auto &profile: oldProfiles) {
+            QSettings legacy(profile.first,profile.second);
+            if (!legacy.contains("server/url")) continue;
+            settings.setValue("server/url",legacy.value("server/url"));
+            settings.setValue("server/identity",legacy.value("server/identity"));
+            settings.sync(); break;
         }
     }
     origin_ = settings.value("server/url", "https://localhost:8443").toString();
