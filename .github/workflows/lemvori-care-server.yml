@@ -21,6 +21,23 @@ jobs:
           bash -n deploy/lemvori-care/lemvori-carectl
           python3 -m py_compile deploy/lemvori-care/network-address.py
           python3 tests/lemvori-care-network.py
+      - name: Verify live network selection and stable local CA
+        run: |
+          sudo useradd --system --user-group --home-dir /var/lib/lemvori-care \
+            --shell /usr/sbin/nologin lemvori-care
+          sudo install -d -m 0755 /opt/lemvori-care
+          sudo install -m 0755 deploy/lemvori-care/network-address.py \
+            deploy/lemvori-care/network-tls.sh /opt/lemvori-care/
+          sudo /opt/lemvori-care/network-tls.sh --no-restart
+          lan_ip=$(cat /etc/lemvori-care/address)
+          sudo openssl verify -CAfile /etc/lemvori-care/ca/ca.crt \
+            -verify_ip "$lan_ip" /etc/lemvori-care/tls/server.crt
+          sudo openssl verify -CAfile /etc/lemvori-care/ca/ca.crt \
+            -verify_hostname localhost /etc/lemvori-care/tls/server.crt
+          before=$(sudo openssl x509 -in /etc/lemvori-care/ca/ca.crt -noout -fingerprint -sha256)
+          sudo /opt/lemvori-care/network-tls.sh --no-restart
+          after=$(sudo openssl x509 -in /etc/lemvori-care/ca/ca.crt -noout -fingerprint -sha256)
+          test "$before" = "$after"
       - name: Build the actual C++ server for Qt Native
         run: |
           sudo apt-get update
