@@ -107,7 +107,7 @@ public:
     Q_INVOKABLE void loadWorkspace(const QString &section, const QString &query = QString(), const QString &from = QString(), const QString &to = QString());
     Q_INVOKABLE void workspaceAction(const QString &section, const QString &action, int id, const QVariantMap &fields);
     Q_INVOKABLE void openPatient(int id);
-    Q_INVOKABLE void loadPatientVisits(const QString &period = QStringLiteral("upcoming"), int page = 1);
+    Q_INVOKABLE void loadPatientVisits(const QString &period, int page = 1);
     Q_INVOKABLE void exportAppointmentTicket(const QUrl &file);
     Q_INVOKABLE void updatePatientReferral(int referralId, const QString &status);
     Q_INVOKABLE void closePatient();
