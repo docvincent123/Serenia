@@ -12,6 +12,29 @@ ApplicationWindow {
     minimumWidth: 920
     minimumHeight: 640
     readonly property string centerName: String(api.centerConfiguration.center_name || api.licenseStatus.center || "Lemvori Care")
+    function navGroup(page) {
+        if (["Головна","Адміністрування"].includes(page)) return "ОГЛЯД"
+        if (["Прийоми","Календар","Лист очікування","Передача зміни"].includes(page)) return "РОБОЧИЙ ДЕНЬ"
+        if (["Пацієнти","Сім’ї","Архів","Виписки"].includes(page)) return "ПАЦІЄНТИ ТА ДОКУМЕНТИ"
+        if (["Психологи","Супервізії","Навантаження","Звіти"].includes(page)) return "КОМАНДА"
+        return "КОМУНІКАЦІЇ ТА СИСТЕМА"
+    }
+    readonly property var navigation: {
+        const pages = api.role === "director"
+            ? ["Головна","Психологи","Навантаження","Супервізії","Виписки","Повідомлення"]
+            : api.role === "reception"
+            ? ["Головна","Прийоми","Календар","Лист очікування","Пацієнти","Сім’ї","Архів","Передача зміни","Психологи","Виклик на табло"]
+            : ["Головна","Адміністрування","Прийоми","Календар","Лист очікування","Пацієнти","Сім’ї","Архів","Передача зміни","Психологи","Супервізії","Повідомлення","Звіти","Навантаження","Виписки","Виклик на табло","Телефони","Синхронізація","Сервер"]
+        const filtered = pages.filter(function(page){ return root.pageAllowed(page) })
+        const groups = []
+        let last = ""
+        filtered.forEach(function(page) {
+            const group = root.navGroup(page)
+            groups.push({page:page,group:group,header:group!==last})
+            last=group
+        })
+        return groups
+    }
     title: (api.adminEdition ? "Lemvori Care Admin" : "Lemvori Care") + (api.authenticated ? " · " + centerName : "")
     color: "#EDF0F0"
     property string page: "Головна"
@@ -210,11 +233,11 @@ ApplicationWindow {
     }
     component CareField: TextField {
         id: field
-        implicitHeight: 40
-        leftPadding: 12; rightPadding: 12
+        implicitHeight: 46
+        leftPadding: 14; rightPadding: 14
         color: root.ink
         background: Rectangle {
-            radius: 10
+            radius: 13
             color: "#FFFFFF"
             border.color: field.activeFocus ? root.accent : root.line
             border.width: field.activeFocus ? 2 : 1
@@ -285,8 +308,8 @@ ApplicationWindow {
         visible: !api.authenticated
         Rectangle {
             anchors.centerIn: parent
-            width: 430
-            height: loginForm.implicitHeight + 64
+            width: Math.min(460, root.width - 60)
+            height: Math.min(loginForm.implicitHeight + 64, root.height - 40)
             radius: 24
             color: "#FFFFFF"
             border.color: root.line
@@ -316,6 +339,7 @@ ApplicationWindow {
                     }
                 }
                 Label { textFormat:Text.PlainText; text: "Вхід у систему"; color: root.ink; font.pixelSize: 28; font.bold: true; Layout.topMargin: 9 }
+                Label { textFormat:Text.PlainText; text: root.centerName; color: root.muted; font.pixelSize: 13; Layout.fillWidth: true; elide:Text.ElideRight }
                 Label { textFormat:Text.PlainText;
                     text: api.adminEdition ? "Кабінет адміністратора" : "Кабінет реєстратури та керівника"
                     color: root.muted; font.pixelSize: 13
@@ -428,25 +452,27 @@ ApplicationWindow {
                     ColumnLayout {
                         width: parent.width
                         spacing: 5
-                        Label { textFormat:Text.PlainText;
-                            text: api.role === "admin" ? "АДМІНІСТРУВАННЯ" : "РОБОЧЕ МЕНЮ"; color: "#E0E5E5"
-                            font.pixelSize: 10; font.letterSpacing: 1.2
-                            Layout.topMargin: 6; Layout.bottomMargin: 7; Layout.leftMargin: 14
-                        }
                         Repeater {
-                            model: api.role === "director"
-                              ? ["Головна","Психологи","Навантаження","Супервізії","Виписки","Повідомлення"].filter(function(tab) { return root.pageAllowed(tab) })
-                              : api.role === "reception"
-                              ? ["Головна","Прийоми","Календар","Лист очікування","Пацієнти","Сім’ї","Архів","Передача зміни","Психологи","Виклик на табло"].filter(function(tab) { return root.pageAllowed(tab) })
-                              : ["Головна","Адміністрування","Прийоми","Календар","Лист очікування","Пацієнти","Сім’ї","Архів","Передача зміни","Психологи","Супервізії","Повідомлення","Звіти","Навантаження","Виписки","Виклик на табло","Телефони","Синхронізація","Сервер"].filter(function(tab) { return root.pageAllowed(tab) })
-                            delegate: SolviaButton {
-                                required property string modelData
+                            model: root.navigation
+                            delegate: ColumnLayout {
+                                required property var modelData
                                 Layout.fillWidth: true
-                                text: modelData
-                                onRail: true
-                                primary: root.page === modelData
-                                enabled: !api.working
-                                onClicked: root.showPage(modelData)
+                                spacing: 4
+                                Label {
+                                    visible: modelData.header
+                                    text: modelData.group
+                                    color: "#D6DEE1"; font.pixelSize: 10; font.letterSpacing: 1.1; font.bold: true
+                                    Layout.leftMargin: 14; Layout.topMargin: modelData.group === "ОГЛЯД" ? 6 : 13
+                                    Layout.bottomMargin: 3
+                                }
+                                SolviaButton {
+                                    Layout.fillWidth: true
+                                    text: modelData.page
+                                    onRail: true
+                                    primary: root.page === modelData.page
+                                    enabled: !api.working
+                                    onClicked: root.showPage(modelData.page)
+                                }
                             }
                         }
                     }
