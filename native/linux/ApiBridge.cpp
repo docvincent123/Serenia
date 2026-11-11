@@ -850,7 +850,8 @@ bool ApiBridge::workspaceAllowed(const QString &section) const {
         {"families","patients"},{"archive","patients"},{"patient","patients"},{"supervisions","reports"},
         {"workload","reports"},{"reports","reports"},{"messages","messages"},{"recipients","messages"}};
     if (!moduleEnabled(modules.value(section))) return false;
-    if (section == "patient" && (!moduleEnabled("clinical") || !moduleEnabled("documents") || !moduleEnabled("rehabilitation"))) return false;
+    // Patient registration remains accessible when optional clinical, document or rehab modules are disabled.
+    // The server enforces role-based access and redacts private clinical content for reception staff.
     if (role_ == "reception" && !adminEdition_)
         return QStringList{"handover", "waiting", "families", "archive", "tv", "patient"}.contains(section);
     if (role_ == "director" && !adminEdition_)
