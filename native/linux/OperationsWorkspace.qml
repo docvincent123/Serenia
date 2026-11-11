@@ -260,7 +260,7 @@ Item {
                 color:root.ink;font.bold:true}
             Label {text:"Новий статус";font.bold:true;color:root.ink}
             ComboBox {
-                id:referralChoice;Layout.fillWidth:true;implicitHeight:48
+                id:referralChoice;objectName:"referral-status-select";Layout.fillWidth:true;implicitHeight:48
                 model:[
                     {value:"recommended",label:"Рекомендовано"},
                     {value:"sent",label:"Направлено"},
