@@ -14,6 +14,10 @@ on:
       - 'tests/native-qt-*.cpp'
       - '.github/workflows/native-qt-linux.yml'
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qt-native:
     runs-on: ubuntu-24.04
