@@ -173,6 +173,18 @@ void ApiBridge::configureServer(const QString &value) {
     connectServer(value, {});
 }
 
+void ApiBridge::forgetServerBinding() {
+    if (authenticated() || working_) return;
+    // An explicit, UI-confirmed recovery action after replacing the server database.
+    // Keep certificate verification enabled; never automatically trust a changed server ID.
+    QSettings settings;
+    settings.remove("server/identity");
+    settings.sync();
+    pinnedId_.clear();
+    connected_ = false;
+    notify("Попередню прив'язку скинуто. Перевірте сертифікат та підключіть центр знову.");
+}
+
 void ApiBridge::verifySavedServer() {
     if (authenticated() || working_ || connected_ || pinnedId_.isEmpty()) return;
     connectServer(origin_, pinnedId_);
