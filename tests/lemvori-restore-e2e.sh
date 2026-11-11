@@ -80,10 +80,20 @@ if sudo lemvori-carectl restore "$rollback_archive" 'ВІДНОВИТИ'; then
 fi
 sudo rm -f /run/systemd/system/lemvori-care.service.d/failure.conf
 sudo systemctl daemon-reload
-sudo systemctl restart lemvori-care.service
-sudo lemvori-carectl health >/dev/null
+sudo systemctl reset-failed lemvori-care.service
 [[ $(sudo -u postgres psql -At -d lemvori_core -c 'SELECT center_name FROM center_settings WHERE id=1') == 'LIVE_MUTATION_FOR_ROLLBACK' ]] || {
   echo "Automatic rollback did not keep the pre-restore live data" >&2; exit 1
 }
+sudo systemctl start lemvori-care.service
+ok=0
+for attempt in $(seq 1 25); do
+  if sudo lemvori-carectl health >/dev/null 2>&1; then ok=1; break; fi
+  sleep 1
+done
+if (( ! ok )); then
+  sudo systemctl status lemvori-care.service --no-pager || true
+  sudo journalctl -u lemvori-care.service -n 50 --no-pager || true
+  echo "Service did not recover after removing simulated failure" >&2; exit 1
+fi
 echo "PASS: simulated failed HTTPS startup rolled back to original live PostgreSQL database"
 
