@@ -1145,6 +1145,80 @@ void ApiBridge::saveConsentPolicy(const QVariantMap&policy){
  working_=true;error_.clear();emit stateChanged();
  request("PATCH","/api/consent-policy",QJsonObject::fromVariantMap(policy),[this](const QJsonValue&value){working_=false;consentPolicy_=value.toObject().toVariantMap();emit configurationChanged();notify("Правила та версії згод збережено.");emit operationCompleted("consent-policy");});
 }
+void ApiBridge::exportBlankForm(const QUrl &file, const QString &formId) {
+ if (!adminEdition_ || role_ != "admin" || !file.isLocalFile() || working_) return;
+ if (centerConfiguration_.isEmpty()) return issue("Спочатку завантажте дані центру.");
+ const QStringList all{
+  "patient_request","informed_consent","data_processing","center_rules",
+  "family_consent","referral","visit_sheet","consultation_attendance","refusal","handover"};
+ if(!all.contains(formId))return issue("Невідомий тип бланка.");
+ const QHash<QString,QString> titles{
+  {"patient_request","Заява на отримання послуг"},
+  {"informed_consent","Інформована згода"},
+  {"data_processing","Згода на обробку персональних даних"},
+  {"center_rules","Ознайомлення з правилами центру"},
+  {"family_consent","Згода на сімейну консультацію"},
+  {"referral","Направлення до спеціаліста"},
+  {"visit_sheet","Лист відвідування"},
+  {"consultation_attendance","Підтвердження проведення консультації"},
+  {"refusal","Заява про відмову"},
+  {"handover","Акт передачі зміни"}};
+ const QString title=titles.value(formId);
+ const QString line="____________________________________________________________________";
+ const QString metadata="<p><b>Номер документа:</b> ____________________ &nbsp; "
+                        "<b>Дата:</b> ____________________</p>";
+ QString html="<html><body style='font-family:Sans Serif;color:#11212D;font-size:11pt'>";
+ html+="<h2>"+CarePdf::text(centerConfiguration_.value("center_name","Lemvori Care"))+"</h2>";
+ html+="<p>"+CarePdf::text(centerConfiguration_.value("address"))+" · "+
+       CarePdf::text(centerConfiguration_.value("phone"))+"</p><hr>";
+ html+="<h1>"+CarePdf::text(title)+"</h1>"+metadata;
+ html+="<p><b>Пацієнт:</b> "+line+"<br><b>Дата народження:</b> ____________________</p>";
+ if (formId == "informed_consent" || formId == "data_processing" ||
+     formId == "center_rules" || formId == "family_consent") {
+    bool found=false;
+    for(const auto &entry:consentPolicy_.value("templates").toList()) {
+      const auto rule=entry.toMap();
+      if(rule.value("document_type").toString()!=formId)continue;
+      const auto content=rule.value("content").toString();
+      if(content.trimmed().size()<20)
+        return issue("Адміністратор ще не затвердив текст згоди. Збереження заборонено.");
+      html+="<p><b>Редакція:</b> "+CarePdf::text(rule.value("version"))+"</p>";
+      html+="<p style='line-height:160%'>"+CarePdf::text(content)+"</p>";
+      found=true;break;
+    }
+    if(!found)return issue("Для цього бланка потрібно налаштувати згоду в розділі «Згоди пацієнтів».");
+ } else if(formId=="patient_request") {
+    html+="<p><b>Послуга / мета звернення:</b> "+line+"</p>";
+    html+="<p><b>Коментар заявника:</b><br><br>"+line+"<br><br>"+line+"</p>";
+ } else if(formId=="referral") {
+    html+="<p><b>Спеціаліст / установа:</b> "+line+"</p>";
+    html+="<p><b>Причина направлення:</b><br><br>"+line+"<br><br>"+line+"</p>";
+ } else if(formId=="visit_sheet") {
+    html+="<table width='100%' border='1' cellspacing='0' cellpadding='7'>";
+    html+="<tr><th>Дата</th><th>Час</th><th>Фахівець</th><th>Підпис</th></tr>";
+    for(int i=0;i<9;i++)html+="<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>";
+    html+="</table>";
+ } else if(formId=="consultation_attendance") {
+    html+="<p><b>Дата, час, кабінет:</b> "+line+"</p>";
+    html+="<p><b>Спеціаліст:</b> "+line+"</p>";
+    html+="<p><b>Примітки:</b><br><br>"+line+"<br><br>"+line+"</p>";
+ } else if(formId=="refusal") {
+    html+="<p><b>Опис відмови (заповнює заявник):</b><br><br>"+line+"<br><br>"+line+"<br><br>"+line+"</p>";
+ } else if(formId=="handover") {
+    html+="<p><b>Зміна / підрозділ:</b> "+line+"</p>";
+    html+="<p><b>Передані документи, матеріали й зауваження:</b><br><br>"+line+"<br><br>"+line+"<br><br>"+line+"</p>";
+ }
+ html+="<br><p><b>ПІБ заявника / представника:</b> "+line+"</p>";
+ html+="<p><b>Підпис заявника:</b> ____________________  <b>Дата:</b> ____________</p>";
+ html+="<p><b>Працівник центру:</b> "+line+"</p>";
+ html+="<p><b>Підпис працівника:</b> ____________________  <b>Дата:</b> ____________</p>";
+ html+="<p style='font-size:9pt;color:#4A5C6A'>"+
+       CarePdf::text(centerConfiguration_.value("document_footer"))+"</p></body></html>";
+ if(!CarePdf::save(file,title+" · "+centerConfiguration_.value("center_name").toString(),html))
+    return issue("Не вдалося створити PDF-бланк.");
+ notify("Бланк PDF збережено. Підписи ставляться на роздрукованому оригіналі.");
+}
+
 bool ApiBridge::printRegistration(const QUrl&file,const QVariantMap&fields){
  if(!requireStaffRole()||working_||centerConfiguration_.isEmpty()||consentPolicy_.isEmpty())return false;
  const auto birth=QDate::fromString(fields.value("dob").toString(),Qt::ISODate);
