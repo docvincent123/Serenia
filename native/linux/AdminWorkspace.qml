@@ -442,13 +442,13 @@ Item {
                     visible: root.section === "database"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: root.bridge.localDatabaseTools()
-                        ? "Операції виконуються на цьому Linux-сервері після підтвердження прав адміністратора системи."
+                        ? "Копії створюються для lemvori_core у /var/backups/lemvori-care. Відновлення в цьому випуску вимкнене до впровадження безпечної перевірки дампа."
                         : "Відкрийте Lemvori Care Admin на серверному ПК і підключіться до локальної HTTPS-адреси для роботи з файлами бази."
                 }
                 RowLayout {
                     visible: root.section === "database"
                     Action { text: "Створити копію БД"; primary: true; enabled: root.bridge.localDatabaseTools() && !root.bridge.working; onClicked: root.bridge.databaseBackup() }
-                    Action { text: "Відновити з файлу"; enabled: root.bridge.localDatabaseTools() && !root.bridge.working; onClicked: picker.open() }
+                    Action { text: "Відновлення: після перевірки"; enabled: false; onClicked: picker.open() }
                 }
                 Item { Layout.fillHeight: true; implicitHeight: 16 }
             }
