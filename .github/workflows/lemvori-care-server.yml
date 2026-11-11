@@ -65,6 +65,10 @@ jobs:
           openssl req -new -x509 -newkey rsa:2048 -nodes -days 1 \
             -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
             -keyout "$RUNNER_TEMP/lemvori-tls/server.key" -out "$RUNNER_TEMP/lemvori-tls/server.crt"
+          openssl genpkey -algorithm ED25519 -out "$RUNNER_TEMP/license-private.pem"
+          openssl pkey -in "$RUNNER_TEMP/license-private.pem" -pubout -out "$RUNNER_TEMP/license-public.pem"
+          export LEMVORI_LICENSE_REQUIRED=1
+          export LEMVORI_LICENSE_PUBLIC_KEY="$RUNNER_TEMP/license-public.pem"
           build/lemvori-ci/SolviaServer --host 127.0.0.1 --port 8443 \
             --cert "$RUNNER_TEMP/lemvori-tls/server.crt" \
             --key "$RUNNER_TEMP/lemvori-tls/server.key" &
@@ -86,3 +90,33 @@ jobs:
           assert len(data.get("server_id","")) == 64, data
           print("Lemvori Care HTTPS /api/health OK")
           PY
+          python3 - "$RUNNER_TEMP" <<'PYLICENSE'
+          import datetime,json,os,pathlib,ssl,subprocess,sys,urllib.request
+          tmp=pathlib.Path(sys.argv[1])
+          base="https://127.0.0.1:8443"
+          context=ssl.create_default_context(cafile=str(tmp/"lemvori-tls/server.crt"))
+          def fetch(path,payload=None,token=""):
+              headers={"Content-Type":"application/json"}
+              if token:headers["Authorization"]="Bearer "+token
+              data=None if payload is None else json.dumps(payload).encode()
+              request=urllib.request.Request(base+path,data=data,headers=headers,
+                method="GET" if payload is None else "POST")
+              with urllib.request.urlopen(request,context=context,timeout=10) as resp:
+                  return json.load(resp)
+          sid=fetch("/api/health")["server_id"]
+          user=fetch("/api/login",{"login":"admin","password":"CI-admin-password-12345","platform":"Desktop"})
+          token=user["token"]
+          before=fetch("/api/license",token=token)
+          assert before["status"]=="activation_required",before
+          issued=tmp/"signed-license.json"
+          future=(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(days=365)).isoformat()
+          subprocess.run(["python3","tools/issue-center-license.py","--key",str(tmp/"license-private.pem"),
+            "--server-id",sid,"--center","CI Лемворі Центр","--expires",future,
+            "--output",str(issued)],check=True)
+          activated=fetch("/api/license",json.loads(issued.read_text()),token)
+          assert activated["status"]=="active",activated
+          assert fetch("/api/license",token=token)["status"]=="active"
+          info=fetch("/api/settings/center",token=token)
+          assert info["center_name"]=="CI Лемворі Центр",info
+          print("Lemvori signed license activated and persisted in PostgreSQL; center branding confirmed")
+          PYLICENSE
