@@ -71,6 +71,7 @@ public:
     Q_INVOKABLE void exportCenterRequest(const QUrl &file);
     Q_INVOKABLE void importLicense(const QUrl &file);
     Q_INVOKABLE void activateLicenseText(const QString &signedJson);
+    Q_INVOKABLE void exportBlankForm(const QUrl &file, const QString &formId);
     Q_INVOKABLE void saveCenterModules(const QVariantList &enabled);
     Q_INVOKABLE void saveConsentPolicy(const QVariantMap &policy);
     Q_INVOKABLE void openPdf(const QUrl &file);
