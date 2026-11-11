@@ -12,6 +12,23 @@ case "$cmd" in
     --cacert /etc/lemvori-care/ca/ca.crt https://127.0.0.1:8443/api/health; echo ;;
   certificate) openssl x509 -in /etc/lemvori-care/ca/ca.crt -noout -fingerprint -sha256 ;;
   network) /opt/lemvori-care/network-tls.sh ;;
+  backup)
+    [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
+    install -d -o root -g root -m 0700 /var/backups/lemvori-care
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    target="/var/backups/lemvori-care/lemvori-core-$stamp.dump"
+    [[ ! -e $target ]] || { echo 'Backup already exists' >&2; exit 1; }
+    partial=$(mktemp /var/backups/lemvori-care/.backup.XXXXXXXX)
+    trap 'rm -f "$partial"' EXIT
+    runuser -u lemvori-care -- env PGPASSFILE=/etc/lemvori-care/pgpass \
+       /usr/bin/pg_dump --format=custom --no-owner --no-privileges \
+       -h 127.0.0.1 -p 5432 -U lemvori_app -d lemvori_core > "$partial"
+    /usr/bin/pg_restore --list "$partial" >/dev/null
+    chmod 0600 "$partial"
+    mv -n -- "$partial" "$target"
+    trap - EXIT
+    echo "Lemvori Care database backup: $target"
+    ;;
   publisher-key)
     [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
     source_file=${2:-}
@@ -28,5 +45,5 @@ case "$cmd" in
     install -o root -g lemvori-care -m 0644 "$source_file" /etc/lemvori-care/license/publisher.pem
     echo 'Lemvori publisher verification key installed. You can import the signed center license.'
     ;;
-  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|publisher-key FILE}' >&2; exit 2 ;;
+  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|backup|publisher-key FILE}' >&2; exit 2 ;;
 esac
