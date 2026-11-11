@@ -257,6 +257,52 @@ Item {
                     Action { text: "+ Додати"; primary: true; visible: root.listEditable; enabled: !root.bridge.working && (root.section !== "team" || root.bridge.serviceChoices.length > 0); onClicked: root.edit({}) }
                     Action { text: "Редагувати"; primary: true; visible: root.detailsEditable; enabled: !root.bridge.working && Object.keys(root.bridge.adminDetails).length > 0; onClicked: root.edit(root.bridge.adminDetails) }
                 }
+                ColumnLayout {
+                    Layout.fillWidth: true; spacing: 13
+                    visible: root.section === "overview"
+                    Rectangle {
+                        Layout.fillWidth: true; implicitHeight: 110; radius: 20
+                        color: "#253745"
+                        ColumnLayout {
+                            anchors.fill: parent; anchors.margins: 18; spacing: 7
+                            Label { color: "#D1DADD"; text: "LEMVORI CARE · АДМІНІСТРУВАННЯ"; font.pixelSize: 11; font.bold: true }
+                            Label { Layout.fillWidth: true; color: "#FFFFFF"; font.pixelSize: 23; font.bold: true; elide: Text.ElideRight
+                                text: root.bridge.centerConfiguration.center_name || "Додайте назву центру" }
+                            Label { color: "#D1DADD"; text: "Ліцензія: " + (root.bridge.licenseStatus.status === "active" ? "активна" : root.bridge.licenseStatus.status || "перевіряємо…"); font.pixelSize: 12 }
+                        }
+                    }
+                    GridLayout {
+                        Layout.fillWidth: true; columns: width > 650 ? 2 : 1; columnSpacing: 12; rowSpacing: 12
+                        Repeater {
+                            model: [
+                                {key:"center",title:"01 · Дані центру",info:"Назва, реквізити, адреса та контакти"},
+                                {key:"team",title:"02 · Персонал",info:"Працівники, ролі та кабінети"},
+                                {key:"workflow",title:"03 · Графік прийомів",info:"Розклад, зміни та доступ реєстратури"},
+                                {key:"forms",title:"04 · Документи",info:"PDF-бланки й підписи пацієнтів"},
+                                {key:"license",title:"05 · Ліцензія",info:"Активація, сервер та строк"},
+                                {key:"sessions",title:"06 · Безпека",info:"Сеанси працівників і журнал дій"}
+                            ]
+                            delegate: Rectangle {
+                                required property var modelData
+                                Layout.fillWidth: true; Layout.preferredHeight: 98
+                                color: "#FFFFFF"; radius: 17; border.color: "#CCD0CF"
+                                ColumnLayout {
+                                    anchors.fill: parent; anchors.margins: 17; spacing: 5
+                                    Label { color: root.ink; font.pixelSize: 16; font.bold: true; text: modelData.title }
+                                    Label { color: root.muted; font.pixelSize: 12; text: modelData.info; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                    onClicked:root.select(modelData.key)
+                                }
+                            }
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true; color: root.muted; wrapMode: Text.WordWrap
+                        text: "Ліцензії, картки й документи зберігаються на сервері. Сервер перевіряє права співробітників для кожної операції."
+                    }
+                }
                 Label { textFormat:Text.PlainText;
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; visible: !!root.bridge.error || !!root.bridge.notice
                     text: root.bridge.error || root.bridge.notice
