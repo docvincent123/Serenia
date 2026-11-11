@@ -29,7 +29,7 @@ jobs:
           sudo install -m 0755 deploy/lemvori-care/network-address.py \
             deploy/lemvori-care/network-tls.sh /opt/lemvori-care/
           sudo /opt/lemvori-care/network-tls.sh --no-restart
-          lan_ip=$(cat /etc/lemvori-care/address)
+          lan_ip=$(sudo cat /etc/lemvori-care/address)
           sudo openssl verify -CAfile /etc/lemvori-care/ca/ca.crt \
             -verify_ip "$lan_ip" /etc/lemvori-care/tls/server.crt
           sudo openssl verify -CAfile /etc/lemvori-care/ca/ca.crt \
