@@ -773,9 +773,9 @@ void ApiBridge::runDatabaseTool(const QStringList &arguments) {
         working_ = false;
         if (status != QProcess::NormalExit || code != 0) {
             issue(QString("Операцію PostgreSQL не завершено (код %1). Перевірте lemvori-carectl.").arg(code));
-        } else if (arguments.first() == "restore-ui") {
+        } else if (arguments.first() == "restore" || arguments.first() == "restore-latest") {
             clearSession();
-            notify("Базу відновлено. Увійдіть до центру повторно.");
+            notify("Резервну копію перевірено і базу відновлено. Повторно ввійдіть до центру.");
         } else {
             notify("Резервну копію збережено в каталозі /var/backups/lemvori-care/.");
             refresh();
@@ -792,7 +792,18 @@ void ApiBridge::databaseRestore(const QUrl &file, const QString &confirmation) {
     const QString path = file.toLocalFile();
     if (confirmation.trimmed() != "ВІДНОВИТИ" || !QFileInfo(path).isFile() || !path.endsWith(".dump"))
         return issue("Оберіть файл .dump і введіть ВІДНОВИТИ.");
-    issue("У новому сервері Lemvori Care відновлення з файлу ще не активовано. Поточна база не змінювалась.");
+    if (!adminEdition_ || role_ != "admin" || !localDatabaseTools() || working_)
+        return issue("Відновлення дозволене тільки адміністратору на серверному ПК.");
+    runDatabaseTool({"restore", path, confirmation});
+
+}
+
+void ApiBridge::restoreLatestBackup(const QString &confirmation) {
+    if (confirmation.trimmed() != "ВІДНОВИТИ")
+        return issue("Для відновлення введіть ВІДНОВИТИ.");
+    if (!adminEdition_ || role_!="admin" || !localDatabaseTools() || working_)
+        return issue("Відновлення доступне адміністратору на серверному ПК.");
+    runDatabaseTool({"restore-latest", confirmation});
 }
 
 void ApiBridge::loadDischarges() {
