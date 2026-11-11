@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+cmd=${1:-status}
+case "$cmd" in
+  start|stop|restart) systemctl "$cmd" lemvori-care.service ;;
+  status) systemctl status lemvori-care.service lemvori-care-network.timer --no-pager ;;
+  logs) journalctl -u lemvori-care.service -u lemvori-care-network-refresh.service -n 80 --no-pager ;;
+  address)
+    ip=$(cat /etc/lemvori-care/address)
+    printf 'Local: https://localhost:8443\nLAN:   https://%s:8443\n' "$ip" ;;
+  health) curl --fail --silent --show-error --max-time 10 \
+    --cacert /etc/lemvori-care/ca/ca.crt https://127.0.0.1:8443/api/health; echo ;;
+  certificate) openssl x509 -in /etc/lemvori-care/ca/ca.crt -noout -fingerprint -sha256 ;;
+  network) /opt/lemvori-care/network-tls.sh ;;
+  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network}' >&2; exit 2 ;;
+esac
