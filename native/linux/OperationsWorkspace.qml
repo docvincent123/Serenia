@@ -477,7 +477,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData;Layout.fillWidth:true;radius:15
                             implicitHeight:refLine.implicitHeight+28;color:"white";border.color:"#D4DDDF"
-                            ColumnLayout {id:refLine;anchors.left:parent.left;anchors.right:parent.top;anchors.margins:14;spacing:5
+                            ColumnLayout {id:refLine;anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:14;spacing:5
                                 Label {textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap
                                     text:[modelData.destination_type,modelData.destination_name].filter(Boolean).join(" · ");color:root.ink;font.bold:true}
                                 Label {textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap
