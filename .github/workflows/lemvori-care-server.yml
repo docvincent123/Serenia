@@ -1,0 +1,31 @@
+name: Lemvori Care independent Linux server
+on:
+  pull_request:
+    paths:
+      - 'deploy/lemvori-care/**'
+      - 'src/server/main.cpp'
+      - 'tests/lemvori-care-network.py'
+      - '.github/workflows/lemvori-care-server.yml'
+  workflow_dispatch:
+
+jobs:
+  server-deployment-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate installer and network scripts
+        run: |
+          bash -n deploy/lemvori-care/install.sh
+          bash -n deploy/lemvori-care/network-tls.sh
+          bash -n deploy/lemvori-care/lemvori-carectl
+          python3 -m py_compile deploy/lemvori-care/network-address.py
+          python3 tests/lemvori-care-network.py
+      - name: Build the actual C++ server for Qt Native
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libpq-dev libssl-dev \
+            nlohmann-json3-dev libcpp-httplib-dev
+          cmake -S . -B build/lemvori-ci -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build build/lemvori-ci --target SolviaServer --parallel 2
+          test -x build/lemvori-ci/SolviaServer
