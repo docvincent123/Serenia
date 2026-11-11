@@ -237,11 +237,11 @@ Item {
                     Action { text:"У лист очікування"; visible:root.bridge.patientRecord.status==="active"; onClicked:root.edit("waiting","create",{patient_id:root.bridge.patientRecord.id,psychologist_id:root.bridge.patientRecord.psychologist_id},"Побажання пацієнта") }
                     Action { text:"Новий курс"; visible:root.bridge.patientRecord.status!=="active"; onClicked:root.edit("courseOpen","course-open",root.bridge.patientRecord,"Новий курс супроводу") }
                     Action { text:"Друк карти"; onClicked:{cardPicker.clinical=false;cardPicker.open()} }
-                    Action { text:"Історія PDF"; visible:root.bridge.role==="admin"; onClicked:{cardPicker.clinical=true;cardPicker.open()} }
-                    Action { text:"Додати документ"; onClicked:documents.create() }
-                    Action { text:"Переглянути документи"; onClicked:documents.showDocuments() }
+                    Action { text:"Історія PDF"; visible:root.bridge.role==="admin" && root.bridge.moduleEnabled("clinical"); onClicked:{cardPicker.clinical=true;cardPicker.open()} }
+                    Action { text:"Додати документ"; visible:root.bridge.moduleEnabled("documents"); onClicked:documents.create() }
+                    Action { text:"Переглянути документи"; visible:root.bridge.moduleEnabled("documents"); onClicked:documents.showDocuments() }
                     Action { text:"Направлення"; onClicked:root.edit("referral","referral",root.bridge.patientRecord,"Нове направлення") }
-                    Action { text:"Створити виписку"; visible:root.bridge.role==="admin"; onClicked:root.edit("discharge","discharge",root.bridge.patientRecord,"Період виписки") }
+                    Action { text:"Створити виписку"; visible:root.bridge.role==="admin" && root.bridge.moduleEnabled("documents"); onClicked:root.edit("discharge","discharge",root.bridge.patientRecord,"Період виписки") }
                     Action { text:"Нотатка адміна"; visible:root.bridge.role==="admin"; onClicked:root.edit("note","note",root.bridge.patientRecord,"Нотатка адміністратора") }
                 }
                 Label { textFormat:Text.PlainText; visible:!!root.bridge.patientRecord.consent_status; text:root.bridge.patientRecord.consent_status && root.bridge.patientRecord.consent_status.complete?"Згоди оформлено":"Потрібні згоди: "+((root.bridge.patientRecord.consent_status || {}).missing || []).join(", ");color:root.bridge.patientRecord.consent_status && root.bridge.patientRecord.consent_status.complete?"#256540":"#8C3632";Layout.fillWidth:true;wrapMode:Text.WordWrap }
@@ -261,9 +261,9 @@ Item {
                 Label { textFormat:Text.PlainText; visible:!(root.bridge.patientRecord.documents || []).length; text:"Документів немає."; color:root.muted }
                 Label { textFormat:Text.PlainText; text:"Направлення"; font.bold:true; font.pixelSize:17; color:root.ink }
                 Repeater { model:root.bridge.patientRecord.referrals || []; delegate:Label { textFormat:Text.PlainText; required property var modelData; text:[modelData.destination_type,modelData.destination_name,root.label(modelData.status),modelData.reason].filter(Boolean).join(" · "); color:root.muted; wrapMode:Text.WordWrap; Layout.fillWidth:true } }
-                Label { textFormat:Text.PlainText; visible:root.bridge.role==="admin"; text:"План реабілітації"; font.bold:true; font.pixelSize:17; color:root.ink }
+                Label { textFormat:Text.PlainText; visible:root.bridge.role==="admin" && root.bridge.moduleEnabled("rehabilitation"); text:"План реабілітації"; font.bold:true; font.pixelSize:17; color:root.ink }
                 Repeater { model:root.bridge.rehabilitationGoals; delegate:Label { textFormat:Text.PlainText; required property var modelData; text:[modelData.title,modelData.measurement,modelData.baseline,modelData.target_value,modelData.progress_value,modelData.target_date].filter(Boolean).join(" · "); color:root.muted; wrapMode:Text.WordWrap; Layout.fillWidth:true } }
-                Label { textFormat:Text.PlainText; visible:root.bridge.role==="admin"; text:"Записи консультацій"; font.bold:true; font.pixelSize:17; color:root.ink }
+                Label { textFormat:Text.PlainText; visible:root.bridge.role==="admin" && root.bridge.moduleEnabled("clinical"); text:"Записи консультацій"; font.bold:true; font.pixelSize:17; color:root.ink }
                 Repeater { model:root.bridge.patientRecord.consultations || []; delegate:Label { textFormat:Text.PlainText; required property var modelData; text:[modelData.created,modelData.psychologist,modelData.request_text,modelData.state_text,modelData.work_done,modelData.goals,modelData.note,modelData.result_text,modelData.recommendations,modelData.next_plan].filter(Boolean).join("\n"); color:root.muted; wrapMode:Text.WordWrap; Layout.fillWidth:true } }
                 Repeater { model:root.bridge.patientRecord.admin_notes || []; delegate:Label { textFormat:Text.PlainText; required property var modelData; text:modelData.author+" · "+modelData.created+"\n"+modelData.note; color:root.muted; wrapMode:Text.WordWrap; Layout.fillWidth:true } }
             }
