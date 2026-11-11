@@ -48,6 +48,7 @@ case "$cmd" in
     archives=(/var/backups/lemvori-care/lemvori-core-*.dump)
     if (( ${#archives[@]} )); then ls -1th -- "${archives[@]}"; else echo "No backups"; fi
     ;;
+  diagnose) exec /opt/lemvori-care/verify-host.sh ;;
   publisher-key)
     [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
     source_file=${2:-}
@@ -64,5 +65,5 @@ case "$cmd" in
     install -o root -g lemvori-care -m 0644 "$source_file" /etc/lemvori-care/license/publisher.pem
     echo 'Lemvori publisher verification key installed. You can import the signed center license.'
     ;;
-  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|backup|restore FILE ВІДНОВИТИ|restore-latest ВІДНОВИТИ|list-backups|publisher-key FILE}' >&2; exit 2 ;;
+  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|backup|restore FILE ВІДНОВИТИ|restore-latest ВІДНОВИТИ|list-backups|diagnose|publisher-key FILE}' >&2; exit 2 ;;
 esac
