@@ -697,6 +697,7 @@ void ApiBridge::saveAdminEntry(const QString &section, int id, const QVariantMap
         notify("Зміни збережено.");
         emit operationCompleted("admin");
         loadAdminSection(section);
+        if (section == "center") loadCenterConfiguration();
         refresh();
     });
 }
