@@ -197,14 +197,28 @@ Item {
         property var entry:({})
         property string validation:""
         title:heading; modal:true; anchors.centerIn:Overlay.overlay
-        width:Math.min(560,Overlay.overlay.width-40); height:Math.min(640,Overlay.overlay.height-40)
+        width:Math.min(760,Overlay.overlay.width-40); height:Math.min(700,Overlay.overlay.height-40)
         closePolicy:root.bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
         onOpened:validation=""
+        background:Rectangle{radius:21;color:"#F5F7F7";border.color:"#CCD0CF"}
+        header:Rectangle {
+            color:"transparent";implicitHeight:83
+            ColumnLayout{anchors.fill:parent;anchors.leftMargin:22;anchors.rightMargin:22;spacing:4
+                Label{text:root.bridge.centerConfiguration.center_name||"LEMVORI CARE";font.pixelSize:11;color:root.muted}
+                Label{text:form.heading;color:root.ink;font.pixelSize:22;font.bold:true;elide:Text.ElideRight;Layout.fillWidth:true}
+            }
+        }
         contentItem:ScrollView {
-            contentWidth:availableWidth; clip:true
+            id:formScroll;contentWidth:availableWidth;clip:true
+            leftPadding:22;rightPadding:22;topPadding:8;bottomPadding:12
             ColumnLayout {
-                width:parent.width; spacing:10
-                Repeater {
+                width:formScroll.availableWidth; spacing:13
+                Label {text:"Поля з позначкою * обов’язкові.";color:root.muted;font.pixelSize:12}
+                GridLayout {
+                    id:formGrid
+                    Layout.fillWidth:true;columns:formScroll.availableWidth>620?2:1
+                    columnSpacing:15;rowSpacing:14
+                    Repeater {
                     id:fields
                     model:form.visible ? (root.schemas[form.kind] || []).filter(f => !f.editOnly || form.action==="edit") : []
                     delegate:ColumnLayout {
@@ -212,16 +226,37 @@ Item {
                         readonly property var original:form.entry[modelData.key] ?? modelData.initial ?? ""
                         readonly property var fieldValue:editor.item?editor.item.fieldValue:original
                         Layout.fillWidth:true
-                        Label { textFormat:Text.PlainText; text:modelData.label+(modelData.required?" *":""); color:root.ink; Layout.fillWidth:true; wrapMode:Text.WordWrap }
+                        Layout.columnSpan:modelData.type==="area"&&formGrid.columns>1?2:1
+                        spacing:6
+                        Label { textFormat:Text.PlainText; text:modelData.label+(modelData.required?" *":"");color:root.ink; font.bold:true;Layout.fillWidth:true;wrapMode:Text.WordWrap }
                         Loader {
-                            id:editor; Layout.fillWidth:true
+                            id:editor;Layout.fillWidth:true
                             sourceComponent:modelData.options?comboEditor:modelData.type==="number"?numberEditor:modelData.type==="area"?areaEditor:textEditor
-                            Component { id:comboEditor; ComboBox { background:Rectangle{radius:10;color:"white";border.color:"#CCD0CF"}  objectName:modelData.key; readonly property var fieldValue:currentValue; model:modelData.options; textRole:"label"; valueRole:"key"; Component.onCompleted:{const index=indexOfValue(original); currentIndex=index>=0?index:0} } }
-                            Component { id:numberEditor; SpinBox { readonly property int fieldValue:value; from:modelData.from; to:modelData.to; value:Number(original); editable:true } }
-                            Component { id:textEditor; Field { objectName:modelData.key; readonly property string fieldValue:text; text:String(original); maximumLength:modelData.key==="summary"?300:3000 } }
-                            Component { id:areaEditor; TextArea { objectName:modelData.key; readonly property string fieldValue:text; text:String(original); selectByMouse:true; wrapMode:TextEdit.Wrap; implicitHeight:100; color:root.ink; background:Rectangle{radius:10;color:"white";border.color:"#CCD0CF"} } }
+                            Component {id:comboEditor;ComboBox{
+                                objectName:modelData.key;implicitHeight:46;readonly property var fieldValue:currentValue
+                                model:modelData.options;textRole:"label";valueRole:"key"
+                                background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"}
+                                Component.onCompleted:{const index=indexOfValue(original);currentIndex=index>=0?index:0}
+                            }}
+                            Component {id:numberEditor;SpinBox{
+                                implicitHeight:46;readonly property int fieldValue:value
+                                from:modelData.from;to:modelData.to;value:Number(original);editable:true
+                                background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"}
+                            }}
+                            Component {id:textEditor;Field{
+                                objectName:modelData.key;implicitHeight:46
+                                readonly property string fieldValue:text;text:String(original)
+                                maximumLength:modelData.key==="summary"?300:3000
+                            }}
+                            Component {id:areaEditor;TextArea{
+                                id:area;objectName:modelData.key;readonly property string fieldValue:text
+                                text:String(original);selectByMouse:true;wrapMode:TextEdit.Wrap
+                                implicitHeight:120;color:root.ink;leftPadding:14;topPadding:12
+                                background:Rectangle{radius:12;color:"white";border.color:area.activeFocus?"#253745":"#CCD0CF"}
+                            }}
                         }
                     }
+                }
                 }
                 Label { textFormat:Text.PlainText; text:form.validation || root.bridge.error; visible:!!text; color:"#8C3632"; Layout.fillWidth:true; wrapMode:Text.WordWrap }
             }
