@@ -23,6 +23,12 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QVariantList workspaceRows READ workspaceRows NOTIFY workspaceChanged)
     Q_PROPERTY(QVariantMap workspaceDetails READ workspaceDetails NOTIFY workspaceChanged)
     Q_PROPERTY(QVariantMap patientRecord READ patientRecord NOTIFY patientRecordChanged)
+    Q_PROPERTY(QVariantList patientVisits READ patientVisits NOTIFY patientRecordChanged)
+    Q_PROPERTY(int patientVisitsTotal READ patientVisitsTotal NOTIFY patientRecordChanged)
+    Q_PROPERTY(int patientVisitsPage READ patientVisitsPage NOTIFY patientRecordChanged)
+    Q_PROPERTY(QString patientVisitsPeriod READ patientVisitsPeriod NOTIFY patientRecordChanged)
+    Q_PROPERTY(bool patientVisitsLoading READ patientVisitsLoading NOTIFY patientRecordChanged)
+    Q_PROPERTY(QString patientVisitsError READ patientVisitsError NOTIFY patientRecordChanged)
     Q_PROPERTY(bool workspaceLoading READ workspaceLoading NOTIFY workspaceChanged)
     Q_PROPERTY(QString workspaceError READ workspaceError NOTIFY workspaceChanged)
     Q_PROPERTY(bool adminEdition READ adminEdition CONSTANT)
@@ -89,12 +95,19 @@ public:
     QVariantList workspaceRows() const { return workspaceRows_; }
     QVariantMap workspaceDetails() const { return workspaceDetails_; }
     QVariantMap patientRecord() const { return patientRecord_; }
+    QVariantList patientVisits() const { return patientVisits_; }
+    int patientVisitsTotal() const { return patientVisitsTotal_; }
+    int patientVisitsPage() const { return patientVisitsPage_; }
+    QString patientVisitsPeriod() const { return patientVisitsPeriod_; }
+    bool patientVisitsLoading() const { return patientVisitsLoading_; }
+    QString patientVisitsError() const { return patientVisitsError_; }
     bool workspaceLoading() const { return workspaceLoading_; }
     QString workspaceError() const { return workspaceError_; }
     Q_INVOKABLE bool workspaceAllowed(const QString &section) const;
     Q_INVOKABLE void loadWorkspace(const QString &section, const QString &query = QString(), const QString &from = QString(), const QString &to = QString());
     Q_INVOKABLE void workspaceAction(const QString &section, const QString &action, int id, const QVariantMap &fields);
     Q_INVOKABLE void openPatient(int id);
+    Q_INVOKABLE void loadPatientVisits(const QString &period = QStringLiteral("upcoming"), int page = 1);
     Q_INVOKABLE void closePatient();
     bool adminEdition() const { return adminEdition_; }
     QVariantList dischargeRows() const { return dischargeRows_; }
@@ -207,12 +220,15 @@ private:
     QVariantMap consentPolicy_, centerConfiguration_, licenseStatus_, registrationSnapshot_;
     QVariantList centerModules_;
     QString registrationReference_;
-    QVariantList workspaceRows_, familyOptions_, documentTemplates_, rehabilitationGoals_;
+    QVariantList workspaceRows_, familyOptions_, documentTemplates_, rehabilitationGoals_, patientVisits_;
     QVariantMap workspaceDetails_, patientRecord_, detailRecord_;
     int detailGeneration_ = 0;
     bool workspaceLoading_ = false;
     QString workspaceSection_, workspaceQuery_, workspaceFrom_, workspaceTo_, workspaceError_;
-    int workspaceGeneration_ = 0, recordGeneration_ = 0;
+    int workspaceGeneration_ = 0, recordGeneration_ = 0, patientVisitGeneration_ = 0;
+    int patientVisitsTotal_ = 0, patientVisitsPage_ = 1;
+    QString patientVisitsPeriod_ = "upcoming", patientVisitsError_;
+    bool patientVisitsLoading_ = false;
     QString mutationKey_;
     QJsonObject mutationBody_;
     QNetworkAccessManager network_;
