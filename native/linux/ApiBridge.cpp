@@ -1,10 +1,13 @@
 #include "ApiBridge.h"
+#include "CarePdf.h"
+#include <stdexcept>
 #include <QBuffer>
 #include <QImageReader>
 #include <QImage>
 #include <QPdfWriter>
 #include <QPainter>
 #include <QTextDocument>
+#include <QDesktopServices>
 #include <QDate>
 #include <QDateTime>
 #include <QFile>
@@ -55,6 +58,7 @@ void ApiBridge::notify(const QString &message) {
 }
 
 void ApiBridge::clearSession() {
+    consentPolicy_.clear(); centerConfiguration_.clear(); licenseStatus_.clear(); centerModules_.clear(); registrationSnapshot_.clear(); registrationReference_.clear(); emit configurationChanged();
     ++workspaceGeneration_; ++recordGeneration_; ++detailGeneration_;
     detailRecord_.clear(); emit detailChanged();
     workspaceRows_.clear(); familyOptions_.clear(); documentTemplates_.clear(); rehabilitationGoals_.clear(); workspaceDetails_.clear(); patientRecord_.clear();
@@ -384,6 +388,7 @@ void ApiBridge::refresh() {
             }
         }, true);
     }
+    if (centerModules_.isEmpty()) loadCenterConfiguration();
     getShift(generation);
     getMeta(generation);
     if (role_ == "admin" || role_ == "reception") {
@@ -990,6 +995,10 @@ void ApiBridge::openDetail(const QString &kind, int id) {
 void ApiBridge::saveDocument(const QVariantMap &fields, const QUrl &scanFile) {
     if (!workspaceAllowed("patient") || working_) return;
     QVariantMap body = fields;
+    if (body.value("source").toString()=="paper_scan") for (const auto &entry:consentPolicy_.value("templates").toList()) {
+        const auto rule=entry.toMap();
+        if(rule.value("document_type")==body.value("document_type") && rule.value("content").toString().size()>=20) {body.insert("consent_version",rule.value("version"));body.insert("content",rule.value("content"));body.insert("title",rule.value("title"));}
+    }
     if (body.value("source").toString() == "paper_scan") {
         if (!scanFile.isLocalFile()) return issue("Оберіть зображення документа на цьому ПК.");
         QFile file(scanFile.toLocalFile());
@@ -1058,4 +1067,112 @@ void ApiBridge::exportDischarge(const QUrl &url, int id) {
         if (!painted || !destination.commit()) return issue("Не вдалося зберегти PDF-виписку.");
         notify("PDF-виписку збережено.");
     });
+}
+
+namespace {
+QVariantMap paperImages(const QUrl &source){
+ if(!source.isLocalFile())throw std::runtime_error("Оберіть локальний PNG або JPEG.");
+ QFile file(source.toLocalFile());
+ if(!file.open(QIODevice::ReadOnly)||file.size()>4400000)throw std::runtime_error("Зображення має бути до 4 МБ.");
+ QImageReader reader(&file);reader.setAutoTransform(true);const auto size=reader.size();const auto format=reader.format();
+ if(!size.isValid()||qint64(size.width())*size.height()>24000000||(format!="png"&&format!="jpeg"))throw std::runtime_error("Потрібен PNG або JPEG до 24 мегапікселів.");
+ const auto image=reader.read();if(image.isNull())throw std::runtime_error("Зображення пошкоджене.");
+ QByteArray data;QBuffer buffer(&data);buffer.open(QIODevice::WriteOnly);
+ if(!image.save(&buffer,"JPEG",90)||data.size()>4400000)throw std::runtime_error("Зменште розмір зображення.");
+ file.seek(0);
+ return {{"scan_data","data:image/jpeg;base64,"+QString::fromLatin1(data.toBase64())},
+ {"original_data",QString("data:image/%1;base64,").arg(format=="png"?"png":"jpeg")+QString::fromLatin1(file.readAll().toBase64())}};
+}
+}
+void ApiBridge::loadCenterConfiguration(){
+ if(!authenticated())return;
+ request("GET","/api/settings/center",{},[this](const QJsonValue&value){centerConfiguration_=value.toObject().toVariantMap();emit configurationChanged();},true);
+ request("GET","/api/center/modules",{},[this](const QJsonValue&value){auto data=value.toObject();centerModules_=data.value("modules").toArray().toVariantList();licenseStatus_=data.value("license").toObject().toVariantMap();emit configurationChanged();},true);
+ if(role_=="admin"||role_=="reception")request("GET","/api/consent-policy",{},[this](const QJsonValue&value){consentPolicy_=value.toObject().toVariantMap();emit configurationChanged();},true);
+}
+void ApiBridge::importLicense(const QUrl&url){
+ if(!adminEdition_||role_!="admin"||working_||!url.isLocalFile())return;
+ QFile file(url.toLocalFile());if(!file.open(QIODevice::ReadOnly)||file.size()>65536)return issue("Не вдалося прочитати файл ліцензії.");
+ const auto envelope=QJsonDocument::fromJson(file.readAll());if(!envelope.isObject())return issue("Некоректний файл ліцензії.");
+ working_=true;error_.clear();emit stateChanged();
+ request("POST","/api/license",envelope.object(),[this](const QJsonValue&){working_=false;notify("Ліцензію перевірено сервером і активовано.");loadCenterConfiguration();emit operationCompleted("license");});
+}
+void ApiBridge::saveCenterModules(const QVariantList&enabled){
+ if(!adminEdition_||role_!="admin"||working_)return;
+ working_=true;error_.clear();emit stateChanged();
+ request("PATCH","/api/center/modules",{{"enabled",QJsonArray::fromVariantList(enabled)}},[this](const QJsonValue&){working_=false;notify("Модулі центру налаштовано.");loadCenterConfiguration();emit operationCompleted("modules");});
+}
+void ApiBridge::saveConsentPolicy(const QVariantMap&policy){
+ if(!adminEdition_||role_!="admin"||working_)return;
+ working_=true;error_.clear();emit stateChanged();
+ request("PATCH","/api/consent-policy",QJsonObject::fromVariantMap(policy),[this](const QJsonValue&value){working_=false;consentPolicy_=value.toObject().toVariantMap();emit configurationChanged();notify("Правила та версії згод збережено.");emit operationCompleted("consent-policy");});
+}
+bool ApiBridge::printRegistration(const QUrl&file,const QVariantMap&fields){
+ if(!requireStaffRole()||working_||centerConfiguration_.isEmpty()||consentPolicy_.isEmpty())return false;
+ const auto birth=QDate::fromString(fields.value("dob").toString(),Qt::ISODate);
+ if(fields.value("name").toString().trimmed().isEmpty()||fields.value("name").toString().toUtf8().size()>150||!birth.isValid()||birth<QDate(1900,1,1)||birth>QDate::currentDate()){issue("Заповніть ПІБ та дату народження перед друком.");return false;}
+ QString reference=QUuid::createUuid().toString(QUuid::WithoutBraces);
+ const QString header="<h2>"+CarePdf::text(centerConfiguration_.value("center_name","Lemvori Care"))+"</h2><p>"+CarePdf::text(centerConfiguration_.value("address"))+"<br>"+CarePdf::text(centerConfiguration_.value("phone"))+"</p>";
+ QString html=header+"<h1>Реєстраційна картка</h1><p><b>Посилання на реєстрацію:</b> "+reference+"</p><p><b>Пацієнт:</b> "+CarePdf::text(fields.value("name"))+"<br><b>Дата народження:</b> "+CarePdf::text(fields.value("dob"))+"<br><b>Телефон:</b> "+CarePdf::text(fields.value("phone"))+"<br><b>Категорія:</b> "+CarePdf::text(fields.value("category"))+"</p><p>Дата __________________ Підпис __________________</p>";
+ for(const auto&entry:consentPolicy_.value("templates").toList()){
+  auto consent=entry.toMap();if(!consent.value("required").toBool())continue;
+  if(consent.value("content").toString().size()<20){issue("Адміністратор має затвердити тексти згод перед друком.");return false;}
+  html+="<div style='page-break-before:always'>"+header+"<h2>"+CarePdf::text(consent.value("title"))+"</h2><p>Версія "+CarePdf::text(consent.value("version"))+" · "+reference+"</p><p>Пацієнт: "+CarePdf::text(fields.value("name"))+"<br>Дата народження: "+CarePdf::text(fields.value("dob"))+"</p><p>"+CarePdf::text(consent.value("content"))+"</p><br><p>ПІБ підписанта ______________________________</p><p>Дата __________________ Підпис __________________</p></div>";
+ }
+ if(!CarePdf::save(file,"Реєстрація · "+fields.value("name").toString(),html)){issue("Не вдалося зберегти бланки PDF.");return false;}
+ registrationSnapshot_=fields;registrationReference_=reference;emit configurationChanged();notify("Бланки PDF готові до друку. Підпишіть і завантажте скани.");return true;
+}
+void ApiBridge::registerWithConsents(const QVariantMap&fields,const QVariantList&consents,bool bookAfter){
+ if(!requireStaffRole()||working_)return;
+ const bool required=consentPolicy_.value("required",true).toBool();
+ if(consentPolicy_.isEmpty())return issue("Завантажте правила згод центру.");
+ if(required&&(registrationReference_.isEmpty()||fields!=registrationSnapshot_))return issue("Після зміни даних повторно роздрукуйте бланки та отримайте підписи.");
+ QJsonArray documents;
+ try{
+  for(const auto&entry:consents){
+   auto item=entry.toMap();if(!item.value("paper_signed").toBool()||item.value("signed_by_name").toString().trimmed().isEmpty())return issue("Перевірте підписи на папері та вкажіть підписанта.");
+   QVariantMap document=paperImages(QUrl(item.value("file").toString()));
+   QVariantMap rule;for(const auto&candidate:consentPolicy_.value("templates").toList())if(candidate.toMap().value("document_type")==item.value("document_type"))rule=candidate.toMap();
+   if(rule.isEmpty())return issue("Невідома згода.");
+   document.insert("document_type",rule.value("document_type"));document.insert("title",rule.value("title"));document.insert("content",rule.value("content"));document.insert("consent_version",rule.value("version"));
+   document.insert("registration_reference",registrationReference_);document.insert("signed_patient_name",fields.value("name"));document.insert("signed_patient_dob",fields.value("dob"));
+   document.insert("source","paper_scan");document.insert("status","signed");document.insert("paper_signed",true);document.insert("signed_by_name",item.value("signed_by_name"));documents.append(QJsonObject::fromVariantMap(document));
+  }
+ }catch(const std::exception&error){return issue(QString::fromUtf8(error.what()));}
+ auto body=QJsonObject::fromVariantMap(fields);body.insert("consents",documents);
+ working_=true;error_.clear();notice_.clear();emit stateChanged();
+ request("POST","/api/patients",body,[this,fields,bookAfter](const QJsonValue&value){
+  working_=false;registrationReference_.clear();registrationSnapshot_.clear();emit configurationChanged();notify("Пацієнта зареєстровано. Підписані згоди прикріплено до картки.");
+  emit operationCompleted("patient");emit patientRegistered({{"id",value.toObject().value("id").toInt()},{"name",fields.value("name")},{"psychologist_id",fields.value("psychologist_id")}},bookAfter);searchPatients("");refresh();
+ });
+}
+void ApiBridge::exportPatientCard(const QUrl&file,bool clinical){
+ if(!workspaceAllowed("patient")||patientRecord_.isEmpty()||(clinical&&role_!="admin"))return;
+ const auto&record=patientRecord_;
+ QString html="<h2>"+CarePdf::text(centerConfiguration_.value("center_name","Lemvori Care"))+"</h2><p>"+CarePdf::text(centerConfiguration_.value("address"))+"</p><h1>Картка № "+CarePdf::text(record.value("patient_no"))+"</h1><h2>"+CarePdf::text(record.value("name"))+"</h2><p>Дата народження: "+CarePdf::text(record.value("dob"))+"<br>Телефон: "+CarePdf::text(record.value("phone"))+"<br>Категорія: "+CarePdf::text(record.value("category"))+"</p>";
+ for(const auto&entry:record.value("courses").toList()){auto row=entry.toMap();html+="<h3>Курс № "+CarePdf::text(row.value("course_no"))+"</h3><p>"+CarePdf::text(row.value("started_at"))+" — "+CarePdf::text(row.value("ended_at"))+" · "+CarePdf::text(row.value("psychologist"))+"</p>";}
+ if(clinical){
+  html+="<h2>Історія консультацій</h2>";
+  for(const auto&entry:record.value("consultations").toList()){
+   auto row=entry.toMap();html+="<h3>"+CarePdf::text(row.value("created"))+" · "+CarePdf::text(row.value("psychologist"))+"</h3>";
+   const QList<QPair<QString,QString>> fields{{"Звернення","request_text"},{"Стан","state_text"},{"Проведена робота","work_done"},{"Нотатка","note"},{"Цілі","goals"},{"Результат","result_text"},{"Рекомендації","recommendations"},{"Подальший супровід","next_plan"}};
+   for(const auto&field:fields)if(!row.value(field.second).toString().isEmpty())html+="<p><b>"+field.first+":</b> "+CarePdf::text(row.value(field.second))+"</p>";
+  }
+ }
+ html+="<h3>Згоди та документи</h3>";
+ for(const auto&entry:record.value("documents").toList()){auto row=entry.toMap();html+="<p>"+CarePdf::text(row.value("title"))+" · "+CarePdf::text(row.value("status"))+" · "+CarePdf::text(row.value("signed_at"))+" · "+CarePdf::text(row.value("signed_by_name"))+"</p>";}
+ if(!CarePdf::save(file,"Картка · "+record.value("patient_no").toString(),html))return issue("Не вдалося зберегти PDF-картку.");notify("PDF-картку збережено.");
+}
+
+void ApiBridge::exportCenterRequest(const QUrl&url){
+ if(!adminEdition_||role_!="admin"||!url.isLocalFile()||licenseStatus_.value("server_id").toString().isEmpty())return;
+ QJsonArray modules;for(const auto&entry:centerModules_)if(entry.toMap().value("enabled").toBool())modules.append(entry.toMap().value("id").toString());
+ QJsonObject request{{"format","lemvori.center-request"},{"version",1},{"server_id",licenseStatus_.value("server_id").toString()},{"center",centerConfiguration_.value("center_name").toString()},{"requested_modules",modules}};
+ QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly)||file.write(QJsonDocument(request).toJson())<0||!file.commit())return issue("Не вдалося зберегти запит центру.");notify("Запит центру збережено для Lemvori Control.");
+}
+
+void ApiBridge::openPdf(const QUrl&url){
+ if(!authenticated()||!url.isLocalFile())return;
+ const QFileInfo file(url.toLocalFile());if(!file.isFile()||file.suffix().compare("pdf",Qt::CaseInsensitive)!=0)return;
+ if(!QDesktopServices::openUrl(url))issue("Відкрийте збережений PDF у системній програмі для друку.");
 }

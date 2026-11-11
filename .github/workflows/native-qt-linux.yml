@@ -22,14 +22,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Qt 6 compiler and QML runtime
         run: |
-          sudo apt-get update
+          bash tools/ci-ubuntu-apt.sh
           sudo apt-get install -y cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-svg-dev \
             qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
             qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models \
             qml6-module-qtquick-templates qml6-module-qtquick-shapes \
             qml6-module-qtqml-workerscript libqt6svg6
       - name: Verify server permission route coverage
-        run: python3 tests/module-route-map.py
+        run: |
+          python3 tests/module-route-map.py
+          python3 tests/encrypted-storage.py
       - name: Build native program
         run: |
           cmake -S native/linux -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release

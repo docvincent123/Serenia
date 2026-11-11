@@ -1,0 +1,14 @@
+#pragma once
+#include <algorithm>
+const J& careModuleCatalog(){static const J catalog=J::parse(R"LEMVORI([
+ {"id":"patients","name":"Картки та сім’ї","version":"1.0.0","core":true,"depends":[]},
+ {"id":"documents","name":"Документи та PDF","version":"1.0.0","core":true,"depends":["patients"]},
+ {"id":"consents","name":"Обов’язкові згоди","version":"1.0.0","core":true,"depends":["patients","documents"]},
+ {"id":"appointments","name":"Реєстратура, календар і очікування","version":"1.0.0","core":false,"depends":["patients","consents"]},
+ {"id":"clinical","name":"Психологічні консультації","version":"1.0.0","core":false,"depends":["appointments","documents"]},
+ {"id":"rehabilitation","name":"План реабілітації","version":"1.0.0","core":false,"depends":["clinical"]},
+ {"id":"reports","name":"Аналітика та супервізії","version":"1.0.0","core":false,"depends":["patients"]},
+ {"id":"messages","name":"Повідомлення на Android","version":"1.0.0","core":false,"depends":[]},
+ {"id":"roster","name":"Склад спеціалістів на зміні","version":"1.0.0","core":false,"depends":["appointments"]}
+]
+)LEMVORI");return catalog;}

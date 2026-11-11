@@ -11,6 +11,11 @@
 
 class ApiBridge final : public QObject {
     Q_OBJECT
+    Q_PROPERTY(QVariantMap consentPolicy READ consentPolicy NOTIFY configurationChanged)
+    Q_PROPERTY(QVariantMap centerConfiguration READ centerConfiguration NOTIFY configurationChanged)
+    Q_PROPERTY(QVariantMap licenseStatus READ licenseStatus NOTIFY configurationChanged)
+    Q_PROPERTY(QVariantList centerModules READ centerModules NOTIFY configurationChanged)
+    Q_PROPERTY(QString registrationReference READ registrationReference NOTIFY configurationChanged)
     Q_PROPERTY(QVariantList rehabilitationGoals READ rehabilitationGoals NOTIFY patientRecordChanged)
     Q_PROPERTY(QVariantList documentTemplates READ documentTemplates NOTIFY patientRecordChanged)
     Q_PROPERTY(QVariantMap detailRecord READ detailRecord NOTIFY detailChanged)
@@ -57,6 +62,20 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QVariantList rooms READ rooms NOTIFY bookingOptionsChanged)
 public:
     explicit ApiBridge(bool adminEdition = false, QObject *parent = nullptr);
+    QVariantMap consentPolicy() const { return consentPolicy_; }
+    QVariantMap centerConfiguration() const { return centerConfiguration_; }
+    QVariantMap licenseStatus() const { return licenseStatus_; }
+    QVariantList centerModules() const { return centerModules_; }
+    QString registrationReference() const { return registrationReference_; }
+    Q_INVOKABLE void loadCenterConfiguration();
+    Q_INVOKABLE void exportCenterRequest(const QUrl &file);
+    Q_INVOKABLE void importLicense(const QUrl &file);
+    Q_INVOKABLE void saveCenterModules(const QVariantList &enabled);
+    Q_INVOKABLE void saveConsentPolicy(const QVariantMap &policy);
+    Q_INVOKABLE void openPdf(const QUrl &file);
+    Q_INVOKABLE bool printRegistration(const QUrl &file, const QVariantMap &fields);
+    Q_INVOKABLE void registerWithConsents(const QVariantMap &fields, const QVariantList &consents, bool bookAfter);
+    Q_INVOKABLE void exportPatientCard(const QUrl &file, bool clinical);
     QVariantList rehabilitationGoals() const { return rehabilitationGoals_; }
     QVariantList documentTemplates() const { return documentTemplates_; }
     Q_INVOKABLE void exportDischarge(const QUrl &file, int id);
@@ -151,6 +170,7 @@ public:
                                      const QString &dob, const QString &category,
                                      int psychologistId, bool bookAfter);
 signals:
+    void configurationChanged();
     void detailChanged();
     void workspaceChanged();
     void patientRecordChanged();
@@ -180,6 +200,9 @@ private:
     void getShift(int generation);
     bool canWrite() const;
     bool requireStaffRole() const;
+    QVariantMap consentPolicy_, centerConfiguration_, licenseStatus_, registrationSnapshot_;
+    QVariantList centerModules_;
+    QString registrationReference_;
     QVariantList workspaceRows_, familyOptions_, documentTemplates_, rehabilitationGoals_;
     QVariantMap workspaceDetails_, patientRecord_, detailRecord_;
     int detailGeneration_ = 0;

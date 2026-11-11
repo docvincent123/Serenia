@@ -28,3 +28,9 @@ android/app/src/main/res/raw/solvia_consultation.wav
 
 # Generated local OCR runtime and language assets
 frontend/public/ocr/
+
+# Local publisher packaging output and generated Python caches
+publisher/build/
+publisher/dist/
+publisher/*.spec
+__pycache__/

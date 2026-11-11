@@ -176,6 +176,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install publisher signature test dependency
+        run: python3 -m pip install "cryptography>=44,<47"
+
+      - name: Prepare reliable Ubuntu package mirrors
+        run: bash tools/ci-ubuntu-apt.sh
+
       - name: Bootstrap vcpkg
         run: |
           git clone --depth 1 https://github.com/microsoft/vcpkg.git /tmp/vcpkg
@@ -218,6 +224,8 @@ jobs:
           cp -r frontend/dist/. out/SOLVIA-Linux/ui/
           find installer/linux -maxdepth 1 -type f -exec cp {} out/SOLVIA-Linux/ \;
           cp docs/LINUX.md out/SOLVIA-Linux/
+          mkdir -p out/SOLVIA-Linux/security
+          cp deployment/create-encrypted-storage.sh tools/check-encrypted-storage.py docs/LEMVORI-CONTROL.md deployment/README.md out/SOLVIA-Linux/security/
           version=$(sed -n 's/^project(Solvia VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)
           test -n "$version"
           printf '%s\n' "$version" > out/SOLVIA-Linux/VERSION

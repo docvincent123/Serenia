@@ -862,3 +862,30 @@ CREATE TABLE IF NOT EXISTS user_module_blocks(
  blocked_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
  PRIMARY KEY(user_id,module)
 );
+
+-- Center feature switches never delete patient data or replace staff role checks.
+CREATE TABLE IF NOT EXISTS center_modules(
+ module TEXT PRIMARY KEY,
+ enabled BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS center_consent_policy(
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ required BOOLEAN NOT NULL DEFAULT TRUE,
+ revision INTEGER NOT NULL DEFAULT 1
+);
+INSERT INTO center_consent_policy(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
+CREATE TABLE IF NOT EXISTS center_consent_templates(
+ document_type TEXT PRIMARY KEY CHECK(document_type IN ('informed_consent','data_processing','center_rules','family_consent')),
+ title TEXT NOT NULL,
+ content TEXT NOT NULL DEFAULT '',
+ version INTEGER NOT NULL DEFAULT 1,
+ required BOOLEAN NOT NULL DEFAULT TRUE
+);
+INSERT INTO center_consent_templates(document_type,title,required) VALUES
+ ('informed_consent','Інформована згода',TRUE),('data_processing','Згода на обробку персональних даних',TRUE),
+ ('center_rules','Ознайомлення з правилами центру',FALSE),('family_consent','Згода законного представника',FALSE)
+ ON CONFLICT(document_type) DO NOTHING;
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS consent_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS registration_reference TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_identity_hash TEXT NOT NULL DEFAULT '';

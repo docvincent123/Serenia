@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 Item {
     id: root
@@ -151,6 +152,7 @@ Item {
         footer:DialogButtonBox { Action { text:"Закрити"; onClicked:familyDialog.close() } }
         Connections { target:root.bridge; function onStateChanged(){if(!root.bridge.authenticated)familyDialog.close()} }
     }
+    FileDialog { id:cardPicker; property bool clinical:false; title:"Зберегти картку PDF";fileMode:FileDialog.SaveFile;defaultSuffix:"pdf";nameFilters:["PDF (*.pdf)"];onAccepted:root.bridge.exportPatientCard(selectedFile,clinical) }
     DocumentsDialog { id:documents; bridge:root.bridge }
     RecoveryDialog { id:recovery; bridge:root.bridge }
     Dialog {
@@ -234,12 +236,15 @@ Item {
                     Action { text:"Записати"; primary:true; visible:root.bridge.patientRecord.status==="active"; onClicked: {const patient=root.bridge.patientRecord;patientDialog.close();root.bookPatient(patient)} }
                     Action { text:"У лист очікування"; visible:root.bridge.patientRecord.status==="active"; onClicked:root.edit("waiting","create",{patient_id:root.bridge.patientRecord.id,psychologist_id:root.bridge.patientRecord.psychologist_id},"Побажання пацієнта") }
                     Action { text:"Новий курс"; visible:root.bridge.patientRecord.status!=="active"; onClicked:root.edit("courseOpen","course-open",root.bridge.patientRecord,"Новий курс супроводу") }
+                    Action { text:"Друк карти"; onClicked:{cardPicker.clinical=false;cardPicker.open()} }
+                    Action { text:"Історія PDF"; visible:root.bridge.role==="admin"; onClicked:{cardPicker.clinical=true;cardPicker.open()} }
                     Action { text:"Додати документ"; onClicked:documents.create() }
                     Action { text:"Переглянути документи"; onClicked:documents.showDocuments() }
                     Action { text:"Направлення"; onClicked:root.edit("referral","referral",root.bridge.patientRecord,"Нове направлення") }
                     Action { text:"Створити виписку"; visible:root.bridge.role==="admin"; onClicked:root.edit("discharge","discharge",root.bridge.patientRecord,"Період виписки") }
                     Action { text:"Нотатка адміна"; visible:root.bridge.role==="admin"; onClicked:root.edit("note","note",root.bridge.patientRecord,"Нотатка адміністратора") }
                 }
+                Label { textFormat:Text.PlainText; visible:!!root.bridge.patientRecord.consent_status; text:root.bridge.patientRecord.consent_status && root.bridge.patientRecord.consent_status.complete?"Згоди оформлено":"Потрібні згоди: "+((root.bridge.patientRecord.consent_status || {}).missing || []).join(", ");color:root.bridge.patientRecord.consent_status && root.bridge.patientRecord.consent_status.complete?"#256540":"#8C3632";Layout.fillWidth:true;wrapMode:Text.WordWrap }
                 Label { textFormat:Text.PlainText; visible:!!root.bridge.patientRecord.id; text:"Курси супроводу"; font.bold:true; font.pixelSize:17; color:root.ink }
                 Repeater {
                     model:root.bridge.patientRecord.courses || []

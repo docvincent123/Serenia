@@ -16,7 +16,7 @@ cases={
  '/api/tv/candidates':'appointments','/api/waiting-list/1/book':'appointments','/api/slots':'appointments',
  '/api/staff/messages':'messages','/api/staff/recipients':'messages',
  '/api/supervisions':'reports','/api/shift-reports':'reports','/api/stats':'reports',
- '/api/shift-psychologists':'roster','/api/account/password':'','/api/admin/devices':''
+ '/api/consent-policy':'documents','/api/shift-psychologists':'roster','/api/account/password':'','/api/admin/devices':''
 }
 checks='\n'.join('if(moduleForApi('+json.dumps(route)+')!='+json.dumps(module)+')return '+str(i+1)+';' for i,(route,module) in enumerate(cases.items()))
 with tempfile.TemporaryDirectory() as temp:

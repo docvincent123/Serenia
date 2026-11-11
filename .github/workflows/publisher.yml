@@ -1,0 +1,44 @@
+name: Lemvori Control native publisher
+on:
+  pull_request:
+    paths: ['publisher/**', '.github/workflows/publisher.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publisher:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install publisher build dependencies
+        run: python -m pip install -r publisher/requirements.txt
+      - name: Linux display dependencies
+        if: runner.os == 'Linux'
+        run: |
+          bash tools/ci-ubuntu-apt.sh
+          sudo apt-get install -y python3-tk xvfb fonts-dejavu-core xfonts-base
+      - name: Build native publisher
+        working-directory: publisher
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Lemvori-Control --add-data "modules.json:." --collect-data tzdata main.py
+      - name: Linux GUI smoke
+        if: runner.os == 'Linux'
+        run: xvfb-run -a publisher/dist/Lemvori-Control --smoke
+      - name: Windows GUI smoke
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $process = Start-Process publisher/dist/Lemvori-Control.exe -ArgumentList '--smoke' -PassThru
+          if (!$process.WaitForExit(15000)) { $process.Kill(); throw 'Publisher did not exit after smoke test' }
+          if ($process.ExitCode -ne 0) { throw "Publisher failed: $($process.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemvori-control-${{ runner.os }}-x64
+          path: publisher/dist/Lemvori-Control*
+          retention-days: 7

@@ -37,6 +37,9 @@ class Center(BaseHTTPRequestHandler):
         responses = {
             "/api/health": {"ok": True, "server_id": SERVER_ID},
             "/api/me": {"role": role, "name": "Synthetic account"},
+            "/api/settings/center": {"center_name":"Тестовий центр","address":"Synthetic address"},
+            "/api/consent-policy": {"required":True,"revision":1,"templates":[{"document_type":kind,"title":kind,"content":"Synthetic approved consent text for native workflow checks.","version":1,"required":True} for kind in ["informed_consent","data_processing"]]},
+            "/api/center/modules": {"license":{"status":"unmanaged","write_allowed":True,"server_id":SERVER_ID},"modules":[{"id":"patients","name":"Картки","version":"1.0.0","core":True,"enabled":True,"licensed":True,"depends":[]}]},
             "/api/operations/handover": [{"id":5,"summary":"Завдання наступній зміні","state":"open","priority":"important","created_by":"Реєстратор","shift_date":"2026-11-11"}],
             "/api/shift-day": {"open":True,"shift_date":"2026-11-11"},
             "/api/patient-directory": {"items":[{"id":19,"name":"Тестовий пацієнт","patient_no":"0019","psychologist_id":7,"status":"active"}],"total":1},

@@ -57,6 +57,16 @@ int main(int argc,char **argv){
     verify(lookup("text","Новий документ")==nullptr,"Document dialog unexpectedly open");click("Додати документ");verify(lookup("placeholderText","Назва документа"),"Document form missing");clickObject("document-close");
     click("Переглянути документи");verify(waitFor([&]{return lookup("text","Текст згоди")!=nullptr;}),"Document text missing");clickObject("document-close");
     click("У лист очікування");verify(lookup("objectName","date_from"),"Waiting request editor missing");click("Скасувати");clickObject("patient-close");
+    verify(waitFor([&]{return !bridge.centerConfiguration().isEmpty()&&!bridge.consentPolicy().isEmpty();}),"Consent rules did not load");
+    QVariantMap registration{{"name","Synthetic consent patient"},{"dob","2000-01-02"},{"phone","+380990000111"},{"category","Інше"},{"psychologist_id",7}};
+    verify(bridge.printRegistration(QUrl::fromLocalFile(config.filePath("registration.pdf")),registration),"Registration PDF failed");
+    verify(!bridge.registrationReference().isEmpty(),"Printed reference missing");
+    QImage scan(32,32,QImage::Format_RGB32);scan.fill(Qt::white);const auto scanPath=config.filePath("signed.png");verify(scan.save(scanPath),"Scan fixture failed");
+    QVariantList signatures;
+    for(const auto&kind:QStringList{"informed_consent","data_processing"})signatures.append(QVariantMap{{"document_type",kind},{"file",QUrl::fromLocalFile(scanPath).toString()},{"signed_by_name","Synthetic signer"},{"paper_signed",true}});
+    auto changed=registration;changed.insert("name","Changed after printing");bridge.registerWithConsents(changed,signatures,false);verify(!bridge.working()&&bridge.error().contains("повторно"),"Changed registration accepted stale signatures");
+    int registered=0;QObject::connect(&bridge,&ApiBridge::patientRegistered,[&](const QVariantMap&patient,bool){registered=patient.value("id").toInt();});
+    bridge.registerWithConsents(registration,signatures,false);verify(waitFor([&]{return registered==21;}),"Registration did not attach signed scans");
     click("Записати на прийом");auto *kind=lookup("objectName","booking-kind");verify(kind,"Booking type selector missing");kind->setProperty("currentIndex",4);pump();verify(lookup("text","+ Учасник"),"Group participant selector missing");click("Закрити");
     page("Виклик на табло");page("Архів");
     if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))window->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/archive.png");

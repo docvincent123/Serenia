@@ -24,6 +24,9 @@ Item {
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
     readonly property var sections: [
         {label:"ЦЕНТР"},
+        {key:"license",label:"Ліцензія центру",detail:"Підписаний ключ і ліміти центру"},
+        {key:"modules",label:"Модулі центру",detail:"Функції та їхні залежності"},
+        {key:"consent-policy",label:"Правила згод",detail:"Тексти, версії та обов’язковість підписаних документів"},
         {key:"team", label:"Працівники", detail:"Облікові записи, ролі та доступ працівників центру"},
         {key:"rooms", label:"Кабінети", detail:"Типи, номери та місткість кабінетів"},
         {key:"templates",label:"Шаблони документів",detail:"Тексти згод, правил та інших документів центру"},
@@ -146,7 +149,9 @@ Item {
         ]
     })
 
+    CenterSettingsDialog { id:centerSettings; bridge:root.bridge }
     function select(key) {
+        if (["license","modules","consent-policy"].includes(key)) {centerSettings.show(key);return}
         searchText = ""
         section = key
         if (key !== "database") bridge.loadAdminSection(key)

@@ -311,7 +311,7 @@ ApplicationWindow {
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 3
                         Label { textFormat:Text.PlainText; text: root.title; color: root.ink; font.pixelSize: 18; font.bold: true }
-                        Label { textFormat:Text.PlainText; text: "Реабілітаційний центр"; color: root.muted; font.pixelSize: 12 }
+                        Label { textFormat:Text.PlainText; text: "Реабілітаційний центр · " + (Qt.application.version || "3.2.0-preview7"); color: root.muted; font.pixelSize: 12 }
                     }
                 }
                 Label { textFormat:Text.PlainText; text: "Вхід у систему"; color: root.ink; font.pixelSize: 28; font.bold: true; Layout.topMargin: 9 }
@@ -1293,31 +1293,5 @@ ApplicationWindow {
             SolviaButton { text:"Закрити"; onClicked:participantsDialog.close() }
         }
     }
-    Dialog {
-        id:newPatientDialog; title:"Новий пацієнт"; modal:true; anchors.centerIn:Overlay.overlay
-        width:Math.min(500,root.width-60); standardButtons:Dialog.NoButton
-        ColumnLayout {
-            width:parent.width; spacing:10
-            CareField { id:patientName; Layout.fillWidth:true; placeholderText:"Прізвище, ім'я та по батькові" }
-            CareField { id:patientPhone; Layout.fillWidth:true; placeholderText:"Номер телефону" }
-            Text { textFormat:Text.PlainText; text:"Дата народження (РРРР-ММ-ДД)"; color:root.muted; font.pixelSize:12 }
-            CareField { id:patientDob; Layout.fillWidth:true; inputMask:"9999-99-99"; selectByMouse:true }
-            Text { textFormat:Text.PlainText; text:"Категорія"; color:root.muted; font.pixelSize:12 }
-            CareSelect { id:patientCategory; Layout.fillWidth:true; model:["Військовий/військова","Ветеран/ветеранка","Партнер/партнерка","Дитина","Інше"] }
-            Text { textFormat:Text.PlainText; text:"Психолог"; color:root.muted; font.pixelSize:12 }
-            CareSelect { id:patientPsy; Layout.fillWidth:true; model:api.psychologists; textRole:"name"; valueRole:"id" }
-            Text { textFormat:Text.PlainText; Layout.fillWidth:true; wrapMode:Text.WordWrap; text:api.error; visible:!!api.error; color:"#8C3632" }
-            RowLayout {
-                Layout.fillWidth:true
-                SolviaButton { text:"Скасувати"; enabled:!api.working; onClicked:newPatientDialog.close() }
-                Item { Layout.fillWidth:true }
-                SolviaButton { text:"Зберегти"; enabled:!api.working
-                    onClicked:api.registerPatient(patientName.text,patientPhone.text,patientDob.text,
-                                                   String(patientCategory.currentText),Number(patientPsy.currentValue),false) }
-                SolviaButton { text:"Зберегти й записати"; primary:true; enabled:!api.working
-                    onClicked:api.registerPatient(patientName.text,patientPhone.text,patientDob.text,
-                                                   String(patientCategory.currentText),Number(patientPsy.currentValue),true) }
-            }
-        }
-    }
+    RegistrationDialog { id:newPatientDialog; bridge:api }
 }
