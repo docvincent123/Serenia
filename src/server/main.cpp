@@ -205,21 +205,27 @@ const std::vector<std::string>& accessModules(){
 }
 std::string moduleForApi(const std::string&path){
  auto starts=[&](const char*prefix){return path.rfind(prefix,0)==0;};
+ if(starts("/api/patients/")){
+  if(path.ends_with("/documents"))return "documents";
+  if(path.ends_with("/draft"))return "clinical";
+  if(path.ends_with("/rehab-goals")||path.ends_with("/courses")||path.ends_with("/referrals")||path.ends_with("/progress"))return "rehabilitation";
+  if(path.ends_with("/appointments"))return "appointments";
+ }
  if(starts("/api/consultations")||starts("/api/assessments")||starts("/api/consultation-drafts")
     ||starts("/api/clinical"))return "clinical";
  if(starts("/api/discharges")||starts("/api/document-templates")
     ||starts("/api/patient-documents")||starts("/api/documents")
     ||starts("/api/document-export"))return "documents";
  if(starts("/api/patient-courses")||starts("/api/rehabilitation")
-    ||starts("/api/patient-referrals")||starts("/api/courses"))return "rehabilitation";
+    ||starts("/api/patient-referrals")||starts("/api/courses")||starts("/api/rehab-goals")||starts("/api/referrals"))return "rehabilitation";
  if(path=="/api/patients"||starts("/api/patients/")||path=="/api/patient-directory"
     ||path=="/api/families"||starts("/api/families/"))return "patients";
  if(starts("/api/appointments")||path=="/api/shift-workspace"
     ||path=="/api/workday/home"||path=="/api/slots"
-    ||starts("/api/waiting-list")||starts("/api/reminders"))return "appointments";
+    ||starts("/api/waiting-list")||starts("/api/reminders")||starts("/api/operations/handover")||path=="/api/tv/call"||path=="/api/tv/candidates")return "appointments";
  if(path=="/api/stats"||starts("/api/reports")
-    ||starts("/api/shift-reports")||starts("/api/report-"))return "reports";
- if(starts("/api/staff-messages")||starts("/api/messages"))return "messages";
+    ||starts("/api/shift-reports")||starts("/api/report-")||starts("/api/supervisions"))return "reports";
+ if(starts("/api/staff-messages")||starts("/api/messages")||starts("/api/staff/messages")||path=="/api/staff/recipients")return "messages";
  if(starts("/api/shift-psychologists")||starts("/api/psychologists"))return "roster";
  return "";
 }

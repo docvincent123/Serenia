@@ -97,6 +97,9 @@ class Scenario(unittest.TestCase):
                 'blocked_modules':['appointments','clinical','documents','reports'],
             })
             self.assertEqual(self.call('GET','/api/shift-workspace',token=token)[0],403)
+            for endpoint in ['/api/patients/1/documents','/api/patients/1/draft',
+                             '/api/patients/1/appointments','/api/operations/handover','/api/tv/candidates']:
+                self.assertEqual(self.call('GET',endpoint,token=token)[0],403,endpoint)
             self.assertEqual(self.call('GET','/api/patients/1',token=token)[0],403,
                              'Patient-detail projection must not expose private content when clinical is blocked')
             self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],200,
@@ -125,7 +128,7 @@ class Scenario(unittest.TestCase):
         finally:
             self.api('admin','DELETE',f'/api/users/{uid}/sessions',{})
             direct_sql(f'DELETE FROM audit WHERE user_id={uid}; DELETE FROM users WHERE id={uid}')
- 
+
     def test_a0_live_workflow_events_and_tv(self):
         def sql(statement):
             return subprocess.check_output(['psql',self.database,'-X','-qAt','-v','ON_ERROR_STOP=1','-c',statement],text=True).strip()

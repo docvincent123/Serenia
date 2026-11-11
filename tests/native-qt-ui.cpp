@@ -1,0 +1,76 @@
+#include "ApiBridge.h"
+#include <QGuiApplication>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QQuickStyle>
+#include <QImage>
+#include <QFile>
+#include <QElapsedTimer>
+#include <QSettings>
+#include <QSslCertificate>
+#include <QSslConfiguration>
+#include <QTemporaryDir>
+#include <QThread>
+#include <functional>
+
+static void pump(int ms=160) { QElapsedTimer t; t.start(); while(t.elapsed()<ms){QCoreApplication::processEvents();QThread::msleep(3);} }
+static bool waitFor(const std::function<bool()> &ready) { QElapsedTimer t; t.start(); while(!ready()&&t.elapsed()<5000)pump(10);pump(50);return ready(); }
+static void verify(bool ok,const char *message){if(!ok)qFatal("%s",message);}
+static QQuickItem *find(QQuickItem *item,const char *property,const QString &value){
+    if(!item->isVisible())return nullptr;
+    if(item->property(property).toString()==value)return item;
+    for(auto *child:item->childItems())if(auto *match=find(child,property,value))return match;
+    return nullptr;
+}
+int main(int argc,char **argv){
+    QGuiApplication app(argc,argv); QQuickStyle::setStyle("Basic");
+    verify(argc==3,"Expected HTTPS fixture and CA");
+    QTemporaryDir config;QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,config.path());
+    QCoreApplication::setOrganizationName("LemvoriLab");QCoreApplication::setApplicationName("NativeUiTest");
+    auto ssl=QSslConfiguration::defaultConfiguration();ssl.addCaCertificates(QSslCertificate::fromPath(argv[2]));QSslConfiguration::setDefaultConfiguration(ssl);
+    QStringList warnings;
+    ApiBridge bridge;
+    QQmlApplicationEngine engine;
+    QObject::connect(&engine,&QQmlEngine::warnings,[&](const QList<QQmlError> &errors){for(const auto &error:errors)warnings<<error.toString();});
+    engine.rootContext()->setContextProperty("api",&bridge);engine.load(QUrl("qrc:/Main.qml"));
+    verify(!engine.rootObjects().isEmpty(),"QML did not load");
+    auto *window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());verify(window,"Window missing");
+    window->resize(920,640);pump();
+    auto lookup=[&](const char *prop,const QString &value){return find(window->contentItem(),prop,value);};
+    auto click=[&](const QString &text){auto *item=lookup("text",text);if(!item)qFatal("Requested action not found: %s",qPrintable(text));verify(QMetaObject::invokeMethod(item,"clicked"),"Action is not clickable");pump();};
+    auto clickObject=[&](const QString &name){auto *item=lookup("objectName",name);verify(item,"Named action missing");verify(QMetaObject::invokeMethod(item,"clicked"),"Named action not clickable");pump();};
+    verify(lookup("placeholderText","Введіть логін")&&!lookup("placeholderText","https://server.center:8443"),"Login exposes server form");
+    auto *login=lookup("placeholderText","Введіть логін");auto bounds=login->mapRectToScene(login->boundingRect());
+    verify(bounds.left()>=0&&bounds.right()<=window->width()&&bounds.bottom()<=window->height(),"Login does not fit small window");
+    if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))window->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/login.png");
+    click("Підключення");verify(lookup("placeholderText","https://server.center:8443"),"Connection dialog missing");click("Готово");
+    bridge.configureServer(argv[1]);verify(waitFor([&]{return bridge.connected();}),"Fixture connection failed");
+    bridge.login("reception","test");verify(waitFor([&]{return bridge.role()=="reception";}),"Reception login failed");pump();
+    auto page=[&](const QString &name){verify(QMetaObject::invokeMethod(window,"showPage",Q_ARG(QVariant,QVariant(name))),"Navigation method failed");pump();verify(waitFor([&]{return !bridge.workspaceLoading();}),"Workspace stuck loading");};
+    verify(!lookup("text","Адміністрування")&&!lookup("text","Супервізії"),"Reception sees management menu");
+    page("Передача зміни");verify(lookup("text","Завдання наступній зміні"),"Handover row missing");click("+ Додати");
+    auto *summary=lookup("objectName","summary");verify(summary,"Handover editor missing");summary->setProperty("text","Передати зміну");click("Зберегти");verify(waitFor([&]{return !bridge.working();}),"Handover save failed");pump();
+    page("Лист очікування");page("Сім’ї");click("+ Додати");verify(lookup("objectName","name"),"Family editor missing");click("Скасувати");
+    page("Пацієнти");verify(waitFor([&]{return !bridge.patients().isEmpty();}),"Patient directory missing");pump();click("Картка");verify(waitFor([&]{return bridge.patientRecord().value("id").toInt()==19;}),"Patient record missing");pump();
+    verify(lookup("text","Новий документ")==nullptr,"Document dialog unexpectedly open");click("Додати документ");verify(lookup("placeholderText","Назва документа"),"Document form missing");clickObject("document-close");
+    click("Переглянути документи");verify(waitFor([&]{return lookup("text","Текст згоди")!=nullptr;}),"Document text missing");clickObject("document-close");
+    click("У лист очікування");verify(lookup("objectName","date_from"),"Waiting request editor missing");click("Скасувати");clickObject("patient-close");
+    click("Записати на прийом");auto *kind=lookup("objectName","booking-kind");verify(kind,"Booking type selector missing");kind->setProperty("currentIndex",4);pump();verify(lookup("text","+ Учасник"),"Group participant selector missing");click("Закрити");
+    page("Виклик на табло");page("Архів");
+    if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))window->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/archive.png");
+    bridge.logout();bridge.login("director","test");verify(waitFor([&]{return bridge.role()=="director";}),"Director login failed");pump();
+    verify(!lookup("text","Пацієнти")&&!lookup("text","Телефони"),"Director sees confidential modules");page("Супервізії");click("+ Додати");verify(lookup("objectName","scheduled_at"),"Supervision form missing");click("Скасувати");page("Повідомлення");click("+ Додати");verify(lookup("objectName","body"),"Message editor missing");click("Скасувати");page("Навантаження");
+    bridge.loadDischarges();verify(waitFor([&]{return !bridge.dischargeRows().isEmpty();}),"PDF source missing");
+    const auto pdfPath=config.filePath("discharge.pdf");bridge.exportDischarge(QUrl::fromLocalFile(pdfPath),9);
+    verify(waitFor([&]{return QFile::exists(pdfPath);}),"PDF export failed");QFile pdf(pdfPath);verify(pdf.open(QIODevice::ReadOnly)&&pdf.read(5)=="%PDF-","Export is not a PDF");
+    ApiBridge admin(true);QQmlApplicationEngine adminEngine;QObject::connect(&adminEngine,&QQmlEngine::warnings,[&](const QList<QQmlError> &errors){for(const auto &error:errors)warnings<<error.toString();});
+    adminEngine.rootContext()->setContextProperty("api",&admin);adminEngine.load(QUrl("qrc:/Main.qml"));verify(!adminEngine.rootObjects().isEmpty(),"Admin QML missing");
+    auto *adminWindow=qobject_cast<QQuickWindow*>(adminEngine.rootObjects().first());adminWindow->resize(920,640);admin.configureServer(argv[1]);verify(waitFor([&]{return admin.connected();}),"Admin connection failed");admin.login("admin","test");verify(waitFor([&]{return admin.role()=="admin";}),"Admin login failed");pump();
+    for(const auto &name:QStringList{"Телефони","Синхронізація","Адміністрування"}){QMetaObject::invokeMethod(adminWindow,"showPage",Q_ARG(QVariant,QVariant(name)));pump();}
+    QMetaObject::invokeMethod(adminWindow,"showPage",Q_ARG(QVariant,QVariant("Синхронізація")));pump();
+    auto *recover=find(adminWindow->contentItem(),"text","Звірити запис");verify(recover,"Recovery action missing");QMetaObject::invokeMethod(recover,"clicked");verify(waitFor([&]{return admin.detailRecord().value("id").toInt()==12;}),"Recovery detail failed");pump();verify(find(adminWindow->contentItem(),"text","Запис із телефона"),"Recovery source text missing");
+    if(!warnings.isEmpty())qFatal("QML warnings: %s",qPrintable(warnings.join("\n")));
+    qInfo("PASS: reception, director and admin native UI and small-window login");
+}

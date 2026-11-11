@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QImage>
 #include <QSettings>
 #include <QSslCertificate>
 #include <QSslConfiguration>
@@ -59,10 +60,40 @@ int main(int argc, char **argv) {
     staff.book(19, 7, 2, "2026-11-11", "10:15", "11:00", "individual");
     staff.book(19, 7, 2, "2026-11-11", "10:15", "11:00", "individual");
     verify(waitFor([&] { return staff.notice().contains("Пацієнта записано"); }), "Booking failed");
+    verify(staff.workspaceAllowed("waiting") && staff.workspaceAllowed("patient"), "Reception missing operational permissions");
+    verify(!staff.workspaceAllowed("messages") && !staff.workspaceAllowed("devices"), "Reception gained management permission");
+    staff.loadWorkspace("waiting");
+    verify(waitFor([&] { return !staff.workspaceLoading() && staff.workspaceRows().size()==1; }), "Waiting list did not load");
+    staff.workspaceAction("waiting", "offered", 6, {{"version",3}});
+    verify(waitFor([&] { return !staff.working(); }), "Waiting offer did not complete");
+    staff.workspaceAction("waiting", "book", 6, {{"version",4},{"room_id",2},{"start","2026-11-11T10:15"},{"end","2026-11-11T11:00"}});
+    verify(waitFor([&] { return !staff.working(); }), "Waiting booking did not complete");
+    staff.workspaceAction("handover", "create", 0, {{"summary","Передати ключі"},{"priority","important"}});
+    staff.workspaceAction("handover", "create", 0, {{"summary","Передати ключі"},{"priority","important"}});
+    verify(waitFor([&] { return !staff.working(); }), "Handover did not complete");
+    staff.openPatient(19);
+    verify(waitFor([&] { return staff.patientRecord().value("id").toInt()==19; }), "Patient record did not load");
+    staff.workspaceAction("patient", "edit", 19, {{"family_id", 2},{"name", "Synthetic patient"}});
+    verify(waitFor([&] { return !staff.working(); }), "Patient edit failed");
+    verify(waitFor([&]{return staff.patientRecord().value("id").toInt()==19;}),"Patient did not reload after edit");
+    QImage scan(32,32,QImage::Format_RGB32);scan.fill(Qt::white);
+    const auto scanPath=config.filePath("paper.png");verify(scan.save(scanPath),"Cannot create test scan");
+    staff.saveDocument({{"source","paper_scan"},{"title","Згода"},{"document_type","informed_consent"},{"status","signed"},{"signed_by_name","Пацієнт"},{"paper_signed",true}},QUrl::fromLocalFile(scanPath));
+    verify(waitFor([&] { return !staff.working(); }), "Scanned document failed");
+    staff.bookParticipants({19,20},7,2,"2026-11-11","14:15","15:15","group");
+    verify(waitFor([&] { return !staff.working(); }), "Group booking failed");
+    staff.workspaceAction("messages", "create", 0, {{"recipient_id",7},{"body","FORBIDDEN"}});
+    staff.loadWorkspace("devices");
     staff.logout();
+    verify(staff.workspaceRows().isEmpty() && staff.patientRecord().isEmpty() && !staff.workspaceAllowed("waiting"), "Sign-out retained workspace data or permissions");
     verify(!staff.authenticated() && staff.availableSlots().isEmpty(), "Sign-out retained a booking slot");
     staff.login("director", "test");
     verify(waitFor([&] { return staff.overview().value("total_patients").toInt() == 15; }), "Director statistics did not load");
+    verify(staff.workspaceAllowed("supervisions") && staff.workspaceAllowed("messages") && !staff.workspaceAllowed("patient"), "Director permission boundary failed");
+    staff.workspaceAction("supervisions", "create", 0, {{"psychologist_id",7},{"scheduled_at","2026-11-11T12:00"},{"duration_minutes",60},{"topic","План супервізії"}});
+    verify(waitFor([&] { return !staff.working(); }), "Director supervision failed");
+    staff.workspaceAction("messages", "create", 0, {{"recipient_id",7},{"body","Зустріч о 12:00"}});
+    verify(waitFor([&] { return !staff.working(); }), "Director message failed");
     staff.loadDischarges();
     verify(waitFor([&] { return staff.dischargeRows().size() == 1; }), "Director discharges did not load");
     staff.reviewDischarge(9, 2, false, "Уточнити рекомендації");
@@ -75,6 +106,11 @@ int main(int argc, char **argv) {
     verify(waitFor([&] { return admin.error().contains("лише адміністраторам"); }), "Admin app accepted reception");
     admin.login("admin", "test");
     verify(waitFor([&] { return admin.role() == "admin"; }), "Admin sign-in failed");
+    verify(admin.workspaceAllowed("devices") && admin.workspaceAllowed("recovery"), "Admin missing device tools");
+    admin.openDetail("recovery",12);
+    verify(waitFor([&]{return admin.detailRecord().value("id").toInt()==12;}),"Recovery source did not load");
+    admin.workspaceAction("recovery","resolve",12,{{"action","complete"},{"reason","Звірено оригінал"},{"confirmed",true},{"payload",admin.detailRecord().value("payload")}});
+    verify(waitFor([&]{return !admin.working();}),"Recovery resolution failed");
     admin.searchPatients(QString());
     verify(waitFor([&] { return admin.patientTotal() == 41 && admin.patientPage() == 1 && admin.patients().size() == 1; }), "Patient register first page failed");
     admin.loadPatientPage(2);
@@ -84,13 +120,13 @@ int main(int argc, char **argv) {
     verify(waitFor([&] { return admin.adminRows().size() == 1; }), "Admin team did not load");
     verify(waitFor([&] { return admin.serviceChoices().size() == 1; }), "Service options did not load");
     admin.saveAdminEntry("team", 4, {{"name", "Test Staff"}, {"role", "reception"}, {"active", true}, {"primary_service_code", "art"}});
-    verify(waitFor([&] { return admin.notice().contains("Зміни збережено"); }), "Admin team change failed");
+    verify(waitFor([&] { return !admin.working() && admin.notice().contains("Зміни збережено"); }), "Admin team change failed");
     admin.endUserSessions(4);
-    verify(waitFor([&] { return admin.notice().contains("Сеанси працівника завершено"); }), "Employee session revocation failed");
+    verify(waitFor([&] { return !admin.working() && admin.notice().contains("Сеанси працівника завершено"); }), "Employee session revocation failed");
     admin.loadAdminSection("permissions");
     verify(waitFor([&] { return admin.adminRows().size() == 1; }), "Admin permissions did not load");
     admin.saveModulePermissions(4, QVariantList{"documents","clinical"});
-    verify(waitFor([&] { return admin.notice().contains("Права працівника оновлено"); }), "Admin permission update failed");
+    verify(waitFor([&] { return !admin.working() && admin.notice().contains("Права працівника оновлено"); }), "Admin permission update failed");
 
     const auto profile = QUrl::fromLocalFile(config.filePath("test.solvia"));
     admin.exportProfile(profile, true);

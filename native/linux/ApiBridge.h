@@ -11,6 +11,15 @@
 
 class ApiBridge final : public QObject {
     Q_OBJECT
+    Q_PROPERTY(QVariantList rehabilitationGoals READ rehabilitationGoals NOTIFY patientRecordChanged)
+    Q_PROPERTY(QVariantList documentTemplates READ documentTemplates NOTIFY patientRecordChanged)
+    Q_PROPERTY(QVariantMap detailRecord READ detailRecord NOTIFY detailChanged)
+    Q_PROPERTY(QVariantList familyOptions READ familyOptions NOTIFY patientRecordChanged)
+    Q_PROPERTY(QVariantList workspaceRows READ workspaceRows NOTIFY workspaceChanged)
+    Q_PROPERTY(QVariantMap workspaceDetails READ workspaceDetails NOTIFY workspaceChanged)
+    Q_PROPERTY(QVariantMap patientRecord READ patientRecord NOTIFY patientRecordChanged)
+    Q_PROPERTY(bool workspaceLoading READ workspaceLoading NOTIFY workspaceChanged)
+    Q_PROPERTY(QString workspaceError READ workspaceError NOTIFY workspaceChanged)
     Q_PROPERTY(bool adminEdition READ adminEdition CONSTANT)
     Q_PROPERTY(QVariantList adminRows READ adminRows NOTIFY dataChanged)
     Q_PROPERTY(QVariantList serviceChoices READ serviceChoices NOTIFY dataChanged)
@@ -28,6 +37,7 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QString notice READ notice NOTIFY stateChanged)
     Q_PROPERTY(QString lastRefresh READ lastRefresh NOTIFY stateChanged)
     Q_PROPERTY(bool authenticated READ authenticated NOTIFY stateChanged)
+    Q_PROPERTY(bool online READ online NOTIFY stateChanged)
     Q_PROPERTY(bool connected READ connected NOTIFY stateChanged)
     Q_PROPERTY(bool working READ working NOTIFY stateChanged)
     Q_PROPERTY(bool rosterSupported READ rosterSupported NOTIFY dataChanged)
@@ -47,6 +57,24 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QVariantList rooms READ rooms NOTIFY bookingOptionsChanged)
 public:
     explicit ApiBridge(bool adminEdition = false, QObject *parent = nullptr);
+    QVariantList rehabilitationGoals() const { return rehabilitationGoals_; }
+    QVariantList documentTemplates() const { return documentTemplates_; }
+    Q_INVOKABLE void exportDischarge(const QUrl &file, int id);
+    QVariantMap detailRecord() const { return detailRecord_; }
+    Q_INVOKABLE void openDetail(const QString &kind, int id);
+    Q_INVOKABLE void saveDocument(const QVariantMap &fields, const QUrl &scanFile);
+    Q_INVOKABLE void changePassword(const QString &current, const QString &next);
+    QVariantList familyOptions() const { return familyOptions_; }
+    QVariantList workspaceRows() const { return workspaceRows_; }
+    QVariantMap workspaceDetails() const { return workspaceDetails_; }
+    QVariantMap patientRecord() const { return patientRecord_; }
+    bool workspaceLoading() const { return workspaceLoading_; }
+    QString workspaceError() const { return workspaceError_; }
+    Q_INVOKABLE bool workspaceAllowed(const QString &section) const;
+    Q_INVOKABLE void loadWorkspace(const QString &section, const QString &query = QString(), const QString &from = QString(), const QString &to = QString());
+    Q_INVOKABLE void workspaceAction(const QString &section, const QString &action, int id, const QVariantMap &fields);
+    Q_INVOKABLE void openPatient(int id);
+    Q_INVOKABLE void closePatient();
     bool adminEdition() const { return adminEdition_; }
     QVariantList dischargeRows() const { return dischargeRows_; }
     QVariantList adminRows() const { return adminRows_; }
@@ -64,6 +92,7 @@ public:
     QString notice() const { return notice_; }
     QString lastRefresh() const { return lastRefresh_; }
     bool authenticated() const { return !token_.isEmpty() && !role_.isEmpty(); }
+    bool online() const { return online_; }
     bool connected() const { return connected_; }
     bool working() const { return working_; }
     bool rosterSupported() const { return rosterSupported_; }
@@ -114,6 +143,7 @@ public:
     Q_INVOKABLE void markArrived(int appointmentId, int patientId);
     Q_INVOKABLE void setShift(bool open);
     Q_INVOKABLE void assignPsychologist(int id, bool onShift);
+    Q_INVOKABLE void bookParticipants(const QVariantList &patientIds, int psychologistId, int roomId, const QString &date, const QString &start, const QString &end, const QString &kind);
     Q_INVOKABLE void book(int patientId, int psychologistId, int roomId,
                           const QString &date, const QString &start, const QString &end,
                           const QString &kind);
@@ -121,6 +151,9 @@ public:
                                      const QString &dob, const QString &category,
                                      int psychologistId, bool bookAfter);
 signals:
+    void detailChanged();
+    void workspaceChanged();
+    void patientRecordChanged();
     void stateChanged();
     void dataChanged();
     void slotsChanged();
@@ -147,6 +180,14 @@ private:
     void getShift(int generation);
     bool canWrite() const;
     bool requireStaffRole() const;
+    QVariantList workspaceRows_, familyOptions_, documentTemplates_, rehabilitationGoals_;
+    QVariantMap workspaceDetails_, patientRecord_, detailRecord_;
+    int detailGeneration_ = 0;
+    bool workspaceLoading_ = false;
+    QString workspaceSection_, workspaceQuery_, workspaceFrom_, workspaceTo_, workspaceError_;
+    int workspaceGeneration_ = 0, recordGeneration_ = 0;
+    QString mutationKey_;
+    QJsonObject mutationBody_;
     QNetworkAccessManager network_;
     const bool adminEdition_;
     bool loadingSlots_ = false, databaseWorking_ = false, patientsLoading_ = false;
@@ -159,6 +200,7 @@ private:
     QVariantList adminRows_, dischargeRows_, serviceChoices_;
     QVariantMap adminDetails_;
     QString origin_, pinnedId_, token_, role_, name_, error_, notice_, lastRefresh_;
+    bool online_ = false;
     bool connected_ = false, working_ = false, rosterSupported_ = false, rosterConfigured_ = false;
     QString rosterDate_, calendarDate_;
     int calendarGeneration_ = 0;

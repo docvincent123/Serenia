@@ -28,6 +28,8 @@ jobs:
             qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models \
             qml6-module-qtquick-templates qml6-module-qtquick-shapes \
             qml6-module-qtqml-workerscript libqt6svg6
+      - name: Verify server permission route coverage
+        run: python3 tests/module-route-map.py
       - name: Build native program
         run: |
           cmake -S native/linux -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -43,6 +45,11 @@ jobs:
         run: python3 tests/native-qt-settings.py build/native-linux/solvia-native
       - name: Verify staff and admin workflows through HTTPS
         run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-workflow-check
+      - name: Exercise native windows for each role
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-ui-check --ui
       - name: Check no WebKit or Chrome dependency is linked
         run: |
           if ldd build/native-linux/solvia-native | grep -Ei 'webkit|chromium|electron|webengine'; then

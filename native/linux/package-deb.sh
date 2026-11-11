@@ -5,7 +5,7 @@ set -Eeuo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 build=${SOLVIA_NATIVE_BUILD_DIR:-"$root/build/native-linux"}
 binary="$build/solvia-native"
-version=${SOLVIA_NATIVE_VERSION:-3.2.0~preview5}
+version=${SOLVIA_NATIVE_VERSION:-3.2.0~preview6}
 [[ -x $binary ]] || { echo "Спочатку зберіть $binary" >&2; exit 1; }
 command -v dpkg-deb >/dev/null || { echo "Потрібен dpkg-deb" >&2; exit 1; }
 stage=$(mktemp -d)

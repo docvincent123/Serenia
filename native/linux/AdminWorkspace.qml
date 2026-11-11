@@ -26,6 +26,7 @@ Item {
         {label:"ЦЕНТР"},
         {key:"team", label:"Працівники", detail:"Облікові записи, ролі та доступ працівників центру"},
         {key:"rooms", label:"Кабінети", detail:"Типи, номери та місткість кабінетів"},
+        {key:"templates",label:"Шаблони документів",detail:"Тексти згод, правил та інших документів центру"},
         {key:"services", label:"Напрямки", detail:"Перелік послуг і категорій центру"},
         {key:"permissions", label:"Права за модулями", detail:"Індивідуальні обмеження доступу без розширення базових прав ролі"},
         {label:"ОРГАНІЗАЦІЯ"},
@@ -33,6 +34,7 @@ Item {
         {key:"workflow", label:"Правила запису", detail:"Робочі дні, крок розкладу та тривалість прийомів"},
         {key:"center", label:"Дані центру", detail:"Контакти, реквізити та файли підключення"},
         {label:"СИСТЕМА"},
+        {key:"tv-displays", label:"Табло центру", detail:"Підключення телевізорів за кодом і налаштування показу"},
         {key:"sessions", label:"Сеанси", detail:"Пристрої працівників і час останньої активності"},
         {key:"audit", label:"Журнал дій", detail:"Історія дій працівників у системі"},
         {key:"database", label:"База та копії", detail:"Резервне копіювання та відновлення PostgreSQL"}
@@ -84,7 +86,7 @@ Item {
         {key:"rehabilitation", label:"Реабілітація"}, {key:"creative", label:"Терапевтичні заняття"},
         {key:"other", label:"Інший напрямок"}
     ]
-    readonly property bool listEditable: ["team","rooms","services"].includes(section)
+    readonly property bool listEditable: ["team","rooms","services","tv-displays","templates"].includes(section)
     readonly property bool detailsEditable: ["access","workflow","center"].includes(section)
     readonly property var currentSection: sections.find(item => item.key === section)
     readonly property var schema: ({
@@ -108,6 +110,16 @@ Item {
             {key:"name", label:"Назва напрямку"},
             {key:"category", label:"Категорія", options:categories, initial:"psychology"},
             {key:"active", label:"Напрямок активний", type:"check", initial:true, editOnly:true}
+        ],
+        templates:[{key:"title",label:"Назва шаблону"},{key:"content",label:"Текст документа",type:"area"},{key:"active",label:"Шаблон доступний",type:"check",initial:true,editOnly:true}],
+        "tv-displays":[
+            {key:"name",label:"Назва телевізора"},
+            {key:"code",label:"Код з екрана телевізора (6 цифр)",createOnly:true},
+            {key:"room_id",label:"Кабінет",options:[{key:0,label:"Усі кабінети"}].concat(bridge.rooms.map(r=>({key:r.id,label:r.name}))),initial:0},
+            {key:"page_seconds",label:"Час сторінки, секунд",type:"number",from:6,to:60,initial:12},
+            {key:"message",label:"Оголошення на табло"},
+            {key:"enabled",label:"Табло увімкнено",type:"check",initial:true},
+            {key:"show_full_names",label:"Показувати повні ПІБ",type:"check",initial:false}
         ],
         access:[
             {key:"access_date", label:"Дата (РРРР-ММ-ДД)", initial:today},
@@ -167,7 +179,7 @@ Item {
         property bool onRail: false
         implicitHeight: onRail ? 35 : 42
         leftPadding: 16; rightPadding: 16
-        contentItem: Label {
+        contentItem: Label { textFormat:Text.PlainText;
             text: action.text; horizontalAlignment: action.onRail ? Text.AlignLeft : Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
             color: action.onRail ? root.ink : action.primary ? "#F1F3F3" : root.ink
             font.bold: action.primary; elide: Text.ElideRight
@@ -198,7 +210,7 @@ Item {
                         delegate: ColumnLayout {
                             required property var modelData
                             Layout.fillWidth: true
-                            Label {
+                            Label { textFormat:Text.PlainText;
                                 visible: !modelData.key; text: modelData.label; color: root.muted
                                 font.pixelSize: 10; font.letterSpacing: 1
                                 Layout.topMargin: 9; Layout.bottomMargin: 3; Layout.leftMargin: 12
@@ -226,18 +238,18 @@ Item {
                     Layout.fillWidth: true
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 4
-                        Label { text: root.currentSection.label; color: root.ink; font.pixelSize: 26; font.bold: true; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                        Label { text: root.currentSection.detail; color: root.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        Label { textFormat:Text.PlainText; text: root.currentSection.label; color: root.ink; font.pixelSize: 26; font.bold: true; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        Label { textFormat:Text.PlainText; text: root.currentSection.detail; color: root.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                     }
                     Action { text: "+ Додати"; primary: true; visible: root.listEditable; enabled: !root.bridge.working && (root.section !== "team" || root.bridge.serviceChoices.length > 0); onClicked: root.edit({}) }
                     Action { text: "Редагувати"; primary: true; visible: root.detailsEditable; enabled: !root.bridge.working && Object.keys(root.bridge.adminDetails).length > 0; onClicked: root.edit(root.bridge.adminDetails) }
                 }
-                Label {
+                Label { textFormat:Text.PlainText;
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; visible: !!root.bridge.error || !!root.bridge.notice
                     text: root.bridge.error || root.bridge.notice
                     color: root.bridge.error ? "#8C3632" : root.muted
                 }
-                Label {
+                Label { textFormat:Text.PlainText;
                     Layout.fillWidth: true; visible: root.detailsEditable && !Object.keys(root.bridge.adminDetails).length
                     text: "Очікуємо дані сервера…"; color: root.muted
                 }
@@ -246,8 +258,8 @@ Item {
                     delegate: RowLayout {
                         required property var modelData
                         Layout.fillWidth: true
-                        Label { text: modelData.label; color: root.muted; Layout.preferredWidth: 224; wrapMode: Text.WordWrap }
-                        Label {
+                        Label { textFormat:Text.PlainText; text: modelData.label; color: root.muted; Layout.preferredWidth: 224; wrapMode: Text.WordWrap }
+                        Label { textFormat:Text.PlainText;
                             Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.ink
                             text: {
                                 const value = root.bridge.adminDetails[modelData.key]
@@ -282,33 +294,33 @@ Item {
                         }
                         Action { text: "Очистити"; enabled: root.searchText.length > 0; onClicked: root.searchText = "" }
                     }
-                    Label {
+                    Label { textFormat:Text.PlainText;
                         text: "Показано " + root.filteredRows.length + " із " + root.bridge.adminRows.length
                         color: root.muted; font.pixelSize: 12
                     }
                 }
-                Label {
+                Label { textFormat:Text.PlainText;
                     visible: (root.listEditable || root.section === "permissions" || root.section === "sessions" || root.section === "audit") &&
                              root.filteredRows.length === 0 && !root.bridge.working
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: root.searchText ? "За цим запитом нічого не знайдено." : "У цьому розділі поки немає записів."
                 }
-                Label {
+                Label { textFormat:Text.PlainText;
                     visible: root.section === "team" && root.bridge.serviceChoices.length === 0
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: "Завантажуємо перелік напрямків для працівників…"
                 }
-                Label {
+                Label { textFormat:Text.PlainText;
                     visible: root.section === "permissions"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: "Базова роль визначає максимальні права. Нижче можна лише обмежити окремі модулі працівника. Заборонений базовою роллю доступ увімкнути тут неможливо; зміни перевіряє сервер і записує в журнал."
                 }
-                Label {
+                Label { textFormat:Text.PlainText;
                     visible: root.section === "team"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: "Роль доступу контролює дозволені дії. Посада й професійний напрямок відображають спеціалізацію, але не відкривають чужі картки пацієнтів."
                 }
-                Label {
+                Label { textFormat:Text.PlainText;
                     visible: root.section === "services"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: "Напрямки — це послуги центру. Права доступу працівника задаються окремою роллю; спеціалізація не надає доступ до чужих медичних записів."
@@ -324,17 +336,18 @@ Item {
                             anchors.fill: parent; anchors.margins: 11
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 5
-                                Label {
+                                Label { textFormat:Text.PlainText;
                                     Layout.fillWidth: true; elide: Text.ElideRight; color: root.ink; font.bold: true
-                                    text: root.section === "audit" ? String(modelData.event || "") + " · " + String(modelData.entity || "") : String(modelData.name || modelData.device_name || "—")
+                                    text: root.section === "audit" ? String(modelData.event || "") + " · " + String(modelData.entity || "") : String(modelData.name || modelData.title || modelData.device_name || "—")
                                 }
-                                Label {
+                                Label { textFormat:Text.PlainText;
                                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                                     text: {
                                         if (root.section === "team") return [modelData.login, root.readable(root.roles,modelData.role), root.readable(root.positions,modelData.job_title), modelData.primary_service_name, modelData.active ? "Активний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "permissions") return [modelData.login, root.readable(root.roles,modelData.role), "Обмежено модулів: " + (modelData.blocked_modules || []).length].filter(Boolean).join(" · ")
                                         if (root.section === "rooms") return [modelData.code, root.readable(root.roomTypes,modelData.type), modelData.capacity + " місць", modelData.active ? "Доступний" : "Вимкнений"].filter(Boolean).join(" · ")
                                         if (root.section === "services") return root.readable(root.categories,modelData.category) + (modelData.active ? "" : " · Вимкнено")
+                                        if (root.section === "tv-displays") return [modelData.enabled?"Увімкнено":"Вимкнено",modelData.last_seen,modelData.message].filter(Boolean).join(" · ")
                                         if (root.section === "sessions") return [modelData.login || modelData.user_name || modelData.user, modelData.device_name || modelData.platform, modelData.last_seen, modelData.online ? "Онлайн" : "Офлайн"].filter(Boolean).join(" · ")
                                         return [modelData.actor, modelData.created].filter(Boolean).join(" · ")
                                     }
@@ -366,7 +379,7 @@ Item {
                     Action { text:"Файл для Android / ПК"; onClicked:{ exportPicker.localOnly = false; exportPicker.open() } }
                     Action { text:"Файл для Wi-Fi центру"; visible:root.bridge.adminDetails.connection_mode === "local"; onClicked:{ exportPicker.localOnly = true; exportPicker.open() } }
                 }
-                Label {
+                Label { textFormat:Text.PlainText;
                     visible: root.section === "database"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: root.bridge.localDatabaseTools()
@@ -414,8 +427,8 @@ Item {
                 anchors.leftMargin: 24; anchors.rightMargin: 24
                 anchors.topMargin: 14; anchors.bottomMargin: 8
                 spacing: 2
-                Label { text: form.recordId > 0 ? "Редагування" : "Новий запис"; color: root.muted; font.pixelSize: 12 }
-                Label { text: form.title; color: root.ink; font.pixelSize: 23; font.bold: true }
+                Label { textFormat:Text.PlainText; text: form.recordId > 0 ? "Редагування" : "Новий запис"; color: root.muted; font.pixelSize: 12 }
+                Label { textFormat:Text.PlainText; text: form.title; color: root.ink; font.pixelSize: 23; font.bold: true }
             }
         }
         contentItem: ScrollView {
@@ -436,11 +449,11 @@ Item {
                         readonly property var fieldValue: editor.item ? editor.item.fieldValue : original
                         Layout.fillWidth: true
                         spacing: 7
-                        Label { text: modelData.label; color: root.ink; font.pixelSize: 13; font.bold: true }
+                        Label { textFormat:Text.PlainText; text: modelData.label; color: root.ink; font.pixelSize: 13; font.bold: true }
                         Loader {
                             id: editor
                             Layout.fillWidth: true
-                            sourceComponent: modelData.options ? comboEditor : modelData.type === "check" ? checkEditor : modelData.type === "number" ? numericEditor : textEditor
+                            sourceComponent: modelData.options ? comboEditor : modelData.type === "check" ? checkEditor : modelData.type === "number" ? numericEditor : modelData.type === "area" ? areaEditor : textEditor
                             Component {
                                 id: comboEditor
                                 ComboBox {
@@ -454,7 +467,7 @@ Item {
                                         const index = indexOfValue(original)
                                         currentIndex = index >= 0 ? index : 0
                                     }
-                                    contentItem: Text {
+                                    contentItem: Text { textFormat:Text.PlainText;
                                         text: selection.displayText
                                         color: root.ink
                                         font.pixelSize: 14
@@ -462,7 +475,7 @@ Item {
                                         verticalAlignment: Text.AlignVCenter
                                         elide: Text.ElideRight
                                     }
-                                    indicator: Label {
+                                    indicator: Label { textFormat:Text.PlainText;
                                         text: "⌄"; font.pixelSize: 22
                                         color: root.muted
                                         anchors.right: parent.right; anchors.rightMargin: 17
@@ -541,10 +554,11 @@ Item {
                                     }
                                 }
                             }
+                            Component { id: areaEditor; TextArea { readonly property string fieldValue:text; text:String(original); selectByMouse:true; wrapMode:TextEdit.Wrap; implicitHeight:200 } }
                         }
                     }
                 }
-                Label { Layout.fillWidth: true; visible: !!root.bridge.error; text: root.bridge.error; color: "#8C3632"; wrapMode: Text.WordWrap }
+                Label { textFormat:Text.PlainText; Layout.fillWidth: true; visible: !!root.bridge.error; text: root.bridge.error; color: "#8C3632"; wrapMode: Text.WordWrap }
             }
         }
         footer: Rectangle {
@@ -591,9 +605,9 @@ Item {
             implicitHeight: 100; color: "transparent"
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 22; spacing: 5
-                Label { text: permissionsDialog.person.name || "Працівник"; font.pixelSize: 21; font.bold: true; color: root.ink }
-                Label { text: "Базова роль: " + root.readable(root.roles, permissionsDialog.person.role); font.pixelSize: 13; color: root.muted }
-                Label { text: "Перемикачі можуть лише обмежувати доступ"; font.pixelSize: 12; color: root.muted }
+                Label { textFormat:Text.PlainText; text: permissionsDialog.person.name || "Працівник"; font.pixelSize: 21; font.bold: true; color: root.ink }
+                Label { textFormat:Text.PlainText; text: "Базова роль: " + root.readable(root.roles, permissionsDialog.person.role); font.pixelSize: 13; color: root.muted }
+                Label { textFormat:Text.PlainText; text: "Перемикачі можуть лише обмежувати доступ"; font.pixelSize: 12; color: root.muted }
             }
         }
         contentItem: ScrollView {
@@ -609,7 +623,7 @@ Item {
                         radius: 16; color: "#FFFFFF"; border.color: "#D4DCDE"
                         RowLayout {
                             anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 14
-                            Label { text: modelData.label; Layout.fillWidth: true; color: root.ink; font.pixelSize: 14 }
+                            Label { textFormat:Text.PlainText; text: modelData.label; Layout.fillWidth: true; color: root.ink; font.pixelSize: 14 }
                             Switch {
                                 checked: !permissionsDialog.blocked.includes(modelData.key)
                                 Accessible.name: "Дозволити " + modelData.label
@@ -658,9 +672,13 @@ Item {
         modal: true; anchors.centerIn: Overlay.overlay
         width: Math.min(450, root.width - 32)
         standardButtons: Dialog.Yes | Dialog.No
-        contentItem: Label {
-            text: "Користувач: " + endUserSessions.targetName + "\nУсі його пристрої будуть розлогінені. Інших працівників це не зачепить."
-            wrapMode: Text.WordWrap; color: root.ink; padding: 14
+        contentItem: Item {
+            implicitHeight: 105
+            Label { textFormat:Text.PlainText;
+                anchors.fill:parent; anchors.margins:14
+                text: "Користувач: " + endUserSessions.targetName + "\nУсі його пристрої будуть розлогінені. Інших працівників це не зачепить."
+                wrapMode:Text.WordWrap; color:root.ink
+            }
         }
         onAccepted: root.bridge.endUserSessions(targetId)
     }
@@ -685,7 +703,7 @@ Item {
         modal: true; anchors.centerIn: Overlay.overlay; width: 460
         ColumnLayout {
             width: parent.width
-            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: "Після перевірки файла сервер створить захисну копію й відновить вибрану базу. Для підтвердження введіть ВІДНОВИТИ." }
+            Label { textFormat:Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap; text: "Після перевірки файла сервер створить захисну копію й відновить вибрану базу. Для підтвердження введіть ВІДНОВИТИ." }
             TextField { id: restoreConfirmation; Layout.fillWidth: true; placeholderText: "ВІДНОВИТИ" }
             Action { text: "Відновити"; enabled: restoreConfirmation.text.trim() === "ВІДНОВИТИ"; onClicked: { root.bridge.databaseRestore(picker.selectedFile, restoreConfirmation.text); restore.close() } }
         }

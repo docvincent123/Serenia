@@ -37,6 +37,19 @@ class Center(BaseHTTPRequestHandler):
         responses = {
             "/api/health": {"ok": True, "server_id": SERVER_ID},
             "/api/me": {"role": role, "name": "Synthetic account"},
+            "/api/operations/handover": [{"id":5,"summary":"Завдання наступній зміні","state":"open","priority":"important","created_by":"Реєстратор","shift_date":"2026-11-11"}],
+            "/api/shift-day": {"open":True,"shift_date":"2026-11-11"},
+            "/api/patient-directory": {"items":[{"id":19,"name":"Тестовий пацієнт","patient_no":"0019","psychologist_id":7,"status":"active"}],"total":1},
+            "/api/supervisions": [{"id":8,"psychologist":"Тестовий психолог","psychologist_id":7,"scheduled_at":"2026-11-11T12:00","duration_minutes":60,"status":"scheduled","topic":"Підтримка команди"}],
+            "/api/staff/messages": [{"id":3,"body":"Зустріч команди","recipient":"Психолог","created":"2026-11-11T10:00"}],
+            "/api/admin/devices": [{"name":"Тестовий психолог","device_name":"Android test","fresh":True,"pending_count":2,"blocked_count":0}],
+            "/api/admin/recovery": [{"id":12,"patient":"Тестовий пацієнт","psychologist":"Тестовий психолог","state":"open","kind":"consultation","revision":2}],
+            "/api/admin/recovery/12": {"id":12,"patient":"Тестовий пацієнт","state":"open","revision":2,"draft_version":3,"payload":{"note":"Запис із телефона","patient_id":19,"appointment_id":4,"client_key":"test-key-123456789"},"existing":[],"server_draft":None},
+            "/api/patients/19/documents": [{"id":1,"title":"Згода","status":"signed","content":"Текст згоди","signed_by_name":"Пацієнт"}],
+            "/api/waiting-list": [{"id":6,"version":3,"patient_id":19,"psychologist_id":7,"status":"waiting"}],
+            "/api/patients/19": {"id":19,"name":"Synthetic patient","psychologist_id":7,"status":"active","courses":[{"id":4,"course_no":1,"started_at":"2026-11-01","status":"active","psychologist":"Тестовий психолог"}],"documents":[{"id":1,"title":"Згода","status":"signed"}]},
+            "/api/families": [{"id":2,"name":"Synthetic family","member_count":2}],
+            "/api/meta": {"psychologists":[{"id":7,"name":"Synthetic psychologist"}],"rooms":[{"id":2,"name":"Room 2"}]},
             "/api/slots": ["10:15", "14:15"],
             "/api/users": [{"id": 4, "name": "Synthetic staff", "active": True}],
             "/api/services": [{"id": 2, "code": "art", "name": "Арттерапія", "category": "creative", "active": True}],
@@ -56,7 +69,7 @@ class Center(BaseHTTPRequestHandler):
             if page not in (1, 2):
                 return self.respond({"error": "Unexpected register page"}, 400)
             return self.respond({
-                "items": [{"id": page, "name": "Пацієнт " + str(page), "patient_no": "TEST" + str(page)}],
+                "items": [{"id":19 if "--ui" in sys.argv[2:] else page,"name":"Пацієнт "+str(page),"patient_no":"TEST"+str(page),"psychologist_id":7,"status":"active"}],
                 "total": 41, "page": page, "page_size": 25,
             })
         if path in {"/api/users", "/api/mobile-config"} and role != "admin":
@@ -103,13 +116,35 @@ with tempfile.TemporaryDirectory() as temporary:
             server.shutdown()
             worker.join()
 
+if "--ui" in sys.argv[2:]:
+    print("PASS: native role navigation, dialogs and responsive layout")
+    sys.exit(0)
+
 bookings = [body for path, body in Center.requests if path == "/api/appointments"]
-assert len(bookings) == 1, "Double submit must create only one booking"
+assert len(bookings) == 2, "Double submit must create only one booking"
+assert bookings[1]["patient_ids"] == [19,20] and bookings[1]["kind"] == "group"
 assert bookings[0]["patient_ids"] == [19] and bookings[0]["client_key"]
 assert bookings[0]["start"] == "2026-11-11T10:15" and bookings[0]["end"] == "2026-11-11T11:00"
 assert ("/api/discharges/9/workflow", {"action": "return", "revision": 2, "reason": "Уточнити рекомендації"}) in Center.requests
 assert ("/api/users/4", {"name": "Test Staff", "role": "reception", "active": True, "primary_service_code": "art"}) in Center.requests
 print("PASS: native HTTPS and profile binding, distinct staff/admin roles, slot booking with duplicate-submit protection, director review, and team editing")
 
+assert ("/api/waiting-list/6", {"version":3,"status":"offered"}) in Center.requests
+assert any(path=="/api/waiting-list/6/book" and body["version"]==4 for path,body in Center.requests)
+handovers=[body for path,body in Center.requests if path=="/api/operations/handover"]
+assert len(handovers)==1 and handovers[0]["client_key"]
+assert any(path=="/api/patients/19" and body["family_id"]==2 for path,body in Center.requests)
+assert any(path=="/api/supervisions" for path,body in Center.requests)
+assert len([1 for path,body in Center.requests if path=="/api/staff/messages"])==1
+assert all(body.get("body")!="FORBIDDEN" for path,body in Center.requests)
+print("PASS: operational roles, version-checked waiting booking, handover double-submit lock, patient family edit, supervision, messaging and logout data cleanup")
+
+document=next(body for path,body in Center.requests if path=="/api/patients/19/documents")
+assert document["original_data"].startswith("data:image/png;base64,")
+assert document["scan_data"].startswith("data:image/jpeg;base64,")
+assert document["paper_signed"] is True
+recovery=next(body for path,body in Center.requests if path=="/api/admin/recovery/12")
+assert recovery["revision"]==2 and recovery["draft_version"]==3
+print("PASS: group participants, signed paper scan with preserved original, and recovery revision guards")
 assert ("/api/users/4/sessions", {}) in Center.requests, "Admin did not revoke selected employee sessions"
 assert ("/api/admin/module-permissions", {"user_id":4,"blocked_modules":["documents","clinical"]}) in Center.requests, "Qt access editor did not send selected restrictions"

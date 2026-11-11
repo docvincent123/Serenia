@@ -1,4 +1,10 @@
 #include "ApiBridge.h"
+#include <QBuffer>
+#include <QImageReader>
+#include <QImage>
+#include <QPdfWriter>
+#include <QPainter>
+#include <QTextDocument>
 #include <QDate>
 #include <QDateTime>
 #include <QFile>
@@ -49,6 +55,12 @@ void ApiBridge::notify(const QString &message) {
 }
 
 void ApiBridge::clearSession() {
+    ++workspaceGeneration_; ++recordGeneration_; ++detailGeneration_;
+    detailRecord_.clear(); emit detailChanged();
+    workspaceRows_.clear(); familyOptions_.clear(); documentTemplates_.clear(); rehabilitationGoals_.clear(); workspaceDetails_.clear(); patientRecord_.clear();
+    workspaceSection_.clear(); workspaceError_.clear(); workspaceLoading_ = false;
+    mutationBody_ = {}; mutationKey_.clear();
+    emit workspaceChanged(); emit patientRecordChanged();
     ++sessionGeneration_;
     ++refreshGeneration_;
     ++patientGeneration_;
@@ -103,14 +115,21 @@ void ApiBridge::request(const QByteArray &method, const QString &path,
         return;
     }
     const int generation = sessionGeneration_;
+    const bool ownsWork = method != "GET" || (path == "/api/me" && role_.isEmpty()) || (path == "/api/health" && !connected_);
     connect(reply, &QNetworkReply::finished, this,
-            [this, reply, generation, path, quiet, completed = std::move(completed), failed = std::move(failed)]() mutable {
+            [this, reply, generation, path, quiet, ownsWork, completed = std::move(completed), failed = std::move(failed)]() mutable {
         const auto bytes = reply->readAll();
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const auto networkError = reply->error();
         const QString networkDetails = reply->errorString();
         reply->deleteLater();
         if (generation != sessionGeneration_) return; // logout/server switch won the race
+        const bool reachable = status > 0;
+        if (online_ != reachable) { online_ = reachable; emit stateChanged(); }
+        const auto reportFailure = [this, ownsWork](const QString &why) {
+            if (ownsWork) issue(why);
+            else { error_ = why; notice_.clear(); emit stateChanged(); }
+        };
         QJsonParseError parse{};
         const auto document = QJsonDocument::fromJson(bytes, &parse);
         const QJsonValue value = document.isArray()
@@ -132,13 +151,13 @@ void ApiBridge::request(const QByteArray &method, const QString &path,
                 return;
             }
             if (failed) failed(why);
-            if (!quiet) issue(why);
+            if (!quiet) reportFailure(why);
             return;
         }
         if (parse.error != QJsonParseError::NoError || (!document.isArray() && !document.isObject())) {
             const QString why = "Сервер повернув некоректну відповідь.";
             if (failed) failed(why);
-            if (!quiet) issue(why);
+            if (!quiet) reportFailure(why);
             return;
         }
         completed(value);
@@ -284,6 +303,7 @@ void ApiBridge::getOverview(int generation) {
     request("GET", role_ == "director" ? "/api/stats" : "/api/workday/home", {}, [this,generation](const QJsonValue &v){
         if (generation != refreshGeneration_) return;
         overview_ = v.toObject().toVariantMap();
+        lastRefresh_ = QTime::currentTime().toString("HH:mm:ss"); emit stateChanged();
         emit dataChanged();
     }, true);
 }
@@ -375,7 +395,6 @@ void ApiBridge::refresh() {
     }
     getRoster(generation);
     if (role_ == "admin") getSystem(generation);
-    lastRefresh_ = QTime::currentTime().toString("HH:mm:ss");
     emit stateChanged();
 }
 void ApiBridge::searchPatients(const QString &text) {
@@ -528,6 +547,25 @@ void ApiBridge::book(int patientId, int psychologistId, int roomId, const QStrin
         {"status", "scheduled"}, {"start", date + "T" + start}, {"end", date + "T" + end}});
 }
 
+void ApiBridge::bookParticipants(const QVariantList &patientIds, int psychologistId, int roomId,
+                                 const QString &date, const QString &start, const QString &end, const QString &kind) {
+    if (!requireStaffRole() || working_) return;
+    if (!psychologistBookable(psychologistId, date) || patientIds.isEmpty() || patientIds.size() > 30 ||
+        roomId <= 0 || start >= end || !QDate::fromString(date, Qt::ISODate).isValid())
+        return issue("Оберіть учасників, психолога, кабінет і час.");
+    if (!QStringList{"individual","child","crisis","group","family"}.contains(kind) ||
+        (patientIds.size() > 1 && kind != "group" && kind != "family"))
+        return issue("Для кількох учасників оберіть сімейний або груповий прийом.");
+    QJsonArray ids;
+    for (const auto &value : patientIds) {
+        const int id = value.toInt();
+        if (id <= 0 || ids.contains(id)) return issue("Перевірте список учасників.");
+        ids.append(id);
+    }
+    saveBooking({{"patient_ids", ids}, {"psychologist_id", psychologistId}, {"room_id", roomId},
+        {"kind",kind}, {"status","scheduled"}, {"start",date+"T"+start}, {"end",date+"T"+end}});
+}
+
 void ApiBridge::moveBooking(const QVariantMap &appointment, int roomId,
                             const QString &date, const QString &start, const QString &end) {
     if (!requireStaffRole() || working_) return;
@@ -596,7 +634,7 @@ void ApiBridge::registerPatient(const QString &name,const QString &phone,
 
 namespace {
 const QHash<QString, QString> adminEndpoints{
-    {"team", "/api/users"}, {"rooms", "/api/rooms"}, {"services", "/api/services"},
+    {"templates", "/api/document-templates"}, {"tv-displays", "/api/admin/tv-displays"}, {"team", "/api/users"}, {"rooms", "/api/rooms"}, {"services", "/api/services"},
     {"access", "/api/reception-access"}, {"workflow", "/api/settings/workflow"},
     {"center", "/api/settings/center"}, {"sessions", "/api/admin/sessions"}, {"audit", "/api/audit"},
     {"permissions", "/api/admin/module-permissions"}
@@ -628,7 +666,7 @@ void ApiBridge::loadAdminSection(const QString &section) {
 
 void ApiBridge::saveAdminEntry(const QString &section, int id, const QVariantMap &fields) {
     if (!adminEdition_ || role_ != "admin" || working_ || section != adminSection_) return;
-    const bool item = section == "team" || section == "rooms" || section == "services";
+    const bool item = section == "team" || section == "rooms" || section == "services" || section == "tv-displays" || section == "templates";
     if (!item && section != "access" && section != "workflow" && section != "center") return;
     QString path = adminEndpoints.value(section);
     const bool creates = section == "access" || (item && id == 0);
@@ -786,5 +824,238 @@ void ApiBridge::exportProfile(const QUrl &file, bool localOnly) {
         if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit())
             return issue("Не вдалося зберегти файл підключення.");
         notify("Файл підключення збережено.");
+    });
+}
+
+namespace {
+const QHash<QString, QString> workspaceEndpoints{
+    {"handover", "/api/operations/handover"}, {"waiting", "/api/waiting-list"},
+    {"families", "/api/families"}, {"archive", "/api/patient-directory"},
+    {"supervisions", "/api/supervisions"}, {"messages", "/api/staff/messages"},
+    {"recipients", "/api/staff/recipients"}, {"reports", "/api/shift-reports"},
+    {"workload", "/api/stats"}, {"tv", "/api/tv/candidates"},
+    {"devices", "/api/admin/devices"}, {"recovery", "/api/admin/recovery"}
+};
+}
+
+bool ApiBridge::workspaceAllowed(const QString &section) const {
+    if (!authenticated()) return false;
+    if (role_ == "admin" && adminEdition_) return workspaceEndpoints.contains(section) || section == "patient";
+    const QHash<QString,QString> modules{{"handover","appointments"},{"waiting","appointments"},{"tv","appointments"},
+        {"families","patients"},{"archive","patients"},{"patient","patients"},{"supervisions","reports"},
+        {"workload","reports"},{"reports","reports"},{"messages","messages"},{"recipients","messages"}};
+    if (!moduleEnabled(modules.value(section))) return false;
+    if (section == "patient" && (!moduleEnabled("clinical") || !moduleEnabled("documents") || !moduleEnabled("rehabilitation"))) return false;
+    if (role_ == "reception" && !adminEdition_)
+        return QStringList{"handover", "waiting", "families", "archive", "tv", "patient"}.contains(section);
+    if (role_ == "director" && !adminEdition_)
+        return QStringList{"supervisions", "messages", "recipients", "workload"}.contains(section);
+    return false;
+}
+
+void ApiBridge::loadWorkspace(const QString &section, const QString &query, const QString &from, const QString &to) {
+    if (!workspaceAllowed(section) || !workspaceEndpoints.contains(section)) return;
+    const int generation = ++workspaceGeneration_;
+    if (workspaceSection_ != section || workspaceQuery_ != query || workspaceFrom_ != from || workspaceTo_ != to) {
+        workspaceRows_.clear(); workspaceDetails_.clear();
+    }
+    workspaceSection_ = section; workspaceQuery_ = query; workspaceFrom_ = from; workspaceTo_ = to;
+    workspaceLoading_ = true; workspaceError_.clear(); emit workspaceChanged();
+    QUrlQuery params;
+    if (section == "archive") { params.addQueryItem("status", "archived"); params.addQueryItem("q", query); params.addQueryItem("page_size", "100"); }
+    if (section == "workload" || section == "reports") {
+        const QString start = from.isEmpty() ? QDate::currentDate().toString("yyyy-MM-01") : from;
+        const QString end = to.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : to;
+        if (!QDate::fromString(start, Qt::ISODate).isValid() || !QDate::fromString(end, Qt::ISODate).isValid() || start > end) {
+            workspaceLoading_ = false; workspaceError_ = "Перевірте період звіту."; emit workspaceChanged(); return;
+        }
+        params.addQueryItem("from", start); params.addQueryItem("to", end);
+    }
+    const QString path = workspaceEndpoints.value(section) + (params.isEmpty() ? "" : "?" + params.toString(QUrl::FullyEncoded));
+    request("GET", path, {}, [this, generation, section](const QJsonValue &result) {
+        if (generation != workspaceGeneration_) return;
+        workspaceDetails_ = result.toObject().toVariantMap();
+        workspaceRows_ = section == "archive" ? result.toObject().value("items").toArray().toVariantList()
+            : section == "workload" ? result.toObject().value("load").toArray().toVariantList() : result.toArray().toVariantList();
+        workspaceLoading_ = false; emit workspaceChanged();
+    }, true, [this, generation](const QString &reason) {
+        if (generation != workspaceGeneration_) return;
+        workspaceLoading_ = false; workspaceError_ = reason;
+        workspaceRows_.clear(); workspaceDetails_.clear(); emit workspaceChanged();
+    });
+}
+
+void ApiBridge::openPatient(int id) {
+    if (!workspaceAllowed("patient") || id <= 0) return;
+    const int generation = ++recordGeneration_;
+    patientRecord_.clear(); familyOptions_.clear(); emit patientRecordChanged();
+    rehabilitationGoals_.clear();
+    if (role_ == "admin") request("GET", "/api/patients/" + QString::number(id) + "/rehab-goals", {}, [this, generation](const QJsonValue &value) {
+        if (generation != recordGeneration_) return;
+        rehabilitationGoals_ = value.toArray().toVariantList(); emit patientRecordChanged();
+    });
+    request("GET", "/api/document-templates", {}, [this, generation](const QJsonValue &value) {
+        if (generation != recordGeneration_) return;
+        documentTemplates_ = value.toArray().toVariantList(); emit patientRecordChanged();
+    });
+    request("GET", "/api/families", {}, [this, generation](const QJsonValue &value) {
+        if (generation != recordGeneration_) return;
+        familyOptions_ = value.toArray().toVariantList(); emit patientRecordChanged();
+    });
+    request("GET", "/api/patients/" + QString::number(id), {}, [this, generation](const QJsonValue &value) {
+        if (generation != recordGeneration_) return;
+        patientRecord_ = value.toObject().toVariantMap(); emit patientRecordChanged();
+    });
+}
+void ApiBridge::closePatient() {
+    ++recordGeneration_; ++detailGeneration_; patientRecord_.clear(); familyOptions_.clear(); detailRecord_.clear(); emit patientRecordChanged(); emit detailChanged();
+}
+
+void ApiBridge::workspaceAction(const QString &section, const QString &action, int id, const QVariantMap &fields) {
+    if (!workspaceAllowed(section) || working_) return;
+    QString path; QByteArray method = "POST";
+    auto body = QJsonObject::fromVariantMap(fields);
+    bool keyed = false;
+    if (section == "handover") {
+        path = workspaceEndpoints.value(section);
+        if (action == "resolve" && id > 0) { path += "/" + QString::number(id); method = "PATCH"; body = {{"state", "resolved"}}; }
+        else if (action == "create") keyed = true;
+        else return;
+    } else if (section == "families" && action == "create") path = workspaceEndpoints.value(section);
+    else if (section == "waiting") {
+        path = workspaceEndpoints.value(section);
+        if (action == "create") {}
+        else if (id > 0 && (action == "offered" || action == "cancelled")) {
+            path += "/" + QString::number(id); method = "PATCH";
+            body = {{"version", body.value("version")}, {"status", action}};
+        } else if (id > 0 && action == "book") path += "/" + QString::number(id) + "/book";
+        else return;
+    } else if (section == "supervisions") {
+        path = workspaceEndpoints.value(section);
+        if (action == "edit" && id > 0) { path += "/" + QString::number(id); method = "PATCH"; }
+        else if (action != "create") return;
+    } else if (section == "messages" && action == "create") { path = workspaceEndpoints.value(section); keyed = true; }
+    else if (section == "tv" && action == "call") path = "/api/tv/call";
+    else if (section == "patient" && id > 0) {
+        const int patientId = patientRecord_.value("id").toInt();
+        if (patientId <= 0) return;
+        const QString patientPath = "/api/patients/" + QString::number(patientId);
+        if (action == "edit" && id == patientId) { path = patientPath; method = "PATCH"; }
+        else if (action == "course-open" && id == patientId) path = patientPath + "/courses";
+        else if (action == "course-close") {
+            bool found = false;
+            for (const auto &row : patientRecord_.value("courses").toList()) if (row.toMap().value("id").toInt() == id) found = true;
+            if (!found) return;
+            path = "/api/courses/" + QString::number(id); method = "PATCH";
+        } else if (action == "document" && id == patientId) path = patientPath + "/documents";
+        else if (action == "discharge" && role_ == "admin") { path = "/api/discharges"; body.insert("patient_id", patientId); }
+        else if (action == "referral") path = patientPath + "/referrals";
+        else if (action == "note" && role_ == "admin") { path = "/api/admin-notes"; body.insert("patient_id", patientId); }
+        else return;
+    } else if (section == "recovery" && action == "resolve" && id > 0 && detailRecord_.value("id").toInt() == id) {
+        path = "/api/admin/recovery/" + QString::number(id);
+        body.insert("revision", QJsonValue::fromVariant(detailRecord_.value("revision")));
+        body.insert("draft_version", QJsonValue::fromVariant(detailRecord_.value("draft_version")));
+    } else return;
+    if (keyed) {
+        QJsonObject fingerprint = body; fingerprint.insert("_path", path);
+        if (fingerprint != mutationBody_) { mutationBody_ = fingerprint; mutationKey_ = QUuid::createUuid().toString(QUuid::WithoutBraces); }
+        body.insert("client_key", mutationKey_);
+    }
+    working_ = true; error_.clear(); emit stateChanged();
+    request(method, path, body, [this, section](const QJsonValue &) {
+        working_ = false; mutationBody_ = {}; mutationKey_.clear();
+        notify("Зміни збережено."); emit operationCompleted("workspace");
+        if (section == "patient") openPatient(patientRecord_.value("id").toInt());
+        else if (workspaceSection_ == section) loadWorkspace(section, workspaceQuery_, workspaceFrom_, workspaceTo_);
+        refresh();
+    });
+}
+
+void ApiBridge::openDetail(const QString &kind, int id) {
+    QString path;
+    if (kind == "recovery" && workspaceAllowed("recovery") && id > 0) path = "/api/admin/recovery/" + QString::number(id);
+    else if (kind == "family" && workspaceAllowed("families") && id > 0) path = "/api/patient-directory?status=all&page_size=100&family_id=" + QString::number(id);
+    else if (kind == "documents" && workspaceAllowed("patient") && id == patientRecord_.value("id").toInt() && id > 0)
+        path = "/api/patients/" + QString::number(id) + "/documents";
+    else return;
+    const int generation = ++detailGeneration_;
+    detailRecord_.clear(); emit detailChanged();
+    request("GET", path, {}, [this, generation, kind](const QJsonValue &value) {
+        if (generation != detailGeneration_) return;
+        detailRecord_ = kind == "documents" ? QVariantMap{{"documents",value.toArray().toVariantList()}} : value.toObject().toVariantMap();
+        emit detailChanged();
+    });
+}
+void ApiBridge::saveDocument(const QVariantMap &fields, const QUrl &scanFile) {
+    if (!workspaceAllowed("patient") || working_) return;
+    QVariantMap body = fields;
+    if (body.value("source").toString() == "paper_scan") {
+        if (!scanFile.isLocalFile()) return issue("Оберіть зображення документа на цьому ПК.");
+        QFile file(scanFile.toLocalFile());
+        if (!file.open(QIODevice::ReadOnly) || file.size() > 4400000) return issue("Оберіть PNG або JPEG до 4 МБ.");
+        QImageReader reader(&file); reader.setAutoTransform(true);
+        const auto dimensions = reader.size();
+        if (!dimensions.isValid() || qint64(dimensions.width()) * dimensions.height() > 24000000 ||
+            (reader.format() != "png" && reader.format() != "jpeg")) return issue("Потрібне зображення PNG або JPEG до 24 мегапікселів.");
+        const QImage image = reader.read();
+        if (image.isNull()) return issue("Не вдалося прочитати зображення документа.");
+        QByteArray bytes; QBuffer buffer(&bytes); buffer.open(QIODevice::WriteOnly);
+        if (!image.save(&buffer, "JPEG", 90) || bytes.size() > 4400000) return issue("Зменште розмір зображення документа.");
+        const QString encoded = "data:image/jpeg;base64," + QString::fromLatin1(bytes.toBase64());
+        file.seek(0);
+        const QString mime = reader.format() == "png" ? "image/png" : "image/jpeg";
+        body.insert("scan_data", encoded);
+        body.insert("original_data", "data:" + mime + ";base64," + QString::fromLatin1(file.readAll().toBase64()));
+    }
+    workspaceAction("patient", "document", patientRecord_.value("id").toInt(), body);
+}
+void ApiBridge::changePassword(const QString &current, const QString &next) {
+    if (!authenticated() || working_) return;
+    if (current.isEmpty() || next.isEmpty() || current == next) return issue("Вкажіть поточний та інший новий пароль.");
+    working_ = true; error_.clear(); emit stateChanged();
+    request("POST", "/api/account/password", {{"current_password",current},{"new_password",next}}, [this](const QJsonValue &) {
+        clearSession(); notify("Пароль змінено. Увійдіть з новим паролем."); emit operationCompleted("password");
+    });
+}
+
+void ApiBridge::exportDischarge(const QUrl &url, int id) {
+    if (!authenticated() || (role_ != "admin" && role_ != "director") || !url.isLocalFile()) return;
+    QVariantMap record;
+    for (const auto &row : dischargeRows_) if (row.toMap().value("id").toInt() == id) record = row.toMap();
+    if (record.isEmpty()) return issue("Відкрийте актуальний список виписок.");
+    const QString file = url.toLocalFile();
+    request("GET", "/api/settings/center", {}, [this, file, record](const QJsonValue &value) {
+        const auto center = value.toObject();
+        auto escape = [](const QVariant &text) { return text.toString().toHtmlEscaped().replace("\n", "<br>"); };
+        const bool approved = record.value("workflow_status").toString() == "approved";
+        QString html = "<html><body style='font-family:Sans Serif;font-size:11pt;color:#11212D'>";
+        html += "<h2>" + escape(center.value("center_name").toString("Lemvori Care")) + "</h2><p>" + escape(center.value("address").toString()) + "<br>" + escape(center.value("phone").toString()) + "</p><hr>";
+        html += "<h1>Виписка № " + escape(record.value("document_no")) + "</h1>";
+        if (!approved) html += "<p style='color:#8C3632;font-weight:bold'>ЧЕРНЕТКА · НЕ ПОГОДЖЕНО</p>";
+        html += "<p><b>Пацієнт:</b> " + escape(record.value("patient_name")) + "<br><b>Номер картки:</b> " + escape(record.value("patient_no_snapshot")) + "<br><b>Дата народження:</b> " + escape(record.value("patient_dob")) + "<br><b>Період:</b> " + escape(record.value("date_from")) + " — " + escape(record.value("date_to")) + "</p>";
+        const QList<QPair<QString,QString>> sections{{"Підсумок","summary"},{"Динаміка","dynamics"},{"Рекомендації","recommendations"},{"Подальший супровід","followup"}};
+        for (const auto &section : sections) html += "<h3>" + section.first + "</h3><p>" + escape(record.value(section.second)) + "</p>";
+        html += "<br><p>Психолог: " + escape(record.value("psychologist_name")) + " __________________</p><p>Керівник: " + escape(record.value("approved_by_name")) + " __________________</p><p style='font-size:9pt'>Редакція " + escape(record.value("revision")) + " · " + escape(record.value("created")) + "</p></body></html>";
+        QSaveFile destination(file);
+        if (!destination.open(QIODevice::WriteOnly)) return issue("Не вдалося створити PDF у вибраному місці.");
+        bool painted = false;
+        {
+            QPdfWriter writer(&destination); writer.setResolution(96); writer.setPageSize(QPageSize(QPageSize::A4));
+            writer.setPageMargins(QMarginsF(16,16,16,16)); writer.setTitle("Lemvori Care · " + record.value("document_no").toString()); writer.setCreator("Lemvori Care");
+            QTextDocument document; document.setHtml(html); document.setPageSize(QSizeF(writer.width(), writer.height()));
+            QPainter painter(&writer);
+            if (painter.isActive()) {
+                painted = true;
+                for (int page=0; page<document.pageCount(); ++page) {
+                    if (page>0 && !writer.newPage()) { painted = false; break; }
+                    painter.save(); painter.translate(0,-page*writer.height());
+                    document.drawContents(&painter,QRectF(0,page*writer.height(),writer.width(),writer.height())); painter.restore();
+                }
+                painter.end();
+            }
+        }
+        if (!painted || !destination.commit()) return issue("Не вдалося зберегти PDF-виписку.");
+        notify("PDF-виписку збережено.");
     });
 }
