@@ -66,3 +66,24 @@ sudo -u postgres psql -At -d lemvori_core -c 'SELECT count(*) FROM sessions' | g
 sudo find /var/backups/lemvori-care -maxdepth 1 -name 'lemvori-core-pre-restore-*.dump' | grep -q .
 sudo -u postgres psql -At -d postgres -c "SELECT datname FROM pg_database WHERE datname LIKE 'lemvori_previous_%'" | grep -q .
 echo "PASS: corrupted backup rejected; active DB unchanged; verified staged restore + safety snapshot + HTTPS health + session revocation"
+# Simulate a failed API restart AFTER cutover. The script must put the
+# original live database back, not merely print a warning.
+rollback_archive=$(sudo lemvori-carectl backup | sed 's/^.*: //')
+sudo -u postgres psql -d lemvori_core -c "UPDATE center_settings SET center_name='LIVE_MUTATION_FOR_ROLLBACK' WHERE id=1"
+sudo install -d -o root -g root -m 0755 /run/systemd/system/lemvori-care.service.d
+printf '[Service]\nExecStart=\nExecStart=/usr/bin/false\n' > "$RUNNER_TEMP/force-failure.conf"
+sudo install -o root -g root -m 0644 "$RUNNER_TEMP/force-failure.conf" \
+    /run/systemd/system/lemvori-care.service.d/failure.conf
+sudo systemctl daemon-reload
+if sudo lemvori-carectl restore "$rollback_archive" 'ВІДНОВИТИ'; then
+  echo "Restore should fail when HTTPS server cannot start" >&2; exit 1
+fi
+sudo rm -f /run/systemd/system/lemvori-care.service.d/failure.conf
+sudo systemctl daemon-reload
+sudo systemctl restart lemvori-care.service
+sudo lemvori-carectl health >/dev/null
+[[ $(sudo -u postgres psql -At -d lemvori_core -c 'SELECT center_name FROM center_settings WHERE id=1') == 'LIVE_MUTATION_FOR_ROLLBACK' ]] || {
+  echo "Automatic rollback did not keep the pre-restore live data" >&2; exit 1
+}
+echo "PASS: simulated failed HTTPS startup rolled back to original live PostgreSQL database"
+
