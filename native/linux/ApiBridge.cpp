@@ -173,6 +173,18 @@ void ApiBridge::configureServer(const QString &value) {
     connectServer(value, {});
 }
 
+void ApiBridge::forgetServerBinding() {
+    if (authenticated() || working_) return;
+    // An explicit, UI-confirmed recovery action after replacing the server database.
+    // Keep certificate verification enabled; never automatically trust a changed server ID.
+    QSettings settings;
+    settings.remove("server/identity");
+    settings.sync();
+    pinnedId_.clear();
+    connected_ = false;
+    notify("Попередню прив'язку скинуто. Перевірте сертифікат та підключіть центр знову.");
+}
+
 void ApiBridge::verifySavedServer() {
     if (authenticated() || working_ || connected_ || pinnedId_.isEmpty()) return;
     connectServer(origin_, pinnedId_);
@@ -850,7 +862,8 @@ bool ApiBridge::workspaceAllowed(const QString &section) const {
         {"families","patients"},{"archive","patients"},{"patient","patients"},{"supervisions","reports"},
         {"workload","reports"},{"reports","reports"},{"messages","messages"},{"recipients","messages"}};
     if (!moduleEnabled(modules.value(section))) return false;
-    if (section == "patient" && (!moduleEnabled("clinical") || !moduleEnabled("documents") || !moduleEnabled("rehabilitation"))) return false;
+    // Patient registration remains accessible when optional clinical, document or rehab modules are disabled.
+    // The server enforces role-based access and redacts private clinical content for reception staff.
     if (role_ == "reception" && !adminEdition_)
         return QStringList{"handover", "waiting", "families", "archive", "tv", "patient"}.contains(section);
     if (role_ == "director" && !adminEdition_)
@@ -867,7 +880,15 @@ void ApiBridge::loadWorkspace(const QString &section, const QString &query, cons
     workspaceSection_ = section; workspaceQuery_ = query; workspaceFrom_ = from; workspaceTo_ = to;
     workspaceLoading_ = true; workspaceError_.clear(); emit workspaceChanged();
     QUrlQuery params;
-    if (section == "archive") { params.addQueryItem("status", "archived"); params.addQueryItem("q", query); params.addQueryItem("page_size", "100"); }
+    if (section == "archive") {
+        // The date-from argument is unused for archive; Qt passes the archive page here.
+        bool validPage = false;
+        const int archivePage = from.toInt(&validPage);
+        params.addQueryItem("status", "archived");
+        params.addQueryItem("q", query);
+        params.addQueryItem("page_size", "100");
+        params.addQueryItem("page", QString::number(validPage && archivePage > 0 ? archivePage : 1));
+    }
     if (section == "workload" || section == "reports") {
         const QString start = from.isEmpty() ? QDate::currentDate().toString("yyyy-MM-01") : from;
         const QString end = to.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : to;

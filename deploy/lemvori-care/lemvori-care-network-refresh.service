@@ -1,0 +1,7 @@
+[Unit]
+Description=Refresh Lemvori Care LAN address after DHCP or network changes
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/lemvori-care/network-tls.sh

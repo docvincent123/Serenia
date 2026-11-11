@@ -150,6 +150,7 @@ public:
     Q_INVOKABLE void reviewDischarge(int id, int revision, bool approve, const QString &reason);
     Q_INVOKABLE void importProfile(const QUrl &file);
     Q_INVOKABLE void configureServer(const QString &url);
+    Q_INVOKABLE void forgetServerBinding();
     Q_INVOKABLE void verifySavedServer();
     Q_INVOKABLE void login(const QString &login, const QString &password);
     Q_INVOKABLE void logout();

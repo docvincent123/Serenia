@@ -6,7 +6,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(httplib CONFIG REQUIRED)
+# vcpkg supplies httplibConfig.cmake; Ubuntu/Mint's libcpp-httplib-dev
+# currently ships a header + shared library without the CMake config.
+find_package(httplib CONFIG QUIET)
+if(NOT TARGET httplib::httplib)
+  find_path(HTTPLIB_INCLUDE_DIR NAMES httplib.h REQUIRED)
+  find_library(HTTPLIB_LIBRARY NAMES cpp-httplib REQUIRED)
+  add_library(httplib::httplib UNKNOWN IMPORTED)
+  set_target_properties(httplib::httplib PROPERTIES
+    IMPORTED_LOCATION "${HTTPLIB_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${HTTPLIB_INCLUDE_DIR}"
+  )
+endif()
 find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL REQUIRED)
 

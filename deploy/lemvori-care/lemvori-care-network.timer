@@ -1,0 +1,11 @@
+[Unit]
+Description=Detect Lemvori Care LAN address changes
+
+[Timer]
+OnBootSec=35s
+OnUnitActiveSec=45s
+AccuracySec=5s
+Unit=lemvori-care-network-refresh.service
+
+[Install]
+WantedBy=timers.target
