@@ -140,6 +140,7 @@ public:
     Q_INVOKABLE bool localDatabaseTools() const;
     Q_INVOKABLE void databaseBackup();
     Q_INVOKABLE void databaseRestore(const QUrl &file, const QString &confirmation);
+    Q_INVOKABLE void restoreLatestBackup(const QString &confirmation);
     Q_INVOKABLE void loadSlots(const QString &date, int psychologistId, int roomId, int duration, int excludedId);
     Q_INVOKABLE void setCalendarDate(const QString &date);
     Q_INVOKABLE int durationMinutes(const QString &start, const QString &end) const;
