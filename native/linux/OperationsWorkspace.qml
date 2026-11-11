@@ -345,6 +345,7 @@ Item {
                         model:patientDialog.tabs
                         delegate: Action {
                             required property var modelData
+                            objectName:"patient-tab-"+modelData.key
                             text:modelData.label
                             primary:patientDialog.activeTab===modelData.key
                             onClicked:{
@@ -415,8 +416,8 @@ Item {
                     Label {text:"Історія та майбутні прийоми";color:root.ink;font.bold:true;font.pixelSize:18}
                     RowLayout {
                         Layout.fillWidth:true
-                        Action {text:"Майбутні";primary:root.bridge.patientVisitsPeriod==="upcoming";onClicked:root.bridge.loadPatientVisits("upcoming",1)}
-                        Action {text:"Історія";primary:root.bridge.patientVisitsPeriod==="history";onClicked:root.bridge.loadPatientVisits("history",1)}
+                        Action {objectName:"patient-visits-upcoming";text:"Майбутні";primary:root.bridge.patientVisitsPeriod==="upcoming";onClicked:root.bridge.loadPatientVisits("upcoming",1)}
+                        Action {objectName:"patient-visits-history";text:"Історія";primary:root.bridge.patientVisitsPeriod==="history";onClicked:root.bridge.loadPatientVisits("history",1)}
                         Item {Layout.fillWidth:true}
                         Label {color:root.muted;text:"Усього: "+root.bridge.patientVisitsTotal}
                     }
