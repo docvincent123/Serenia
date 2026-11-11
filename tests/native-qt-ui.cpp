@@ -66,6 +66,13 @@ int main(int argc,char **argv){
     verify(bridge.patientVisits().first().toMap().value("status").toString()=="completed","Past visit projection invalid");
     clickObject("patient-visits-upcoming");
     verify(waitFor([&]{return !bridge.patientVisitsLoading() && bridge.patientVisitsPeriod()=="upcoming" && bridge.patientVisitsTotal()==11;}),"Upcoming visits reload failed");
+    clickObject("patient-tab-referrals");
+    clickObject("referral-edit-7");
+    auto *referralChoice=lookup("objectName","referral-status-select");
+    verify(referralChoice,"Referral status editor missing");
+    referralChoice->setProperty("currentIndex",1);
+    pump();click("Зберегти статус");
+    verify(waitFor([&]{return !bridge.working();}),"Referral status update failed");
     clickObject("patient-tab-overview");
     verify(lookup("text","Телефон: —"),"Patient overview registration field missing");
         verify(lookup("text","Новий документ")==nullptr,"Document dialog unexpectedly open");click("Додати документ");verify(lookup("placeholderText","Назва документа"),"Document form missing");clickObject("document-close");
