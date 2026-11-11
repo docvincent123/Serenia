@@ -108,6 +108,7 @@ public:
     Q_INVOKABLE void workspaceAction(const QString &section, const QString &action, int id, const QVariantMap &fields);
     Q_INVOKABLE void openPatient(int id);
     Q_INVOKABLE void loadPatientVisits(const QString &period = QStringLiteral("upcoming"), int page = 1);
+    Q_INVOKABLE void exportAppointmentTicket(const QUrl &file);
     Q_INVOKABLE void closePatient();
     bool adminEdition() const { return adminEdition_; }
     QVariantList dischargeRows() const { return dischargeRows_; }
