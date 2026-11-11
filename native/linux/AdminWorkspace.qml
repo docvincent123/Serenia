@@ -442,13 +442,13 @@ Item {
                     visible: root.section === "database"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; color: root.muted
                     text: root.bridge.localDatabaseTools()
-                        ? "Копії створюються для lemvori_core у /var/backups/lemvori-care. Відновлення в цьому випуску вимкнене до впровадження безпечної перевірки дампа."
+                        ? "Резервні копії — /var/backups/lemvori-care. Перед відновленням архів перевіряється в тимчасовій БД; оригінал зберігається для відкату."
                         : "Відкрийте Lemvori Care Admin на серверному ПК і підключіться до локальної HTTPS-адреси для роботи з файлами бази."
                 }
                 RowLayout {
                     visible: root.section === "database"
                     Action { text: "Створити копію БД"; primary: true; enabled: root.bridge.localDatabaseTools() && !root.bridge.working; onClicked: root.bridge.databaseBackup() }
-                    Action { text: "Відновлення: після перевірки"; enabled: false; onClicked: picker.open() }
+                    Action { text: "Відновити з резервної копії"; enabled: root.bridge.localDatabaseTools() && !root.bridge.working; onClicked: {restoreConfirmation.clear();restore.open()} }
                 }
                 Item { Layout.fillHeight: true; implicitHeight: 16 }
             }
@@ -753,21 +753,59 @@ Item {
         nameFilters: ["Файл центру (*.solvia)"]
         onAccepted: root.bridge.exportProfile(selectedFile, localOnly)
     }
-    FileDialog {
-        id: picker
-        title: "Вибрати резервну копію PostgreSQL"
-        nameFilters: ["Резервна копія (*.dump)"]
-        onAccepted: { restoreConfirmation.clear(); restore.open() }
-    }
     Dialog {
         id: restore
-        title: "Відновлення бази PostgreSQL"
-        modal: true; anchors.centerIn: Overlay.overlay; width: 460
+        title: "Безпечне відновлення lemvori_core"
+        modal: true; anchors.centerIn: Overlay.overlay
+        width: Math.min(540, root.width - 32)
+        padding: 20
+        background: Rectangle { radius: 22; color:"#F8FAFA"; border.color:"#CCD0CF" }
         ColumnLayout {
-            width: parent.width
-            Label { textFormat:Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap; text: "Після перевірки файла сервер створить захисну копію й відновить вибрану базу. Для підтвердження введіть ВІДНОВИТИ." }
-            TextField { id: restoreConfirmation; Layout.fillWidth: true; placeholderText: "ВІДНОВИТИ" }
-            Action { text: "Відновити"; enabled: restoreConfirmation.text.trim() === "ВІДНОВИТИ"; onClicked: { root.bridge.databaseRestore(picker.selectedFile, restoreConfirmation.text); restore.close() } }
+            width: parent.width; spacing: 13
+            Label {
+                textFormat: Text.PlainText; Layout.fillWidth:true
+                wrapMode: Text.WordWrap; color: root.ink; font.bold:true
+                text: "База не перезаписується поверх живих даних."
+            }
+            Label {
+                textFormat: Text.PlainText; Layout.fillWidth:true
+                wrapMode: Text.WordWrap; color: root.muted
+                text: "Архів перевіряється в тимчасовій PostgreSQL-базі. Перед переключенням створюється страхувальна копія. Якщо HTTPS не запуститься, відновлюється стара база. Усі сеанси після успішного відновлення завершаться."
+            }
+            Label { text:"Шлях до архіву (лише з /var/backups/lemvori-care)"; font.bold:true; color:root.ink }
+            TextField {
+                id: restorePath; Layout.fillWidth:true; implicitHeight:46
+                placeholderText:"/var/backups/lemvori-care/lemvori-core-....dump"
+                selectByMouse:true; leftPadding:13
+                background:Rectangle{radius:12;color:"white";border.color:restorePath.activeFocus?"#253745":"#CCD0CF"}
+            }
+            Label {
+                textFormat: Text.PlainText; Layout.fillWidth:true; wrapMode:Text.WordWrap
+                color: root.muted; font.pixelSize:12
+                text: "Дізнатися назви копій: sudo lemvori-carectl list-backups. Якщо залишити поле порожнім, обереться найновіша копія."
+            }
+            Label { text:"Для підтвердження введіть ВІДНОВИТИ"; font.bold:true; color:root.ink }
+            TextField {
+                id: restoreConfirmation; Layout.fillWidth:true; implicitHeight:46
+                placeholderText:"ВІДНОВИТИ"; selectByMouse:true; leftPadding:13
+                background:Rectangle{radius:12;color:"white";border.color:restoreConfirmation.activeFocus?"#253745":"#CCD0CF"}
+            }
+            RowLayout {
+                Layout.fillWidth:true;spacing:12
+                Action { text:"Скасувати"; onClicked:restore.close(); Layout.fillWidth:true }
+                Action {
+                    text:"Перевірити й відновити";primary:true;Layout.fillWidth:true
+                    enabled:restoreConfirmation.text.trim()==="ВІДНОВИТИ"&&!root.bridge.databaseWorking
+                    onClicked:{
+                        const path=restorePath.text.trim()
+                        if(path)
+                            root.bridge.databaseRestore("file://" + path,restoreConfirmation.text)
+                        else
+                            root.bridge.restoreLatestBackup(restoreConfirmation.text)
+                        restore.close()
+                    }
+                }
+            }
         }
     }
 }
