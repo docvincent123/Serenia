@@ -750,7 +750,7 @@ void ApiBridge::endUserSessions(int userId) {
 bool ApiBridge::localDatabaseTools() const {
     const QString host = QUrl(origin_).host();
     return adminEdition_ && (host == "localhost" || host == "127.0.0.1" || host == "::1")
-        && QFileInfo("/usr/local/sbin/solvia-admin").isExecutable();
+        && QFileInfo("/usr/local/sbin/lemvori-carectl").isExecutable();
 }
 
 void ApiBridge::runDatabaseTool(const QStringList &arguments) {
@@ -772,16 +772,16 @@ void ApiBridge::runDatabaseTool(const QStringList &arguments) {
         if (generation != sessionGeneration_) return;
         working_ = false;
         if (status != QProcess::NormalExit || code != 0) {
-            issue(QString("Операцію PostgreSQL не завершено (код %1). Перевірте журнал solvia-admin.").arg(code));
+            issue(QString("Операцію PostgreSQL не завершено (код %1). Перевірте lemvori-carectl.").arg(code));
         } else if (arguments.first() == "restore-ui") {
             clearSession();
             notify("Базу відновлено. Увійдіть до центру повторно.");
         } else {
-            notify("Резервну копію збережено в каталозі /var/backups/solvia/.");
+            notify("Резервну копію збережено в каталозі /var/backups/lemvori-care/.");
             refresh();
         }
     });
-    process->start("/usr/bin/pkexec", QStringList{"/usr/local/sbin/solvia-admin"} + arguments);
+    process->start("/usr/bin/pkexec", QStringList{"/usr/local/sbin/lemvori-carectl"} + arguments);
 }
 
 void ApiBridge::databaseBackup() {
@@ -792,7 +792,7 @@ void ApiBridge::databaseRestore(const QUrl &file, const QString &confirmation) {
     const QString path = file.toLocalFile();
     if (confirmation.trimmed() != "ВІДНОВИТИ" || !QFileInfo(path).isFile() || !path.endsWith(".dump"))
         return issue("Оберіть файл .dump і введіть ВІДНОВИТИ.");
-    runDatabaseTool({"restore-ui", path});
+    issue("У новому сервері Lemvori Care відновлення з файлу ще не активовано. Поточна база не змінювалась.");
 }
 
 void ApiBridge::loadDischarges() {
