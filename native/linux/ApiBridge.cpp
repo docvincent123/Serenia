@@ -984,6 +984,32 @@ void ApiBridge::loadPatientVisits(const QString &period, int page) {
     });
 }
 
+void ApiBridge::updatePatientReferral(int referralId, const QString &status) {
+    if (!workspaceAllowed("patient") || working_ || referralId<=0 ||
+        (role_!="admin" && role_!="reception")) return;
+    const QStringList allowed{"recommended","sent","completed","cancelled"};
+    if(!allowed.contains(status))return issue("Оберіть коректний статус направлення.");
+    bool belongs=false;
+    for(const auto &entry:patientRecord_.value("referrals").toList()) {
+        const auto referral=entry.toMap();
+        if(referral.value("id").toInt()==referralId) {
+            belongs=referral.value("status").toString()!=status;
+            break;
+        }
+    }
+    if (!belongs) return issue("Направлення не належить відкритій картці або статус не змінено.");
+    const int patientId=patientRecord_.value("id").toInt();
+    const int generation=recordGeneration_;
+    working_=true;error_.clear();emit stateChanged();
+    request("PATCH","/api/referrals/"+QString::number(referralId),
+        {{"status",status}},[this,patientId,generation](const QJsonValue&){
+        working_=false;notify("Статус направлення оновлено.");
+        emit operationCompleted("referral");
+        if(generation==recordGeneration_ && patientRecord_.value("id").toInt()==patientId)
+            openPatient(patientId);
+    });
+}
+
 void ApiBridge::exportAppointmentTicket(const QUrl &file) {
     if (!workspaceAllowed("patient") || patientRecord_.value("id").toInt()<=0 || !file.isLocalFile())
         return issue("Відкрийте картку пацієнта для друку талона.");
