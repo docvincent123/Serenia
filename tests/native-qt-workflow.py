@@ -65,6 +65,19 @@ class Center(BaseHTTPRequestHandler):
                 "api_url": f"https://127.0.0.1:{self.server.server_port}",
             },
         }
+        if path == "/api/patients/19/appointments":
+            from urllib.parse import parse_qs, urlsplit
+            params = parse_qs(urlsplit(self.path).query)
+            period = params.get("period", ["upcoming"])[0]
+            page = int(params.get("page", ["1"])[0])
+            if period not in ("upcoming", "history") or page < 1:
+                return self.respond({"error":"Invalid visit request"},400)
+            items = [{"id": 400+page, "start":"2026-11-12T10:00" if period=="upcoming" else "2026-10-12T10:00",
+                      "psychologist":"Тестовий психолог", "room":"Кабінет 2",
+                      "status":"scheduled" if period=="upcoming" else "completed",
+                      "visit_status":"" if period=="upcoming" else "completed"}]
+            return self.respond({"items":items,"total":11 if period=="upcoming" else 1,
+                                 "page":page,"page_size":10})
         if path == "/api/patient-directory":
             from urllib.parse import parse_qs, urlsplit
             params = parse_qs(urlsplit(self.path).query)
