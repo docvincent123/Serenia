@@ -1,0 +1,13 @@
+[Unit]
+Description=Prepare Lemvori Care LAN IP and HTTPS certificate
+Wants=network-online.target
+After=network-online.target
+Before=lemvori-care.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/lemvori-care/network-tls.sh --no-restart
+
+[Install]
+WantedBy=multi-user.target
