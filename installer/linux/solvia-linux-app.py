@@ -1,11 +1,12 @@
 #!/usr/bin/python3
-"""SOLVIA Linux client: GTK3 window with WebKitGTK 4.1, no Chrome process."""
+"""Lemvori Care Linux client: GTK3 window with WebKitGTK 4.1, no Chrome process."""
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit, unquote, urlencode
 import mimetypes
 import subprocess
 import json
+import threading
 
 
 def server_url(value):
@@ -54,16 +55,17 @@ def run(on_ready=None):
     config = Path(GLib.get_user_config_dir()) / 'solvia' / 'server-url'
     ui_root = next((root for root in (Path(__file__).resolve().parent / 'ui', Path('/usr/local/lib/solvia/ui'), Path('/opt/solvia/ui')) if (root / 'index.html').is_file()), None)
     if ui_root is None:
-        print('Не знайдено локальний інтерфейс SOLVIA. Повторно встановіть повний пакет клієнта.', file=sys.stderr)
+        print('Не знайдено локальний інтерфейс Lemvori Care. Повторно встановіть повний пакет клієнта.', file=sys.stderr)
         return 1
 
     class WindowController:
         def __init__(self, application, console=False):
             self.application = application
             self.console = console
+            self.admin_busy = False
             self.window = None
             self.origin = ''
-            self.window = Gtk.ApplicationWindow(application=application, title='Lemvori Care Server Console 3.1.1' if console else 'Lemvori Care 3.1.1')
+            self.window = Gtk.ApplicationWindow(application=application, title='Lemvori Care Server Console 3.1.2' if console else 'Lemvori Care 3.1.2')
             display = Gdk.Display.get_default()
             monitor = display.get_primary_monitor() or display.get_monitor(0)
             area = monitor.get_workarea()
@@ -72,28 +74,39 @@ def run(on_ready=None):
             self.window.get_style_context().add_class('solvia-native')
             provider = Gtk.CssProvider()
             provider.load_from_data(b'''
-                .solvia-native { background-color: #f3f3e9; color: #112c2b; }
-                .solvia-native headerbar { background: #112c2b; color: #f4f6ec;
-                    border-color: #34584a; box-shadow: none; }
-                .solvia-native headerbar button { background: #25443d; color: #f4f6ec;
-                    border-color: #426255; border-radius: 8px; box-shadow: none; }
-                .solvia-native headerbar button:hover { background: #34584a; }
-                .solvia-native headerbar button:focus { border-color: #a7edcf; }
+                .solvia-native { background-color: #9BA8AB; color: #11212D; }
+                .solvia-native headerbar { background: #4A5C6A; color: #CCD0CF;
+                    border-color: #253745; box-shadow: none; }
+                .solvia-native headerbar button { background: #253745; color: #CCD0CF;
+                    border-color: #9BA8AB; border-radius: 24px; box-shadow: none; }
+                .solvia-native headerbar button:hover { background: #11212D; }
+                .solvia-native headerbar button:focus { border-color: #CCD0CF; }
             ''')
             Gtk.StyleContext.add_provider_for_screen(self.window.get_screen(), provider,
                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
             self.window.set_wmclass('SOLVIAServerConsole' if console else 'SOLVIAAdmin', 'SOLVIAAdmin')
             self.window.set_icon_name('solvia-admin')
-            header = Gtk.HeaderBar(title='Lemvori Care Server Console 3.1.1' if console else 'Lemvori Care 3.1.1', show_close_button=True)
+            header = Gtk.HeaderBar(title='Lemvori Care Server Console 3.1.2' if console else 'Lemvori Care 3.1.2', show_close_button=True)
             self.window.set_titlebar(header)
             self.spinner = Gtk.Spinner()
             header.pack_start(self.spinner)
-            for label, callback in [('Оновити', lambda *_: self.load()),
-                                    ('Сервер', lambda *_: self.connection())]:
-                button = Gtk.Button(label=label)
-                button.connect('clicked', callback)
-                header.pack_end(button)
+            # The employee program has no update / server administration icons.
+            # The dedicated Server Console can change the server endpoint.
             if console:
+                connection = Gtk.Button(label='Підключення до сервера')
+                connection.connect('clicked', lambda *_: self.connection())
+                header.pack_end(connection)
+            if console:
+                # Critical database operations exist only in the separately
+                # launched, local Server Console, never in the staff workspace.
+                local_admin = Path('/usr/local/sbin/solvia-admin').is_file()
+                for label, action in [('Резервна копія', self.backup_database),
+                                      ('Відновити БД з файлу', self.restore_database)]:
+                    item = Gtk.Button(label=label)
+                    item.set_sensitive(local_admin)
+                    item.set_tooltip_text('Операція з локальною БД цього комп’ютера; потрібне підтвердження адміністратора ОС.')
+                    item.connect('clicked', lambda _, handler=action: handler())
+                    header.pack_end(item)
                 services = Gtk.Button(label='Служби сервера')
                 services.set_sensitive(Path('/usr/local/bin/solvia-server-control').is_file())
                 services.set_tooltip_text('Керування службами доступне на серверному ПК.')
@@ -119,7 +132,7 @@ def run(on_ready=None):
                         stream = Gio.MemoryInputStream.new_from_bytes(GLib.Bytes.new(data))
                         request.finish(stream, len(data), mime)
                     except (OSError, ValueError):
-                        request.finish_error(GLib.Error('Файл локального інтерфейсу SOLVIA недоступний.'))
+                        request.finish_error(GLib.Error('Файл локального інтерфейсу Lemvori Care недоступний.'))
                 context.register_uri_scheme('solvia', asset)
                 # Local LAN connections must not be sent to a desktop HTTP proxy.
                 manager.set_network_proxy_settings(WebKit2.NetworkProxyMode.NO_PROXY, None)
@@ -130,11 +143,14 @@ def run(on_ready=None):
             manager = self.view.get_user_content_manager()
             manager.register_script_message_handler('solviaEvents')
             manager.connect('script-message-received::solviaEvents', self.workflow_notification)
+            if console:
+                manager.register_script_message_handler('solviaAdmin')
+                manager.connect('script-message-received::solviaAdmin', self.admin_message)
             self.view.connect('load-changed', self.changed)
             self.view.connect('load-failed', self.failed)
             self.view.connect('load-failed-with-tls-errors', self.tls_failed)
             self.view.connect('web-process-terminated', lambda *_: self.show_error(
-                'Робоче вікно SOLVIA перервало роботу. Натисніть «Повторити підключення».'))
+                'Робоче вікно Lemvori Care перервало роботу. Натисніть «Повторити підключення».'))
             self.view.connect('decide-policy', self.policy)
             self.view.connect('permission-request', lambda _, request: (request.deny(), True)[1])
             self.view.connect('close', lambda *_: self.window.destroy())
@@ -161,6 +177,109 @@ def run(on_ready=None):
                 self.show_error(str(error))
             if on_ready and not console:
                 GLib.idle_add(on_ready, self)
+
+        def admin_message(self, manager, message):
+            if not self.console or not (self.view.get_uri() or '').startswith('solvia://app/'):
+                return
+            action = message.get_js_value().to_string()
+            if action == 'backup':
+                self.backup_database()
+            elif action == 'restore':
+                self.restore_database()
+
+        def admin_notice(self, title, text, success=True):
+            kind = Gtk.MessageType.INFO if success else Gtk.MessageType.ERROR
+            notice = Gtk.MessageDialog(transient_for=self.window, modal=True,
+                                       message_type=kind, buttons=Gtk.ButtonsType.OK,
+                                       text=title)
+            notice.format_secondary_text(text)
+            notice.run()
+            notice.destroy()
+
+        def run_admin_job(self, args, title):
+            if self.admin_busy:
+                return
+            if not Path('/usr/local/sbin/solvia-admin').is_file():
+                self.admin_notice('Операція недоступна',
+                                  'Керування базою доступне лише з локальної Server Console.', False)
+                return
+            self.admin_busy = True
+            self.spinner.start()
+
+            def worker():
+                try:
+                    proc = subprocess.run(['pkexec', '/usr/local/sbin/solvia-admin', *args],
+                                          capture_output=True, text=True, timeout=5400, check=False)
+                    ok = proc.returncode == 0
+                    output = (proc.stdout if ok else proc.stderr or proc.stdout).strip()
+                    if ok and args[0] == 'backup':
+                        output = 'Перевірену копію збережено: ' + (output.splitlines()[-1] if output else '/var/backups/solvia/')
+                    elif ok:
+                        output = 'Базу відновлено. Повторно увійдіть до програми та перевірте дані центру.'
+                    else:
+                        output = ('Код: ' + str(proc.returncode) +
+                                  '. Перевірте журнал solvia-admin на локальному сервері. '
+                                  'Дані не слід перезаписувати повторно без діагностики.')
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    ok = False
+                    output = 'Не вдалося виконати команду: ' + type(error).__name__
+                def done():
+                    self.spinner.stop()
+                    self.admin_busy = False
+                    self.admin_notice(title + (' — готово' if ok else ' — помилка'), output[:1000], ok)
+                    if ok and args[0] == 'restore-ui':
+                        self.load(force=True)
+                    return False
+                GLib.idle_add(done)
+            threading.Thread(target=worker, daemon=True).start()
+
+        def backup_database(self):
+            if not self.console:
+                return
+            self.run_admin_job(['backup'], 'Резервна копія PostgreSQL')
+
+        def restore_database(self):
+            if not self.console or self.admin_busy:
+                return
+            picker = Gtk.FileChooserDialog(title='Оберіть PostgreSQL backup (.dump) з цього комп’ютера',
+                                            parent=self.window, action=Gtk.FileChooserAction.OPEN)
+            picker.add_buttons('Скасувати', Gtk.ResponseType.CANCEL,
+                               'Перевірити файл', Gtk.ResponseType.OK)
+            filter_dump = Gtk.FileFilter()
+            filter_dump.set_name('Резервна копія PostgreSQL (*.dump)')
+            filter_dump.add_pattern('*.dump')
+            picker.add_filter(filter_dump)
+            selected = picker.get_filename() if picker.run() == Gtk.ResponseType.OK else None
+            picker.destroy()
+            if not selected:
+                return
+            source = Path(selected)
+            if not source.is_file() or source.is_symlink():
+                self.admin_notice('Непридатний файл', 'Оберіть звичайний файл резервної копії.', False)
+                return
+            confirmation = Gtk.Dialog(title='Підтвердження відновлення',
+                                      transient_for=self.window, modal=True)
+            confirmation.add_buttons('Скасувати', Gtk.ResponseType.CANCEL,
+                                     'Відновити базу', Gtk.ResponseType.OK)
+            box = confirmation.get_content_area()
+            box.set_border_width(22)
+            box.set_spacing(14)
+            note = Gtk.Label(
+                label='УВАГА! Це замінить УСІ дані поточної БД на цьому серверному ПК.\n'
+                      'Робота персоналу буде перервана, а активні сеанси можуть завершитися.\n'
+                      'Файл спочатку перевіриться на ізольованій БД, а поточна БД\n'
+                      'буде збережена як окрема захисна копія.\n'
+                      'Щоб підтвердити, введіть ВІДНОВИТИ:', xalign=0)
+            note.set_line_wrap(True)
+            box.pack_start(note, False, False, 0)
+            field = Gtk.Entry()
+            field.set_placeholder_text('ВІДНОВИТИ')
+            box.pack_start(field, False, False, 0)
+            confirmation.show_all()
+            confirmed = confirmation.run() == Gtk.ResponseType.OK and field.get_text() == 'ВІДНОВИТИ'
+            confirmation.destroy()
+            if confirmed:
+                self.run_admin_job(['restore-ui', str(source)], 'Відновлення PostgreSQL')
 
         def workflow_notification(self, manager, message):
             if not (self.view.get_uri() or '').startswith('solvia://app/'):
@@ -207,7 +326,7 @@ def run(on_ready=None):
         def failed(self, view, event, uri, error):
             if error.matches(WebKit2.network_error_quark(), WebKit2.NetworkError.CANCELLED):
                 return False
-            self.show_error('Не вдалося відкрити локальний інтерфейс SOLVIA. Повторно встановіть повний пакет клієнта.')
+            self.show_error('Не вдалося відкрити локальний інтерфейс Lemvori Care. Повторно встановіть повний пакет клієнта.')
             return True
 
         def tls_failed(self, view, uri, certificate, errors):
@@ -239,7 +358,7 @@ def run(on_ready=None):
             return True
 
         def connection(self):
-            dialog = Gtk.Dialog(title='Сервер SOLVIA', transient_for=self.window, modal=True)
+            dialog = Gtk.Dialog(title='Сервер Lemvori Care', transient_for=self.window, modal=True)
             dialog.add_buttons('Скасувати', Gtk.ResponseType.CANCEL, 'Підключитися', Gtk.ResponseType.OK)
             box = dialog.get_content_area()
             box.set_spacing(12)
@@ -281,7 +400,7 @@ def run(on_ready=None):
             if download.get_web_view() != self.view:
                 return
             def destination(item, suggested):
-                dialog = Gtk.FileChooserDialog(title='Зберегти файл SOLVIA', parent=self.window,
+                dialog = Gtk.FileChooserDialog(title='Зберегти файл Lemvori Care', parent=self.window,
                                               action=Gtk.FileChooserAction.SAVE)
                 dialog.add_buttons('Скасувати', Gtk.ResponseType.CANCEL, 'Зберегти', Gtk.ResponseType.OK)
                 dialog.set_do_overwrite_confirmation(True)

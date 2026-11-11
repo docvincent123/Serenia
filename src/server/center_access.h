@@ -1,4 +1,5 @@
 #pragma once
+#include "module_catalog.h"
 
 std::string installationId(DB& db) {
     return db.query("SELECT server_id FROM installation_identity WHERE id=1")[0]["server_id"].get<std::string>();
@@ -28,18 +29,50 @@ J verifyCenterLicense(const J& envelope,const std::string& serverId) {
     auto grant=J::parse(payload);
     check(str(grant,"server_id",64)==serverId,"Ліцензію видано іншому серверу",403);
     str(grant,"center",200);str(grant,"license_id",100);
-    check(grant.contains("expires_at") && grant["expires_at"].is_number_integer() && grant["expires_at"].get<long long>()>0,"Некоректний строк ліцензії");
+    check(grant.value("version",1)==1||grant.value("version",1)==2,"Непідтримувана версія ліцензії");
+    const bool perpetual=grant.value("version",1)==2 && grant.value("perpetual",false);
+    check(grant.contains("expires_at") && grant["expires_at"].is_number_integer() &&
+        (perpetual?grant["expires_at"].get<long long>()==0:grant["expires_at"].get<long long>()>0),"Некоректний строк ліцензії");
+    if(grant.value("version",1)==2){
+        check(grant.contains("modules")&&grant["modules"].is_array()&&grant["modules"].size()<=careModuleCatalog().size(),"Некоректні модулі ліцензії");
+        std::vector<std::string> names;
+        for(const auto&name:grant["modules"]){
+            check(name.is_string(),"Некоректний модуль");auto id=name.get<std::string>();bool found=false;
+            for(const auto&module:careModuleCatalog())if(module["id"]==id)found=true;
+            check(found&&std::find(names.begin(),names.end(),id)==names.end(),"Невідомий або повторний модуль");names.push_back(id);
+        }
+        for(const auto&module:careModuleCatalog()){
+            const bool enabled=std::find(names.begin(),names.end(),module["id"].get<std::string>())!=names.end();
+            check(!module["core"].get<bool>()||enabled,"Відсутній базовий модуль ліцензії");
+            if(enabled)for(const auto&dependency:module["depends"])check(std::find(names.begin(),names.end(),dependency.get<std::string>())!=names.end(),"Відсутня залежність модуля");
+        }
+        check(grant.contains("module_versions")&&grant["module_versions"].is_object(),"Відсутні версії модулів");
+        for(const auto&module:careModuleCatalog())if(std::find(names.begin(),names.end(),module["id"].get<std::string>())!=names.end())
+            check(grant["module_versions"].contains(module["id"].get<std::string>())&&grant["module_versions"][module["id"].get<std::string>()]==module["version"],"Для цієї ліцензії потрібна сумісна версія модулів");
+        if(grant.contains("workflow")&&!grant["workflow"].empty()){
+            const auto&workflow=grant["workflow"];check(workflow.is_object()&&workflow.size()==6,"Некоректні правила центру");
+            auto opening=str(workflow,"opening_time",5),closing=str(workflow,"closing_time",5),days=str(workflow,"working_days",7);
+            std::regex clock("([01][0-9]|2[0-3]):[0-5][0-9]");check(std::regex_match(opening,clock)&&std::regex_match(closing,clock)&&opening<closing,"Некоректні години роботи");
+            check(std::regex_match(days,std::regex("[1-7]{1,7}")),"Некоректні робочі дні");
+            for(auto key:{"slot_step_minutes","default_duration_minutes","session_hours"})check(workflow.contains(key)&&workflow[key].is_number_integer(),"Некоректні правила запису");
+            int step=workflow["slot_step_minutes"],duration=workflow["default_duration_minutes"],hours=workflow["session_hours"];
+            check((step==15||step==30||step==60)&&duration>=15&&duration<=240&&hours>=1&&hours<=24,"Некоректні правила запису");
+        }
+        for(auto key:{"max_users","max_devices"})check(grant.contains(key)&&grant[key].is_number_integer()&&grant[key]>=1&&grant[key]<=10000,"Некоректні ліміти ліцензії");
+    }
     return grant;
 }
 J centerAccess(DB& db) {
     auto id=installationId(db);
-    // Opt-in deployment: upgrading an existing centre never silently locks it out.
-    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty())return {{"status","unmanaged"},{"write_allowed",true},{"server_id",id}};
+    // Legacy centers without any activation remain opt-in. Once activated,
+    // losing the verifier configuration must never unlock an expired grant.
     auto rows=db.query("SELECT envelope FROM center_license WHERE id=1");
+    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty()&&(!rows.empty()||environmentUtf8("SOLVIA_LICENSE_REQUIRED")=="1"))return {{"status","publisher_key_required"},{"write_allowed",false},{"server_id",id}};
+    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty())return {{"status","unmanaged"},{"write_allowed",true},{"server_id",id}};
     if(rows.empty())return {{"status","activation_required"},{"write_allowed",false},{"server_id",id}};
     try {
         auto grant=verifyCenterLicense(J::parse(rows[0]["envelope"].get<std::string>()),id);
-        bool active=grant["expires_at"].get<long long>()>epoch();
+        bool active=(grant.value("version",1)==2&&grant.value("perpetual",false))||grant["expires_at"].get<long long>()>epoch();
         grant["status"]=active?"active":"expired";grant["write_allowed"]=active;return grant;
     } catch(const std::exception&) { return {{"status","invalid"},{"write_allowed",false},{"server_id",id}}; }
 }

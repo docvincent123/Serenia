@@ -162,8 +162,8 @@ CREATE INDEX IF NOT EXISTS idx_shift_report_date ON shift_reports(shift_date);
 
 CREATE TABLE IF NOT EXISTS center_settings(
   id SMALLINT PRIMARY KEY CHECK(id=1),
-  center_name TEXT NOT NULL DEFAULT 'SOLVIA Center',
-  short_name TEXT NOT NULL DEFAULT 'SOLVIA',
+  center_name TEXT NOT NULL DEFAULT 'Lemvori Care',
+  short_name TEXT NOT NULL DEFAULT 'Lemvori Care',
   address TEXT NOT NULL DEFAULT '',
   phone TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
@@ -184,7 +184,10 @@ CREATE TABLE IF NOT EXISTS center_settings(
   vps_name TEXT NOT NULL DEFAULT '',
   updated TEXT NOT NULL DEFAULT ''
 );
-INSERT INTO center_settings(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
+INSERT INTO center_settings(id,center_name,short_name) VALUES(1,'Lemvori Care','Lemvori Care')
+ON CONFLICT(id) DO NOTHING;
+UPDATE center_settings SET center_name='Lemvori Care',short_name='Lemvori Care'
+WHERE id=1 AND center_name='SOLVIA Center' AND short_name='SOLVIA' AND updated='';
 
 CREATE TABLE IF NOT EXISTS admin_notes(
   id BIGSERIAL PRIMARY KEY,
@@ -814,3 +817,75 @@ ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS approved_by BIGINT REFE
 ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS approved_at TEXT NOT NULL DEFAULT '';
 ALTER TABLE discharge_summaries ADD COLUMN IF NOT EXISTS return_reason TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_discharge_workflow ON discharge_summaries(workflow_status,id DESC);
+
+
+-- Configurable disciplines are centre-level service categories, not authorization roles.
+-- A "psychiatry" service does not grant prescribing or medical-record permissions.
+CREATE TABLE IF NOT EXISTS center_services(
+ id BIGSERIAL PRIMARY KEY,
+ code TEXT NOT NULL UNIQUE,
+ name TEXT NOT NULL,
+ category TEXT NOT NULL CHECK(category IN ('psychology','medical','rehabilitation','creative','other')),
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created TEXT NOT NULL DEFAULT '',
+ updated TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_center_services_name_ci ON center_services(lower(name));
+INSERT INTO center_services(code,name,category,active) VALUES
+ ('psychology','Психологічне консультування','psychology',TRUE),
+ ('psychiatry','Психіатрія','medical',TRUE),
+ ('rehabilitation','Фізична реабілітація','rehabilitation',TRUE),
+ ('movement','Танцювально-рухова терапія','creative',TRUE),
+ ('art','Арттерапія','creative',TRUE),
+ ('occupational','Ерготерапія','rehabilitation',TRUE),
+ ('speech','Логопедія','rehabilitation',TRUE),
+ ('social','Соціальний супровід','other',TRUE)
+ON CONFLICT(code) DO NOTHING;
+
+-- Professional service association is descriptive; it NEVER changes RBAC or clinical permissions.
+-- Blank means the employee is not assigned to a primary service.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_service_code TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_users_primary_service_code ON users(primary_service_code);
+
+-- Optional professional title (distinct from the security role).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT '';
+
+-- Deny-only per-user restrictions. Absence of an entry preserves the existing
+-- hard-coded role access: a restriction NEVER grants a forbidden permission.
+CREATE TABLE IF NOT EXISTS user_module_blocks(
+ user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ module TEXT NOT NULL CHECK(module IN (
+  'patients','appointments','clinical','rehabilitation','documents',
+  'reports','messages','roster'
+ )),
+ blocked_at TEXT NOT NULL DEFAULT '',
+ blocked_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+ PRIMARY KEY(user_id,module)
+);
+
+-- Center feature switches never delete patient data or replace staff role checks.
+CREATE TABLE IF NOT EXISTS center_modules(
+ module TEXT PRIMARY KEY,
+ enabled BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS center_consent_policy(
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ required BOOLEAN NOT NULL DEFAULT TRUE,
+ revision INTEGER NOT NULL DEFAULT 1
+);
+INSERT INTO center_consent_policy(id) VALUES(1) ON CONFLICT(id) DO NOTHING;
+CREATE TABLE IF NOT EXISTS center_consent_templates(
+ document_type TEXT PRIMARY KEY CHECK(document_type IN ('informed_consent','data_processing','center_rules','family_consent')),
+ title TEXT NOT NULL,
+ content TEXT NOT NULL DEFAULT '',
+ version INTEGER NOT NULL DEFAULT 1,
+ required BOOLEAN NOT NULL DEFAULT TRUE
+);
+INSERT INTO center_consent_templates(document_type,title,required) VALUES
+ ('informed_consent','Інформована згода',TRUE),('data_processing','Згода на обробку персональних даних',TRUE),
+ ('center_rules','Ознайомлення з правилами центру',FALSE),('family_consent','Згода законного представника',FALSE)
+ ON CONFLICT(document_type) DO NOTHING;
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS consent_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS registration_reference TEXT NOT NULL DEFAULT '';
+ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_identity_hash TEXT NOT NULL DEFAULT '';

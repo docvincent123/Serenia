@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Lemvori Care Admin
+GenericName=Адміністрування центру
+Comment=Працівники, кабінети, зміни, доступ і база даних
+Exec=/usr/local/bin/solvia-native --admin
+Icon=solvia-admin
+Terminal=false
+Categories=Office;MedicalSoftware;
+StartupNotify=true
+StartupWMClass=lemvori-care-admin

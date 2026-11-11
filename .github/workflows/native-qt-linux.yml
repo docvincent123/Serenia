@@ -1,15 +1,17 @@
-name: SOLVIA Native Qt Linux
+name: Lemvori Care native desktop
 on:
   push:
     branches: [feature/rehab-center-readiness]
     paths:
       - 'native/linux/**'
-      - 'tests/native-qt-settings.py'
+      - 'tests/native-qt-*.py'
+      - 'tests/native-qt-*.cpp'
       - '.github/workflows/native-qt-linux.yml'
   pull_request:
     paths:
       - 'native/linux/**'
-      - 'tests/native-qt-settings.py'
+      - 'tests/native-qt-*.py'
+      - 'tests/native-qt-*.cpp'
       - '.github/workflows/native-qt-linux.yml'
   workflow_dispatch:
 jobs:
@@ -20,12 +22,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Qt 6 compiler and QML runtime
         run: |
-          sudo apt-get update
+          bash tools/ci-ubuntu-apt.sh
           sudo apt-get install -y cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-svg-dev \
-            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
             qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models \
             qml6-module-qtquick-templates qml6-module-qtquick-shapes \
             qml6-module-qtqml-workerscript libqt6svg6
+      - name: Verify server permission route coverage
+        run: |
+          python3 tests/module-route-map.py
+          python3 tests/encrypted-storage.py
       - name: Build native program
         run: |
           cmake -S native/linux -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -34,9 +40,18 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: timeout 15s build/native-linux/solvia-native --smoke
+        run: |
+          timeout 15s build/native-linux/solvia-native --smoke
+          timeout 15s build/native-linux/solvia-native --admin --smoke
       - name: Verify company settings migration
         run: python3 tests/native-qt-settings.py build/native-linux/solvia-native
+      - name: Verify staff and admin workflows through HTTPS
+        run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-workflow-check
+      - name: Exercise native windows for each role
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-ui-check --ui
       - name: Check no WebKit or Chrome dependency is linked
         run: |
           if ldd build/native-linux/solvia-native | grep -Ei 'webkit|chromium|electron|webengine'; then
@@ -46,8 +61,59 @@ jobs:
         run: bash native/linux/package-deb.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: solvia-native-linux-x64
+          name: lemvori-care-native-linux-x64
           path: |
             build/native-linux/solvia-native
             build/native-linux/solvia-native_*.deb
+          retention-days: 7
+
+
+  qt-windows:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Qt for MSVC
+        shell: pwsh
+        run: |
+          python -m pip install aqtinstall
+          python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O "${{ runner.temp }}\qt"
+          "QT_DIR=${{ runner.temp }}\qt\6.8.3\msvc2022_64" >> $env:GITHUB_ENV
+      - name: Build native Qt applications and package dependencies
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_DIR\bin;$env:PATH"
+          cmake -S native/linux -B build/native-windows -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$env:QT_DIR" -DBUILD_TESTING=OFF
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build/native-windows --config Release --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force out/lemvori-care-native | Out-Null
+          Copy-Item build/native-windows/Release/solvia-native.exe "out/lemvori-care-native/Lemvori Care.exe"
+          & "$env:QT_DIR\bin\windeployqt.exe" --release --no-compiler-runtime --qmldir native/linux "out/lemvori-care-native/Lemvori Care.exe"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item "out/lemvori-care-native/Lemvori Care.exe" "out/lemvori-care-native/Lemvori Care Admin.exe"
+          if (Get-ChildItem out/lemvori-care-native -Recurse -File | Where-Object Name -Match "WebEngine|WebView2|Chromium") {
+            throw "The native package includes a browser engine."
+          }
+      - name: Launch both packaged native executables
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: windows
+          QT_QUICK_BACKEND: software
+          QT_FORCE_STDERR_LOGGING: "1"
+        run: |
+          foreach ($name in @("Lemvori Care.exe", "Lemvori Care Admin.exe")) {
+            $log = Join-Path $env:RUNNER_TEMP "$name-stderr.log"
+            $exe = (Resolve-Path (Join-Path "out/lemvori-care-native" $name)).Path
+            $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -ArgumentList "--smoke" -RedirectStandardError $log -PassThru
+            if (!$process.WaitForExit(20000)) { $process.Kill(); Get-Content $log; throw "$name did not exit after smoke test." }
+            if ($process.ExitCode -ne 0) { Get-Content $log; throw "$name exited with $($process.ExitCode)" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemvori-care-native-windows-x64
+          path: out/lemvori-care-native/
           retention-days: 7

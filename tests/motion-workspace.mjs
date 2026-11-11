@@ -15,7 +15,7 @@ for (const role of ['admin','reception','psychologist','director']) {
  assert.equal(directory[0],'module-directory','Full catalogue remains available');
  assert(primary.every(([key])=>primaryKeysByRole[role].includes(key)));
 }
-assert(modulesFor('admin').some(m=>m.key==='settings'));assert(!modulesFor('reception').some(m=>['team','settings','audit','devices'].includes(m.key)));assert(!modulesFor('director').some(m=>m.key==='patients'));assert.deepEqual(modulesFor('unknown'),[]);
+assert(modulesFor('admin').some(m=>m.key==='services'));assert(!modulesFor('admin').some(m=>m.key==='settings'));assert(!modulesFor('reception').some(m=>['team','settings','audit','devices'].includes(m.key)));assert(!modulesFor('director').some(m=>m.key==='patients'));assert.deepEqual(modulesFor('unknown'),[]);
 const ap=(id,start,end)=>({id,start:'2026-10-26T'+start,end:'2026-10-26T'+end,psychologist_id:3});
 const layout=timelineLayout([ap(1,'09:00','10:00'),ap(2,'09:30','10:30'),ap(3,'10:30','11:00'),ap(4,'07:00','07:45'),ap(5,'21:00','22:00'),ap(6,'12:00','11:00'),ap(7,'26:00','27:00')],[{id:3,name:'Тестовий психолог'},{id:4,name:'Без записів'}]);
 assert.equal(layout.start,420);assert.equal(layout.end,1320);assert.equal(layout.columns.length,2);assert.equal(layout.columns[1].events.length,0);assert.equal(layout.invalid.length,2);assert.equal(layout.columns[0].lanes,2);

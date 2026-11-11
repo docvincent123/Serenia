@@ -13,7 +13,7 @@ const administratorLinks=[
   ['rooms','Кабінети','Розміщення прийомів'],
   ['reports','Звіти','Підсумки роботи'],
   ['devices','Пристрої','Підключені робочі місця'],
-  ['settings','Налаштування','Параметри центру']
+  ['services','Напрямки допомоги','Психологія й реабілітація']
 ];
 const receptionLinks=[
   ['shift-workspace','Прийоми за зміну','Прибуття та виклики'],
@@ -62,13 +62,13 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
   return <div className="center-home flow-desk" data-flow-role={role}>
     <header className="flow-desk-hero">
       <div className="flow-desk-title">
-        <div className="flow-desk-overline"><span className="flow-desk-overline-mark"/> SOLVIA <span className="flow-desk-overline-divider">/</span> {isReception?'РОБОЧЕ МІСЦЕ РЕЄСТРАТОРА':'АДМІНІСТРУВАННЯ'}</div>
+        <div className="flow-desk-overline"><span className="flow-desk-overline-mark"/> Lemvori Care <span className="flow-desk-overline-divider">/</span> {isReception?'РОБОЧЕ МІСЦЕ РЕЄСТРАТОРА':'АДМІНІСТРУВАННЯ'}</div>
         <h1>{isReception?'Реєстратура':'Керування центром'}</h1>
         <p>{formatDay(snapshot?.date)} <span aria-hidden="true">·</span> {isReception?'Записи, прибуття та пацієнти без зайвих переходів':'Головні показники та інструменти адміністратора'}</p>
       </div>
       <div className="flow-desk-hero-actions">
         <span role="status" aria-live="polite" className={'flow-desk-sync'+(error?' is-error':'')}>{syncLabel}</span>
-        <button className="flow-desk-reload" type="button" onClick={reload} disabled={refreshing} aria-label="Оновити дані"><AppIcon name="refresh" size={17}/> Оновити</button>
+        {/* Динамічне оновлення працює кожні 30 секунд і після подій, без кнопки. */}
         <button className="flow-desk-create" type="button" onClick={isReception?onBook:()=>onNavigate('shift-workspace')}>
           <AppIcon name={isReception?'new-booking':'shift-workspace'} size={18}/>{isReception?'Записати на прийом':'Список прийомів'}
         </button>
@@ -117,7 +117,7 @@ export default function CenterHome({api,role,onNavigate,onRegister,onBook,onOpen
           <span className="flow-desk-shortcut-copy"><strong>{title}</strong><small>{subtitle}</small></span>
           <AppIcon name="arrow-right" size={16}/>
         </button>)}</div>
-        <div className="flow-desk-panel-note"><AppIcon name="check" size={16}/><span>Статуси й прийоми надходять із сервера. Для оновлення натисніть «Оновити».</span></div>
+        <div className="flow-desk-panel-note"><AppIcon name="check" size={16}/><span>Статуси й прийоми оновлюються автоматично.</span></div>
       </aside>
     </div>
   </div>;

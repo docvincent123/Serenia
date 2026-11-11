@@ -42,6 +42,8 @@ SELECT count(*) FROM users;
 SELECT count(*) FROM patients;
 SELECT count(*) FROM appointments;
 SELECT count(*) FROM consultations;
+SELECT server_id FROM installation_identity WHERE id=1;
+SELECT center_name FROM center_settings WHERE id=1;
 DO $$ BEGIN
  IF EXISTS (SELECT 1 FROM pg_constraint WHERE connamespace='public'::regnamespace AND NOT convalidated)
  THEN RAISE EXCEPTION 'Unvalidated constraints in backup'; END IF;
@@ -121,24 +123,42 @@ SQL
     [[ $# == 2 && -f $2 ]] || { echo 'sudo solvia-admin verify-backup /path/backup.dump'; exit 1; }
     verify_backup "$2"
     echo 'SOLVIA: ізольоване відновлення перевірено; робоча база не змінена.' ;;
-  restore)
-    [[ $# == 2 && -f $2 ]] || { echo 'sudo solvia-admin restore /path/backup.dump'; exit 1; }
-    verify_backup "$2"
-    read -r -p 'Відновлення замінить дані центру. Введіть ВІДНОВИТИ: ' confirm
-    [[ $confirm == ВІДНОВИТИ ]] || exit 1
+  restore|restore-ui)
+    [[ $# == 2 && -f $2 && ! -L $2 ]] || { echo 'sudo solvia-admin restore /path/backup.dump'; exit 2; }
+    # Work from an immutable private copy. This prevents an archive selected by
+    # a user from changing between isolated verification and production restore.
+    archive=$(mktemp /var/backups/solvia/restore-import-XXXXXXXX.dump)
+    trap 'rm -f -- "$archive"' EXIT
+    cp -- "$2" "$archive"
+    chmod 0600 "$archive"
+    verify_backup "$archive"
+    if [[ $1 == restore ]]; then
+      read -r -p 'Відновлення замінить дані центру. Введіть ВІДНОВИТИ: ' confirm
+      [[ $confirm == ВІДНОВИТИ ]] || { echo 'Відновлення скасоване.'; exit 1; }
+    else
+      # Only launched by the local GTK Server Console after a separate typed
+      # confirmation AND polkit root authorization. Never exposed via HTTP.
+      [[ -x /usr/local/sbin/solvia-admin ]] || exit 1
+    fi
     exec 9>/run/solvia-admin/install.lock; flock -n 9
-    systemctl stop solvia-network.timer solvia-network-refresh.service solvia-certificate.timer solvia-certificate.service solvia
+    # Prevent any old app, worker or timer from writing during restore.
+    systemctl stop solvia-network.timer solvia-network-refresh.service solvia-certificate.timer solvia-certificate.service \
+      solvia-nightly.timer solvia-shift-backup.timer solvia-backup.timer solvia-shift-backup.service \
+      solvia-http.service solvia.service
+    echo 'Створюємо обов’язкову захисну копію поточної БД…'
     "$0" backup
-    # Root opens the archive; postgres can read stdin even from a private directory.
+    echo 'Відновлюємо перевірений архів як одну PostgreSQL-транзакцію…'
     runuser -u postgres -- /usr/lib/postgresql/16/bin/pg_restore -p 55432 -d solvia --role=solvia --no-owner --no-privileges \
-      --clean --if-exists --single-transaction --exit-on-error < "$2" || {
-        echo 'Відновлення скасовано транзакцією; сервер залишено зупиненим для перевірки.'; exit 1;
+      --clean --if-exists --single-transaction --exit-on-error < "$archive" || {
+        echo 'Помилка відновлення: транзакцію скасовано; сервер залишено зупиненим для діагностики.'; exit 1;
       }
     runuser -u solvia --preserve-environment -- /opt/solvia/SolviaServer --init
-    systemctl start solvia
+    systemctl start solvia.service solvia-http.service
     "$0" health
-    systemctl start solvia-network.timer solvia-certificate.timer
-    record_event restore "$2" success "database restored and HTTPS health check passed" ;;
+    systemctl start solvia-network.timer solvia-certificate.timer \
+      solvia-nightly.timer solvia-shift-backup.timer solvia-backup.timer
+    record_event restore "$2" success "isolated verification, protective backup, and HTTPS check passed"
+    echo 'Відновлення завершено. Повторно увійдіть до центру, перевірте дані та server_id.' ;;
   backups)
     find /var/backups/solvia -maxdepth 1 -type f -name '*.dump' -printf '%TY-%Tm-%Td %TH:%TM  %10s bytes  %p\n' | sort -r ;;
   db-status)

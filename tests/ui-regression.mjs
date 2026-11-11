@@ -12,7 +12,7 @@ const server = createServer(async (req,res) => {
     const path = resolve(root, '.' + new URL(req.url, 'http://localhost').pathname);
     if (!path.startsWith(root + '/') && path !== root) { res.writeHead(403).end(); return; }
     const file = path === root || path.endsWith('/') ? resolve(root, 'index.html') : path;
-    res.setHeader('Content-Type', ({'.js':'application/javascript','.css':'text/css','.png':'image/png','.html':'text/html'})[extname(file)] || 'application/octet-stream');
+    res.setHeader('Content-Type', ({'.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.html':'text/html'})[extname(file)] || 'application/octet-stream');
     res.end(await readFile(file));
   } catch { res.writeHead(404).end(); }
 });
@@ -25,7 +25,7 @@ try {
   await page.emulateMedia({reducedMotion:'reduce'});
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   let dischargePatchCalls=0;
-  let dischargeRecord={id:1,patient_name:'Демонстраційний пацієнт',document_no:'2026-12345',date_from:'2026-10-01',date_to:'2026-10-15',author:'Тестовий психолог',revision:1,summary:'Підсумок супроводу',dynamics:'Динаміка',recommendations:'Попередня рекомендація',followup:'Подальший супровід'};
+  let dischargeRecord={id:1,patient_name:'Демонстраційний пацієнт',document_no:'2026-12345',date_from:'2026-10-01',date_to:'2026-10-15',author:'Тестовий психолог',revision:1,workflow_status:'legacy',summary:'Підсумок супроводу',dynamics:'Динаміка',recommendations:'Попередня рекомендація',followup:'Подальший супровід'};
   let staffMessages = [], staffCalls = 0;
   let accessAllowed = true, accessCalls = 0;
   let serviceMode='ready';
@@ -60,8 +60,12 @@ try {
     else if(path === '/api/shift-readiness') data=readiness;
     else if(path === '/api/shift-reports') { if(method === 'POST') { reportCalls++; const body=route.request().postDataJSON(); assert.equal(body.shift_date,'2026-10-02','Report must use active shift date, not device calendar date'); data={id:1,consultations_count:3}; } }
     else if (path === '/api/mobile-update') data = { available:false };
-    else if (path === '/api/mobile-config') data = { format:'quremed.solvia.mobile',version:2,server_id:'a'.repeat(64),api_url:'https://solvia.example.test',https_url:'https://solvia.example.test',preferred:'https' };
-    else if (path === '/api/settings/center') data = { center_name:'SOLVIA · демонстрація', connection_mode:'local' };
+    else if (path === '/api/mobile-config') {
+      const endpoint = url.searchParams.has('lan') ? 'https://192.168.1.105:8443' : 'https://solvia.example.test';
+      data = { format:'quremed.solvia.mobile',version:2,server_id:'a'.repeat(64),api_url:endpoint,https_url:endpoint,preferred:'https' };
+    }
+    else if (path === '/api/settings/center') data = { center_name:'Тестовий центр', connection_mode:'local' };
+    else if (path === '/api/center-identity') data = { name:'Тестовий центр',city:'Львів',server_id:'a'.repeat(64) };
     else if (path === '/api/settings/workflow') data = { opening_time:'09:00',closing_time:'18:00',working_days:'1234567',slot_step_minutes:60,default_duration_minutes:60,session_hours:8 };
     else if (path === '/api/admin/system') data = { database:{name:'solvia',size:'8 MB',version:'16'},counts:{patients:24,consultations:42},backups:[{id:1,action:'verify',status:'success',created:'2026-10-02T10:00',details:'isolated restore checked'}] };
     else if (path === '/api/meta') data = { rooms:[{id:2,name:'Кабінет 1'}],psychologists:[{id:3,name:'Тестовий психолог'}],categories:['Інше'],workflow:{default_duration_minutes:60} };
@@ -108,20 +112,21 @@ try {
     } else if (path === '/api/logout') { await route.abort('timedout'); return; }
     await route.fulfill({ contentType:'application/json',body:JSON.stringify(data) });
   });
-  await page.goto(base); await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  await page.goto(base); await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
   serviceMode='maintenance';
   await page.reload();
   const maintenance=page.getByRole('dialog',{name:'Сервер на оновленні',exact:true});
   await maintenance.waitFor();
   await page.screenshot({path:'out/design/server-maintenance.png',fullPage:true});
   await maintenance.getByRole('button',{name:'Згорнути повідомлення',exact:true}).click();
-  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
   serviceMode='ready';
   await page.reload();
-  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
   assert.equal(await page.getByRole('dialog',{name:'Сервер на оновленні',exact:true}).count(),0);
   const studioHeader=page.locator('.studio-header');
-  assert.equal(await studioHeader.locator('img.studio-mark[src="/lemvori-care.svg"]').count(),1,'The supplied SOLVIA logo appears in the desktop header');
+  assert.equal(await studioHeader.locator('img.studio-mark[src="/lemvori-care.svg"]').count(),1,'The Lemvori Care mark appears in the desktop header');
+  await studioHeader.getByText('Тестовий центр',{exact:true}).waitFor();
   const shiftStatus=page.locator('.shift-bar').first();
   assert.equal(await page.locator('.studio-tabs').count(),0,'Tabs removed');
   assert.equal(await page.locator('.workspace-topbar').count(),0,'Old toolbar removed');
@@ -131,7 +136,7 @@ try {
   await page.locator('.focus-nav-primary').getByRole('button',{name:'Календар',exact:true}).click();
   await page.getByRole('heading',{name:'Календар центру',exact:true}).waitFor();
   await page.getByRole('button',{name:'Назад до попереднього розділу'}).click();
-  await page.getByRole('heading',{name:'Головна центру',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Керування центром',exact:true}).waitFor();
   assert.equal(await page.locator('.studio-back-row').count(),0,'No back button on initial home');
   const globalSearch=page.getByRole('textbox',{name:'Пошук у центрі',exact:true});
   await globalSearch.fill('late-global');
@@ -143,26 +148,27 @@ try {
   await globalSearch.fill('');
   await page.locator('.search-popover').waitFor({state:'hidden'});
   assert.equal(await page.locator('.focus-nav-primary').getByRole('button',{name:'Прийоми',exact:true}).count(),1,'Shift operations are always one click away');
-  assert.equal(await page.locator('.focus-nav-primary button').count(),4,'Minimal desktop navigation');
-  assert.equal(await page.getByRole('button',{name:'Інші функції центру',exact:true}).count(),1,'Other functions stay discoverable');
+  assert.equal(await page.locator('.focus-nav-primary button').count(),6,'Labeled desktop navigation exposes core tasks and directions');
+  assert.equal(await page.getByRole('button',{name:'Усі функції центру',exact:true}).count(),1,'Other functions stay discoverable');
   assert.equal(await page.locator('.center-home').getByText('ЦЕ_ПРИВАТНЕ_ПІБ').count(),0,'Home is not a clinical or audit feed');
-  assert.equal(await page.locator('.center-home-metric').count(),3,'Daily status is compact');
-  assert.equal(await page.locator('.center-home-action').count(),4,'Four clear quick actions for staff');
-  assert.equal(await page.locator('.center-home-intro .center-home-primary').count(),1,'One primary command');
-  await page.locator('.center-home-visit').first().waitFor();
+  assert.equal(await page.locator('.flow-desk-metric').count(),3,'Daily status is compact');
+  assert.equal(await page.locator('.flow-desk-shortcut').count(),6,'Six administrator tools remain discoverable');
+  assert.equal(await page.locator('.flow-desk-hero .flow-desk-create').count(),1,'One main shift action');
+  await page.locator('.flow-desk-visit').first().waitFor();
   await page.getByText(/Оновлено о/).waitFor();
   await page.route('**/api/workday/home',route=>route.abort('failed'));
-  await page.getByRole('button',{name:'Оновити дані головної сторінки'}).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('solvia:workflow-updated')));
   await page.locator('.center-home .alert.error').waitFor();
-  assert.equal(await page.locator('.center-home-visit').count(),0,'No stale appointments during disconnection');
+  assert.equal(await page.locator('.flow-desk-visit').count(),0,'No stale appointments during disconnection');
   await page.unroute('**/api/workday/home');
-  await page.getByRole('button',{name:'Оновити дані головної сторінки'}).click();
-  await page.locator('.center-home-visit').first().waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('solvia:workflow-updated')));
+  await page.locator('.flow-desk-visit').first().waitFor();
   assert.equal(await page.locator('.center-home .alert.error').count(),0,'Appointments refresh when server returns');
 
-  const systemSettings = page.getByRole('button',{name:'Налаштування центру',exact:true});
+  assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0,'Employee workspace has no server settings button');
+  const profileSettings = page.getByRole('button',{name:'Налаштування профілю',exact:true});
   const exit = page.getByRole('button',{name:'Вийти',exact:true});
-  for (const target of [systemSettings, exit]) {
+  for (const target of [profileSettings, exit]) {
     const box = await target.boundingBox(); assert(box && box.y >= 0 && box.y+box.height <= 600, 'Account actions must be in the visible viewport');
   }
   await page.screenshot({ path:'out/design/desktop-dashboard.png',fullPage:true });
@@ -175,7 +181,7 @@ try {
   await accessDialog.waitFor({state:'hidden'});
   assert.equal(accessCalls,1);assert.equal(closeCalls,0,'Reception authorization must never close the clinical shift');
 
-  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
   await page.getByRole('button',{name:'Відкрити розділ Повідомлення',exact:true}).click();
   await page.getByRole('heading',{name:'Повідомлення психологам',exact:true}).waitFor();
   await page.getByRole('button',{name:/Тестовий психолог/}).click();
@@ -190,7 +196,7 @@ try {
   await page.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.workspace')?.scrollTo(0,0);});
   await page.screenshot({path:'out/design/desktop-messages.png',fullPage:true});
   await page.setViewportSize({width:1280,height:600});
-    await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
+    await profileSettings.click(); await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
   await page.screenshot({ path:'out/design/desktop-settings.png',fullPage:true });
   assert.equal(await page.locator('.settings-nav').getByRole('button',{name:/Оновлення Android/}).count(),0);
   await page.goto(base+'/?mode=server');
@@ -208,13 +214,20 @@ try {
   const configDownload = page.waitForEvent('download');
   await page.getByRole('button',{name:'Файл для Android / ПК',exact:true}).click();
   const downloaded = await configDownload;
-  assert.equal(downloaded.suggestedFilename(),'SOLVIA-Mobile.solvia');
+  assert.equal(downloaded.suggestedFilename(),'Lemvori-Care-Mobile.solvia');
   const config = JSON.parse(await readFile(await downloaded.path(),'utf8'));
   assert.equal(config.api_url,'https://solvia.example.test');
   assert.equal(config.server_id,'a'.repeat(64));
   assert.equal(config.format,'quremed.solvia.mobile');
+  const lanDownload = page.waitForEvent('download');
+  await page.getByRole('button',{name:'Файл для Wi-Fi центру',exact:true}).click();
+  const lanFile = await lanDownload;
+  assert.equal(lanFile.suggestedFilename(),'Lemvori-Care-LAN.solvia');
+  const lanConfig = JSON.parse(await readFile(await lanFile.path(),'utf8'));
+  assert.equal(lanConfig.https_url,'https://192.168.1.105:8443');
+  assert.equal(lanConfig.server_id,config.server_id);
   // Settings remain accessible even with the shift closed.
-  open = false; await page.goto(base); await systemSettings.click(); await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
+  open = false; await page.goto(base); await profileSettings.click(); await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
   open = true; await page.reload();
   await page.locator('.focus-navigation').getByRole('button',{name:'Прийоми',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
@@ -239,7 +252,7 @@ try {
   await page.getByRole('button',{name:'← До списку',exact:true}).click();
   await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();
   await page.locator('.focus-navigation').getByRole('button',{name:'Головна',exact:true}).click();
-  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
   await page.getByRole('button',{name:'Відкрити розділ Лист очікування',exact:true}).click();
   await page.getByRole('button',{name:'+ Додати в очікування',exact:true}).click();
   const dialog = page.getByRole('dialog',{name:'Нове очікування'});
@@ -326,7 +339,7 @@ try {
   assert.equal(reportCalls,1);
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
   await page.locator('.focus-navigation').getByRole('button',{name:'Головна',exact:true}).click();
-  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
   await page.getByRole('button',{name:'Відкрити розділ Пристрої',exact:true}).click();
   await page.getByRole('heading',{name:'Стан телефонів',exact:true}).waitFor();
   await page.getByText('○ Поточний стан невідомий',{exact:true}).waitFor();
@@ -344,26 +357,30 @@ try {
     await page.screenshot({path:`out/design/desktop-${role}.png`,fullPage:true});
     if(role==='director'){
       await page.getByRole('button',{name:'Виписки',exact:true}).click();
-      await page.getByRole('button',{name:'Редагувати',exact:true}).click();
-      const editor=page.getByRole('dialog',{name:'Редагування виписки',exact:true});
-      await editor.getByLabel('Рекомендації',{exact:true}).fill('Уточнена рекомендація');
-      await editor.getByLabel('Причина редагування',{exact:true}).fill('Уточнення рекомендацій');
-      await page.screenshot({path:'out/design/desktop-discharge-editor.png',fullPage:true});
-      await editor.getByRole('button',{name:'Зберегти зміни',exact:true}).click();
-      await editor.waitFor({state:'hidden'});
-      assert.equal(dischargePatchCalls,1);assert.equal(dischargeRecord.recommendations,'Уточнена рекомендація');
-      await page.getByText(/версія 2/).waitFor();
+      await page.getByText('Архівна виписка',{exact:true}).waitFor();
+      assert.equal(await page.getByRole('button',{name:'Редагувати',exact:true}).count(),0,'Director cannot edit clinical content; only responsible professionals may revise it');
     }
 
   }
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};
   await page.reload();
+  await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Відкрити розділ Виписки',exact:true}).click();
+  await page.getByRole('button',{name:'Редагувати',exact:true}).click();
+  const editor=page.getByRole('dialog',{name:'Редагування виписки',exact:true});
+  await editor.getByLabel('Рекомендації',{exact:true}).fill('Уточнена рекомендація');
+  await editor.getByLabel('Причина редагування',{exact:true}).fill('Уточнення рекомендацій');
+  await page.screenshot({path:'out/design/desktop-discharge-editor.png',fullPage:true});
+  await editor.getByRole('button',{name:'Зберегти зміни',exact:true}).click();
+  await editor.waitFor({state:'hidden'});
+  assert.equal(dischargePatchCalls,1);assert.equal(dischargeRecord.recommendations,'Уточнена рекомендація');
+  await page.getByText(/версія 2/).waitFor();
   accessAllowed=false;currentUser={id:2,name:'Реєстратура',role:'reception'};await page.reload();
   await page.getByRole('heading',{name:'Очікуємо дозволу адміністратора',exact:true}).waitFor();
   assert.equal(closeCalls,0,'Shift remains open while reception waits for permission');
   currentUser={id:1,name:'Тестовий адміністратор',role:'admin'};await page.reload();
-  await systemSettings.click();
-  await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();
+  await profileSettings.click();
+  await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
   assert.deepEqual(errors,[],'No uncaught React runtime errors');
   const fresh=await browser.newPage();
   await fresh.route('**/api/**',async route=>route.fulfill({contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({ok:true,version:'3.1.0',server_id:'a'.repeat(64),mode:'ready'})}));

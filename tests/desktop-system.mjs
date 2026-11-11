@@ -5,11 +5,11 @@ import {readFile,mkdir} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {createRequire} from 'node:module';
 import {navFor,navigationGroups} from '../frontend/src/workspace-model.mjs';
-const expected={admin:['dashboard','shift-workspace','handover','calendar','waiting-list','patients','families','team','psychologist-roster','staff-messages','rooms','reports','discharges','workload','supervisions','archive','devices','settings','audit'],reception:['shift-workspace','handover','psychologist-roster','calendar','waiting-list','patients','families','archive'],director:['dashboard','psychologist-roster','workload','supervisions','discharges','staff-messages'],psychologist:['calendar','patients','reports','supervisions']};
-for(const [role,keys] of Object.entries(expected)){const nav=navFor(role).map(([key])=>key);assert.deepEqual(nav,keys,`Preserve every ${role} module and its order`);for(const key of nav.filter(key=>key!=='settings'))assert.equal(navigationGroups.filter(([, ,members])=>members.includes(key)).length,1,`Exactly one navigation group for ${key}`);}
+const expected={admin:['dashboard','shift-workspace','handover','calendar','waiting-list','patients','families','team','services','psychologist-roster','staff-messages','rooms','reports','discharges','workload','supervisions','archive','devices','audit'],reception:['shift-workspace','handover','psychologist-roster','calendar','waiting-list','patients','families','archive'],director:['dashboard','psychologist-roster','workload','supervisions','discharges','staff-messages'],psychologist:['calendar','patients','reports','supervisions']};
+for(const [role,keys] of Object.entries(expected)){const nav=navFor(role).map(([key])=>key);assert.deepEqual(nav,keys,`Preserve every ${role} module and its order`);for(const key of nav)assert.equal(navigationGroups.filter(([, ,members])=>members.includes(key)).length,1,`Exactly one navigation group for ${key}`);}
 assert.deepEqual(navFor('unknown'),[]);
 const require=createRequire(import.meta.url),{chromium}=require(process.env.SOLVIA_PLAYWRIGHT_MODULE||'playwright');
-const root=resolve('frontend/dist'),server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(path!==root&&!path.startsWith(root+'/')){res.writeHead(403).end();return;}const file=path===root?resolve(root,'index.html'):path;res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png'})[extname(file)]||'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
+const root=resolve('frontend/dist'),server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(path!==root&&!path.startsWith(root+'/')){res.writeHead(403).end();return;}const file=path===root?resolve(root,'index.html'):path;res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml'})[extname(file)]||'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,...(process.env.SOLVIA_CHROMIUM_EXECUTABLE?{executablePath:process.env.SOLVIA_CHROMIUM_EXECUTABLE,args:['--no-sandbox','--disable-dev-shm-usage']}:{})});
 try{
@@ -62,7 +62,7 @@ try{
     else if(path==='/api/supervisions')data=[{id:1,psychologist_id:3,psychologist:'Марченко Оксана',scheduled_at:'2026-10-16T11:00',duration_minutes:60,status:'planned',topic:'Планова супервізія',recommendations:''}];
     else if(path==='/api/shift-workspace')data=[{appointment_id:7,patient_id:10,patient:p.name,patient_no:p.patient_no,phone:p.phone,category:p.category,psychologist_id:3,psychologist:p.psychologist,room:'Кабінет 101',kind:'individual',status:'scheduled',start:'2026-10-15T09:00',end:'2026-10-15T10:00'}];
     else if(path==='/api/appointments')data=[{id:7,psychologist_id:3,psychologist:p.psychologist,room_id:2,room:'Кабінет 101',kind:'individual',status:'scheduled',start:'2026-10-15T09:00',end:'2026-10-15T10:00',patients:[p]},{id:8,psychologist_id:4,psychologist:'Литвин Максим',room_id:2,room:'Кабінет 102',kind:'individual',status:'confirmed',start:'2026-10-15T10:30',end:'2026-10-15T11:15',patients:[p2]},{id:9,psychologist_id:5,psychologist:'Кравчук Ірина',room_id:2,room:'Кабінет 103',kind:'group',status:'scheduled',start:'2026-10-15T09:30',end:'2026-10-15T11:00',patients:[p,p2]}];
-    else if(path==='/api/discharges')data=[{id:1,patient_name:p.name,document_no:'2026-12345',date_from:'2026-10-01',date_to:'2026-10-15',summary:'Демонстраційний підсумок супроводу',dynamics:'Демонстраційна динаміка',recommendations:'Демонстраційні рекомендації',followup:'Демонстраційний план',author:p.psychologist,revision:1}];
+    else if(path==='/api/discharges')data=[{id:1,patient_name:p.name,document_no:'12345',workflow_status:'draft',date_from:'2026-10-01',date_to:'2026-10-15',summary:'Демонстраційний підсумок супроводу',dynamics:'Демонстраційна динаміка',recommendations:'Демонстраційні рекомендації',followup:'Демонстраційний план',author:p.psychologist,revision:1}];
     else if(path==='/api/slots')data=['09:00','11:00','14:30'];
     else if(path==='/api/audit')data=[{id:1,created:'2026-10-15T08:00',actor:'Коваль Андрій',event:'open',entity:'shift',entity_id:1}];
     await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
@@ -72,23 +72,36 @@ try{
     const target=nav.getByRole('button',{name:label,exact:true});
     if(await target.count()) await target.click();
     else {
-      await nav.getByRole('button',{name:'Головна',exact:true}).click();
-      await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+      await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
       await page.getByRole('button',{name:`Відкрити розділ ${label}`,exact:true}).click();
     }
     await page.getByRole('heading',{name:title,exact:true}).waitFor();
   }
   async function capture(name){await page.evaluate(()=>{const pane=document.querySelector('.workspace');if(pane)pane.scrollTop=0;});await page.screenshot({path:`out/design/full-${name}.png`,fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`No page-wide overflow: ${name}`);}
   await mkdir('out/design',{recursive:true});await page.goto(`http://127.0.0.1:${server.address().port}`);
-  await page.locator('.center-home-action').first().waitFor();assert.equal(await page.locator('.center-home-action').count(),4);
-  assert.equal(await nav.getByRole('button').count(),4,'The main admin navigation is deliberately short');
-  assert.equal(await page.locator('.center-home-metric').count(),3);
+  await page.locator('.flow-desk-shortcut').first().waitFor();
+  assert.equal(await page.locator('.flow-desk-shortcut').count(),6);
+  assert.equal(await nav.getByRole('button').count(),6,'The main admin navigation is deliberately short');
+  assert.equal(await page.locator('.flow-desk-metric').count(),3);
+  for(const [width,height] of [[1440,1000],[1280,688],[1024,600],[1024,480]]){
+    await page.setViewportSize({width,height});
+    const sidebar=await page.locator('.sidebar').evaluate(el=>{
+      const buttons=[...el.querySelectorAll('.focus-navigation button,.studio-rail-directory,.sidebar-actions button')];
+      const bounds=buttons.map(button=>button.getBoundingClientRect());
+      return {overlap:bounds.some((rect,index)=>index>0&&rect.top<bounds[index-1].bottom),
+        background:getComputedStyle(el).backgroundColor,
+        active:getComputedStyle(el.querySelector('[aria-current=page]')).backgroundColor,
+        profile:el.querySelector('button[aria-label="Налаштування профілю"]').textContent.trim()};
+    });
+    assert.deepEqual(sidebar,{overlap:false,background:'rgb(74, 92, 106)',active:'rgb(204, 208, 207)',profile:'Мій профіль'});
+    assert.equal(await page.locator('.care-sidebar-mark').evaluate(img=>img.complete&&img.naturalWidth>0),true);
+  }
+  await page.setViewportSize({width:1440,height:1000});
   await capture('admin-overview');
-  await page.getByRole('button',{name:'Інші функції центру',exact:true}).click();
+  await page.getByRole('button',{name:'Усі функції центру',exact:true}).click();
   await page.getByRole('heading',{name:'Усі розділи',exact:true}).waitFor();
   assert.equal(await page.locator('.motion-module-card').count(),21,'All administrator modules including live shift roster');
   for (const [key,title] of navFor('admin')) assert.equal(await page.getByRole('button',{name:`Відкрити розділ ${title}`,exact:true}).count(),1,`Admin module: ${key}`);
-  await page.locator('.motion-role-map summary').click();assert.equal(await page.locator('.motion-role-map-grid article').count(),4);
   await capture('all-admin-modules');
   await page.getByRole('button',{name:'Відкрити розділ Передача зміни',exact:true}).click();
   await page.getByRole('heading',{name:'Передача зміни',exact:true}).waitFor();
@@ -137,8 +150,11 @@ try{
   await open('Навантаження','Контроль завантаження психологів');await page.locator('.workload-card').waitFor();await capture('workload');
   await open('Супервізії','Супервізії психологів');await capture('supervisions');
   await open('Виписки','Виписки');await page.getByRole('button',{name:'Редагувати',exact:true}).click();await page.getByRole('dialog',{name:'Редагування виписки',exact:true}).waitFor();await capture('discharge-editor');await page.getByRole('dialog').getByRole('button',{name:'Закрити',exact:true}).click();
-  await page.getByRole('button',{name:'Налаштування центру',exact:true}).click();await page.getByRole('heading',{name:'Налаштування Lemvori Care',exact:true}).waitFor();await capture('settings');
-  await page.setViewportSize({width:1024,height:600});for(const label of ['Налаштування центру','Вийти']){const box=await page.getByRole('button',{name:label,exact:true}).boundingBox();assert(box&&box.y>=0&&box.y+box.height<=600,`Short-screen account action: ${label}`);}await capture('short-desktop');
+  assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0);
+  await page.getByRole('button',{name:'Налаштування профілю',exact:true}).click();
+  await page.getByRole('heading',{name:'Налаштування профілю',exact:true}).waitFor();
+  await capture('settings');
+  await page.setViewportSize({width:1024,height:600});for(const label of ['Налаштування профілю','Вийти']){const box=await page.getByRole('button',{name:label,exact:true}).boundingBox();assert(box&&box.y>=0&&box.y+box.height<=600,`Short-screen account action: ${label}`);}await capture('short-desktop');
   role='director';await page.setViewportSize({width:1440,height:1000});await page.reload();await page.locator('.overview-kpi').first().waitFor();assert.equal(await nav.getByRole('button',{name:'Пацієнти',exact:true}).count(),0);assert.equal(await nav.getByRole('button',{name:'Кабінети',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Налаштування центру',exact:true}).count(),0);await capture('director-overview');
   role='reception';await page.reload();await page.getByRole('heading',{name:'Реєстратура',exact:true}).waitFor();await nav.getByRole('button',{name:'Прийоми',exact:true}).click();await page.getByRole('heading',{name:'Прийоми за зміну',exact:true}).waitFor();await page.locator('.visit-patient-link').first().click();await capture('reception');
   await page.getByRole('button',{name:'Підсумок дня',exact:true}).click();

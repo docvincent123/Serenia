@@ -15,13 +15,13 @@ export function cleanBase(value) {
 export function connectionProfile(text) {
   if (new TextEncoder().encode(text).length > 65536) throw new Error('Файл підключення завеликий.');
   const profile = JSON.parse(text);
-  if (profile.format !== 'quremed.solvia.mobile' || ![1, 2].includes(profile.version)) throw new Error('Непідтримуваний файл SOLVIA.');
+  if (profile.format !== 'quremed.solvia.mobile' || ![1, 2].includes(profile.version)) throw new Error('Непідтримуваний файл Lemvori Care.');
   const base = cleanBase(profile.https_url || profile.api_url);
   if (!base.startsWith('https://')) throw new Error('Файл центру має містити HTTPS-адресу.');
   if (profile.version === 2 && !/^[a-f0-9]{64}$/.test(profile.server_id || '')) throw new Error('У файлі відсутній ідентифікатор сервера.');
-  return {base, serverId: profile.server_id || '', center: String(profile.center || 'SOLVIA')};
+  return {base, serverId: profile.server_id || '', center: String(profile.center || 'Lemvori Care')};
 }
 export function verifyProfile(profile, health) {
-  if (health.ok !== true || !health.version) throw new Error('Сервер SOLVIA недоступний.');
-  if (profile.serverId && profile.serverId !== health.server_id) throw new Error('Це інший сервер SOLVIA. Отримайте правильний файл у адміністратора.');
+  if (health.ok !== true || !health.version) throw new Error('Сервер Lemvori Care недоступний.');
+  if (profile.serverId && profile.serverId !== health.server_id) throw new Error('Це інший сервер Lemvori Care. Отримайте правильний файл у адміністратора.');
 }

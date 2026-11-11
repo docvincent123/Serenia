@@ -57,7 +57,7 @@ class MainActivity : Activity() {
     private val serviceStatus by lazy { ServiceStatusMonitor(this,{server}) { base ->
         val result=requestAt(base,"GET","/api/client-status",authToken="") as JSONObject
         val expected=prefs.getString("server_id:$base", "").orEmpty()
-        require(expected.isBlank() || result.optString("server_id")==expected) { "Інший сервер SOLVIA" }
+        require(expected.isBlank() || result.optString("server_id")==expected) { "Інший сервер Lemvori Care" }
         result
     } }
     private var server = ""
@@ -98,6 +98,7 @@ class MainActivity : Activity() {
     private var lastCacheTime = 0L
     private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var homeAppointmentsRefresh: ((JSONArray) -> Unit)? = null
+    private var workflowHistoryRefresh: (() -> Unit)? = null
     private var appointmentRefreshRunning = false
     private val appointmentPrefetchRunning = java.util.concurrent.atomic.AtomicBoolean(false)
     private var appointmentErrorView: TextView? = null
@@ -197,7 +198,14 @@ class MainActivity : Activity() {
                 if(token==auth && server==base) {
                     if(!snapshot.shift.optBoolean("open")) {
                         AppointmentReminders.cancelScope(this,base,uid); ShiftNotifications.refresh(this,base,uid)
-                        runOnUiThread { if(token==auth && server==base && consultationWindow==null && selectedNavigation in listOf("home","archive")) renderShiftGate(snapshot.shift) }
+                        runOnUiThread {
+                            if(token==auth && server==base && !isDestroyed) {
+                                LiveShiftService.stop(this@MainActivity)
+                                offlineMode = false
+                                updateConnectionStatus()
+                                if(consultationWindow==null && selectedNavigation in listOf("home","archive")) renderShiftGate(snapshot.shift)
+                            }
+                        }
                     } else {
                         runOnUiThread {
                             if(token==auth && server==base && !isDestroyed) {
@@ -216,6 +224,9 @@ class MainActivity : Activity() {
                             if(token!=auth || server!=base || store.session()?.optString("token")!=auth) throw ApiError(401,"Сесію змінено")
                             requestAt(base,"GET",path,authToken=auth)
                         } }
+                        runOnUiThread {
+                            if(token==auth && server==base && !isDestroyed) workflowHistoryRefresh?.invoke()
+                        }
                         if(!isDestroyed && appointmentPrefetchRunning.compareAndSet(false,true)) cacheIo.execute {
                             try {
                                 fun get(path:String):Any {
@@ -340,7 +351,7 @@ class MainActivity : Activity() {
             } catch (_: Exception) {
                 server = ""
                 prefs.edit().remove("server").apply()
-                Toast.makeText(this, "Збережена адреса сервера більше не відповідає політиці SOLVIA. Підключіть сервер повторно.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Збережена адреса сервера більше не відповідає політиці Lemvori Care. Підключіть сервер повторно.", Toast.LENGTH_LONG).show()
             }
         }
         if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) {
@@ -358,6 +369,7 @@ class MainActivity : Activity() {
 
     private fun mount(content: View) {
         sceneEpoch++
+        workflowHistoryRefresh = null
         pdfPreview?.close(); pdfPreview = null
         val shell = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -387,7 +399,7 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(dp(48), dp(48)))
             header.addView(TextView(this).apply {
                 workspaceTitle = this
-                text = "SOLVIA"; textSize = 18f; setTextColor(MobileUi.onAccent)
+                text = "Lemvori Care"; textSize = 18f; setTextColor(MobileUi.onAccent)
                 maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(dp(12), 0, 0, 0); typeface = Typeface.create("sans-serif", Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -471,10 +483,10 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(forest); setPadding(dp(18), dp(18), dp(18), dp(18))
         }
         val identity = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        identity.addView(logo(44).apply { contentDescription = "Емблема SOLVIA" }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(14) })
+        identity.addView(logo(44).apply { contentDescription = "Емблема Lemvori Care" }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(14) })
         identity.addView(title(userName, 20f).apply { setTextColor(MobileUi.onAccent) }, LinearLayout.LayoutParams(0, -2, 1f))
         heading.addView(identity)
-        heading.addView(TextView(this).apply { text = "Психолог · SOLVIA"; setTextColor(MobileUi.onAccent); textSize = 13f })
+        heading.addView(TextView(this).apply { text = "Психолог · Lemvori Care"; setTextColor(MobileUi.onAccent); textSize = 13f })
         panel.addView(heading)
         val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(12)) }
         val popup = android.widget.PopupWindow(panel, (resources.displayMetrics.widthPixels * 0.86f).toInt(), -1, true).apply {
@@ -483,7 +495,7 @@ class MainActivity : Activity() {
         fun row(label: String, icon: Int, action: () -> Unit) {
             rows.addView(MobileUi.button(this, label) { popup.dismiss(); action() }.apply {
                 textSize = 15f; gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                background = rounded(MobileUi.panel, 0)
+                background = rounded(MobileUi.panel, 18)
                 val image = getDrawable(icon)?.mutate(); image?.setTint(MobileUi.ink)
                 image?.setBounds(0, 0, dp(24), dp(24)); setCompoundDrawables(image, null, null, null)
                 compoundDrawablePadding = dp(12); minHeight = dp(48); minimumHeight = dp(48)
@@ -520,14 +532,24 @@ class MainActivity : Activity() {
         selectedNavigation = "messages"; backAction = { homeScreen() }
         val body = root(); body.addView(topBar("Повідомлення", ::homeScreen))
         body.addView(title("Події прийомів", 18f))
-        val events=WorkflowNotifications.history(offlineStore())
-        if(events.length()==0)body.addView(caption("Нові записи, прибуття та зміни прийомів з’являться після синхронізації."))
-        for(i in 0 until events.length()){
-            val event=events.getJSONObject(i);val row=card()
-            row.addView(title(WorkflowNotifications.title(event.optString("kind")),16f))
-            row.addView(caption(listOf(event.optString("start").takeIf { it.length>=16 }?.substring(11,16).orEmpty(),event.optString("room")).filter { it.isNotBlank() }.joinToString(" · ")))
-            row.addView(caption(event.optString("created").replace('T',' ')))
-            body.addView(row)
+        val workflow = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(workflow)
+        var workflowFingerprint = ""
+        fun renderWorkflow() {
+            val events = WorkflowNotifications.history(offlineStore())
+            val fingerprint = events.toString()
+            if(fingerprint == workflowFingerprint) return
+            workflowFingerprint = fingerprint
+            workflow.removeAllViews()
+            if(events.length()==0) workflow.addView(caption("Нові записи, прибуття та зміни прийомів з’являться після синхронізації."))
+            for(i in 0 until events.length()) {
+                val event = events.getJSONObject(i)
+                val row = card()
+                row.addView(title(WorkflowNotifications.title(event.optString("kind")),16f))
+                row.addView(caption(listOf(event.optString("start").takeIf { it.length>=16 }?.substring(11,16).orEmpty(),event.optString("room")).filter { it.isNotBlank() }.joinToString(" · ")))
+                row.addView(caption(event.optString("created").replace('T',' ')))
+                workflow.addView(row)
+            }
         }
         body.addView(title("Від команди центру", 18f))
         val staff = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(staff)
@@ -545,8 +567,10 @@ class MainActivity : Activity() {
         if(unsent > 0) body.addView(caption("Записів у роботі, що очікують передавання: $unsent"))
         body.addView(title("Нагадування", 18f))
         val notices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(notices)
-        body.addView(secondary("Оновити повідомлення") { syncNow(); messagesScreen() })
         mount(scroll(body))
+        workflowHistoryRefresh = ::renderWorkflow
+        renderWorkflow()
+        refreshAppointments()
         apiAsync("GET", "/api/staff/messages", onError = { staff.addView(caption("Повідомлення недоступні без зв’язку із сервером.")) }) { value ->
             val rows = value as JSONArray
             if(rows.length() == 0) staff.addView(caption("Службових повідомлень поки немає."))
@@ -607,7 +631,7 @@ class MainActivity : Activity() {
         val counters = PhoneNetworkStats.snapshot(this,server)
         connection.addView(caption("RX: ${counters.first} відповідей  ·  TX: ${counters.second} запитів"))
         connection.addView(caption("Помилки підключення та запитів: ${counters.third}")); connection.addView(secondary("Перевірити підключення") { informationScreen() }); body.addView(connection)
-        val device = card(); device.addView(title("Пристрій",20f));device.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}"))
+        val device = card(); device.addView(title("Пристрій",20f));device.addView(caption("Lemvori Care ${BuildConfig.VERSION_NAME}"))
         device.addView(caption((Build.MANUFACTURER + " " + Build.MODEL).trim()))
         device.addView(caption("ID: " + (Settings.Secure.getString(contentResolver,Settings.Secure.ANDROID_ID) ?: "Не визначено"))); body.addView(device)
         mount(scroll(body))
@@ -656,7 +680,7 @@ class MainActivity : Activity() {
     private fun exportPdf(file: java.io.File) {
         pendingPdf = file
         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE); type = "application/pdf"; putExtra(Intent.EXTRA_TITLE, "SOLVIA-document.pdf")
+            addCategory(Intent.CATEGORY_OPENABLE); type = "application/pdf"; putExtra(Intent.EXTRA_TITLE, "Lemvori-Care-document.pdf")
         }, exportPdfRequest)
     }
 
@@ -746,7 +770,7 @@ class MainActivity : Activity() {
 
     private fun showError(message: String) {
         AlertDialog.Builder(this)
-            .setTitle("SOLVIA")
+            .setTitle("Lemvori Care")
             .setMessage(message)
             .setPositiveButton("OK", null)
             .show()
@@ -794,7 +818,7 @@ class MainActivity : Activity() {
             val expected = prefs.getString("server_id:$base", "").orEmpty()
             if(expected.isNotBlank()) {
                 val health = requestAt(base, "GET", "/api/health", authToken = "") as JSONObject
-                require(health.optString("server_id") == expected) { "Це інший сервер SOLVIA. Отримайте правильний файл підключення." }
+                require(health.optString("server_id") == expected) { "Це інший сервер Lemvori Care. Отримайте правильний файл підключення." }
             }
         }
         val connection = URL(base + path).openConnection() as HttpURLConnection
@@ -919,10 +943,10 @@ class MainActivity : Activity() {
                 }
                     ?: throw IllegalStateException("Не вдалося прочитати файл")
                 val json = JSONObject(text)
-                require(json.optString("format") == "quremed.solvia.mobile") { "Це не файл підключення SOLVIA" }
+                require(json.optString("format") == "quremed.solvia.mobile") { "Це не файл підключення Lemvori Care" }
 
                 val version = json.optInt("version", 1)
-                require(version in 1..2) { "Оновіть SOLVIA для цього формату підключення" }
+                require(version in 1..2) { "Оновіть Lemvori Care для цього формату підключення" }
                 val expectedId = json.optString("server_id")
                 if(version == 2) require(expectedId.matches(Regex("[a-f0-9]{64}"))) { "У файлі відсутній ідентифікатор сервера" }
                 val preferred = json.optString("preferred", "https")
@@ -940,11 +964,12 @@ class MainActivity : Activity() {
                 try {
                     val health = requestAt(candidate, "GET", "/api/health", authToken = "") as JSONObject
                     require(health.optBoolean("ok")) { "Сервер не підтвердив готовність" }
-                    if(expectedId.isNotBlank()) require(health.optString("server_id") == expectedId) { "Файл належить іншому серверу SOLVIA" }
-                    prefs.edit().putString("server_id:$candidate", expectedId).apply()
-                    rememberServer(candidate)
+                    if(expectedId.isNotBlank()) require(health.optString("server_id") == expectedId) { "Файл належить іншому серверу Lemvori Care" }
                     runOnUiThread {
-                        Toast.makeText(this, "Сервер SOLVIA підключено: $server", Toast.LENGTH_LONG).show()
+                        if(isDestroyed || token.isNotBlank()) return@runOnUiThread
+                        prefs.edit().putString("server_id:$candidate", expectedId).apply()
+                        rememberServer(candidate)
+                        Toast.makeText(this, "Сервер Lemvori Care підключено: $server", Toast.LENGTH_LONG).show()
                         loginScreen()
                     }
                 } catch (primary: Exception) {
@@ -952,15 +977,20 @@ class MainActivity : Activity() {
                         val localHttp = configAddress(httpSource)
                         val health = requestAt(localHttp, "GET", "/api/health", authToken = "") as JSONObject
                         require(health.optBoolean("ok")) { "Локальний HTTP сервер не готовий" }
+                        if(expectedId.isNotBlank()) require(health.optString("server_id") == expectedId) { "Файл належить іншому серверу Lemvori Care" }
                         runOnUiThread {
+                            if(isDestroyed || token.isNotBlank()) return@runOnUiThread
                             AlertDialog.Builder(this)
                                 .setTitle("Доступний локальний HTTP")
                                 .setMessage("HTTPS не вдалося відкрити, але сервер доступний через $localHttp. Використовувати HTTP лише у приватній Wi-Fi/LAN мережі центру? Для VPS та інтернету використовуйте HTTPS.")
                                 .setNegativeButton("Ні") { _, _ -> setupScreen() }
                                 .setPositiveButton("Підключити локально") { _, _ ->
-                                    rememberServer(localHttp)
-                                    Toast.makeText(this, "Підключено локально: $server", Toast.LENGTH_LONG).show()
-                                    loginScreen()
+                                    if(token.isBlank()) {
+                                        prefs.edit().putString("server_id:$localHttp", expectedId).apply()
+                                        rememberServer(localHttp)
+                                        Toast.makeText(this, "Підключено локально: $server", Toast.LENGTH_LONG).show()
+                                        loginScreen()
+                                    }
                                 }
                                 .show()
                         }
@@ -968,8 +998,9 @@ class MainActivity : Activity() {
                 }
             } catch (e: Exception) {
                 runOnUiThread {
+                    if(isDestroyed || token.isNotBlank()) return@runOnUiThread
+                    if(server.isBlank()) setupScreen() else loginScreen()
                     showError("Не вдалося імпортувати підключення: " + (e.message ?: "невідома помилка"))
-                    setupScreen()
                 }
             }
         }
@@ -1020,14 +1051,14 @@ class MainActivity : Activity() {
         backAction = null
         val body = root()
         body.addView(logo())
-        body.addView(title("Підключення до SOLVIA", 27f))
+        body.addView(title("Підключення до Lemvori Care", 27f))
         body.addView(caption("Один раз відкрийте файл центру, створений на серверному ПК. Після перезапуску й оновлення підключення зберігається автоматично."))
 
         val importCard = card()
         importCard.background = rounded(forestSoft, 17, line)
         importCard.addView(title("Автоматичне підключення", 18f))
         importCard.addView(caption("Отримайте файл підключення в адміністратора центру й відкрийте його на телефоні."))
-        importCard.addView(primary("Відкрити файл SOLVIA-Mobile.solvia") { openServerConfigFile() })
+        importCard.addView(primary("Відкрити файл підключення") { openServerConfigFile() })
         body.addView(importCard)
         body.addView(spacer(14))
 
@@ -1066,11 +1097,11 @@ class MainActivity : Activity() {
         backAction = null
         val body = root().apply {
             setPadding(dp(24), dp(36), dp(24), dp(24))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(bg, Color.rgb(233,240,226)))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(bg, MobileUi.panel))
         }
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         brand.addView(logo(88))
-        brand.addView(title("SOLVIA", 34f).apply { letterSpacing = 0.12f; gravity = Gravity.CENTER })
+        brand.addView(title("Lemvori Care", 32f).apply { gravity = Gravity.CENTER })
         brand.addView(caption("by LemvoriLab").apply { gravity = Gravity.CENTER; textSize = 13f })
         brand.addView(caption("Кабінет психолога").apply { gravity = Gravity.CENTER; textSize = 15f })
         body.addView(brand); body.addView(spacer(22))
@@ -1119,7 +1150,7 @@ class MainActivity : Activity() {
             if(action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) { submit?.performClick(); true } else false
         }
         form.addView(submit); body.addView(form)
-        body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}").apply { gravity = Gravity.CENTER })
+        body.addView(caption("Lemvori Care ${BuildConfig.VERSION_NAME}").apply { gravity = Gravity.CENTER })
         mount(scroll(body))
     }
 
@@ -1155,7 +1186,7 @@ class MainActivity : Activity() {
         workspaceReady = false
         backAction = null
         val checking = root()
-        checking.addView(title("SOLVIA " + BuildConfig.VERSION_NAME, 20f))
+        checking.addView(title("Lemvori Care " + BuildConfig.VERSION_NAME, 20f))
         checking.addView(caption("Перевіряємо відкриття зміни…"))
         mount(scroll(checking))
         apiAsync("GET", "/api/shift-day") { result ->
@@ -1228,7 +1259,7 @@ class MainActivity : Activity() {
             fun render(tab: String) {
                 selectedNavigation = if(tab == "completed") "archive" else "home"
                 pageTitle.text = if(tab == "completed") "Архів зміни" else "Активні консультації"
-                workspaceTitle?.text = "SOLVIA · " + LocalDate.parse(currentShiftDate()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"))
+                workspaceTitle?.text = "Lemvori Care · " + LocalDate.parse(currentShiftDate()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"))
                 pendingIndicators.clear()
                 val scrollPosition = homeScroll.scrollY
                 tabs.removeAllViews(); today.removeAllViews()
@@ -1723,6 +1754,28 @@ class MainActivity : Activity() {
                 addGap(box)
                 box.addView(caption("Приватна нотатка психолога"))
                 box.addView(note)
+                box.addView(secondary("Розгорнути нотатку для зручного введення") {
+                    val large = edit("Приватна нотатка").apply {
+                        setText(note.text)
+                        minLines = 10
+                        maxLines = 18
+                        textSize = 18f
+                        setSelection(text.length)
+                    }
+                    val holder = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp(16), dp(10), dp(16), dp(10))
+                        addView(large)
+                    }
+                    AlertDialog.Builder(this)
+                        .setTitle("Зручний редактор нотатки")
+                        .setView(holder)
+                        .setNegativeButton("Скасувати", null)
+                        .setPositiveButton("Перенести в запис") { _, _ ->
+                            note.setText(large.text.toString())
+                            note.setSelection(note.text.length)
+                        }.show()
+                })
                 addGap(box)
                 box.addView(caption("Цілі поточного етапу"))
                 box.addView(goals)
@@ -1801,15 +1854,23 @@ class MainActivity : Activity() {
                     draftStatus.text = if(DraftSync.transferred(local)) "Запис передано на сервер" else if(local.optBoolean("sync_blocked")) "Потрібна перевірка серверної версії" else "Запис збережено на телефоні"
                 }
             }
+            // Encrypted drafts were written on every keystroke and every scroll pixel.
+            // Debounce while typing, but always flush on close so nothing is lost.
+            val localSaveHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            val localSaveTask = Runnable { persistDraft() }
+            fun queueLocalSave() {
+                localSaveHandler.removeCallbacks(localSaveTask)
+                localSaveHandler.postDelayed(localSaveTask, 420)
+            }
             val watcher = object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { persistDraft() }
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { queueLocalSave() }
                 override fun afterTextChanged(s: Editable?) {}
             }
             textFields.values.forEach { it.addTextChangedListener(watcher) }
-            flagChecks.forEach { it.setOnCheckedChangeListener { _, _ -> persistDraft() } }
+            flagChecks.forEach { it.setOnCheckedChangeListener { _, _ -> queueLocalSave() } }
             val selectionWatcher = object : android.widget.AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { persistDraft() }
+                override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) { queueLocalSave() }
                 override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
             }
             listOf(appointmentSpinner, typeSpinner, riskSpinner).forEach { it.onItemSelectedListener = selectionWatcher }
@@ -1821,9 +1882,14 @@ class MainActivity : Activity() {
                 .setPositiveButton("Завершити", null)
                 .create()
             consultationWindow = dialog
-            scroll.setOnScrollChangeListener { _, _, _, _, _ -> persistDraft() }
+            scroll.setOnScrollChangeListener { _, _, _, _, _ -> queueLocalSave() }
             scroll.post {scroll.scrollTo(0,savedDraft?.optInt("scroll_y",0) ?: 0)}
-            dialog.setOnDismissListener { persistDraft(); draftIndicatorRefresh = null; if (consultationWindow === dialog) consultationWindow = null }
+            dialog.setOnDismissListener {
+                localSaveHandler.removeCallbacks(localSaveTask)
+                persistDraft()
+                draftIndicatorRefresh = null
+                if (consultationWindow === dialog) consultationWindow = null
+            }
             tools.addView(secondary("Повторити передавання") {
                 persistDraft(); syncNow()
             })
@@ -1847,7 +1913,7 @@ class MainActivity : Activity() {
             dialog.setOnShowListener {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).apply {
                     isAllCaps = false; textSize = 15f; setTextColor(MobileUi.onAccent)
-                    background = rounded(forest, 14); setPadding(dp(18), dp(10), dp(18), dp(10)); minHeight = dp(48)
+                    background = rounded(forest, 28); setPadding(dp(18), dp(10), dp(18), dp(10)); minHeight = dp(48)
                 }
                 dialog.getButton(AlertDialog.BUTTON_NEGATIVE).apply { isAllCaps = false; setTextColor(muted) }
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -1963,7 +2029,7 @@ class MainActivity : Activity() {
         listOf("Оповіщення", "Оформлення", "Редагування", "Підключення").forEach { section ->
             body.addView(secondary(section) { settingsDetailsScreen(section) })
         }
-        body.addView(caption("SOLVIA ${BuildConfig.VERSION_NAME}")); mount(scroll(body))
+        body.addView(caption("Lemvori Care ${BuildConfig.VERSION_NAME}")); mount(scroll(body))
     }
     private fun settingsDetailsScreen(section: String) {
         selectedNavigation = "more"; backAction = { settingsScreen() }
@@ -1972,17 +2038,17 @@ class MainActivity : Activity() {
             "Оповіщення" -> {
         body.addView(title("Оповіщення", 20f))
         val tone=prefs.getString("consultation_ringtone",null)
-        val toneName=if(tone==null) "Мелодія SOLVIA" else if(tone.isBlank()) "Без звуку" else runCatching { android.media.RingtoneManager.getRingtone(this,android.net.Uri.parse(tone))?.getTitle(this) }.getOrNull() ?: "Обрана мелодія"
+        val toneName=if(tone==null) "Мелодія Lemvori Care" else if(tone.isBlank()) "Без звуку" else runCatching { android.media.RingtoneManager.getRingtone(this,android.net.Uri.parse(tone))?.getTitle(this) }.getOrNull() ?: "Обрана мелодія"
         body.addView(caption("Поточна мелодія: $toneName"))
         body.addView(secondary("Вибрати мелодію консультації") {
             val picker = Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER)
                 .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_NOTIFICATION or android.media.RingtoneManager.TYPE_ALARM)
-                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE,"Мелодія SOLVIA")
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE,"Мелодія Lemvori Care")
                 .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT,true)
             prefs.getString("consultation_ringtone",null)?.let { picker.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,android.net.Uri.parse(it)) }
             runCatching { startActivityForResult(picker,4201) }.onFailure { showError("Вибір мелодії недоступний. Відкрийте налаштування оповіщень Android.") }
         })
-        body.addView(secondary("Мелодія SOLVIA за замовчуванням") { prefs.edit().remove("consultation_ringtone").apply();AppointmentReminders.channel(this);Toast.makeText(this,"Мелодію SOLVIA відновлено",Toast.LENGTH_SHORT).show() })
+        body.addView(secondary("Мелодія Lemvori Care за замовчуванням") { prefs.edit().remove("consultation_ringtone").apply();AppointmentReminders.channel(this);Toast.makeText(this,"Мелодію Lemvori Care відновлено",Toast.LENGTH_SHORT).show() })
         body.addView(CheckBox(this).apply {
             text = "Звукове нагадування на час консультації"; setTextColor(ink)
             isChecked = prefs.getBoolean("reminders_enabled", true)
@@ -2062,13 +2128,10 @@ class MainActivity : Activity() {
         body.addView(secondary("Перевірити з’єднання") {
             apiAsync("GET", "/api/health") { value ->
                 val health = value as JSONObject
-                showError("Сервер доступний: SOLVIA " + health.optString("version") + " · " + health.optString("platform"))
+                showError("Сервер доступний: Lemvori Care " + health.optString("version") + " · " + health.optString("platform"))
             }
         })
-        body.addView(secondary("Оновлення SOLVIA") {
-            updates.check(manual = true)
-        })
-        body.addView(caption("Версії надходять із сервера центру. Оновлення встановлюється поверх програми й зберігає ваші дані. Android попросить підтвердити встановлення."))
+        body.addView(caption("Адміністратор публікує оновлення на сервері центру. Коли нова версія доступна, Lemvori Care сповістить вас."))
         body.addView(secondary("Вийти й змінити сервер") {
             AlertDialog.Builder(this).setTitle("Змінити сервер?")
                 .setMessage("Поточну сесію буде завершено. Перевірте нову HTTPS-адресу та сертифікат.")

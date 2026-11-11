@@ -35,6 +35,6 @@ if [[ -f $package/ui/solvia-icon.png ]]; then
   install -D -m 0644 "$package/ui/solvia-icon.png" /usr/share/icons/hicolor/256x256/apps/solvia-admin.png
 fi
 update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
-echo 'Клієнт SOLVIA встановлено. Відкрийте SOLVIA в меню та натисніть «Сервер».'
+echo 'Клієнт Lemvori Care встановлено. Відкрийте Lemvori Care в меню програм.'
 echo 'Серверні служби й базу даних цей інсталятор не встановлює.'
 echo 'Для підключення до іншого ПК додайте довіру до CA центру за інструкцією LINUX.md.'

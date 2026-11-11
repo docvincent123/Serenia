@@ -1,0 +1,82 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Dialogs
+import QtQuick.Layouts
+Dialog {
+    id:root
+    required property var bridge
+    property var scans:({})
+    property string printedSnapshot:""
+    property url printedFile:""
+    readonly property var rules:(bridge.consentPolicy.templates || []).filter(r=>r.required)
+    readonly property bool requiresConsent:bridge.consentPolicy.required !== false
+    readonly property bool dataReady:!!name.text.trim()&&!!phone.text.trim()&&/^\d{4}-\d{2}-\d{2}$/.test(dob.text)&&Number(psychologist.currentValue)>0
+    readonly property bool ready:{
+        if(!dataReady||!Object.keys(bridge.consentPolicy).length)return false
+        if(!requiresConsent)return true
+        if(!bridge.registrationReference||printedSnapshot!==JSON.stringify(fields())||!rules.length)return false
+        for(let i=0;i<consents.count;i++){const row=consents.itemAt(i);if(!row||!row.signed||!row.signerName||!scans[row.documentType])return false}
+        return true
+    }
+    function fields(){return {name:name.text.trim(),phone:phone.text.trim(),dob:dob.text,category:category.currentText,psychologist_id:Number(psychologist.currentValue)}}
+    function submit(bookAfter){const entries=[];for(let i=0;i<consents.count;i++){const row=consents.itemAt(i);if(scans[row.documentType])entries.push({document_type:row.documentType,file:String(scans[row.documentType]),signed_by_name:row.signerName,paper_signed:row.signed})}bridge.registerWithConsents(fields(),entries,bookAfter)}
+    title:"Реєстрація пацієнта та згоди"; modal:true; anchors.centerIn:Overlay.overlay
+    width:Math.min(780,Overlay.overlay.width-40);height:Math.min(740,Overlay.overlay.height-40)
+    closePolicy:bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
+    onOpened:{scans=({});printedSnapshot="";bridge.loadCenterConfiguration()}
+    onClosed:{name.clear();phone.clear();dob.clear();scans=({});printedSnapshot=""}
+    component Action:Button { id:b;implicitHeight:42;leftPadding:16;rightPadding:16;contentItem:Text{textFormat:Text.PlainText;text:b.text;color:b.enabled?"#11212D":"#9BA8AB";font.bold:true;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter} background:Rectangle{radius:21;color:b.hovered?"#CCD0CF":"white";border.color:"#CCD0CF"} }
+    component Field:TextField { implicitHeight:42;leftPadding:12;rightPadding:12;selectByMouse:true;background:Rectangle{radius:10;color:"white";border.color:"#CCD0CF"} }
+    contentItem:ScrollView {
+        id:scroll;contentWidth:availableWidth;clip:true
+        ColumnLayout {
+            width:scroll.availableWidth;spacing:12
+            Label { textFormat:Text.PlainText;text:"1. Реєстраційні дані";font.bold:true;font.pixelSize:18 }
+            Field { id:name;Layout.fillWidth:true;placeholderText:"Прізвище, ім’я та по батькові" }
+            RowLayout {
+                Layout.fillWidth:true
+                Field { id:phone;Layout.fillWidth:true;placeholderText:"Номер телефону" }
+                Field { id:dob;Layout.fillWidth:true;placeholderText:"Дата народження: РРРР-ММ-ДД";inputMask:"9999-99-99" }
+            }
+            Label { textFormat:Text.PlainText;text:"Категорія та відповідальний психолог" }
+            RowLayout {
+                Layout.fillWidth:true
+                ComboBox { id:category;Layout.fillWidth:true;model:["Військовий/військова","Ветеран/ветеранка","Партнер/партнерка","Дитина","Інше"] }
+                ComboBox { id:psychologist;Layout.fillWidth:true;model:root.bridge.bookingPsychologists;textRole:"name";valueRole:"id" }
+            }
+            Label { textFormat:Text.PlainText;text:"2. Друк і власноручний підпис";font.bold:true;font.pixelSize:18;Layout.topMargin:8 }
+            Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Роздрукуйте картку та затверджені центром бланки. Пацієнт або законний представник підписує їх на папері. Якщо реєстраційні дані зміняться, бланки потрібно надрукувати повторно.";color:"#4A5C6A" }
+            Action { text:"Зберегти бланки PDF для друку";enabled:root.dataReady&&!root.bridge.working;onClicked:printPicker.open() }
+            Action { text:"Відкрити PDF для друку";visible:!!root.printedFile&&root.printedSnapshot===JSON.stringify(root.fields());onClicked:root.bridge.openPdf(root.printedFile) }
+            Label { textFormat:Text.PlainText;visible:!!root.bridge.registrationReference;text:"Реєстрація: "+root.bridge.registrationReference;wrapMode:Text.WrapAnywhere;Layout.fillWidth:true;color:"#4A5C6A" }
+            Label { textFormat:Text.PlainText;text:"3. Скан підписаних згод";font.bold:true;font.pixelSize:18;Layout.topMargin:8 }
+            Repeater {
+                id:consents
+                model:root.rules
+                delegate:ColumnLayout {
+                    required property var modelData
+                    readonly property string documentType:modelData.document_type
+                    readonly property string signerName:signer.text.trim()
+                    readonly property bool signed:verified.checked
+                    Layout.fillWidth:true;spacing:7
+                    Label { textFormat:Text.PlainText;text:modelData.title+" · версія "+modelData.version;Layout.fillWidth:true;wrapMode:Text.WordWrap;font.bold:true }
+                    Action { text:root.scans[documentType]?"Змінити скан":"Вибрати підписаний скан";onClicked:{scanPicker.documentType=documentType;scanPicker.open()} }
+                    Image { visible:!!root.scans[documentType];source:root.scans[documentType] || "";Layout.fillWidth:true;Layout.preferredHeight:150;fillMode:Image.PreserveAspectFit;sourceSize.width:900;cache:false }
+                    Field { id:signer;Layout.fillWidth:true;placeholderText:"ПІБ того, хто підписав документ" }
+                    CheckBox { id:verified;text:"Підпис на паперовому оригіналі перевірено" }
+                    Rectangle { Layout.fillWidth:true;Layout.preferredHeight:1;color:"#CCD0CF" }
+                }
+            }
+            Label { textFormat:Text.PlainText;visible:!root.rules.length;text:"Адміністратор має налаштувати та затвердити тексти згод центру.";Layout.fillWidth:true;wrapMode:Text.WordWrap;color:"#8C3632" }
+            Label { textFormat:Text.PlainText;text:root.bridge.error || root.bridge.notice;visible:!!text;Layout.fillWidth:true;wrapMode:Text.WordWrap;color:root.bridge.error?"#8C3632":"#256540" }
+        }
+    }
+    footer:DialogButtonBox {
+        Action { text:"Скасувати";enabled:!root.bridge.working;onClicked:root.close() }
+        Action { text:"Зареєструвати";enabled:root.ready&&!root.bridge.working;onClicked:root.submit(false) }
+        Action { text:"Зареєструвати й записати";enabled:root.ready&&!root.bridge.working;onClicked:root.submit(true) }
+    }
+    FileDialog { id:printPicker;title:"Бланки реєстрації та згод";fileMode:FileDialog.SaveFile;defaultSuffix:"pdf";nameFilters:["PDF (*.pdf)"];onAccepted:{if(root.bridge.printRegistration(selectedFile,root.fields())){root.printedSnapshot=JSON.stringify(root.fields());root.printedFile=selectedFile}} }
+    FileDialog { id:scanPicker;property string documentType;title:"Підписана згода";nameFilters:["Зображення (*.png *.jpg *.jpeg)"];onAccepted:{const next=Object.assign({},root.scans);next[documentType]=selectedFile;root.scans=next} }
+    Connections { target:root.bridge;function onStateChanged(){if(!root.bridge.authenticated)root.close()}function onOperationCompleted(operation){if(operation==="patient")root.close()} }
+}

@@ -39,7 +39,7 @@ export function ServiceStatus({base,enabled}){
  </section></div>;
 }
 export function ServiceControls({api}){
- const [mode,setMode]=useState('ready'),[minutes,setMinutes]=useState(15),[message,setMessage]=useState('Оновлюємо SOLVIA. Дочекайтеся відновлення підключення.'),[result,setResult]=useState(''),[busy,setBusy]=useState(false);
+ const [mode,setMode]=useState('ready'),[minutes,setMinutes]=useState(15),[message,setMessage]=useState('Оновлюємо Lemvori Care. Дочекайтеся відновлення підключення.'),[result,setResult]=useState(''),[busy,setBusy]=useState(false);
  async function change(next){setBusy(true);setResult('');try{
   const data=await api('POST','/api/admin/service-state',{mode:next,message:next==='maintenance'?message:'',expected_until:next==='maintenance'?Math.floor(Date.now()/1000)+Number(minutes)*60:0});
   setMode(data.mode);setResult(next==='ready'?'Роботу відновлено.':'Усі підключені пристрої отримають повідомлення. Запис на сервер тимчасово призупинено.');

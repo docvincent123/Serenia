@@ -55,9 +55,9 @@ object WorkflowNotifications {
         })
         val intent=PendingIntent.getActivity(context,208,Intent(context,MainActivity::class.java).putExtra("staff_messages",true)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val public=Notification.Builder(context,CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification).setContentTitle("SOLVIA").setContentText("Є оновлення прийомів").build()
+        val public=Notification.Builder(context,CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification).setContentTitle("Lemvori Care").setContentText("Є оновлення прийомів").build()
         val notice=Notification.Builder(context,CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification)
-            .setContentTitle("SOLVIA · "+title(event.optString("kind"))).setContentText("Відкрийте застосунок, щоб переглянути події.")
+            .setContentTitle("Lemvori Care · "+title(event.optString("kind"))).setContentText("Відкрийте застосунок, щоб переглянути події.")
             .setPublicVersion(public).setVisibility(Notification.VISIBILITY_PRIVATE).setContentIntent(intent).setAutoCancel(true).build()
         runCatching { manager.notify("workflow",208,notice) }
     }

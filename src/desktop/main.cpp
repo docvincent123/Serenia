@@ -111,7 +111,7 @@ std::wstring launchUrl() {
 void createWebView(HWND hwnd) {
     const auto ui = executableDirectory() / L"ui";
     if (!std::filesystem::exists(ui / L"index.html")) {
-        fatal(L"Не знайдено React-інтерфейс SOLVIA. Перевірте папку ui поруч із Solvia.exe.");
+        fatal(L"Не знайдено React-інтерфейс Lemvori Care. Перевірте папку ui поруч із Solvia.exe.");
         return;
     }
 
@@ -170,7 +170,7 @@ void createWebView(HWND hwnd) {
                                              message == L"restore" ? L"Restore-Database.ps1" :
                                              L"Restart-Server.ps1");
                                         if (!std::filesystem::exists(script)) {
-                                            MessageBoxW(g_window, L"Не знайдено скрипт обслуговування SOLVIA.", L"Lemvori Care", MB_OK | MB_ICONERROR);
+                                            MessageBoxW(g_window, L"Не знайдено скрипт обслуговування Lemvori Care.", L"Lemvori Care", MB_OK | MB_ICONERROR);
                                             return S_OK;
                                         }
 
@@ -233,7 +233,7 @@ void createWebView(HWND hwnd) {
                                             out << "navigation-error:" << static_cast<int>(status);
                                             return S_OK;
                                         }
-                                        std::wstring message = L"Не вдалося завантажити локальний інтерфейс SOLVIA. WebView2 status: " +
+                                        std::wstring message = L"Не вдалося завантажити локальний інтерфейс Lemvori Care. WebView2 status: " +
                                             std::to_wstring(static_cast<int>(status)) +
                                             L". Файл: " + (executableDirectory() / L"ui" / L"index.html").wstring();
                                         MessageBoxW(g_window, message.c_str(), L"Lemvori Care", MB_OK | MB_ICONERROR);
@@ -247,7 +247,7 @@ void createWebView(HWND hwnd) {
                             const auto url = launchUrl();
                             const HRESULT navigate = g_webview->Navigate(url.c_str());
                             if (FAILED(navigate)) {
-                                fatal(L"Не вдалося відкрити React-інтерфейс SOLVIA.");
+                                fatal(L"Не вдалося відкрити React-інтерфейс Lemvori Care.");
                                 return navigate;
                             }
                             return S_OK;
@@ -345,9 +345,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         0,
         wc.lpszClassName,
 #ifdef SOLVIA_SERVER_CONSOLE
-        L"Lemvori Care Server Console 3.1.1 • LemvoriLab",
+        L"Lemvori Care Server Console 3.1.2 • LemvoriLab",
 #else
-        L"Lemvori Care 3.1.1 by LemvoriLab • Центр психологічної реабілітації",
+        L"Lemvori Care 3.1.2 by LemvoriLab • Центр психологічної реабілітації",
 #endif
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,

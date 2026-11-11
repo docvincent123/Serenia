@@ -24,6 +24,7 @@ import PatientDirectory, {ViewSwitch} from './PatientDirectory.jsx';
 import usePatientDirectory from './usePatientDirectory.jsx';
 import RehabilitationPlan,{PatientJourney} from './RehabilitationPlan.jsx';
 import CenterHome from './CenterHome.jsx';
+import CenterServices from './CenterServices.jsx';
 import HandoverBoard from './HandoverBoard.jsx';
 import PsychologistShiftBoard from './PsychologistShiftBoard.jsx';
 import ServerReadiness from './ServerReadiness.jsx';
@@ -322,7 +323,7 @@ function WorkspaceNavigation({ navigation, role, page, locked, onNavigate }) {
   // The sidebar contains only four day-to-day destinations. Other allowed
   // features are discoverable from the home page, never removed from the API.
   const preferred = role === 'admin'
-    ? [['dashboard','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти'],['team','Команда']]
+    ? [['dashboard','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти'],['team','Команда'],['services','Напрямки']]
     : role === 'reception'
     ? [['reception-home','Головна'],['shift-workspace','Прийоми'],['calendar','Календар'],['patients','Пацієнти'],['psychologist-roster','На зміні']]
     : role === 'director'
@@ -2457,17 +2458,27 @@ function ServerMaintenance({ api, apiBase }) {
     }
   }
 
-  useEffect(() => { loadSystem(); }, [apiBase]);
+  useEffect(() => {
+    void loadSystem();
+    const timer = setInterval(() => { if (!document.hidden) void loadSystem(); }, 30000);
+    return () => clearInterval(timer);
+  }, [apiBase]);
 
   let localWindows = false;
   try { localWindows = platform === 'windows' && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(apiBase).hostname) && !!window.chrome?.webview; } catch {}
+
+  const localLinux = platform === 'linux' && !!window.webkit?.messageHandlers?.solviaAdmin;
+  const linuxAction = action => {
+    if (!localLinux) return;
+    window.webkit.messageHandlers.solviaAdmin.postMessage(action);
+  };
 
   if (!localWindows) return <div className="maintenance-grid">
     <article>
       <strong>Сервер {platform === 'linux' ? 'Linux' : 'центру'}</strong>
       <p>{system?.lan_url || apiBase}</p>
       <p>{platform === 'linux' ? 'systemd + PostgreSQL + HTTPS. Критичні root-операції виконуються локально на сервері.' : 'Обслуговування виконує адміністратор на сервері.'}</p>
-      <Button variant="secondary" onClick={loadSystem}>Оновити діагностику</Button>
+      <p className="server-auto-refresh"><span aria-hidden="true">●</span> Стан оновлюється автоматично кожні 30 секунд.</p>
       {system && backupNeedsAttention(system.backups) && <div className="alert error" role="alert">Резервна копія потребує перевірки: немає свіжої успішної копії або остання операція завершилася помилкою.</div>}
       {systemError && <p className="danger-text">{systemError}</p>}
     </article>
@@ -2490,6 +2501,11 @@ function ServerMaintenance({ api, apiBase }) {
       </article>
       <article>
         <strong>Резервні копії</strong>
+        {localLinux && <div className="backup-actions" role="group" aria-label="Резервне копіювання та відновлення бази">
+          <Button onClick={() => linuxAction('backup')}>Створити резервну копію БД</Button>
+          <Button variant="secondary" onClick={() => linuxAction('restore')}>Відновити з файлу .dump</Button>
+          <small>Ці дії виконуються лише на локальному сервері Linux через підтвердження адміністратора ОС. Перед відновленням створюється захисна копія.</small>
+        </div>}
         <p>Після кожної закритої зміни. О 00:00 за Києвом — копія й передавання на віддалений сервер; додаткова локальна копія о 02:00. Для ручного запуску:</p>
         <code>sudo solvia-admin backup</code>
         <p><code>sudo solvia-admin backups</code></p>
@@ -2503,8 +2519,8 @@ function ServerMaintenance({ api, apiBase }) {
       <article>
         <strong>Діагностика / відновлення</strong>
         <p><code>sudo solvia-admin doctor</code></p>
-        <p><code>sudo solvia-admin restore /path/backup.dump</code></p>
-        <small>Restore навмисно вимагає sudo та ручне підтвердження на Linux-сервері.</small>
+        {!localLinux && <p><code>sudo solvia-admin restore /path/backup.dump</code></p>}
+        <small>{localLinux ? 'Оберіть файл через кнопку «Відновити з файлу»; Linux перевірить архів та попросить підтвердження.' : 'Відновлення навмисно вимагає sudo та локальне підтвердження на сервері.'}</small>
       </article>
     </>}
   </div>;
@@ -2523,10 +2539,11 @@ function ServerConsole({ api, user, onLogout, apiBase, onSwitchApi }) {
   async function terminate(session){if(!window.confirm(`Завершити сесію ${session.name} на ${session.device_name||session.platform}?`))return;try{await api('DELETE',`/api/admin/sessions/${session.session_id}`,{});await load();}catch(e){setError(e.message);}}
   if(user.role!=='admin')return <div className="server-console"><div className="alert error">Server Console доступна тільки адміністратору.</div><Button onClick={onLogout}>Вийти</Button></div>;
   return <div className="server-console" tabIndex={0} role="region" aria-label="Lemvori Care Server Console">
-    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/lemvori-care.svg" alt="Lemvori Care" /></div><div><strong>Lemvori Care Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><Button variant="secondary" onClick={load}>Оновити</Button><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
-    <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['tv','TV-табло'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
+    <header className="server-console-head"><div className="product"><div className="product-mark"><img className="product-logo" src="/lemvori-care.svg" alt="Lemvori Care" /></div><div><strong>Lemvori Care Server Console {pkg.version}</strong><span>{center?.center_name||'Керування сервером центру'}</span></div></div><div className="page-actions"><span className="server-auto-refresh">Стан оновлюється автоматично</span><Button variant="ghost" onClick={onLogout}>Вийти</Button></div></header>
+    <nav className="page-actions" aria-label="Розділи Server Console">{[['overview','Сервер'],['backup','Резервні копії'],['settings','Налаштування сервера'],['pc','Оновлення ПК'],['mobile','Оновлення Android'],['tv','TV-табло'],['sessions','Сеанси пристроїв'],['account','Мій обліковий запис']].map(([key,label])=><Button key={key} variant={page===key?'primary':'secondary'} onClick={()=>setPage(key)}>{label}</Button>)}</nav>
     {error&&<div className="alert error">{error}</div>}
     {page==='overview'&&<><div className="server-status-grid"><article className="stat-card"><strong>Lemvori Care SERVER</strong><h3>Сервер центру {health?.version || '—'}</h3><p>{apiBase}</p></article><article className="stat-card"><strong>{sessions.filter(x=>x.online).length}</strong><h3>Пристроїв онлайн</h3><p>{sessions.length} активних сеансів</p></article></div><ServerReadiness api={api}/><section className="surface"><h2>Обслуговування сервера</h2><ServiceControls api={api}/><ServerMaintenance api={api} apiBase={apiBase} /></section></>}
+    {page==='backup'&&<section className="surface"><h2>Резервне копіювання та відновлення</h2><p>Файли резервних копій зберігаються окремо для кожного центру. Відновлення замінює базу лише на цьому локальному сервері після підтвердження.</p><ServerMaintenance api={api} apiBase={apiBase} /></section>}
     {page==='settings'&&<Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} technical />}
     {page==='pc'&&<DesktopReleaseSettings api={api} />}
     {page==='mobile'&&<MobileReleaseSettings api={api} />}
@@ -2683,17 +2700,17 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
     } catch (e) { setError(e.message); }
   }
 
-  async function downloadMobileConfig() {
+  async function downloadMobileConfig(localOnly = false) {
     try {
-      const config = await api('GET', '/api/mobile-config?stable=1');
+      const config = await api('GET', localOnly ? '/api/mobile-config?lan=1' : '/api/mobile-config?stable=1');
       if (config.format !== 'quremed.solvia.mobile' || !config.api_url) throw new Error('Сервер не створив файл підключення.');
       const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/vnd.solvia.connection+json' });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = href; link.download = 'SOLVIA-Mobile.solvia';
+      link.href = href; link.download = localOnly ? 'Lemvori-Care-LAN.solvia' : 'Lemvori-Care-Mobile.solvia';
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(href), 1000);
-      setConnectionTest({ state: 'ok', message: 'Файл створено сервером зі збережених налаштувань. Відкрийте його на телефоні у Lemvori Care.' });
+      setConnectionTest({ state: 'ok', message: localOnly ? 'Файл для мережі центру готовий. Підключіть телефон до Wi-Fi центру й відкрийте файл у Lemvori Care.' : 'Файл створено зі збережених налаштувань. Відкрийте його на телефоні або ПК у Lemvori Care.' });
     } catch (e) { setConnectionTest({ state: 'error', message: e.message }); }
   }
 
@@ -2845,7 +2862,8 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
                 <div className="form-actions full-span split-actions">
                   <Button type="button" variant="secondary" onClick={testConnection} disabled={connectionTest.state === 'busy'}>Перевірити з’єднання</Button>
                   <div>
-                    <Button type="button" variant="secondary" onClick={downloadMobileConfig}>Файл для Android / ПК</Button>
+                    <Button type="button" variant="secondary" onClick={() => downloadMobileConfig()}>Файл для Android / ПК</Button>
+                    {form.connection_mode === 'local' && <Button type="button" variant="secondary" onClick={() => downloadMobileConfig(true)}>Файл для Wi-Fi центру</Button>}
                     <Button type="submit" variant="secondary">Зберегти профіль</Button>
                     <Button type="button" onClick={applyConnection}>Підключити цей ПК</Button>
                   </div>
@@ -2853,8 +2871,8 @@ function Settings({ api, apiBase, onSwitchApi, technical = false }) {
               </form>
 
               <div className="security-callout">
-                <strong>VPS працює тільки через HTTPS</strong>
-                <p>Lemvori Care не зберігає пароль від VPS. У налаштуваннях зберігається лише адреса API. Авторизація користувачів залишається через персональні облікові записи Lemvori Care.</p>
+                <strong>Підключення телефона</strong>
+                <p>Збережіть профіль сервера й завантажте файл. Для постійної адреси використайте DNS-ім’я. У локальному режимі можна видати файл із HTTPS-адресою для Wi-Fi центру. Якщо IP сервера зміниться, такий файл треба видати повторно. Телефон має довіряти сертифікату сервера.</p>
               </div>
             </section>
           )}
@@ -3407,7 +3425,7 @@ function Discharges({ api, role }) {
   return <><PageHead eyebrow="ДОКУМЕНТИ" title="Виписки" subtitle="Підсумки супроводу, динаміка, рекомендації та історія редагувань." />
     {error && <div className="alert error" role="alert">{error}</div>}
     <section className="surface"><Field label="Пошук виписки"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Пацієнт або номер документа" /></Field>
-    {items===null ? <Spinner /> : !visible.length ? <Empty title="Виписок немає" text="Створені в картках пацієнтів виписки з’являться тут." /> : <div className="assessment-list">{visible.map(item=><div className="assessment-row" key={item.id}><div><strong>{item.patient_name} · № {item.document_no || item.id}</strong><span>{item.date_from} — {item.date_to} · {item.author} · версія {item.revision || 1}</span></div><div className="page-actions"><DischargeWorkflowControls api={api} item={item} role={role} onSaved={load}/>{(item.workflow_status==='draft'||item.workflow_status==='legacy')&&<Button variant="secondary" onClick={()=>setEditing(item)}>Редагувати</Button>}</div></div>)}</div>}</section>
+    {items===null ? <Spinner /> : !visible.length ? <Empty title="Виписок немає" text="Створені в картках пацієнтів виписки з’являться тут." /> : <div className="assessment-list">{visible.map(item=><div className="assessment-row" key={item.id}><div><strong>{item.patient_name} · № {item.document_no || item.id}</strong><span>{item.date_from} — {item.date_to} · {item.author} · версія {item.revision || 1}</span></div><div className="page-actions"><DischargeWorkflowControls api={api} item={item} role={role} onSaved={load}/>{(role==='admin'||role==='psychologist')&&(item.workflow_status==='draft'||item.workflow_status==='legacy')&&<Button variant="secondary" onClick={()=>setEditing(item)}>Редагувати</Button>}</div></div>)}</div>}</section>
     {editing && <DischargeEditor key={editing.id} api={api} item={editing} onClose={()=>setEditing(null)} onSaved={async()=>{setEditing(null);await load();}} />}</>;
 }
 
@@ -3526,6 +3544,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'families') return <Families api={api} openPatient={openPatient} />;
     if (page === 'psychologist-roster' && ['admin','reception','director'].includes(user.role)) return <PsychologistShiftBoard api={api} role={user.role}/>;
     if (page === 'team') return <Team api={api} currentUser={user} />;
+    if (page === 'services' && user.role==='admin') return <CenterServices api={api}/>;
     if (page === 'rooms') return <Rooms api={api} />;
     if (page === 'reports') return <Reports key={shift?.shift_date} api={api} role={user.role} shiftDate={shift?.shift_date} />;
     if (page === 'discharges') return <Discharges api={api} role={user.role} />;
@@ -3534,7 +3553,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
     if (page === 'archive') return <Archive api={api} openPatient={openPatient} />;
     if (page === 'staff-messages' && ['admin','director'].includes(user.role)) return <StaffMessages api={api} initialRecipient={messageTarget?.user_id} initialDevice={messageTarget?.device_id} />;
     if (page === 'devices') return <Devices api={api} onMessage={target=>{setMessageTarget(target);navigate('staff-messages');}} />;
-    if (page === 'settings') return <Settings api={api} apiBase={apiBase} onSwitchApi={onSwitchApi} />;
+    // Center and server administration is available only in the dedicated Server Console.
     if (page === 'preferences') return <AccountSettings api={api} apiBase={apiBase} onLogout={onLogout} user={user} />;
     if (page === 'audit') return <Audit api={api} />;
     return null;
@@ -3555,17 +3574,16 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
         }
       }}>
         <div className="sidebar-brand">
-          <div className="product-mark inverse motion-brand-mark" aria-hidden="true"><svg width="30" height="38" viewBox="0 0 30 38"><g fill="currentColor" transform="rotate(-15 15 19)"><rect x="3" y="10" width="5" height="23" rx="2.5"/><rect x="12" y="2" width="5" height="34" rx="2.5"/><rect x="21" y="15" width="5" height="17" rx="2.5"/></g></svg></div>
+          <img className="care-sidebar-mark" src="/lemvori-care.svg" alt="" />
           <div><strong>Lemvori Care</strong><span>Психологічний центр</span><small className="motion-sidebar-version">{pkg.version} · LemvoriLab</small></div>
         </div>
 
         <WorkspaceNavigation navigation={navigation} role={user.role} page={page} locked={locked} onNavigate={navigate} />
-        <button type="button" className="studio-rail-directory" title="Усі функції центру" aria-label="Усі функції центру" disabled={locked} onClick={()=>navigate('module-directory')}><AppIcon name="module-directory" size={20}/></button>
+        <button type="button" className="studio-rail-directory" title="Усі функції центру" aria-label="Усі функції центру" disabled={locked} onClick={()=>navigate('module-directory')}><AppIcon name="module-directory" size={20}/><span className="care-directory-caption">Усі розділи</span></button>
 
         <div className="sidebar-spacer" />
         <div className="sidebar-actions" aria-label="Налаштування та обліковий запис">
-          {user.role === 'admin' && <button aria-label="Налаштування центру" title="Налаштування центру" className={`nav-item ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><AppIcon name="settings" /><span className="desktop-label">Налаштування центру</span><span className="mobile-label" aria-hidden="true">Система</span></button>}
-          <button aria-label="Налаштування профілю" title="Налаштування профілю" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span className="desktop-label">Налаштування профілю</span><span className="mobile-label" aria-hidden="true">Профіль</span></button>
+          <button aria-label="Налаштування профілю" title="Налаштування профілю" className={`nav-item ${page === 'preferences' ? 'active' : ''}`} onClick={() => navigate('preferences')}><AppIcon name="preferences" /><span>Мій профіль</span></button>
           <button className="nav-item" aria-label="Вийти" title="Вийти" onClick={onLogout}><AppIcon name="logout" /><span>Вийти</span></button>
         </div>
         <div className="sidebar-support">
@@ -3582,7 +3600,7 @@ function Shell({ api, user, onLogout, apiBase, onSwitchApi, draftSession }) {
       </aside>
 
       <main className="workspace" data-page={page}>
-        <StudioWorkspace headerTools={!locked ? <>
+        <StudioWorkspace api={api} headerTools={!locked ? <>
           {user.role !== 'director' && <GlobalSearch api={api} onPatient={openPatient} onNavigate={navigate} />}
           <WorkflowEvents api={api} user={user} apiBase={apiBase} onNavigate={(target,date)=>{if(date)setCalendarFocus(date);navigate(target);}}/>
         </> : null}/>
@@ -3737,6 +3755,6 @@ export default function App() {
 
   if (!user) return <>{appMode !== 'server' && <ServiceStatus base={apiBase} enabled={Boolean(localStorage.getItem('solvia_api'))}/>}<Login initialBase={apiBase} onLogin={login} consoleMode={appMode==='server'} /></>;
   if (appMode === 'server') return <><ServerConsole api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} /></>;
-  return <><ServiceStatus base={apiBase} enabled={true}/><DesktopUpdateNotice api={api} base={apiBase} token={token} /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
+  return <><ServiceStatus base={apiBase} enabled={true}/><DesktopUpdateNotice api={api} base={apiBase} token={token} passive /><Shell api={api} user={user} onLogout={logout} apiBase={apiBase} onSwitchApi={switchApi} draftSession={draftSession} /></>;
 }
 

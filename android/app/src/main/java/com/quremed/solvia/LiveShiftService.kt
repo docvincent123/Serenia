@@ -35,7 +35,7 @@ class LiveShiftService : Service() {
         val manager=getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager;manager.createNotificationChannel(channel)
         val open=PendingIntent.getActivity(this,209,Intent(this,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop=PendingIntent.getService(this,210,Intent(this,LiveShiftService::class.java).setAction(STOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notice=Notification.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification).setContentTitle("SOLVIA · зв’язок під час зміни")
+        val notice=Notification.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_solvia_notification).setContentTitle("Lemvori Care · зв’язок під час зміни")
             .setContentText("Отримуємо розклад і події центру у фоні").setOngoing(true).setOnlyAlertOnce(true).setContentIntent(open)
             .setVisibility(Notification.VISIBILITY_PRIVATE).addAction(Notification.Action.Builder(null,"Зупинити",stop).build()).build()
         if(Build.VERSION.SDK_INT>=29)startForeground(209,notice,ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(209,notice)

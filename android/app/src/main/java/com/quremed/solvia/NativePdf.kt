@@ -46,7 +46,7 @@ object NativePdf {
         var y = 0f
         fun nextPage() {
             page?.let {
-                it.canvas.drawText("SOLVIA · ${model.title.take(48)} · $pageNo", 42f, 818f, footer)
+                it.canvas.drawText("Lemvori Care · ${model.title.take(48)} · $pageNo", 42f, 818f, footer)
                 pdf.finishPage(it)
             }
             pageNo++
@@ -85,7 +85,7 @@ object NativePdf {
                     image.recycle()
                 }
             }
-            page?.let { it.canvas.drawText("SOLVIA · $pageNo", 42f, 818f, footer); pdf.finishPage(it) }
+            page?.let { it.canvas.drawText("Lemvori Care · $pageNo", 42f, 818f, footer); pdf.finishPage(it) }
             FileOutputStream(file).use { pdf.writeTo(it) }
             return file
         } catch (error: Exception) { file.delete(); throw error }
@@ -101,7 +101,7 @@ object NativePdf {
                     val count = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
                         PdfRenderer(descriptor).use { it.pageCount }
                     }
-                    callback.onLayoutFinished(PrintDocumentInfo.Builder("SOLVIA.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(count).build(), old != new)
+                    callback.onLayoutFinished(PrintDocumentInfo.Builder("Lemvori-Care.pdf").setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(count).build(), old != new)
                 } catch (error: Exception) { callback.onLayoutFailed(error.message ?: "Не вдалося відкрити PDF") }
             }
             override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor?, cancel: CancellationSignal?, callback: WriteResultCallback) {

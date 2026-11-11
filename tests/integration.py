@@ -31,6 +31,10 @@ class Scenario(unittest.TestCase):
         output = subprocess.check_output([BINARY, '--database', cls.database, '--demo'], text=True, encoding='utf-8')
         # Re-running setup must preserve existing users and their credentials.
         subprocess.check_call([BINARY, '--database', cls.database, '--init'])
+        # Most scenarios exercise existing workflows; consent enforcement has a
+        # dedicated test which turns it on and verifies atomic registration.
+        subprocess.run(['psql',cls.database,'-X','-v','ON_ERROR_STOP=1','-c',
+                        'UPDATE center_consent_policy SET required=FALSE WHERE id=1'],check=True,stdout=subprocess.DEVNULL)
         cls.passwords = dict(line.split(': ', 1) for line in output.splitlines() if ': ' in line)
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0)); cls.port = s.getsockname()[1]
@@ -65,6 +69,124 @@ class Scenario(unittest.TestCase):
         code, result=self.call(method,path,body,self.tokens.get(role))
         self.assertEqual(code,status,result)
         return result
+    def test_a01_module_restrictions_are_server_enforced(self):
+        """Explicit denies are enforced by API, with no cross-role grant."""
+        original_shift=self.api('admin','GET','/api/shift-day')
+        if not original_shift['open']:
+            self.api('admin','POST','/api/shift-day',{'action':'open'})
+        self.api('admin','POST','/api/reception-access',{'access_date':dt.date.today().isoformat(),'start_time':'00:00','enabled':True})
+        created = self.api('admin','POST','/api/users',{
+            'name': 'Тестова фахівчиня',
+            'login': 'ci-module-limits',
+            'password': 'ci-module-limits-test',
+            'role': 'reception',
+            'job_title': 'physical_therapist',
+            'primary_service_code': 'rehabilitation',
+        })
+        uid = created['id']
+        def direct_sql(statement):
+            return subprocess.check_output([
+                'psql', self.database, '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', statement
+            ], text=True).strip()
+        try:
+            users = self.api('admin','GET','/api/users')
+            account = next(x for x in users if x['id'] == uid)
+            self.assertEqual(account['job_title'], 'physical_therapist')
+            self.assertEqual(account['primary_service_code'], 'rehabilitation')
+            code, signed = self.call('POST','/api/login',{
+                'login':'ci-module-limits', 'password':'ci-module-limits-test', 'platform':'CI'
+            })
+            self.assertEqual(code, 200, signed)
+            token = signed['token']
+            self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],200)
+            self.assertEqual(self.call('GET','/api/my-module-permissions',token=token)[1]['blocked_modules'],[])
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':uid,
+                'blocked_modules':['appointments','clinical','documents','reports'],
+            })
+            self.assertEqual(self.call('GET','/api/shift-workspace',token=token)[0],403)
+            for endpoint in ['/api/patients/1/documents','/api/patients/1/draft',
+                             '/api/patients/1/appointments','/api/operations/handover','/api/tv/candidates']:
+                self.assertEqual(self.call('GET',endpoint,token=token)[0],403,endpoint)
+            self.assertEqual(self.call('GET','/api/patients/1',token=token)[0],403,
+                             'Patient-detail projection must not expose private content when clinical is blocked')
+            self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],200,
+                             'Unrestricted patient-directory search must remain available')
+            self.assertEqual(self.call('GET','/api/me',token=token)[0],200)
+            self.assertEqual(self.call('GET','/api/admin/module-permissions',token=token)[0],403)
+            self.assertEqual(self.call('POST','/api/admin/module-permissions',{
+                'user_id':uid,'blocked_modules':[]
+            },token=token)[0],403)
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':uid,'blocked_modules':['patients']
+            })
+            self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],403)
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':uid,'blocked_modules':['invalid-module']
+            },status=422)
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':1,'blocked_modules':['patients']
+            },status=403)
+            self.api('admin','POST','/api/admin/module-permissions',{
+                'user_id':uid,'blocked_modules':[]
+            })
+            self.assertEqual(self.call('GET','/api/patient-directory',token=token)[0],200)
+            entry = next(x for x in self.api('admin','GET','/api/admin/module-permissions') if x['id'] == uid)
+            self.assertEqual(entry['blocked_modules'],[])
+        finally:
+            self.api('admin','DELETE',f'/api/users/{uid}/sessions',{})
+            direct_sql(f'DELETE FROM audit WHERE user_id={uid}; DELETE FROM users WHERE id={uid}')
+            if not original_shift['open']:
+                self.api('admin','POST','/api/shift-day',{'action':'close'})
+                for role in ['reception','psychologist','director']:
+                    code,session=self.call('POST','/api/login',{'login':role,'password':self.passwords[role],'platform':'CI-'+role,'device_id':'ci-'+role,'device_name':'Synthetic device'})
+                    self.assertEqual(code,200,session)
+                    self.tokens[role]=session['token']
+
+    def test_a02_registration_requires_signed_paper_consents(self):
+        old=self.api('admin','GET','/api/consent-policy')
+        templates=[dict(document_type=t['document_type'],title=t['title'],content='Synthetic center-approved consent text for integration verification.',required=True) for t in old['templates']]
+        policy=self.api('admin','PATCH','/api/consent-policy',dict(required=True,revision=old['revision'],templates=templates))
+        created=None
+        try:
+            psychologist=self.api('admin','GET','/api/meta')['psychologists'][0]['id']
+            fields=dict(name='Consent registration synthetic patient',phone='+380990000111',dob='2000-01-02',category='Інше',psychologist_id=psychologist)
+            self.api('admin','POST','/api/patients',fields,status=428)
+            png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF0cAAAAASUVORK5CYII='
+            docs=[dict(document_type=t['document_type'],title=t['title'],content=t['content'],consent_version=t['version'],status='signed',source='paper_scan',paper_signed=True,signed_by_name='Synthetic signer',scan_data=png,original_data=png,registration_reference='consent-registration-000001',signed_patient_name=fields['name'],signed_patient_dob=fields['dob']) for t in policy['templates']]
+            bad=json.loads(json.dumps(docs));bad[0]['signed_patient_name']='Other patient'
+            self.api('admin','POST','/api/patients',dict(fields,consents=bad),status=409)
+            bad=json.loads(json.dumps(docs));bad[0]['consent_version']-=1
+            self.api('admin','POST','/api/patients',dict(fields,consents=bad),status=409)
+            created=self.api('admin','POST','/api/patients',dict(fields,consents=docs))
+            record=self.api('admin','GET',f"/api/patients/{created['id']}")
+            self.assertTrue(record['consent_status']['complete'])
+            stored=self.api('admin','GET',f"/api/patients/{created['id']}/documents")
+            self.assertEqual(len(stored),len(docs))
+            self.assertTrue(all(d['registration_reference']=='consent-registration-000001' and d['paper_signed'] for d in stored))
+            self.api('admin','PATCH',f"/api/patients/{created['id']}",dict(name='Updated identity requires renewed consents'))
+            self.assertFalse(self.api('admin','GET',f"/api/patients/{created['id']}")['consent_status']['complete'])
+        finally:
+            current=self.api('admin','GET','/api/consent-policy')
+            self.api('admin','PATCH','/api/consent-policy',dict(required=old['required'],revision=current['revision'],templates=old['templates']))
+            if created:
+                subprocess.run(['psql',self.database,'-X','-v','ON_ERROR_STOP=1','-c',f"DELETE FROM patients WHERE id={created['id']}"],check=True,stdout=subprocess.DEVNULL)
+
+    def test_a03_center_module_switches_preserve_read_access(self):
+        modules=self.api('admin','GET','/api/center/modules')['modules']
+        original=[m['id'] for m in modules if m['enabled']]
+        disabled=[m for m in original if m not in ['messages','reports']]
+        try:
+            self.api('admin','PATCH','/api/center/modules',{'enabled':disabled})
+            self.api('admin','POST','/api/staff/messages',{},status=403)
+            self.api('admin','POST','/api/supervisions',{},status=403)
+            self.api('admin','GET','/api/staff/messages')
+            self.api('admin','GET','/api/stats')
+            self.api('admin','PATCH','/api/center/modules',{'enabled':[x for x in disabled if x!='consents']},status=400)
+            self.api('reception','PATCH','/api/center/modules',{'enabled':original},status=403)
+        finally:
+            self.api('admin','PATCH','/api/center/modules',{'enabled':original})
+
     def test_a0_live_workflow_events_and_tv(self):
         def sql(statement):
             return subprocess.check_output(['psql',self.database,'-X','-qAt','-v','ON_ERROR_STOP=1','-c',statement],text=True).strip()
@@ -482,6 +604,9 @@ class Scenario(unittest.TestCase):
         self.assertEqual(mobile_config['server_id'],health['server_id'])
         self.assertEqual(len(health['server_id']),64)
         self.api(admin,'GET','/api/mobile-config?stable=1',status=409)
+        lan_config=self.api(admin,'GET','/api/mobile-config?lan=1')
+        self.assertEqual(lan_config['https_url'],mobile_config['https_url'])
+        self.assertEqual(lan_config['server_id'],mobile_config['server_id'])
         access=self.api(admin,'GET','/api/license')
         self.assertEqual(access['status'],'unmanaged')
         self.assertTrue(access['write_allowed'])
@@ -504,6 +629,7 @@ class Scenario(unittest.TestCase):
         self.api(admin,'PATCH','/api/settings/center',good_vps)
         self.assertEqual(self.api(admin,'GET','/api/settings/center')['connection_mode'],'vps')
         self.assertEqual(self.api(admin,'GET','/api/mobile-config?stable=1')['api_url'],'https://solvia.example.test')
+        self.api(admin,'GET','/api/mobile-config?lan=1',status=409)
         search=self.api(admin,'GET','/api/search?q='+urllib.parse.quote('Тестовий'))
         self.assertTrue(any(x['id']==pid for x in search['patients']))
         rid=self.api(admin,'POST','/api/rooms',{'name':'Тестова кімната','code':'T1','type':'family','capacity':4,'description':'Тест'})['id']
@@ -1516,6 +1642,92 @@ class Scenario(unittest.TestCase):
             self.api('admin','GET',f'/api/slots?date={day}&psychologist_id={worker}&room_id={room}',status=409)
         finally:
             self.api('admin','PATCH',f'/api/users/{worker}',{'active':False})
+
+
+    def test_z_center_identity_and_service_directions(self):
+        identity=self.api('admin','GET','/api/center-identity')
+        health=self.call('GET','/api/health')[1]
+        self.assertEqual(identity['server_id'],health['server_id'])
+        self.assertTrue(identity['name'])
+        self.assertEqual(self.call('GET','/api/center-identity')[0],401)
+        services=self.api('reception','GET','/api/services')
+        self.assertTrue(any(item['code']=='psychology' for item in services))
+        self.assertTrue(any(item['code']=='psychiatry' for item in services))
+        self.api('psychologist','POST','/api/services',{'name':'Нова терапія','category':'creative'},status=403)
+        name='Тестовий напрямок '+str(time.time_ns())
+        created=self.api('admin','POST','/api/services',{'name':name,'category':'creative'})
+        sid=created['id']
+        self.assertGreater(sid,0)
+        self.assertTrue(created['code'].startswith('custom-'))
+        self.assertTrue(any(x['id']==sid for x in self.api('psychologist','GET','/api/services')))
+        self.api('psychologist','PATCH',f'/api/services/{sid}',{'active':False},status=403)
+        self.api('admin','PATCH',f'/api/services/{sid}',{'category':'wrong'},status=400)
+        self.api('admin','PATCH',f'/api/services/{sid}',{'name':name+' редаговано','active':False})
+        current=next(x for x in self.api('admin','GET','/api/services') if x['id']==sid)
+        self.assertFalse(current['active'])
+        self.assertEqual(current['name'],name+' редаговано')
+
+    def test_z_managed_license_limits_and_read_access(self):
+        sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'publisher'))
+        from license_core import create_keys,issue_license
+        inactive=self.api('admin','POST','/api/users',{'name':'Inactive licensed seat','login':'ci-licensed-inactive','password':'synthetic-password','role':'reception'})['id']
+        phone=self.api('admin','POST','/api/users',{'name':'Licensed phone quota','login':'ci-licensed-phone','password':'synthetic-password','role':'psychologist'})['id']
+        self.api('admin','PATCH',f'/api/users/{inactive}',{'active':False})
+        if not self.api('admin','GET','/api/shift-day')['open']:
+            self.api('admin','POST','/api/shift-day',{'action':'open'})
+        active=sum(1 for user in self.api('admin','GET','/api/users') if user['active'])
+        identity=self.api('admin','GET','/api/license')['server_id']
+        # Licensing is deliberately enabled only inside this scenario. Preserve
+        # the shared fixture's policy before issuing the restricted test grant.
+        self.assertEqual(self.api('admin','GET','/api/license')['status'],'unmanaged')
+        previous_workflow=self.api('admin','GET','/api/settings/workflow')
+        previous={key:os.environ.get(key) for key in ['SOLVIA_LICENSE_PUBLIC_KEY','SOLVIA_LICENSE_REQUIRED']}
+        with tempfile.TemporaryDirectory() as folder:
+            private,public=create_keys('test publisher password')
+            path=pathlib.Path(folder)/'public.pem';path.write_bytes(public)
+            try:
+                os.environ['SOLVIA_LICENSE_PUBLIC_KEY']=str(path);os.environ['SOLVIA_LICENSE_REQUIRED']='1'
+                self.__class__.proc.terminate();self.__class__.proc.wait(timeout=10);self.__class__.start()
+                self.assertFalse(self.api('admin','GET','/api/license')['write_allowed'])
+                workflow=dict(opening_time='08:00',closing_time='19:00',working_days='1234567',slot_step_minutes=30,default_duration_minutes=60,session_hours=8)
+                envelope,grant=issue_license(private,'test publisher password',server_id=identity,center='Synthetic licensed center',modules=['appointments'],max_users=active,max_devices=1,workflow=workflow)
+                tampered=dict(envelope,signature=base64.b64encode(bytes(64)).decode())
+                self.api('admin','POST','/api/license',tampered,status=403)
+                access=self.api('admin','POST','/api/license',envelope)
+                self.assertTrue(access['perpetual'] and access['write_allowed'])
+                self.assertEqual(self.api('admin','GET','/api/settings/workflow')['closing_time'],'19:00')
+                self.assertTrue(self.api('admin','GET','/api/consent-policy')['required'])
+                policy=self.api('admin','GET','/api/consent-policy')
+                self.api('admin','PATCH','/api/consent-policy',dict(policy,required=False),status=403)
+                self.api('admin','POST','/api/users',{'name':'Over quota','login':'ci-over-quota','password':'synthetic-password','role':'reception'},status=403)
+                self.api('admin','PATCH',f'/api/users/{inactive}',{'active':True},status=403)
+                self.api('admin','POST','/api/supervisions',{},status=403)
+                self.api('admin','GET','/api/supervisions')
+                self.api('admin','GET','/api/patient-directory')
+                code,_=self.call('POST','/api/login',{'login':'ci-licensed-phone','password':'synthetic-password','platform':'Android','device_id':'ci-license-phone-quota','device_name':'Synthetic Android'})
+                self.assertEqual(code,403)
+                wrong,_=issue_license(private,'test publisher password',server_id='f'*64,center='Another center',modules=['appointments'])
+                self.api('admin','POST','/api/license',wrong,status=403)
+                self.assertEqual(self.api('admin','GET','/api/license')['license_id'],grant['license_id'])
+            finally:
+                for key,value in previous.items():
+                    if value is None:os.environ.pop(key,None)
+                    else:os.environ[key]=value
+                self.__class__.proc.terminate();self.__class__.proc.wait(timeout=10)
+                # The license envelope is persisted in PostgreSQL. Restoring
+                # environment variables alone leaves later integration tests
+                # read-only (HTTP 402), even after restarting the API process.
+                fields=('opening_time','closing_time','working_days',
+                        'slot_step_minutes','default_duration_minutes','session_hours')
+                def sql_literal(value):
+                    return "'" + value.replace("'", "''") + "'" if isinstance(value,str) else str(int(value))
+                settings=', '.join(f'{name}={sql_literal(previous_workflow[name])}' for name in fields)
+                subprocess.run(['psql',self.database,'-X','-v','ON_ERROR_STOP=1','-c',
+                                f'DELETE FROM center_license WHERE id=1; UPDATE workflow_settings SET {settings} WHERE id=1'],
+                               check=True,stdout=subprocess.DEVNULL)
+                self.__class__.start()
+                self.assertEqual(self.api('admin','GET','/api/license')['status'],'unmanaged')
+                subprocess.run(['psql',self.database,'-X','-v','ON_ERROR_STOP=1','-c',f'DELETE FROM audit WHERE user_id IN ({inactive},{phone}); DELETE FROM users WHERE id IN ({inactive},{phone})'],check=True,stdout=subprocess.DEVNULL)
 
 
 if __name__=='__main__': unittest.main()

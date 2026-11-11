@@ -39,7 +39,7 @@ class ServiceStatusMonitor(private val activity: Activity, private val server: (
                     val until=info.optLong("expected_until")
                     val minutes=((until-System.currentTimeMillis()/1000+59)/60).coerceAtLeast(0)
                     val estimate=if(until==0L) "Час завершення ще не вказаний." else if(minutes>0) "Орієнтовно залишилось $minutes хв." else "Оновлення триває довше запланованого."
-                    val message=info.optString("message").ifBlank { "Адміністратор оновлює SOLVIA." }+"\n\n"+estimate+"\n\nПідключення відновиться автоматично. Перед закриттям програми збережіть текст у локальній чернетці."
+                    val message=info.optString("message").ifBlank { "Адміністратор оновлює Lemvori Care." }+"\n\n"+estimate+"\n\nПідключення відновиться автоматично. Перед закриттям програми збережіть текст у локальній чернетці."
                     if(dialog?.isShowing==true){text?.text=message;return@runOnUiThread}
                     if(System.currentTimeMillis()<quietUntil)return@runOnUiThread
                     val body=LinearLayout(activity).apply { orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(32,24,32,20) }
