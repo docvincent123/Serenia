@@ -932,7 +932,10 @@ void ApiBridge::loadWorkspace(const QString &section, const QString &query, cons
 void ApiBridge::openPatient(int id) {
     if (!workspaceAllowed("patient") || id <= 0) return;
     const int generation = ++recordGeneration_;
-    patientRecord_.clear(); familyOptions_.clear(); emit patientRecordChanged();
+    patientRecord_.clear(); familyOptions_.clear(); rehabilitationGoals_.clear();
+    ++patientVisitGeneration_; patientVisits_.clear(); patientVisitsTotal_=0;
+    patientVisitsPage_=1; patientVisitsPeriod_="upcoming"; patientVisitsError_.clear(); patientVisitsLoading_=false;
+    emit patientRecordChanged();
     rehabilitationGoals_.clear();
     if (role_ == "admin") request("GET", "/api/patients/" + QString::number(id) + "/rehab-goals", {}, [this, generation](const QJsonValue &value) {
         if (generation != recordGeneration_) return;
@@ -949,10 +952,44 @@ void ApiBridge::openPatient(int id) {
     request("GET", "/api/patients/" + QString::number(id), {}, [this, generation](const QJsonValue &value) {
         if (generation != recordGeneration_) return;
         patientRecord_ = value.toObject().toVariantMap(); emit patientRecordChanged();
+        loadPatientVisits("upcoming", 1);
     });
 }
+void ApiBridge::loadPatientVisits(const QString &period, int page) {
+    if (!workspaceAllowed("patient") || patientRecord_.value("id").toInt()<=0) return;
+    if (period!="upcoming" && period!="history") return;
+    if (page<1 || page>100000) return;
+    const int id=patientRecord_.value("id").toInt();
+    const int generation=recordGeneration_;
+    const int visitGeneration=++patientVisitGeneration_;
+    patientVisitsPeriod_=period; patientVisitsPage_=page; patientVisits_.clear();
+    patientVisitsTotal_=0; patientVisitsError_.clear(); patientVisitsLoading_=true;
+    emit patientRecordChanged();
+    QUrlQuery query;
+    query.addQueryItem("period", period);
+    query.addQueryItem("page", QString::number(page));
+    const QString path="/api/patients/"+QString::number(id)+"/appointments?"+query.toString(QUrl::FullyEncoded);
+    request("GET", path, {}, [this,generation,visitGeneration,id,page](const QJsonValue&value){
+        if (generation!=recordGeneration_ || visitGeneration!=patientVisitGeneration_ ||
+            patientRecord_.value("id").toInt()!=id) return;
+        const auto response=value.toObject();
+        patientVisits_=response.value("items").toArray().toVariantList();
+        patientVisitsTotal_=response.value("total").toInt();
+        patientVisitsPage_=response.value("page").toInt(page);
+        patientVisitsLoading_=false; emit patientRecordChanged();
+    }, true, [this,generation,visitGeneration](const QString&error){
+        if (generation!=recordGeneration_ || visitGeneration!=patientVisitGeneration_)return;
+        patientVisitsLoading_=false; patientVisitsError_=error; patientVisits_.clear();
+        emit patientRecordChanged();
+    });
+}
+
 void ApiBridge::closePatient() {
-    ++recordGeneration_; ++detailGeneration_; patientRecord_.clear(); familyOptions_.clear(); detailRecord_.clear(); emit patientRecordChanged(); emit detailChanged();
+    ++recordGeneration_; ++detailGeneration_; ++patientVisitGeneration_;
+    patientRecord_.clear(); patientVisits_.clear(); patientVisitsTotal_=0;
+    patientVisitsPage_=1; patientVisitsError_.clear(); patientVisitsLoading_=false;
+    familyOptions_.clear(); rehabilitationGoals_.clear(); detailRecord_.clear();
+    emit patientRecordChanged(); emit detailChanged();
 }
 
 void ApiBridge::workspaceAction(const QString &section, const QString &action, int id, const QVariantMap &fields) {
