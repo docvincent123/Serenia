@@ -790,7 +790,7 @@ void ApiBridge::databaseBackup() {
 
 void ApiBridge::databaseRestore(const QUrl &file, const QString &confirmation) {
     const QString path = file.toLocalFile();
-    if (confirmation.trimmed() != "ВІДНОВИТИ" || !QFileInfo(path).isFile() || !path.endsWith(".dump"))
+    if (confirmation.trimmed() != "ВІДНОВИТИ" || !path.startsWith("/var/backups/lemvori-care/lemvori-core-") || !path.endsWith(".dump"))
         return issue("Оберіть файл .dump і введіть ВІДНОВИТИ.");
     if (!adminEdition_ || role_ != "admin" || !localDatabaseTools() || working_)
         return issue("Відновлення дозволене тільки адміністратору на серверному ПК.");
