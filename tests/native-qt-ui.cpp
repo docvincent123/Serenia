@@ -54,7 +54,17 @@ int main(int argc,char **argv){
     auto *summary=lookup("objectName","summary");verify(summary,"Handover editor missing");summary->setProperty("text","Передати зміну");click("Зберегти");verify(waitFor([&]{return !bridge.working();}),"Handover save failed");pump();
     page("Лист очікування");page("Сім’ї");click("+ Додати");verify(lookup("objectName","name"),"Family editor missing");click("Скасувати");
     page("Пацієнти");verify(waitFor([&]{return !bridge.patients().isEmpty();}),"Patient directory missing");pump();click("Картка");verify(waitFor([&]{return bridge.patientRecord().value("id").toInt()==19;}),"Patient record missing");pump();
-    verify(lookup("text","Новий документ")==nullptr,"Document dialog unexpectedly open");click("Додати документ");verify(lookup("placeholderText","Назва документа"),"Document form missing");clickObject("document-close");
+    verify(waitFor([&]{return !bridge.patientVisitsLoading() && bridge.patientVisitsTotal()==11;}),"Upcoming patient visits did not load");
+    clickObject("patient-tab-visits");
+    verify(lookup("text","Історія та майбутні прийоми"),"Visit timeline tab not visible");
+    clickObject("patient-visits-history");
+    verify(waitFor([&]{return !bridge.patientVisitsLoading() && bridge.patientVisitsPeriod()=="history" && bridge.patientVisitsTotal()==1;}),"Visit history did not load");
+    verify(bridge.patientVisits().first().toMap().value("status").toString()=="completed","Past visit projection invalid");
+    clickObject("patient-visits-upcoming");
+    verify(waitFor([&]{return !bridge.patientVisitsLoading() && bridge.patientVisitsPeriod()=="upcoming" && bridge.patientVisitsTotal()==11;}),"Upcoming visits reload failed");
+    clickObject("patient-tab-overview");
+    verify(lookup("text","Телефон: —"),"Patient overview registration field missing");
+        verify(lookup("text","Новий документ")==nullptr,"Document dialog unexpectedly open");click("Додати документ");verify(lookup("placeholderText","Назва документа"),"Document form missing");clickObject("document-close");
     click("Переглянути документи");verify(waitFor([&]{return lookup("text","Текст згоди")!=nullptr;}),"Document text missing");clickObject("document-close");
     click("У лист очікування");verify(lookup("objectName","date_from"),"Waiting request editor missing");click("Скасувати");clickObject("patient-close");
     verify(waitFor([&]{return !bridge.centerConfiguration().isEmpty()&&!bridge.consentPolicy().isEmpty();}),"Consent rules did not load");
