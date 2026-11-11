@@ -984,6 +984,32 @@ void ApiBridge::loadPatientVisits(const QString &period, int page) {
     });
 }
 
+void ApiBridge::exportAppointmentTicket(const QUrl &file) {
+    if (!workspaceAllowed("patient") || patientRecord_.value("id").toInt()<=0 || !file.isLocalFile())
+        return issue("Відкрийте картку пацієнта для друку талона.");
+    if (patientVisitsPeriod_!="upcoming" || patientVisitsLoading_ || patientVisits_.isEmpty())
+        return issue("Спочатку завантажте майбутні прийоми пацієнта.");
+    const auto next=patientVisits_.first().toMap();
+    if (next.value("start").toString().isEmpty())
+        return issue("У найближчого прийому немає дати.");
+    const QString center=CarePdf::text(centerConfiguration_.value("center_name","Lemvori Care"));
+    QString html="<h2>"+center+"</h2><p>"+
+        CarePdf::text(centerConfiguration_.value("address"))+" · "+
+        CarePdf::text(centerConfiguration_.value("phone"))+"</p><hr>";
+    html+="<h1>Талон на прийом</h1>";
+    html+="<p><b>Пацієнт:</b> "+CarePdf::text(patientRecord_.value("name"))+"</p>";
+    html+="<p><b>Номер картки:</b> "+CarePdf::text(patientRecord_.value("patient_no"))+"</p>";
+    html+="<p><b>Дата й час:</b> "+CarePdf::text(next.value("start"))+"</p>";
+    html+="<p><b>Спеціаліст:</b> "+CarePdf::text(next.value("psychologist"))+"</p>";
+    html+="<p><b>Кабінет:</b> "+CarePdf::text(next.value("room"))+"</p>";
+    html+="<p style='font-size:10pt;color:#4A5C6A'>"+
+        "Цей талон підтверджує інформацію про запис на момент друку. "+
+        "При перенесенні або скасуванні прийому уточніть актуальний час у реєстратурі.</p>";
+    if(!CarePdf::save(file,"Талон на прийом · "+patientRecord_.value("name").toString(),html))
+        return issue("Не вдалося зберегти талон PDF.");
+    notify("Талон майбутнього прийому збережено у PDF.");
+}
+
 void ApiBridge::closePatient() {
     ++recordGeneration_; ++detailGeneration_; ++patientVisitGeneration_;
     patientRecord_.clear(); patientVisits_.clear(); patientVisitsTotal_=0;
