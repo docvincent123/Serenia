@@ -242,6 +242,51 @@ Item {
         }
     }
     Dialog {
+        id: referralStatusDialog
+        property var referral: ({})
+        title: "Змінити статус направлення"
+        modal: true; anchors.centerIn: Overlay.overlay
+        width: Math.min(490, Overlay.overlay.width-36)
+        closePolicy:root.bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
+        background:Rectangle{radius:19;color:"#F5F7F7";border.color:"#CCD0CF"}
+        onOpened:{
+            const index=referralChoice.indexOfValue(referral.status || "recommended")
+            referralChoice.currentIndex=index>=0?index:0
+        }
+        ColumnLayout {
+            width:parent.width;spacing:12
+            Label {textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap
+                text:[referralStatusDialog.referral.destination_type,referralStatusDialog.referral.destination_name].filter(Boolean).join(" · ")
+                color:root.ink;font.bold:true}
+            Label {text:"Новий статус";font.bold:true;color:root.ink}
+            ComboBox {
+                id:referralChoice;Layout.fillWidth:true;implicitHeight:48
+                model:[
+                    {value:"recommended",label:"Рекомендовано"},
+                    {value:"sent",label:"Направлено"},
+                    {value:"completed",label:"Виконано"},
+                    {value:"cancelled",label:"Скасовано"}
+                ]
+                textRole:"label";valueRole:"value"
+                background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"}
+            }
+            Label {Layout.fillWidth:true;wrapMode:Text.WordWrap;color:root.muted;font.pixelSize:12
+                text:"Оновлення збережеться в історії змін сервера. Не позначайте направлення виконаним без підтвердження."}
+            Label {visible:!!root.bridge.error;text:root.bridge.error;color:"#8C3632";Layout.fillWidth:true;wrapMode:Text.WordWrap}
+        }
+        footer:DialogButtonBox {
+            Action {text:"Скасувати";enabled:!root.bridge.working;onClicked:referralStatusDialog.close()}
+            Action {text:"Зберегти статус";primary:true
+                enabled:!root.bridge.working&&referralChoice.currentValue!==referralStatusDialog.referral.status
+                onClicked:root.bridge.updatePatientReferral(Number(referralStatusDialog.referral.id),String(referralChoice.currentValue))}
+        }
+        Connections {
+            target:root.bridge
+            function onOperationCompleted(operation) {if(operation==="referral")referralStatusDialog.close()}
+            function onStateChanged() {if(!root.bridge.authenticated)referralStatusDialog.close()}
+        }
+    }
+    Dialog {
         id: patientDialog
         property string activeTab: "overview"
         readonly property var patient: root.bridge.patientRecord
@@ -486,6 +531,9 @@ Item {
                                     text:[modelData.destination_type,modelData.destination_name].filter(Boolean).join(" · ");color:root.ink;font.bold:true}
                                 Label {textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap
                                     text:[root.label(modelData.status),modelData.reason].filter(Boolean).join(" · ");color:root.muted}
+                                Action {objectName:"referral-edit-"+modelData.id;text:"Оновити статус"
+                                    enabled:!root.bridge.working
+                                    onClicked:{referralStatusDialog.referral=Object.assign({},modelData);referralStatusDialog.open()}}
                             }
                         }
                     }
