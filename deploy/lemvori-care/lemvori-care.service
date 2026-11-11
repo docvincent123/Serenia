@@ -1,0 +1,30 @@
+[Unit]
+Description=Lemvori Care C++ HTTPS API (Qt Native clients)
+Wants=network-online.target postgresql.service
+Requires=lemvori-care-network.service
+After=network-online.target postgresql.service lemvori-care-network.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=lemvori-care
+Group=lemvori-care
+EnvironmentFile=/etc/lemvori-care/server.env
+WorkingDirectory=/var/lib/lemvori-care
+ExecStartPre=/usr/bin/pg_isready -h 127.0.0.1 -p 5432
+ExecStart=/opt/lemvori-care/lemvori-care-api --host 0.0.0.0 --port 8443 --cert /etc/lemvori-care/tls/server.crt --key /etc/lemvori-care/tls/server.key
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/lemvori-care
+
+[Install]
+WantedBy=multi-user.target
