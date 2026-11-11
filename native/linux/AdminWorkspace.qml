@@ -6,7 +6,7 @@ import QtQuick.Layouts
 Item {
     id: root
     required property var bridge
-    property string section: "team"
+    property string section: "overview"
     property string searchText: ""
     readonly property var filteredRows: {
         const rows = bridge.adminRows || []
@@ -23,24 +23,29 @@ Item {
     readonly property color muted: "#4A5C6A"
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
     readonly property var sections: [
+        {label:"ОГЛЯД"},
+        {key:"overview",label:"Панель керування",detail:"Швидкі дії та стан центру"},
         {label:"ЦЕНТР"},
-        {key:"license",label:"Ліцензія центру",detail:"Підписаний ключ і ліміти центру"},
-        {key:"modules",label:"Модулі центру",detail:"Функції та їхні залежності"},
-        {key:"consent-policy",label:"Правила згод",detail:"Тексти, версії та обов’язковість підписаних документів"},
-        {key:"team", label:"Працівники", detail:"Облікові записи, ролі та доступ працівників центру"},
-        {key:"rooms", label:"Кабінети", detail:"Типи, номери та місткість кабінетів"},
-        {key:"templates",label:"Шаблони документів",detail:"Тексти згод, правил та інших документів центру"},
-        {key:"services", label:"Напрямки", detail:"Перелік послуг і категорій центру"},
-        {key:"permissions", label:"Права за модулями", detail:"Індивідуальні обмеження доступу без розширення базових прав ролі"},
-        {label:"ОРГАНІЗАЦІЯ"},
-        {key:"access", label:"Доступ реєстратури", detail:"Коли реєстратура може працювати з прийомами"},
-        {key:"workflow", label:"Правила запису", detail:"Робочі дні, крок розкладу та тривалість прийомів"},
-        {key:"center", label:"Дані центру", detail:"Контакти, реквізити та файли підключення"},
-        {label:"СИСТЕМА"},
-        {key:"tv-displays", label:"Табло центру", detail:"Підключення телевізорів за кодом і налаштування показу"},
-        {key:"sessions", label:"Сеанси", detail:"Пристрої працівників і час останньої активності"},
-        {key:"audit", label:"Журнал дій", detail:"Історія дій працівників у системі"},
-        {key:"database", label:"База та копії", detail:"Резервне копіювання та відновлення PostgreSQL"}
+        {key:"center",label:"Профіль центру",detail:"Назва, реквізити, керівництво, контакти й підписи"},
+        {key:"license",label:"Ліцензія",detail:"Активація, сервер та ліміти"},
+        {key:"modules",label:"Модулі",detail:"Функції в межах ліцензії"},
+        {label:"ПЕРСОНАЛ"},
+        {key:"team",label:"Працівники",detail:"Облікові записи, ролі та статус"},
+        {key:"permissions",label:"Права доступу",detail:"Обмеження модулів у межах ролей"},
+        {key:"services",label:"Напрямки роботи",detail:"Спеціалізації та послуги"},
+        {key:"rooms",label:"Кабінети",detail:"Типи та місткість кабінетів"},
+        {label:"РОБОЧІ ПРОЦЕСИ"},
+        {key:"workflow",label:"Графік і записи",detail:"Робочі дні й правила запису"},
+        {key:"access",label:"Доступ реєстратури",detail:"Дозвіл на робочу зміну"},
+        {key:"tv-displays",label:"Електронне табло",detail:"Телевізори та виклики"},
+        {label:"ДОКУМЕНТИ"},
+        {key:"forms",label:"Бланки й підписи",detail:"PDF-форми з полями для підписів"},
+        {key:"consent-policy",label:"Згоди пацієнтів",detail:"Затверджені тексти та версії"},
+        {key:"templates",label:"Шаблони документів",detail:"Редаговані тексти для співробітників"},
+        {label:"БЕЗПЕКА І СИСТЕМА"},
+        {key:"sessions",label:"Сеанси",detail:"Робочі пристрої"},
+        {key:"audit",label:"Журнал дій",detail:"Події та контроль змін"},
+        {key:"database",label:"База й копії",detail:"PostgreSQL і резервні копії"}
     ]
     readonly property var serviceOptions: {
         const items = [{key: "", label: "Без прив’язки до напрямку"}]
@@ -150,11 +155,14 @@ Item {
     })
 
     CenterSettingsDialog { id:centerSettings; bridge:root.bridge }
+    PrintableFormsDialog { id:printableForms; bridge:root.bridge }
     function select(key) {
         if (["license","modules","consent-policy"].includes(key)) {centerSettings.show(key);return}
+        if (key === "forms") {printableForms.open();return}
         searchText = ""
         section = key
-        if (key !== "database") bridge.loadAdminSection(key)
+        if (key !== "database" && key !== "overview") bridge.loadAdminSection(key)
+        if (key === "overview") bridge.loadCenterConfiguration()
     }
 
     function edit(record) {
@@ -182,7 +190,7 @@ Item {
         id: action
         property bool primary: false
         property bool onRail: false
-        implicitHeight: onRail ? 35 : 42
+        implicitHeight: onRail ? 42 : 42
         leftPadding: 16; rightPadding: 16
         contentItem: Label { textFormat:Text.PlainText;
             text: action.text; horizontalAlignment: action.onRail ? Text.AlignLeft : Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
@@ -190,7 +198,7 @@ Item {
             font.bold: action.primary; elide: Text.ElideRight
         }
         background: Rectangle {
-            radius: action.onRail ? 9 : height/2
+            radius: action.onRail ? 12 : height/2
             color: action.onRail ? (action.primary ? "#CCD0CF" : action.hovered ? "#EDF0F0" : "transparent")
                  : action.primary ? (action.hovered ? "#11212D" : "#253745") : (action.hovered ? "#B9C2C4" : "#DEE2E2")
             border.color: action.visualFocus ? root.ink : action.onRail ? "transparent" : "#9BA8AB"
@@ -201,7 +209,7 @@ Item {
     RowLayout {
         anchors.fill: parent; anchors.margins: 18; spacing: 14
         Rectangle {
-            Layout.fillHeight: true; Layout.preferredWidth: 178
+            Layout.fillHeight: true; Layout.preferredWidth: 222
             color: "#F8FAFA"; border.color: "#CCD0CF"; radius: 13
             ScrollView {
                 id: adminRail
@@ -416,8 +424,8 @@ Item {
         property var values: ({})
         title: root.currentSection.label
         modal: true; anchors.centerIn: Overlay.overlay
-        width: Math.min(590, root.width - 30)
-        height: Math.min(650, root.height - 32)
+        width: Math.min(790, root.width - 30)
+        height: Math.min(730, root.height - 32)
         padding: 0
         closePolicy: root.bridge.working ? Popup.NoAutoClose : Popup.CloseOnEscape
         background: Rectangle {
@@ -442,8 +450,10 @@ Item {
             topPadding: 12; bottomPadding: 12
             contentWidth: availableWidth
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-            ColumnLayout {
-                width: parent.width; spacing: 14
+            GridLayout {
+                id: editorGrid
+                width: parent.width; columns: width > 640 ? 2 : 1
+                columnSpacing: 16; rowSpacing: 18
                 Repeater {
                     id: editorFields
                     model: form.visible ? (root.schema[root.section] || []).filter(field =>
@@ -453,6 +463,7 @@ Item {
                         readonly property var original: form.values[modelData.key] ?? modelData.initial ?? ""
                         readonly property var fieldValue: editor.item ? editor.item.fieldValue : original
                         Layout.fillWidth: true
+                        Layout.columnSpan: editorGrid.columns === 2 && ["content","document_footer","center_name","address"].includes(modelData.key) ? 2 : 1
                         spacing: 7
                         Label { textFormat:Text.PlainText; text: modelData.label; color: root.ink; font.pixelSize: 13; font.bold: true }
                         Loader {
@@ -559,11 +570,11 @@ Item {
                                     }
                                 }
                             }
-                            Component { id: areaEditor; TextArea { readonly property string fieldValue:text; text:String(original); selectByMouse:true; wrapMode:TextEdit.Wrap; implicitHeight:200 } }
+                            Component { id: areaEditor; TextArea { id:area; readonly property string fieldValue:text; text:String(original); selectByMouse:true; wrapMode:TextEdit.Wrap; implicitHeight:200; leftPadding:15; rightPadding:15; topPadding:12; background:Rectangle{radius:15;color:"white";border.color:area.activeFocus?"#253745":"#C7D0D3"} } }
                         }
                     }
                 }
-                Label { textFormat:Text.PlainText; Layout.fillWidth: true; visible: !!root.bridge.error; text: root.bridge.error; color: "#8C3632"; wrapMode: Text.WordWrap }
+                Label { textFormat:Text.PlainText; Layout.fillWidth: true; Layout.columnSpan:editorGrid.columns; visible: !!root.bridge.error; text: root.bridge.error; color: "#8C3632"; wrapMode: Text.WordWrap }
             }
         }
         footer: Rectangle {
