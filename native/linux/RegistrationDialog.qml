@@ -10,7 +10,18 @@ Dialog {
     property url printedFile:""
     readonly property var rules:(bridge.consentPolicy.templates || []).filter(r=>r.required)
     readonly property bool requiresConsent:bridge.consentPolicy.required !== false
-    readonly property bool dataReady:!!name.text.trim()&&!!phone.text.trim()&&/^\d{4}-\d{2}-\d{2}$/.test(dob.text)&&Number(psychologist.currentValue)>0
+    readonly property bool phoneValid: {
+        const count=phone.text.replace(/[^0-9]/g,"").length
+        return count>=7 && count<=15
+    }
+    readonly property bool dateValid: {
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dob.text)) return false
+        const parts=dob.text.split("-").map(Number)
+        const d=new Date(parts[0],parts[1]-1,parts[2])
+        return parts[0]>=1900 && d.getFullYear()===parts[0] &&
+               d.getMonth()+1===parts[1] && d.getDate()===parts[2] && d<=new Date()
+    }
+    readonly property bool dataReady: !!name.text.trim()&&phoneValid&&dateValid&&Number(psychologist.currentValue)>0
     readonly property bool ready:{
         if(!dataReady||!Object.keys(bridge.consentPolicy).length)return false
         if(!requiresConsent)return true
@@ -42,29 +53,48 @@ Dialog {
             Label { textFormat:Text.PlainText;text:"1. Реєстраційні дані";font.bold:true;font.pixelSize:18 }
             Label { text:"ПІБ пацієнта *";font.bold:true;color:"#11212D" }
             Field { id:name;Layout.fillWidth:true;placeholderText:"Прізвище, ім’я та по батькові";Accessible.name:"ПІБ пацієнта" }
-            RowLayout {
-                Layout.fillWidth:true;spacing:14
+            GridLayout {
+                Layout.fillWidth:true;columns:scroll.availableWidth>580?2:1
+                columnSpacing:14;rowSpacing:10
                 ColumnLayout{Layout.fillWidth:true;spacing:5
                     Label{text:"Телефон *";font.bold:true;color:"#11212D"}
-                    Field { id:phone;Layout.fillWidth:true;placeholderText:"+380…";Accessible.name:"Телефон" }
+                    Field { id:phone;Layout.fillWidth:true;placeholderText:"+380…";Accessible.name:"Телефон"
+                        inputMethodHints:Qt.ImhDialableCharactersOnly }
+                    Label {visible:phone.text.length>0&&!root.phoneValid
+                        text:"Перевірте номер: 7–15 цифр";font.pixelSize:11;color:"#8C3632"}
                 }
                 ColumnLayout{Layout.fillWidth:true;spacing:5
                     Label{text:"Дата народження *";font.bold:true;color:"#11212D"}
                     Field { id:dob;Layout.fillWidth:true;placeholderText:"РРРР-ММ-ДД";inputMask:"9999-99-99";Accessible.name:"Дата народження" }
+                    Label {visible:dob.text.length>0&&!root.dateValid
+                        text:"Введіть дійсну дату, не пізніше сьогодні";font.pixelSize:11;color:"#8C3632"}
                 }
             }
-            Label { textFormat:Text.PlainText;text:"Категорія та відповідальний психолог" }
-            RowLayout {
-                Layout.fillWidth:true
-                ComboBox { id:category;Layout.fillWidth:true;model:["Військовий/військова","Ветеран/ветеранка","Партнер/партнерка","Дитина","Інше"] }
-                ComboBox { id:psychologist;Layout.fillWidth:true;model:root.bridge.bookingPsychologists;textRole:"name";valueRole:"id" }
+            GridLayout {
+                Layout.fillWidth:true;columns:scroll.availableWidth>580?2:1
+                columnSpacing:14;rowSpacing:10
+                ColumnLayout{Layout.fillWidth:true;spacing:5
+                    Label{text:"Категорія *";font.bold:true;color:"#11212D"}
+                    ComboBox { id:category;Layout.fillWidth:true;implicitHeight:46;model:["Військовий/військова","Ветеран/ветеранка","Партнер/партнерка","Дитина","Інше"]
+                        background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"} }
+                }
+                ColumnLayout{Layout.fillWidth:true;spacing:5
+                    Label{text:"Відповідальний психолог *";font.bold:true;color:"#11212D"}
+                    ComboBox { id:psychologist;Layout.fillWidth:true;implicitHeight:46;model:root.bridge.bookingPsychologists;textRole:"name";valueRole:"id"
+                        background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"} }
+                }
             }
+            Label {visible:!root.bridge.bookingPsychologists.length
+                text:"Немає психологів, доступних для призначення. Перевірте графік зміни.";Layout.fillWidth:true
+                wrapMode:Text.WordWrap;color:"#8C3632" }
             Label { textFormat:Text.PlainText;text:"2. Друк і власноручний підпис";font.bold:true;font.pixelSize:18;Layout.topMargin:8 }
             Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Роздрукуйте картку та затверджені центром бланки. Пацієнт або законний представник підписує їх на папері. Якщо реєстраційні дані зміняться, бланки потрібно надрукувати повторно.";color:"#4A5C6A" }
             Action { text:"Зберегти бланки PDF для друку";enabled:root.dataReady&&!root.bridge.working;onClicked:printPicker.open() }
             Action { text:"Відкрити PDF для друку";visible:!!root.printedFile&&root.printedSnapshot===JSON.stringify(root.fields());onClicked:root.bridge.openPdf(root.printedFile) }
             Label { textFormat:Text.PlainText;visible:!!root.bridge.registrationReference;text:"Реєстрація: "+root.bridge.registrationReference;wrapMode:Text.WrapAnywhere;Layout.fillWidth:true;color:"#4A5C6A" }
             Label { textFormat:Text.PlainText;text:"3. Скан підписаних згод";font.bold:true;font.pixelSize:18;Layout.topMargin:8 }
+            Label { Layout.fillWidth:true;wrapMode:Text.WordWrap;font.pixelSize:12;color:"#4A5C6A"
+                text:root.requiresConsent ? "Потрібно оформити " + root.rules.length + " обов’язкових згод за актуальними редакціями." : "Обов’язкові згоди наразі не встановлені адміністратором." }
             Repeater {
                 id:consents
                 model:root.rules
