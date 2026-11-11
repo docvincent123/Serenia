@@ -14,7 +14,9 @@ case "$cmd" in
   network) /opt/lemvori-care/network-tls.sh ;;
   backup)
     [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
-    install -d -o root -g root -m 0700 /var/backups/lemvori-care
+    install -d -o root -g root -m 0700 /run/lemvori-care /var/backups/lemvori-care
+    exec 8>/run/lemvori-care/db-maintenance.lock
+    flock -n 8 || { echo "Database maintenance in progress" >&2; exit 1; }
     stamp=$(date -u +%Y%m%dT%H%M%SZ)
     target="/var/backups/lemvori-care/lemvori-core-$stamp.dump"
     [[ ! -e $target ]] || { echo 'Backup already exists' >&2; exit 1; }
@@ -29,6 +31,26 @@ case "$cmd" in
     trap - EXIT
     echo "Lemvori Care database backup: $target"
     ;;
+  restore)
+    [[ $EUID -eq 0 ]] || { echo "Use sudo" >&2; exit 1; }
+    [[ $# -eq 3 ]] || { echo "Usage: lemvori-carectl restore PATH ВІДНОВИТИ" >&2; exit 2; }
+    exec /opt/lemvori-care/restore.sh "$2" "$3"
+    ;;
+  restore-latest)
+    [[ $EUID -eq 0 && $# -eq 2 && $2 == "ВІДНОВИТИ" ]] || { echo "Use sudo and confirm ВІДНОВИТИ" >&2; exit 2; }
+    shopt -s nullglob
+    archives=(/var/backups/lemvori-care/lemvori-core-[0-9]*.dump)
+    (( ${#archives[@]} > 0 )) || { echo "No backups" >&2; exit 1; }
+    latest=$(ls -1t -- "${archives[@]}" | head -n 1)
+    exec /opt/lemvori-care/restore.sh "$latest" "$2"
+    ;;
+  list-backups)
+    [[ $EUID -eq 0 ]] || { echo "Use sudo" >&2; exit 1; }
+    shopt -s nullglob
+    archives=(/var/backups/lemvori-care/lemvori-core-[0-9]*.dump)
+    if (( ${#archives[@]} )); then ls -1th -- "${archives[@]}"; else echo "No backups"; fi
+    ;;
+  diagnose) exec /opt/lemvori-care/verify-host.sh ;;
   publisher-key)
     [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
     source_file=${2:-}
@@ -45,5 +67,5 @@ case "$cmd" in
     install -o root -g lemvori-care -m 0644 "$source_file" /etc/lemvori-care/license/publisher.pem
     echo 'Lemvori publisher verification key installed. You can import the signed center license.'
     ;;
-  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|backup|publisher-key FILE}' >&2; exit 2 ;;
+  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|backup|restore FILE ВІДНОВИТИ|restore-latest ВІДНОВИТИ|list-backups|diagnose|publisher-key FILE}' >&2; exit 2 ;;
 esac
