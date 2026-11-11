@@ -868,7 +868,15 @@ void ApiBridge::loadWorkspace(const QString &section, const QString &query, cons
     workspaceSection_ = section; workspaceQuery_ = query; workspaceFrom_ = from; workspaceTo_ = to;
     workspaceLoading_ = true; workspaceError_.clear(); emit workspaceChanged();
     QUrlQuery params;
-    if (section == "archive") { params.addQueryItem("status", "archived"); params.addQueryItem("q", query); params.addQueryItem("page_size", "100"); }
+    if (section == "archive") {
+        // The date-from argument is unused for archive; Qt passes the archive page here.
+        bool validPage = false;
+        const int archivePage = from.toInt(&validPage);
+        params.addQueryItem("status", "archived");
+        params.addQueryItem("q", query);
+        params.addQueryItem("page_size", "100");
+        params.addQueryItem("page", QString::number(validPage && archivePage > 0 ? archivePage : 1));
+    }
     if (section == "workload" || section == "reports") {
         const QString start = from.isEmpty() ? QDate::currentDate().toString("yyyy-MM-01") : from;
         const QString end = to.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : to;
