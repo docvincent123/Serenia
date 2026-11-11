@@ -12,5 +12,21 @@ case "$cmd" in
     --cacert /etc/lemvori-care/ca/ca.crt https://127.0.0.1:8443/api/health; echo ;;
   certificate) openssl x509 -in /etc/lemvori-care/ca/ca.crt -noout -fingerprint -sha256 ;;
   network) /opt/lemvori-care/network-tls.sh ;;
-  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network}' >&2; exit 2 ;;
+  publisher-key)
+    [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
+    source_file=${2:-}
+    [[ -f $source_file && -r $source_file && ! -L $source_file ]] || {
+      echo 'Supply the signed publisher ED25519 PUBLIC .pem file (not a private key)' >&2; exit 1;
+    }
+    if [[ -e /etc/lemvori-care/license/publisher.pem ]]; then
+      echo 'Publisher key already provisioned. Refusing silent replacement.' >&2; exit 1
+    fi
+    openssl pkey -pubin -in "$source_file" -text -noout | grep -qi 'ED25519' || {
+      echo 'Expected an Ed25519 public key. No changes made.' >&2; exit 1;
+    }
+    install -d -o root -g lemvori-care -m 0750 /etc/lemvori-care/license
+    install -o root -g lemvori-care -m 0644 "$source_file" /etc/lemvori-care/license/publisher.pem
+    echo 'Lemvori publisher verification key installed. You can import the signed center license.'
+    ;;
+  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|publisher-key FILE}' >&2; exit 2 ;;
 esac
