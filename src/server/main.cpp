@@ -743,9 +743,10 @@ std::cout<<"SOLVIA server: "<<host<<":"<<port<<std::endl;if(!server.listen(host,
 int main(int argc,char**argv){try{
 std::map<std::string,std::string> args;
 for(int i=1;i<argc;++i){std::string k=argv[i];if(k=="--init"||k=="--demo")args[k]="1";else if(i+1<argc)args[k]=argv[++i];else throw std::runtime_error("Missing argument");}
-auto envDb=environmentUtf8("SOLVIA_DATABASE_URL");
+auto envDb=environmentUtf8("LEMVORI_DATABASE_URL");
+if(envDb.empty())envDb=environmentUtf8("SOLVIA_DATABASE_URL");
 std::string database=args.count("--database")?args["--database"]:envDb;
-check(!database.empty(),"SOLVIA_DATABASE_URL or --database is required");
+check(!database.empty(),"LEMVORI_DATABASE_URL (or legacy SOLVIA_DATABASE_URL) or --database is required");
 App app(database);
 if(args.count("--init")||args.count("--demo")){
     if (!app.db.query("SELECT id FROM users").empty()) {
@@ -758,11 +759,15 @@ if(args.count("--init")||args.count("--demo")){
         J users=J::array({J::array({"Administrator","admin","admin"}),J::array({"Reception","reception","reception"}),J::array({"Psychologist","psychologist","psychologist"}),J::array({"Director","director","director"})});
         for(auto&u:users){auto pw=randomToken().substr(0,20);app.db.query("INSERT INTO users(name,login,password,role) VALUES(?,?,?,?)",{u[0],u[1],hashPassword(pw),u[2]});std::cout<<u[1].get<std::string>()<<": "<<pw<<std::endl;}
     }else{
-        auto login=environmentUtf8("SOLVIA_ADMIN_LOGIN");
+        auto login=environmentUtf8("LEMVORI_ADMIN_LOGIN");
+        if(login.empty())login=environmentUtf8("SOLVIA_ADMIN_LOGIN");
         check(std::regex_match(login,std::regex("[A-Za-z0-9._-]{3,64}")),"SOLVIA_ADMIN_LOGIN must contain 3-64 safe characters");
-        auto pw=environmentUtf8("SOLVIA_ADMIN_PASSWORD");
+        auto pw=environmentUtf8("LEMVORI_ADMIN_PASSWORD");
+        if(pw.empty())pw=environmentUtf8("SOLVIA_ADMIN_PASSWORD");
         check(pw.size()>=12&&pw.size()<=128&&pw.find('\n')==std::string::npos&&pw.find('\r')==std::string::npos,"SOLVIA_ADMIN_PASSWORD must contain 12-128 characters");
-        auto name=environmentUtf8("SOLVIA_ADMIN_NAME");if(name.empty())name="Administrator";
+        auto name=environmentUtf8("LEMVORI_ADMIN_NAME");
+        if(name.empty())name=environmentUtf8("SOLVIA_ADMIN_NAME");
+        if(name.empty())name="Administrator";
         app.db.query("INSERT INTO users(name,login,password,role) VALUES(?,?,?,?)",{name,login,hashPassword(pw),"admin"});
     }
     for(auto n:{"Кабінет 1","Кабінет 2","Групова зала"})app.db.query("INSERT INTO rooms(name) VALUES(?)",{n});
