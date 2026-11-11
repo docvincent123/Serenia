@@ -43,7 +43,7 @@ Item {
     }
     function openPatient(id) { bridge.openPatient(id); patientDialog.open() }
     function label(value) {
-        const names = {waiting:"Очікує",offered:"Час запропоновано",booked:"Записано",cancelled:"Скасовано",scheduled:"Заплановано",completed:"Завершено",active:"Активний",archived:"Архів",open:"Відкрите",resolved:"Виконано",signed:"Підписано",refused:"Відмова",recommended:"Рекомендовано",sent:"Направлено",normal:"Звичайний",high:"Високий",important:"Важливий",urgent:"Терміновий"}
+        const names = {waiting:"Очікує",offered:"Час запропоновано",booked:"Записано",cancelled:"Скасовано",scheduled:"Заплановано",confirmed:"Підтверджено",completed:"Завершено",no_show:"Неявка",active:"Активний",archived:"Архів",open:"Відкрите",resolved:"Виконано",signed:"Підписано",refused:"Відмова",recommended:"Рекомендовано",sent:"Направлено",planned:"Заплановано",in_progress:"У процесі",achieved:"Досягнуто",paused:"Призупинено",informed_consent:"Інформована згода",data_processing:"Обробка персональних даних",center_rules:"Правила центру",family_consent:"Згода представника",normal:"Звичайний",high:"Високий",important:"Важливий",urgent:"Терміновий"}
         return names[value] || value || "—"
     }
     function summary(row) {
@@ -417,7 +417,7 @@ Item {
                     radius:13;color:"#FFF3E4";border.color:"#E6CFAC"
                     Label {id:consentWarning;anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:14
                         color:"#795126";wrapMode:Text.WordWrap;textFormat:Text.PlainText
-                        text:"Потрібні підписані згоди: "+((patientDialog.patient.consent_status||{}).missing||[]).join(", ")
+                        text:"Потрібні підписані згоди: "+((patientDialog.patient.consent_status||{}).missing||[]).map(root.label).join(", ")
                     }
                 }
                 Flow {
