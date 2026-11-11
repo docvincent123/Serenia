@@ -78,6 +78,7 @@ install -o root -g root -m 0755 "$source_dir/build/lemvori-api/SolviaServer" \
 install -o root -g root -m 0755 "$package/network-address.py" /opt/lemvori-care/network-address.py
 install -o root -g root -m 0755 "$package/network-tls.sh" /opt/lemvori-care/network-tls.sh
 install -o root -g root -m 0755 "$package/lemvori-carectl" /usr/local/sbin/lemvori-carectl
+install -o root -g root -m 0755 "$package/restore.sh" /opt/lemvori-care/restore.sh
 
 has_users=$(dbpsql -Atc "SELECT to_regclass('public.users') IS NOT NULL")
 count=0
