@@ -60,7 +60,7 @@ Do not disable Qt certificate verification.
 
 A new database means a new server identity. If an existing Qt client
 previously pinned an identity for the same URL, it must be explicitly
-re-enrolled. Do not silently bypass the identity mismatch.
+re-enrolled using **Підключення → Переприв’язати після перевстановлення БД**, after verifying the new CA fingerprint. Do not silently bypass the identity mismatch.
 
 The server listens on `0.0.0.0:8443` so both localhost and LAN clients
 can connect. Restrict TCP 8443 in the host firewall to your trusted
