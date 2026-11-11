@@ -461,7 +461,7 @@ Item {
                     }
                     Label {text:"Останній активний курс і документи доступні у вкладках вище.";color:root.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap}
                     Repeater {
-                        model:root.bridge.role==="admin"?(patientDialog.patient.admin_notes||[]):[]
+                        model:root.bridge.role==="admin"&&patientDialog.activeTab==="overview"?(patientDialog.patient.admin_notes||[]):[]
                         delegate: Rectangle {
                             required property var modelData;Layout.fillWidth:true;radius:14
                             implicitHeight:adminNote.implicitHeight+28;color:"white";border.color:"#D7DEDF"
@@ -476,7 +476,7 @@ Item {
                     Layout.fillWidth:true;spacing:10
                     Label {text:"Курси супроводу";color:root.ink;font.bold:true;font.pixelSize:18}
                     Repeater {
-                        model:patientDialog.patient.courses||[]
+                        model:patientDialog.activeTab==="courses"?(patientDialog.patient.courses||[]):[]
                         delegate: Rectangle {
                             required property var modelData;Layout.fillWidth:true
                             implicitHeight:courseContent.implicitHeight+30;radius:15;color:"white";border.color:"#D4DDDF"
@@ -508,7 +508,7 @@ Item {
                     Label {visible:!!root.bridge.patientVisitsError;textFormat:Text.PlainText;Layout.fillWidth:true
                         text:root.bridge.patientVisitsError;color:"#8C3632";wrapMode:Text.WordWrap}
                     Repeater {
-                        model:root.bridge.patientVisits
+                        model:patientDialog.activeTab==="visits"?root.bridge.patientVisits:[]
                         delegate: Rectangle {
                             required property var modelData;Layout.fillWidth:true;radius:14
                             implicitHeight:visitInfo.implicitHeight+28;color:"white";border.color:"#D7DEDF"
@@ -537,7 +537,7 @@ Item {
                     Layout.fillWidth:true;spacing:10
                     Label {text:"Документи та підписи";font.bold:true;font.pixelSize:18;color:root.ink}
                     Repeater {
-                        model:patientDialog.patient.documents||[]
+                        model:patientDialog.activeTab==="documents"?(patientDialog.patient.documents||[]):[]
                         delegate: Rectangle {
                             required property var modelData;Layout.fillWidth:true;radius:15
                             implicitHeight:docLine.implicitHeight+28;color:"white";border.color:"#D4DDDF"
@@ -557,7 +557,7 @@ Item {
                     Layout.fillWidth:true;spacing:10
                     Label {text:"Направлення";font.bold:true;font.pixelSize:18;color:root.ink}
                     Repeater {
-                        model:patientDialog.patient.referrals||[]
+                        model:patientDialog.activeTab==="referrals"?(patientDialog.patient.referrals||[]):[]
                         delegate: Rectangle {
                             required property var modelData;Layout.fillWidth:true;radius:15
                             implicitHeight:refLine.implicitHeight+28;color:"white";border.color:"#D4DDDF"
@@ -580,7 +580,7 @@ Item {
                     Label {text:"План реабілітації";font.bold:true;font.pixelSize:18;color:root.ink}
                     Label {Layout.fillWidth:true;text:"Клінічні цілі редагує відповідальний психолог на своєму пристрої. Тут — перегляд прогресу.";color:root.muted;wrapMode:Text.WordWrap}
                     Repeater {
-                        model:root.bridge.rehabilitationGoals
+                        model:patientDialog.activeTab==="rehab"&&root.bridge.role==="admin"?root.bridge.rehabilitationGoals:[]
                         delegate: Rectangle {
                             required property var modelData;Layout.fillWidth:true;radius:15
                             implicitHeight:rehabLine.implicitHeight+30;color:"white";border.color:"#D4DDDF"
@@ -604,7 +604,7 @@ Item {
                     Layout.fillWidth:true;spacing:10
                     Label {text:"Консультації";font.bold:true;font.pixelSize:18;color:root.ink}
                     Repeater {
-                        model:patientDialog.patient.consultations||[]
+                        model:patientDialog.activeTab==="clinical"&&root.bridge.role==="admin"?(patientDialog.patient.consultations||[]):[]
                         delegate: Rectangle {
                             required property var modelData;Layout.fillWidth:true;radius:15
                             implicitHeight:clinicalLine.implicitHeight+28;color:"white";border.color:"#D4DDDF"
