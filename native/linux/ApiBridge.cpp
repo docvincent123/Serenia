@@ -1118,6 +1118,23 @@ void ApiBridge::importLicense(const QUrl&url){
  working_=true;error_.clear();emit stateChanged();
  request("POST","/api/license",envelope.object(),[this](const QJsonValue&){working_=false;notify("Ліцензію перевірено сервером і активовано.");loadCenterConfiguration();emit operationCompleted("license");});
 }
+void ApiBridge::activateLicenseText(const QString &signedJson) {
+ if(!adminEdition_ || role_!="admin" || working_)return;
+ const QByteArray bytes=signedJson.trimmed().toUtf8();
+ if(bytes.isEmpty() || bytes.size()>65536)return issue("Вставте підписаний JSON-файл ліцензії, не звичайний пароль.");
+ QJsonParseError parseError{};
+ const auto document=QJsonDocument::fromJson(bytes,&parseError);
+ if(parseError.error!=QJsonParseError::NoError || !document.isObject() ||
+    document.object().value("format").toString()!="quremed.solvia.license" ||
+    !document.object().value("payload").isString() ||
+    !document.object().value("signature").isString())
+   return issue("Потрібна підписана ліцензія від Lemvori Control у форматі JSON.");
+ working_=true;error_.clear();emit stateChanged();
+ request("POST","/api/license",document.object(),[this](const QJsonValue&){
+  working_=false;notify("Ліцензію перевірено і закріплено за цим сервером.");
+  loadCenterConfiguration();emit operationCompleted("license");
+ });
+}
 void ApiBridge::saveCenterModules(const QVariantList&enabled){
  if(!adminEdition_||role_!="admin"||working_)return;
  working_=true;error_.clear();emit stateChanged();
