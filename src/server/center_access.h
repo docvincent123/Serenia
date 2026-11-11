@@ -64,10 +64,11 @@ J verifyCenterLicense(const J& envelope,const std::string& serverId) {
 }
 J centerAccess(DB& db) {
     auto id=installationId(db);
-    // Opt-in deployment: upgrading an existing centre never silently locks it out.
-    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty()&&environmentUtf8("SOLVIA_LICENSE_REQUIRED")=="1")return {{"status","publisher_key_required"},{"write_allowed",false},{"server_id",id}};
-    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty())return {{"status","unmanaged"},{"write_allowed",true},{"server_id",id}};
+    // Legacy centers without any activation remain opt-in. Once activated,
+    // losing the verifier configuration must never unlock an expired grant.
     auto rows=db.query("SELECT envelope FROM center_license WHERE id=1");
+    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty()&&(!rows.empty()||environmentUtf8("SOLVIA_LICENSE_REQUIRED")=="1"))return {{"status","publisher_key_required"},{"write_allowed",false},{"server_id",id}};
+    if(environmentUtf8("SOLVIA_LICENSE_PUBLIC_KEY").empty())return {{"status","unmanaged"},{"write_allowed",true},{"server_id",id}};
     if(rows.empty())return {{"status","activation_required"},{"write_allowed",false},{"server_id",id}};
     try {
         auto grant=verifyCenterLicense(J::parse(rows[0]["envelope"].get<std::string>()),id);

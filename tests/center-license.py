@@ -16,6 +16,7 @@ with tempfile.TemporaryDirectory() as tmp:
   result=dict(format='quremed.solvia.license',payload=base64.b64encode(payload).decode(),signature=base64.b64encode((p/'sig').read_bytes()).decode());doc.write_text(json.dumps(result));return result
  active=sign(int(time.time())+3600)
  assert status(doc)['write_allowed'] is True
+ assert status(doc,config={**env,'SOLVIA_LICENSE_PUBLIC_KEY':'','SOLVIA_LICENSE_REQUIRED':''})['write_allowed'] is False
  assert status(doc,'b'*64)['status']=='invalid'
  changed={**active,'payload':base64.b64encode(b'{}').decode()};doc.write_text(json.dumps(changed));assert status(doc)['status']=='invalid'
  changed={**active,'signature':'!!!!'};doc.write_text(json.dumps(changed));assert status(doc)['status']=='invalid'

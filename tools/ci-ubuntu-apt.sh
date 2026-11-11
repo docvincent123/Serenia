@@ -4,7 +4,7 @@ set -Eeuo pipefail
 [[ ${GITHUB_ACTIONS:-} == true ]] || { echo 'This helper is only for disposable GitHub Actions runners.' >&2; exit 2; }
 sudo python3 - <<'PY'
 from pathlib import Path
-paths=[Path('/etc/apt/sources.list')]
+paths=[Path('/etc/apt/sources.list'),Path('/etc/apt/apt-mirrors.txt'),Path('/etc/apt/apt-mirrors-security.txt')]
 folder=Path('/etc/apt/sources.list.d')
 if folder.is_dir():paths+=list(folder.glob('*.list'))+list(folder.glob('*.sources'))
 for path in paths:
