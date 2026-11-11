@@ -55,6 +55,10 @@ int main(int argc,char **argv){
     page("Лист очікування");page("Сім’ї");click("+ Додати");verify(lookup("objectName","name"),"Family editor missing");click("Скасувати");
     page("Пацієнти");verify(waitFor([&]{return !bridge.patients().isEmpty();}),"Patient directory missing");pump();click("Картка");verify(waitFor([&]{return bridge.patientRecord().value("id").toInt()==19;}),"Patient record missing");pump();
     verify(waitFor([&]{return !bridge.patientVisitsLoading() && bridge.patientVisitsTotal()==11;}),"Upcoming patient visits did not load");
+    const auto ticketPath=config.filePath("appointment-ticket.pdf");
+    bridge.exportAppointmentTicket(QUrl::fromLocalFile(ticketPath));
+    QFile ticket(ticketPath);
+    verify(ticket.open(QIODevice::ReadOnly) && ticket.read(5)=="%PDF-","Next appointment ticket not a PDF");
     clickObject("patient-tab-visits");
     verify(lookup("text","Історія та майбутні прийоми"),"Visit timeline tab not visible");
     clickObject("patient-visits-history");
