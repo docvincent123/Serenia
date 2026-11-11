@@ -77,7 +77,7 @@ void imageData(const std::string&value,bool optional=false){
 }
 std::string lanUrl(){
 #ifndef _WIN32
-    std::ifstream file("/etc/solvia/address");std::string ip;file>>ip;
+    std::ifstream file("/etc/lemvori-care/address");std::string ip;file>>ip;
     if(std::regex_match(ip,std::regex("[0-9]{1,3}(\\.[0-9]{1,3}){3}")))return "https://"+ip+":8443";
 #endif
     return {};
