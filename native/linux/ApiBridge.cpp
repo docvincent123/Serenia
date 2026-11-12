@@ -932,13 +932,16 @@ void ApiBridge::loadWorkspace(const QString &section, const QString &query, cons
 void ApiBridge::openPatient(int id) {
     if (!workspaceAllowed("patient") || id <= 0) return;
     const int generation = ++recordGeneration_;
-    patientRecord_.clear(); familyOptions_.clear(); emit patientRecordChanged();
+    patientRecord_.clear(); familyOptions_.clear(); rehabilitationGoals_.clear();
+    ++patientVisitGeneration_; patientVisits_.clear(); patientVisitsTotal_=0;
+    patientVisitsPage_=1; patientVisitsPeriod_="upcoming"; patientVisitsError_.clear(); patientVisitsLoading_=false;
+    emit patientRecordChanged();
     rehabilitationGoals_.clear();
-    if (role_ == "admin") request("GET", "/api/patients/" + QString::number(id) + "/rehab-goals", {}, [this, generation](const QJsonValue &value) {
+    if (role_ == "admin" && moduleEnabled("rehabilitation")) request("GET", "/api/patients/" + QString::number(id) + "/rehab-goals", {}, [this, generation](const QJsonValue &value) {
         if (generation != recordGeneration_) return;
         rehabilitationGoals_ = value.toArray().toVariantList(); emit patientRecordChanged();
     });
-    request("GET", "/api/document-templates", {}, [this, generation](const QJsonValue &value) {
+    if (moduleEnabled("documents")) request("GET", "/api/document-templates", {}, [this, generation](const QJsonValue &value) {
         if (generation != recordGeneration_) return;
         documentTemplates_ = value.toArray().toVariantList(); emit patientRecordChanged();
     });
@@ -949,10 +952,96 @@ void ApiBridge::openPatient(int id) {
     request("GET", "/api/patients/" + QString::number(id), {}, [this, generation](const QJsonValue &value) {
         if (generation != recordGeneration_) return;
         patientRecord_ = value.toObject().toVariantMap(); emit patientRecordChanged();
+        loadPatientVisits("upcoming", 1);
     });
 }
+void ApiBridge::loadPatientVisits(const QString &period, int page) {
+    if (!workspaceAllowed("patient") || patientRecord_.value("id").toInt()<=0) return;
+    if (period!="upcoming" && period!="history") return;
+    if (page<1 || page>100000) return;
+    const int id=patientRecord_.value("id").toInt();
+    const int generation=recordGeneration_;
+    const int visitGeneration=++patientVisitGeneration_;
+    patientVisitsPeriod_=period; patientVisitsPage_=page; patientVisits_.clear();
+    patientVisitsTotal_=0; patientVisitsError_.clear(); patientVisitsLoading_=true;
+    emit patientRecordChanged();
+    QUrlQuery query;
+    query.addQueryItem("period", period);
+    query.addQueryItem("page", QString::number(page));
+    const QString path="/api/patients/"+QString::number(id)+"/appointments?"+query.toString(QUrl::FullyEncoded);
+    request("GET", path, {}, [this,generation,visitGeneration,id,page](const QJsonValue&value){
+        if (generation!=recordGeneration_ || visitGeneration!=patientVisitGeneration_ ||
+            patientRecord_.value("id").toInt()!=id) return;
+        const auto response=value.toObject();
+        patientVisits_=response.value("items").toArray().toVariantList();
+        patientVisitsTotal_=response.value("total").toInt();
+        patientVisitsPage_=response.value("page").toInt(page);
+        patientVisitsLoading_=false; emit patientRecordChanged();
+    }, true, [this,generation,visitGeneration](const QString&error){
+        if (generation!=recordGeneration_ || visitGeneration!=patientVisitGeneration_)return;
+        patientVisitsLoading_=false; patientVisitsError_=error; patientVisits_.clear();
+        emit patientRecordChanged();
+    });
+}
+
+void ApiBridge::updatePatientReferral(int referralId, const QString &status) {
+    if (!workspaceAllowed("patient") || working_ || referralId<=0 ||
+        (role_!="admin" && role_!="reception")) return;
+    const QStringList allowed{"recommended","sent","completed","cancelled"};
+    if(!allowed.contains(status))return issue("Оберіть коректний статус направлення.");
+    bool belongs=false;
+    for(const auto &entry:patientRecord_.value("referrals").toList()) {
+        const auto referral=entry.toMap();
+        if(referral.value("id").toInt()==referralId) {
+            belongs=referral.value("status").toString()!=status;
+            break;
+        }
+    }
+    if (!belongs) return issue("Направлення не належить відкритій картці або статус не змінено.");
+    const int patientId=patientRecord_.value("id").toInt();
+    const int generation=recordGeneration_;
+    working_=true;error_.clear();emit stateChanged();
+    request("PATCH","/api/referrals/"+QString::number(referralId),
+        {{"status",status}},[this,patientId,generation](const QJsonValue&){
+        working_=false;notify("Статус направлення оновлено.");
+        emit operationCompleted("referral");
+        if(generation==recordGeneration_ && patientRecord_.value("id").toInt()==patientId)
+            openPatient(patientId);
+    });
+}
+
+void ApiBridge::exportAppointmentTicket(const QUrl &file) {
+    if (!workspaceAllowed("patient") || patientRecord_.value("id").toInt()<=0 || !file.isLocalFile())
+        return issue("Відкрийте картку пацієнта для друку талона.");
+    if (patientVisitsPeriod_!="upcoming" || patientVisitsLoading_ || patientVisits_.isEmpty())
+        return issue("Спочатку завантажте майбутні прийоми пацієнта.");
+    const auto next=patientVisits_.first().toMap();
+    if (next.value("start").toString().isEmpty())
+        return issue("У найближчого прийому немає дати.");
+    const QString center=CarePdf::text(centerConfiguration_.value("center_name","Lemvori Care"));
+    QString html="<h2>"+center+"</h2><p>"+
+        CarePdf::text(centerConfiguration_.value("address"))+" · "+
+        CarePdf::text(centerConfiguration_.value("phone"))+"</p><hr>";
+    html+="<h1>Талон на прийом</h1>";
+    html+="<p><b>Пацієнт:</b> "+CarePdf::text(patientRecord_.value("name"))+"</p>";
+    html+="<p><b>Номер картки:</b> "+CarePdf::text(patientRecord_.value("patient_no"))+"</p>";
+    html+="<p><b>Дата й час:</b> "+CarePdf::text(next.value("start"))+"</p>";
+    html+="<p><b>Спеціаліст:</b> "+CarePdf::text(next.value("psychologist"))+"</p>";
+    html+="<p><b>Кабінет:</b> "+CarePdf::text(next.value("room"))+"</p>";
+    html += QStringLiteral("<p style='font-size:10pt;color:#4A5C6A'>"
+        "Цей талон підтверджує інформацію про запис на момент друку. "
+        "При перенесенні або скасуванні прийому уточніть актуальний час у реєстратурі.</p>");
+    if(!CarePdf::save(file,"Талон на прийом · "+patientRecord_.value("name").toString(),html))
+        return issue("Не вдалося зберегти талон PDF.");
+    notify("Талон майбутнього прийому збережено у PDF.");
+}
+
 void ApiBridge::closePatient() {
-    ++recordGeneration_; ++detailGeneration_; patientRecord_.clear(); familyOptions_.clear(); detailRecord_.clear(); emit patientRecordChanged(); emit detailChanged();
+    ++recordGeneration_; ++detailGeneration_; ++patientVisitGeneration_;
+    patientRecord_.clear(); patientVisits_.clear(); patientVisitsTotal_=0;
+    patientVisitsPage_=1; patientVisitsError_.clear(); patientVisitsLoading_=false;
+    familyOptions_.clear(); rehabilitationGoals_.clear(); detailRecord_.clear();
+    emit patientRecordChanged(); emit detailChanged();
 }
 
 void ApiBridge::workspaceAction(const QString &section, const QString &action, int id, const QVariantMap &fields) {

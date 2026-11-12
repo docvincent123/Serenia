@@ -14,6 +14,10 @@ on:
       - 'tests/native-qt-*.cpp'
       - '.github/workflows/native-qt-linux.yml'
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qt-native:
     runs-on: ubuntu-24.04
@@ -57,15 +61,19 @@ jobs:
           if ldd build/native-linux/solvia-native | grep -Ei 'webkit|chromium|electron|webengine'; then
             echo 'Native executable unexpectedly depends on web rendering'; exit 1
           fi
-      - name: Create installable SOLVIA Native Debian package
-        run: bash native/linux/package-deb.sh
+      - name: Create installable Lemvori Care Debian package
+        run: |
+          bash native/linux/package-deb.sh
+          ls -lh build/native-linux/solvia-native_*.deb
+          dpkg-deb --field build/native-linux/solvia-native_*.deb Package Version Architecture
       - uses: actions/upload-artifact@v4
         with:
           name: lemvori-care-native-linux-x64
           path: |
             build/native-linux/solvia-native
             build/native-linux/solvia-native_*.deb
-          retention-days: 7
+          retention-days: 14
+          if-no-files-found: error
 
 
   qt-windows:
@@ -116,4 +124,5 @@ jobs:
         with:
           name: lemvori-care-native-windows-x64
           path: out/lemvori-care-native/
-          retention-days: 7
+          retention-days: 14
+          if-no-files-found: error

@@ -50,7 +50,8 @@ class Center(BaseHTTPRequestHandler):
             "/api/admin/recovery/12": {"id":12,"patient":"Тестовий пацієнт","state":"open","revision":2,"draft_version":3,"payload":{"note":"Запис із телефона","patient_id":19,"appointment_id":4,"client_key":"test-key-123456789"},"existing":[],"server_draft":None},
             "/api/patients/19/documents": [{"id":1,"title":"Згода","status":"signed","content":"Текст згоди","signed_by_name":"Пацієнт"}],
             "/api/waiting-list": [{"id":6,"version":3,"patient_id":19,"psychologist_id":7,"status":"waiting"}],
-            "/api/patients/19": {"id":19,"name":"Synthetic patient","psychologist_id":7,"status":"active","courses":[{"id":4,"course_no":1,"started_at":"2026-11-01","status":"active","psychologist":"Тестовий психолог"}],"documents":[{"id":1,"title":"Згода","status":"signed"}]},
+            "/api/patients/19": {"id":19,"name":"Synthetic patient","psychologist_id":7,"status":"active","courses":[{"id":4,"course_no":1,"started_at":"2026-11-01","status":"active","psychologist":"Тестовий психолог"}],"documents":[{"id":1,"title":"Згода","status":"signed"}],
+                                 "referrals":[{"id":7,"destination_type":"Психотерапія","destination_name":"Тестовий спеціаліст","status":"recommended","reason":"Планова консультація"}]},
             "/api/families": [{"id":2,"name":"Synthetic family","member_count":2}],
             "/api/meta": {"psychologists":[{"id":7,"name":"Synthetic psychologist"}],"rooms":[{"id":2,"name":"Room 2"}]},
             "/api/slots": ["10:15", "14:15"],
@@ -65,6 +66,19 @@ class Center(BaseHTTPRequestHandler):
                 "api_url": f"https://127.0.0.1:{self.server.server_port}",
             },
         }
+        if path == "/api/patients/19/appointments":
+            from urllib.parse import parse_qs, urlsplit
+            params = parse_qs(urlsplit(self.path).query)
+            period = params.get("period", ["upcoming"])[0]
+            page = int(params.get("page", ["1"])[0])
+            if period not in ("upcoming", "history") or page < 1:
+                return self.respond({"error":"Invalid visit request"},400)
+            items = [{"id": 400+page, "start":"2026-11-12T10:00" if period=="upcoming" else "2026-10-12T10:00",
+                      "psychologist":"Тестовий психолог", "room":"Кабінет 2",
+                      "status":"scheduled" if period=="upcoming" else "completed",
+                      "visit_status":"" if period=="upcoming" else "completed"}]
+            return self.respond({"items":items,"total":11 if period=="upcoming" else 1,
+                                 "page":page,"page_size":10})
         if path == "/api/patient-directory":
             from urllib.parse import parse_qs, urlsplit
             params = parse_qs(urlsplit(self.path).query)
@@ -149,5 +163,7 @@ assert document["paper_signed"] is True
 recovery=next(body for path,body in Center.requests if path=="/api/admin/recovery/12")
 assert recovery["revision"]==2 and recovery["draft_version"]==3
 print("PASS: group participants, signed paper scan with preserved original, and recovery revision guards")
+if "--ui" in sys.argv[2:]:
+    assert ("/api/referrals/7", {"status":"sent"}) in Center.requests, "Referral follow-up status was not saved by Qt Native"
 assert ("/api/users/4/sessions", {}) in Center.requests, "Admin did not revoke selected employee sessions"
 assert ("/api/admin/module-permissions", {"user_id":4,"blocked_modules":["documents","clinical"]}) in Center.requests, "Qt access editor did not send selected restrictions"
