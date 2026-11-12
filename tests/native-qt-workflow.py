@@ -1,5 +1,7 @@
 """Exercise the compiled Qt bridge against an isolated HTTPS fixture."""
 import json
+import hashlib
+import base64
 import pathlib
 import ssl
 import subprocess
@@ -9,6 +11,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SERVER_ID = "b" * 64
+UPDATE_BYTES = b"!<arch>\nSynthetic DEB package for transport tests"
+UPDATE_RELEASE = {"available":True,"platform":"linux","version":"3.13.0", "sha256":hashlib.sha256(UPDATE_BYTES).hexdigest(),"size_bytes":len(UPDATE_BYTES),"filename":"SOLVIA-3.13.0-Linux-x64.deb","release_notes":"Тестова версія"}
 
 
 class FixtureServer(ThreadingHTTPServer):
@@ -34,7 +38,20 @@ class Center(BaseHTTPRequestHandler):
     def do_GET(self):
         role = self.headers.get("Authorization", "").removeprefix("Bearer ")
         path = self.path.split("?", 1)[0]
+        if path == "/api/desktop-updates/package":
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(UPDATE_BYTES)))
+            self.end_headers()
+            self.wfile.write(UPDATE_BYTES)
+            return
+        update_release = dict(UPDATE_RELEASE)
+        if path == "/api/desktop-updates" and "?" in self.path:
+            self.server.update_checks = getattr(self.server, "update_checks", 0) + 1
+            if self.server.update_checks > 1:
+                update_release["sha256"] = "0" * 64
         responses = {
+            "/api/desktop-updates": update_release if "?" in self.path else [UPDATE_RELEASE],
+            "/api/mobile-update": {"available":True,"version_name":"3.13.0","version_code":182046,"sha256":"a"*64,"size_bytes":1024},
             "/api/health": {"ok": True, "server_id": SERVER_ID},
             "/api/me": {"role": role, "name": "Synthetic account"},
             "/api/settings/center": {"center_name":"Тестовий центр","address":"Synthetic address"},
@@ -137,6 +154,11 @@ if "--ui" in sys.argv[2:]:
     print("PASS: native role navigation, dialogs and responsive layout")
     sys.exit(0)
 
+published = next(body for path,body in Center.requests if path == "/api/desktop-updates")
+assert base64.b64decode(published["package_base64"]) == UPDATE_BYTES
+assert published["sha256"] == UPDATE_RELEASE["sha256"] and published["version"] == "3.13.0"
+assert published["platform"] == "linux"
+print("PASS: native administrator publication, bounded package validation and verified DEB download")
 bookings = [body for path, body in Center.requests if path == "/api/appointments"]
 assert len(bookings) == 2, "Double submit must create only one booking"
 assert bookings[1]["patient_ids"] == [19,20] and bookings[1]["kind"] == "group"

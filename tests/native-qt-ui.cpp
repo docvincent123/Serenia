@@ -50,6 +50,21 @@ int main(int argc,char **argv){
     bridge.login("reception","test");verify(waitFor([&]{return bridge.role()=="reception";}),"Reception login failed");pump();
     auto page=[&](const QString &name){verify(QMetaObject::invokeMethod(window,"showPage",Q_ARG(QVariant,QVariant(name))),"Navigation method failed");pump();verify(waitFor([&]{return !bridge.workspaceLoading();}),"Workspace stuck loading");};
     verify(!lookup("text","Адміністрування")&&!lookup("text","Супервізії"),"Reception sees management menu");
+    click(bridge.displayName());
+    verify(lookup("placeholderText","Поточний пароль"),"Profile form missing");
+    click("Закрити");
+    page("Пацієнти");click("+ Новий пацієнт");
+    auto *registrationName=lookup("placeholderText","Прізвище, ім’я та по батькові");
+    verify(registrationName,"Registration form missing");
+    const auto registrationBounds=registrationName->mapRectToScene(registrationName->boundingRect());
+    verify(registrationBounds.left()>=0&&registrationBounds.right()<=window->width(),"Registration fields overflow small window");
+    if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))window->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/registration.png");
+    auto *category=lookup("objectName","registration-category");verify(category,"Category selector missing");
+    auto *categoryPopup=category->property("popup").value<QObject*>();verify(categoryPopup,"Category popup missing");
+    QMetaObject::invokeMethod(categoryPopup,"open");pump();
+    verify(categoryPopup->property("visible").toBool(),"Category popup did not open");
+    QMetaObject::invokeMethod(categoryPopup,"close");pump();
+    click("Скасувати");
     page("Передача зміни");verify(lookup("text","Завдання наступній зміні"),"Handover row missing");click("+ Додати");
     auto *summary=lookup("objectName","summary");verify(summary,"Handover editor missing");summary->setProperty("text","Передати зміну");click("Зберегти");verify(waitFor([&]{return !bridge.working();}),"Handover save failed");pump();
     page("Лист очікування");page("Сім’ї");click("+ Додати");verify(lookup("objectName","name"),"Family editor missing");click("Скасувати");
@@ -102,6 +117,20 @@ int main(int argc,char **argv){
     for(const auto &name:QStringList{"Телефони","Синхронізація","Адміністрування"}){QMetaObject::invokeMethod(adminWindow,"showPage",Q_ARG(QVariant,QVariant(name)));pump();}
     QMetaObject::invokeMethod(adminWindow,"showPage",Q_ARG(QVariant,QVariant("Синхронізація")));pump();
     auto *recover=find(adminWindow->contentItem(),"text","Звірити запис");verify(recover,"Recovery action missing");QMetaObject::invokeMethod(recover,"clicked");verify(waitFor([&]{return admin.detailRecord().value("id").toInt()==12;}),"Recovery detail failed");pump();verify(find(adminWindow->contentItem(),"text","Запис із телефона"),"Recovery source text missing");
+    auto *closeRecovery=find(adminWindow->contentItem(),"text","Закрити");
+    verify(closeRecovery,"Recovery close missing");QMetaObject::invokeMethod(closeRecovery,"clicked");pump();
+    QMetaObject::invokeMethod(adminWindow,"showPage",Q_ARG(QVariant,QVariant("Адміністрування")));pump();
+    auto *workspace=find(adminWindow->contentItem(),"objectName","admin-workspace");verify(workspace,"Admin workspace missing");
+    auto select=[&](const QString &section){verify(QMetaObject::invokeMethod(workspace,"select",Q_ARG(QVariant,QVariant(section))),"Admin section failed");pump();};
+    select("team");
+    auto *add=find(adminWindow->contentItem(),"text","+ Додати");verify(add,"Staff create action missing");QMetaObject::invokeMethod(add,"clicked");pump();
+    auto *field=find(adminWindow->contentItem(),"text","ПІБ");verify(field,"Staff editor missing");
+    if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/admin-staff.png");
+    auto *cancel=find(adminWindow->contentItem(),"text","Скасувати");verify(cancel,"Staff cancel missing");QMetaObject::invokeMethod(cancel,"clicked");pump();
+    select("updates");
+    verify(waitFor([&]{return !admin.updatesLoading();}),"Update inventory did not finish");pump();
+    verify(find(adminWindow->contentItem(),"objectName","update-version"),"Update publisher form missing");
+    if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/updates.png");
     if(!warnings.isEmpty())qFatal("QML warnings: %s",qPrintable(warnings.join("\n")));
     qInfo("PASS: reception, director and admin native UI and small-window login");
 }

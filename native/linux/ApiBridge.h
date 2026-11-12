@@ -11,6 +11,11 @@
 
 class ApiBridge final : public QObject {
     Q_OBJECT
+    Q_PROPERTY(QVariantMap clientUpdate READ clientUpdate NOTIFY updatesChanged)
+    Q_PROPERTY(QVariantList updateReleases READ updateReleases NOTIFY updatesChanged)
+    Q_PROPERTY(QVariantList updateDevices READ updateDevices NOTIFY updatesChanged)
+    Q_PROPERTY(bool updatesLoading READ updatesLoading NOTIFY updatesChanged)
+    Q_PROPERTY(QString updatesError READ updatesError NOTIFY updatesChanged)
     Q_PROPERTY(QVariantMap consentPolicy READ consentPolicy NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap centerConfiguration READ centerConfiguration NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap licenseStatus READ licenseStatus NOTIFY configurationChanged)
@@ -67,6 +72,16 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QVariantList psychologists READ psychologists NOTIFY bookingOptionsChanged)
     Q_PROPERTY(QVariantList rooms READ rooms NOTIFY bookingOptionsChanged)
 public:
+    QVariantMap clientUpdate() const { return clientUpdate_; }
+    Q_INVOKABLE void checkClientUpdate();
+    Q_INVOKABLE void downloadClientUpdate(const QUrl &file);
+    QVariantList updateReleases() const { return updateReleases_; }
+    QVariantList updateDevices() const { return updateDevices_; }
+    bool updatesLoading() const { return updatesLoading_; }
+    QString updatesError() const { return updatesError_; }
+    Q_INVOKABLE void loadUpdates();
+    Q_INVOKABLE void publishUpdate(const QUrl &file, const QString &platform, const QString &version,
+                                  int build, const QString &notes, const QString &pilotIds);
     explicit ApiBridge(bool adminEdition = false, QObject *parent = nullptr);
     QVariantMap consentPolicy() const { return consentPolicy_; }
     QVariantMap centerConfiguration() const { return centerConfiguration_; }
@@ -189,6 +204,7 @@ public:
                                      const QString &dob, const QString &category,
                                      int psychologistId, bool bookAfter);
 signals:
+    void updatesChanged();
     void configurationChanged();
     void detailChanged();
     void workspaceChanged();
@@ -200,6 +216,11 @@ signals:
     void operationCompleted(const QString &operation);
     void patientRegistered(const QVariantMap &patient, bool bookAfter);
 private:
+    QVariantMap clientUpdate_;
+    QVariantList updateReleases_, updateDevices_;
+    bool updatesLoading_ = false;
+    QString updatesError_;
+    int updatesGeneration_ = 0;
     using Callback = std::function<void(const QJsonValue &)>;
     void request(const QByteArray &method, const QString &path, const QJsonObject &body,
                  Callback completed, bool quiet = false,

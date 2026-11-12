@@ -37,10 +37,11 @@ Dialog {
         }
     }
     contentItem: ScrollView {
+        id: formsScroll
         clip: true; contentWidth: availableWidth
         leftPadding: 24; rightPadding: 24
         ColumnLayout {
-            width: parent.width; spacing: 12
+            width: formsScroll.availableWidth; spacing: 12
             Label {
                 Layout.fillWidth: true
                 text: "Оберіть бланк. PDF матиме назву та реквізити центру, місця для ПІБ, дати й власноручних підписів."

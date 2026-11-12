@@ -56,16 +56,16 @@ Dialog {
             GridLayout {
                 Layout.fillWidth:true;columns:scroll.availableWidth>580?2:1
                 columnSpacing:14;rowSpacing:10
-                ColumnLayout{Layout.fillWidth:true;spacing:5
+                ColumnLayout{Layout.fillWidth:true;Layout.preferredWidth:1;Layout.minimumWidth:0;Layout.alignment:Qt.AlignTop;spacing:5
                     Label{text:"Телефон *";font.bold:true;color:"#11212D"}
                     Field { id:phone;Layout.fillWidth:true;placeholderText:"+380…";Accessible.name:"Телефон"
                         inputMethodHints:Qt.ImhDialableCharactersOnly }
                     Label {visible:phone.text.length>0&&!root.phoneValid
                         text:"Перевірте номер: 7–15 цифр";font.pixelSize:11;color:"#8C3632"}
                 }
-                ColumnLayout{Layout.fillWidth:true;spacing:5
+                ColumnLayout{Layout.fillWidth:true;Layout.preferredWidth:1;Layout.minimumWidth:0;Layout.alignment:Qt.AlignTop;spacing:5
                     Label{text:"Дата народження *";font.bold:true;color:"#11212D"}
-                    Field { id:dob;Layout.fillWidth:true;placeholderText:"РРРР-ММ-ДД";inputMask:"9999-99-99";Accessible.name:"Дата народження" }
+                    Field { id:dob;Layout.fillWidth:true;placeholderText:"РРРР-ММ-ДД";maximumLength:10;inputMethodHints:Qt.ImhDate;Accessible.name:"Дата народження" }
                     Label {visible:dob.text.length>0&&!root.dateValid
                         text:"Введіть дійсну дату, не пізніше сьогодні";font.pixelSize:11;color:"#8C3632"}
                 }
@@ -73,14 +73,14 @@ Dialog {
             GridLayout {
                 Layout.fillWidth:true;columns:scroll.availableWidth>580?2:1
                 columnSpacing:14;rowSpacing:10
-                ColumnLayout{Layout.fillWidth:true;spacing:5
+                ColumnLayout{Layout.fillWidth:true;Layout.preferredWidth:1;Layout.minimumWidth:0;Layout.alignment:Qt.AlignTop;spacing:5
                     Label{text:"Категорія *";font.bold:true;color:"#11212D"}
-                    ComboBox { id:category;Layout.fillWidth:true;implicitHeight:46;model:["Військовий/військова","Ветеран/ветеранка","Партнер/партнерка","Дитина","Інше"]
+                    CareComboBox { id:category;objectName:"registration-category";Layout.fillWidth:true;implicitHeight:46;model:["Військовий/військова","Ветеран/ветеранка","Партнер/партнерка","Дитина","Інше"]
                         background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"} }
                 }
-                ColumnLayout{Layout.fillWidth:true;spacing:5
+                ColumnLayout{Layout.fillWidth:true;Layout.preferredWidth:1;Layout.minimumWidth:0;Layout.alignment:Qt.AlignTop;spacing:5
                     Label{text:"Відповідальний психолог *";font.bold:true;color:"#11212D"}
-                    ComboBox { id:psychologist;Layout.fillWidth:true;implicitHeight:46;model:root.bridge.bookingPsychologists;textRole:"name";valueRole:"id"
+                    CareComboBox { id:psychologist;Layout.fillWidth:true;implicitHeight:46;model:root.bridge.bookingPsychologists;textRole:"name";valueRole:"id"
                         background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"} }
                 }
             }

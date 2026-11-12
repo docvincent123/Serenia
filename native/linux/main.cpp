@@ -14,7 +14,7 @@
 int main(int argc, char **argv) {
     QGuiApplication app(argc, argv);
     app.setOrganizationName("LemvoriLab");
-    app.setApplicationVersion("3.2.0-preview7");
+    app.setApplicationVersion("3.13.0+182046");
     app.setApplicationName("Lemvori Care");
     const bool adminEdition = app.arguments().contains(QStringLiteral("--admin"))
         || QFileInfo(app.applicationFilePath()).completeBaseName().compare("Lemvori Care Admin", Qt::CaseInsensitive) == 0;

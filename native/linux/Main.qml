@@ -243,7 +243,7 @@ ApplicationWindow {
             border.width: field.activeFocus ? 2 : 1
         }
     }
-    component CareSelect: ComboBox {
+    component CareSelect: CareComboBox {
         id: select
         implicitHeight: 40
         leftPadding: 12
@@ -335,7 +335,7 @@ ApplicationWindow {
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 3
                         Label { textFormat:Text.PlainText; text: root.title; color: root.ink; font.pixelSize: 18; font.bold: true }
-                        Label { textFormat:Text.PlainText; text: "Реабілітаційний центр · " + (Qt.application.version || "3.2.0-preview7"); color: root.muted; font.pixelSize: 12 }
+                        Label { textFormat:Text.PlainText; text: "Реабілітаційний центр · " + (Qt.application.version || "3.13.0+182046"); color: root.muted; font.pixelSize: 12 }
                     }
                 }
                 Label { textFormat:Text.PlainText; text: "Вхід у систему"; color: root.ink; font.pixelSize: 28; font.bold: true; Layout.topMargin: 9 }
@@ -403,14 +403,14 @@ ApplicationWindow {
                 Image { source: "qrc:/brand.png"; Layout.preferredWidth: 38; Layout.preferredHeight: 38; fillMode: Image.PreserveAspectFit }
                 ColumnLayout {
                     spacing: 1
-                    Label { textFormat:Text.PlainText; text: root.centerName; font.pixelSize: 19; font.bold: true; color: root.ink; elide: Text.ElideRight; Layout.maximumWidth: 340 }
+                    Label { textFormat:Text.PlainText; text: root.centerName; font.pixelSize: 19; font.bold: true; color: root.ink; elide: Text.ElideRight; Layout.maximumWidth: root.width < 1100 ? 190 : 340 }
                     Label { textFormat:Text.PlainText; text: api.adminEdition ? "Lemvori Care Admin · Адміністрування" : "Lemvori Care · Робоче місце"; font.pixelSize: 11; color: root.muted }
                 }
                 Rectangle { width: 1; height: 25; color: root.line }
                 Text { textFormat:Text.PlainText; text: root.roleLabel; color: root.muted; font.pixelSize: 13 }
                 Item { Layout.fillWidth: true }
                 Text { textFormat:Text.PlainText; text: !api.online ? "Сервер недоступний" : api.lastRefresh ? "Оновлено о " + api.lastRefresh : "Синхронізація…";
-                       font.pixelSize: 11; color: root.muted }
+                       visible:root.width>=1100; font.pixelSize: 11; color: root.muted }
                 Rectangle { width: 1; height: 27; color: root.line }
                 SolviaButton { Layout.maximumWidth:170; text:api.displayName || "Профіль"; subtle:true; enabled:!api.working; onClicked:profileDialog.open() }
                 SolviaButton { text: "Вихід"; subtle: true; enabled: !api.databaseWorking; onClicked: { api.logout(); root.page="Головна" } }
@@ -1075,9 +1075,10 @@ ApplicationWindow {
         modal: true; anchors.centerIn: Overlay.overlay
         width: Math.min(640, root.width - 40); height: Math.min(530, root.height - 30)
         contentItem: ScrollView {
+            id: dischargeScroll
             contentWidth: availableWidth
             ColumnLayout {
-                width: parent.width
+                width: dischargeScroll.availableWidth
                 Text { textFormat:Text.PlainText; text: dischargeReview.record.patient_name || ""; font.bold: true; color: root.ink }
                 Repeater {
                     model: [["Підсумок","summary"],["Динаміка","dynamics"],["Рекомендації","recommendations"],["Подальший супровід","followup"]]
@@ -1296,11 +1297,15 @@ ApplicationWindow {
     }
     Dialog {
         id:profileDialog; title:"Профіль працівника"; modal:true; anchors.centerIn:Overlay.overlay
-        width:Math.min(460,root.width-40)
+        width:Math.min(540,root.width-40); height:Math.min(640,root.height-32)
         onClosed:{currentPassword.clear();nextPassword.clear();repeatPassword.clear()}
         closePolicy:api.working?Popup.NoAutoClose:Popup.CloseOnEscape
-        ColumnLayout {
-            anchors.fill:parent; spacing:10
+        contentItem: ScrollView {
+            id: profileScroll; clip:true; contentWidth:availableWidth
+            ColumnLayout {
+            width:profileScroll.availableWidth; spacing:10
+            Label { text:"Версія 3.13 · build 182046"; font.bold:true; color:root.muted }
+            SolviaButton { text:"Оновлення програми"; enabled:!api.working; onClicked:clientUpdateDialog.open() }
             Label { textFormat:Text.PlainText; text:api.displayName; font.bold:true; color:root.ink }
             Label { textFormat:Text.PlainText; text:root.roleLabel; color:root.muted }
             Label { textFormat:Text.PlainText; text:api.serverUrl; color:root.muted; Layout.fillWidth:true; wrapMode:Text.WrapAnywhere }
@@ -1310,6 +1315,7 @@ ApplicationWindow {
             CareField { id:repeatPassword; Layout.fillWidth:true; placeholderText:"Повторіть новий пароль"; echoMode:TextInput.Password }
             Label { textFormat:Text.PlainText; text:api.error; visible:!!text; color:"#8C3632"; Layout.fillWidth:true; wrapMode:Text.WordWrap }
             Label { textFormat:Text.PlainText; text:"Після зміни пароля всі сеанси облікового запису завершаться."; color:root.muted; Layout.fillWidth:true; wrapMode:Text.WordWrap }
+        }
         }
         footer:DialogButtonBox {
             SolviaButton { text:"Закрити"; enabled:!api.working; onClicked:profileDialog.close() }
@@ -1343,6 +1349,31 @@ ApplicationWindow {
             }
             SolviaButton { text:"Закрити"; onClicked:participantsDialog.close() }
         }
+    }
+    Dialog {
+        id:clientUpdateDialog; title:"Оновлення цього ПК"; modal:true; anchors.centerIn:Overlay.overlay
+        width:Math.min(580,root.width-32); height:Math.min(480,root.height-32)
+        onOpened:api.checkClientUpdate()
+        closePolicy:api.working?Popup.NoAutoClose:Popup.CloseOnEscape
+        contentItem:ScrollView {
+            id:clientUpdateScroll;clip:true;contentWidth:availableWidth
+            ColumnLayout {
+                width:clientUpdateScroll.availableWidth;spacing:14
+                Label { text:"Установлено: 3.13 · build 182046";font.bold:true }
+                Label { text:api.clientUpdate.version ? "Пакет сервера: "+api.clientUpdate.version : "Пакета ще немає або перевірка триває…";Layout.fillWidth:true;wrapMode:Text.WordWrap }
+                Label { text:api.clientUpdate.release_notes || "";textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap }
+                Label { text:"Пакет завантажується із сервера центру та перевіряється за SHA-256. Перед установкою збережіть роботу й закрийте програму.";Layout.fillWidth:true;wrapMode:Text.WordWrap }
+                Label { text:api.error || api.notice;Layout.fillWidth:true;wrapMode:Text.WordWrap;color:api.error?"#8C3632":root.muted }
+                SolviaButton { text:api.working?"Завантажуємо…":"Зберегти перевірений пакет"; enabled:!!api.clientUpdate.sha256&&!api.working;onClicked:clientPackage.open() }
+            }
+        }
+        footer:DialogButtonBox { SolviaButton { text:"Закрити";enabled:!api.working;onClicked:clientUpdateDialog.close() } }
+        Connections { target:api;function onStateChanged(){if(!api.authenticated){clientPackage.close();clientUpdateDialog.close()}} }
+    }
+    FileDialog {
+        id:clientPackage;title:"Зберегти пакет оновлення";fileMode:FileDialog.SaveFile
+        selectedFile:api.clientUpdate.filename || "Lemvori-Care-update"
+        onAccepted:api.downloadClientUpdate(selectedFile)
     }
     RegistrationDialog { id:newPatientDialog; bridge:api }
     LicenseOnboarding {

@@ -1,7 +1,9 @@
 #include "ApiBridge.h"
 #include "CarePdf.h"
 #include <stdexcept>
+#include <memory>
 #include <QBuffer>
+#include <QCryptographicHash>
 #include <QImageReader>
 #include <QImage>
 #include <QPdfWriter>
@@ -64,6 +66,8 @@ void ApiBridge::notify(const QString &message) {
 }
 
 void ApiBridge::clearSession() {
+    ++updatesGeneration_; clientUpdate_.clear(); updateReleases_.clear(); updateDevices_.clear();
+    updatesLoading_ = false; updatesError_.clear(); emit updatesChanged();
     consentPolicy_.clear(); centerConfiguration_.clear(); licenseStatus_.clear(); centerModules_.clear(); registrationSnapshot_.clear(); registrationReference_.clear(); emit configurationChanged();
     ++workspaceGeneration_; ++recordGeneration_; ++detailGeneration_;
     detailRecord_.clear(); emit detailChanged();
@@ -109,7 +113,7 @@ void ApiBridge::request(const QByteArray &method, const QString &path,
     QNetworkRequest req(QUrl(origin_ + path));
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setRawHeader("Accept", "application/json");
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(path == "/api/mobile-update" || path == "/api/desktop-updates" ? 120000 : 15000);
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                      QNetworkRequest::ManualRedirectPolicy);
     if (!token_.isEmpty())
@@ -1394,4 +1398,150 @@ void ApiBridge::openPdf(const QUrl&url){
  if(!authenticated()||!url.isLocalFile())return;
  const QFileInfo file(url.toLocalFile());if(!file.isFile()||file.suffix().compare("pdf",Qt::CaseInsensitive)!=0)return;
  if(!QDesktopServices::openUrl(url))issue("Відкрийте збережений PDF у системній програмі для друку.");
+}
+
+// Packages stay on the authenticated center server. Devices retain their own
+// installation/signature checks; publication never interrupts a consultation.
+void ApiBridge::loadUpdates() {
+    if (!adminEdition_ || role_ != "admin" || updatesLoading_) return;
+    const int generation = ++updatesGeneration_;
+    updatesLoading_ = true; updatesError_.clear();
+    updateReleases_.clear(); updateDevices_.clear(); emit updatesChanged();
+    auto remaining = std::make_shared<int>(3);
+    auto finish = [this, generation, remaining]() {
+        if (generation != updatesGeneration_) return;
+        if (--*remaining == 0) updatesLoading_ = false;
+        emit updatesChanged();
+    };
+    auto failure = [this, generation, finish](const QString &message) {
+        if (generation != updatesGeneration_) return;
+        updatesError_ = message; finish();
+    };
+    request("GET", "/api/desktop-updates", {}, [this,generation,finish](const QJsonValue &value) {
+        if (generation != updatesGeneration_) return;
+        for (const auto &entry : value.toArray()) updateReleases_.append(entry.toObject().toVariantMap());
+        finish();
+    }, true, failure);
+    request("GET", "/api/mobile-update", {}, [this,generation,finish](const QJsonValue &value) {
+        if (generation != updatesGeneration_) return;
+        auto release = value.toObject();
+        if (release.value("available").toBool()) {
+            release.insert("platform", "android");
+            release.insert("version", release.value("version_name"));
+            updateReleases_.append(release.toVariantMap());
+        }
+        finish();
+    }, true, failure);
+    request("GET", "/api/admin/devices", {}, [this,generation,finish](const QJsonValue &value) {
+        if (generation != updatesGeneration_) return;
+        updateDevices_ = value.toArray().toVariantList(); finish();
+    }, true, failure);
+}
+
+void ApiBridge::publishUpdate(const QUrl &file, const QString &platform, const QString &version,
+                              int build, const QString &notes, const QString &pilotIds) {
+    if (!adminEdition_ || role_ != "admin" || working_) return;
+    if (!QStringList{"android","windows","linux"}.contains(platform) || !file.isLocalFile())
+        return issue("Оберіть платформу та локальний файл оновлення.");
+    if (!QRegularExpression("^(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})$").match(version).hasMatch())
+        return issue("Версія пакета: три числа, наприклад 3.13.0.");
+    if (notes.size() > 3000 || (platform == "android" && build <= 0))
+        return issue("Перевірте номер збірки та опис (до 3000 символів).");
+    QJsonArray pilot;
+    for (const auto &part : pilotIds.split(',', Qt::SkipEmptyParts)) {
+        bool ok = false; const int id = part.trimmed().toInt(&ok);
+        if (!ok || id <= 0 || pilot.contains(id) || pilot.size() >= 200)
+            return issue("Пробна група: різні ID активних психологів через кому (до 200).");
+        pilot.append(id);
+    }
+    QFile input(file.toLocalFile());
+    const qint64 limit = (platform == "android" ? 8 : 32) * 1024 * 1024;
+    if (!input.open(QIODevice::ReadOnly) || input.size() < 8 || input.size() > limit)
+        return issue(platform == "android" ? "Оберіть APK до 8 МБ." : "Оберіть пакет ПК до 32 МБ.");
+    const auto bytes = input.read(limit + 1);
+    if (bytes.size() != input.size() || bytes.size() > limit || input.error() != QFile::NoError)
+        return issue("Не вдалося прочитати пакет повністю.");
+    if ((platform == "android" && !bytes.startsWith("PK")) ||
+        (platform == "windows" && !bytes.startsWith("MZ")) ||
+        (platform == "linux" && !(bytes.startsWith(QByteArray::fromHex("1f8b")) || bytes.startsWith("!<arch>\n"))))
+        return issue("Формат пакета не відповідає платформі.");
+    QJsonObject body{{"sha256",QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex())},
+                     {"release_notes",notes.trimmed()}};
+    const bool mobile = platform == "android";
+    if (mobile) {
+        body.insert("version_code",build); body.insert("version_name",version);
+        body.insert("package_name","com.quremed.solvia"); body.insert("rollout_user_ids",pilot);
+        body.insert("apk_base64",QString::fromLatin1(bytes.toBase64()));
+    } else {
+        body.insert("platform",platform); body.insert("version",version);
+        body.insert("package_base64",QString::fromLatin1(bytes.toBase64()));
+    }
+    working_ = true; error_.clear(); emit stateChanged();
+    request("POST", mobile ? "/api/mobile-update" : "/api/desktop-updates", body,
+            [this](const QJsonValue &) {
+        working_ = false; notify("Оновлення опубліковане на сервері центру.");
+        emit operationCompleted("update"); loadUpdates();
+    });
+}
+
+namespace {
+QString nativePlatform() {
+#ifdef Q_OS_WIN
+    return "windows";
+#else
+    return "linux";
+#endif
+}
+}
+void ApiBridge::checkClientUpdate() {
+    if (!authenticated() || working_) return;
+    clientUpdate_.clear(); emit updatesChanged();
+    request("GET", "/api/desktop-updates?platform=" + nativePlatform(), {}, [this](const QJsonValue &value) {
+        auto release = value.toObject();
+        if (release.value("available").toBool()) clientUpdate_ = release.toVariantMap();
+        else notify("Адміністратор ще не опублікував пакет для цього ПК.");
+        emit updatesChanged();
+    });
+}
+void ApiBridge::downloadClientUpdate(const QUrl &file) {
+    if (!authenticated() || working_ || clientUpdate_.isEmpty() || !file.isLocalFile()) return;
+    const auto release = clientUpdate_;
+    const auto sha = release.value("sha256").toString();
+    const qint64 size = release.value("size_bytes").toLongLong();
+    const QString filename = release.value("filename").toString();
+    if (!QRegularExpression("^[a-f0-9]{64}$").match(sha).hasMatch() || size < 8 || size > 32*1024*1024 ||
+        !(filename.endsWith(".deb") || filename.endsWith(".exe") || filename.endsWith(".tar.gz")))
+        return issue("Некоректний опис пакета оновлення.");
+    if (QFileInfo(file.toLocalFile()).absoluteFilePath() == QFileInfo(QCoreApplication::applicationFilePath()).absoluteFilePath())
+        return issue("Збережіть інсталятор в окремий файл.");
+    QNetworkRequest req(QUrl(origin_ + "/api/desktop-updates/package?platform=" + nativePlatform() + "&sha=" + sha));
+    req.setRawHeader("Authorization", QByteArray("Bearer ") + token_.toUtf8());
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+    req.setTransferTimeout(120000);
+    auto *reply = network_.get(req);
+    const int session = sessionGeneration_;
+    auto data = std::make_shared<QByteArray>();
+    working_ = true; error_.clear(); emit stateChanged();
+    connect(reply, &QNetworkReply::readyRead, this, [this,reply,data,size,session]() {
+        if (session != sessionGeneration_ || data->size() + reply->bytesAvailable() > size) { reply->abort(); return; }
+        data->append(reply->readAll());
+    });
+    connect(reply, &QNetworkReply::finished, this, [this,reply,data,size,sha,file,session,filename]() {
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const auto error = reply->error(); reply->deleteLater();
+        if (session != sessionGeneration_) return;
+        working_ = false;
+        if (error != QNetworkReply::NoError || status != 200 || data->size() != size ||
+            QCryptographicHash::hash(*data,QCryptographicHash::Sha256).toHex() != sha.toLatin1())
+            return issue("Не вдалося перевірити пакет. Файл не збережено.");
+        if ((filename.endsWith(".deb") && !data->startsWith("!<arch>\n")) ||
+            (filename.endsWith(".exe") && !data->startsWith("MZ")) ||
+            (filename.endsWith(".tar.gz") && !data->startsWith(QByteArray::fromHex("1f8b"))))
+            return issue("Формат пакета не збігається з описом.");
+        QSaveFile output(file.toLocalFile());
+        if (!output.open(QIODevice::WriteOnly) || output.write(*data) != data->size() || !output.commit())
+            return issue("Не вдалося зберегти інсталятор.");
+        notify("Пакет перевірено й збережено. Збережіть роботу, закрийте Lemvori Care та встановіть пакет системним інсталятором.");
+        emit operationCompleted("client-update");
+    });
 }

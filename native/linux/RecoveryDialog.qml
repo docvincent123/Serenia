@@ -51,8 +51,8 @@ Dialog {
             }
             Label { textFormat:Text.PlainText; text:"Уже проведені консультації"; font.bold:true }
             Repeater { model:root.record.existing || []; delegate:Label { textFormat:Text.PlainText; required property var modelData; text:"№ "+modelData.id+"\n"+root.textFor(modelData); wrapMode:Text.WordWrap; Layout.fillWidth:true } }
-            ComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:choice; Layout.fillWidth:true; visible:!(root.record.existing || []).length; model:["Провести оригінал з телефона","Провести серверну чернетку"]; enabled:!!root.record.server_draft }
-            ComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:existing; Layout.fillWidth:true; visible:!!(root.record.existing || []).length; model:root.record.existing || []; textRole:"id"; valueRole:"id" }
+            CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:choice; Layout.fillWidth:true; visible:!(root.record.existing || []).length; model:["Провести оригінал з телефона","Провести серверну чернетку"]; enabled:!!root.record.server_draft }
+            CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:existing; Layout.fillWidth:true; visible:!!(root.record.existing || []).length; model:root.record.existing || []; textRole:"id"; valueRole:"id" }
             Label { textFormat:Text.PlainText; text:"Причина рішення *" }
             TextArea { id:reason; Layout.fillWidth:true; implicitHeight:100; wrapMode:TextEdit.Wrap
                 selectByMouse:true;leftPadding:14;topPadding:12;placeholderText:"Укажіть причину та обґрунтування…"

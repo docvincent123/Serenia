@@ -5,6 +5,7 @@ import QtQuick.Layouts
 
 Item {
     id: root
+    objectName: "admin-workspace"
     required property var bridge
     property string section: "overview"
     property string searchText: ""
@@ -12,7 +13,7 @@ Item {
         const rows = bridge.adminRows || []
         const needle = searchText.trim().toLowerCase()
         if (!needle) return rows
-        const fields = ["name", "login", "role", "job_title", "primary_service_name", "code", "type", "category", "device_name", "platform", "event", "entity", "actor", "ip_address"]
+        const fields = ["name", "login", "role", "job_title", "primary_service_name", "code", "type", "category", "device_name", "platform", "event", "entity", "actor", "ip_address", "title", "message"]
         return rows.filter(function(record) {
             return fields.some(function(key) {
                 return String(record[key] ?? "").toLowerCase().includes(needle)
@@ -43,6 +44,7 @@ Item {
         {key:"consent-policy",label:"Згоди пацієнтів",detail:"Затверджені тексти та версії"},
         {key:"templates",label:"Шаблони документів",detail:"Редаговані тексти для співробітників"},
         {label:"БЕЗПЕКА І СИСТЕМА"},
+        {key:"updates",label:"Оновлення пристроїв",detail:"Пакети Android, Windows і Linux та стан телефонів"},
         {key:"sessions",label:"Сеанси",detail:"Робочі пристрої"},
         {key:"audit",label:"Журнал дій",detail:"Події та контроль змін"},
         {key:"database",label:"База й копії",detail:"PostgreSQL і резервні копії"}
@@ -154,9 +156,11 @@ Item {
         ]
     })
 
+    UpdatesDialog { id:updates; bridge:root.bridge }
     CenterSettingsDialog { id:centerSettings; bridge:root.bridge }
     PrintableFormsDialog { id:printableForms; bridge:root.bridge }
     function select(key) {
+        if (key === "updates") {updates.open();return}
         if (["license","modules","consent-policy"].includes(key)) {centerSettings.show(key);return}
         if (key === "forms") {printableForms.open();return}
         searchText = ""
@@ -390,7 +394,8 @@ Item {
                         required property var modelData
                         Layout.fillWidth: true; implicitHeight: row.implicitHeight + 22
                         color: "#FFFFFF"; radius: 13; border.color: "#CCD0CF"
-                        RowLayout {
+                        GridLayout {
+                            columns: width > 730 ? 5 : 1
                             id: row
                             anchors.fill: parent; anchors.margins: 11
                             ColumnLayout {
@@ -470,8 +475,8 @@ Item {
         property var values: ({})
         title: root.currentSection.label
         modal: true; anchors.centerIn: Overlay.overlay
-        width: Math.min(790, root.width - 30)
-        height: Math.min(730, root.height - 32)
+        width: Math.min(790, Overlay.overlay.width - 32)
+        height: Math.min(730, Overlay.overlay.height - 32)
         padding: 0
         closePolicy: root.bridge.working ? Popup.NoAutoClose : Popup.CloseOnEscape
         background: Rectangle {
@@ -491,6 +496,7 @@ Item {
             }
         }
         contentItem: ScrollView {
+            id: editorScroll
             clip: true
             leftPadding: 24; rightPadding: 24
             topPadding: 12; bottomPadding: 12
@@ -498,7 +504,7 @@ Item {
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             GridLayout {
                 id: editorGrid
-                width: parent.width; columns: width > 640 ? 2 : 1
+                width: editorScroll.availableWidth; columns: width > 640 ? 2 : 1
                 columnSpacing: 16; rowSpacing: 18
                 Repeater {
                     id: editorFields
@@ -508,17 +514,18 @@ Item {
                         required property var modelData
                         readonly property var original: form.values[modelData.key] ?? modelData.initial ?? ""
                         readonly property var fieldValue: editor.item ? editor.item.fieldValue : original
+                        Layout.preferredWidth: 1; Layout.minimumWidth: 0
                         Layout.fillWidth: true
                         Layout.columnSpan: editorGrid.columns === 2 && ["content","document_footer","center_name","address"].includes(modelData.key) ? 2 : 1
                         spacing: 7
-                        Label { textFormat:Text.PlainText; text: modelData.label; color: root.ink; font.pixelSize: 13; font.bold: true }
+                        Label { textFormat:Text.PlainText; text: modelData.label; Layout.fillWidth:true; wrapMode:Text.WordWrap; color: root.ink; font.pixelSize: 13; font.bold: true }
                         Loader {
                             id: editor
                             Layout.fillWidth: true
                             sourceComponent: modelData.options ? comboEditor : modelData.type === "check" ? checkEditor : modelData.type === "number" ? numericEditor : modelData.type === "area" ? areaEditor : textEditor
                             Component {
                                 id: comboEditor
-                                ComboBox {
+                                CareComboBox {
                                     id: selection
                                     readonly property var fieldValue: currentValue
                                     model: modelData.options; textRole: "label"; valueRole: "key"
@@ -658,8 +665,8 @@ Item {
         property var blocked: ([])
         title: "Доступ працівника"
         modal: true; anchors.centerIn: Overlay.overlay
-        width: Math.min(550, root.width - 30)
-        height: Math.min(630, root.height - 30)
+        width: Math.min(550, Overlay.overlay.width - 32)
+        height: Math.min(630, Overlay.overlay.height - 32)
         padding: 0
         closePolicy: root.bridge.working ? Popup.NoAutoClose : Popup.CloseOnEscape
         background: Rectangle { radius: 24; color: "#F8FAFA"; border.color: "#CCD0CF" }
@@ -673,10 +680,11 @@ Item {
             }
         }
         contentItem: ScrollView {
+            id: permissionsScroll
             clip: true; contentWidth: availableWidth
             leftPadding: 22; rightPadding: 22
             ColumnLayout {
-                width: parent.width; spacing: 8
+                width: permissionsScroll.availableWidth; spacing: 8
                 Repeater {
                     model: root.moduleChoices
                     delegate: Rectangle {

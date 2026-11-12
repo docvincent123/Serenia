@@ -232,7 +232,7 @@ Item {
                         Loader {
                             id:editor;Layout.fillWidth:true
                             sourceComponent:modelData.options?comboEditor:modelData.type==="number"?numberEditor:modelData.type==="area"?areaEditor:textEditor
-                            Component {id:comboEditor;ComboBox{
+                            Component {id:comboEditor;CareComboBox{
                                 objectName:modelData.key;implicitHeight:46;readonly property var fieldValue:currentValue
                                 model:modelData.options;textRole:"label";valueRole:"key"
                                 background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"}
@@ -294,7 +294,7 @@ Item {
                 text:[referralStatusDialog.referral.destination_type,referralStatusDialog.referral.destination_name].filter(Boolean).join(" · ")
                 color:root.ink;font.bold:true}
             Label {text:"Новий статус";font.bold:true;color:root.ink}
-            ComboBox {
+            CareComboBox {
                 id:referralChoice;objectName:"referral-status-select";Layout.fillWidth:true;implicitHeight:48
                 model:[
                     {value:"recommended",label:"Рекомендовано"},

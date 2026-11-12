@@ -37,7 +37,7 @@ Dialog {
             ColumnLayout {
                 visible:!root.viewing; Layout.fillWidth:true; spacing:9
                 Label { textFormat:Text.PlainText; text:"Шаблон центру" }
-                ComboBox {
+                CareComboBox {
                     id:templateChoice
                     Layout.fillWidth:true
                     model:[{id:0,title:"Власний текст"}].concat(root.bridge.documentTemplates)
@@ -45,15 +45,15 @@ Dialog {
                     onActivated:function(index){if(index>0){const entry=root.bridge.documentTemplates[index-1];docTitle.text=entry.title;content.text=entry.content}}
                 }
                 Label { textFormat:Text.PlainText; text:"Тип документа" }
-                ComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:type; Layout.fillWidth:true; model:["Інформована згода","Обробка персональних даних","Правила центру","Сімейна згода","Відмова від послуг","Інший документ"] }
+                CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:type; Layout.fillWidth:true; model:["Інформована згода","Обробка персональних даних","Правила центру","Сімейна згода","Відмова від послуг","Інший документ"] }
                 Label { textFormat:Text.PlainText; text:"Назва *" }
                 TextField { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:docTitle; Layout.fillWidth:true; placeholderText:"Назва документа"; selectByMouse:true; maximumLength:200 }
                 Label { textFormat:Text.PlainText; text:"Текст документа" }
                 TextArea { id:content; Layout.fillWidth:true; implicitHeight:160; wrapMode:TextEdit.Wrap; selectByMouse:true; placeholderText:"Повний текст, з яким ознайомлюється підписант";leftPadding:14;topPadding:12;background:Rectangle{radius:12;color:"white";border.color:content.activeFocus?"#253745":"#CCD0CF"} }
                 RowLayout {
                     Layout.fillWidth:true
-                    ComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:source; Layout.fillWidth:true; model:["Підпис на екрані","Скан паперового документа"] }
-                    ComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:status; Layout.fillWidth:true; model:["Підписано","Відмова від підпису"] }
+                    CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:source; Layout.fillWidth:true; model:["Підпис на екрані","Скан паперового документа"] }
+                    CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:status; Layout.fillWidth:true; model:["Підписано","Відмова від підпису"] }
                 }
                 Label { textFormat:Text.PlainText; text:"ПІБ підписанта" }
                 TextField { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:signer; Layout.fillWidth:true; selectByMouse:true; maximumLength:200 }

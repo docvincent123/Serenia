@@ -128,6 +128,28 @@ int main(int argc, char **argv) {
     admin.saveModulePermissions(4, QVariantList{"documents","clinical"});
     verify(waitFor([&] { return !admin.working() && admin.notice().contains("Права працівника оновлено"); }), "Admin permission update failed");
 
+    admin.loadUpdates();
+    verify(waitFor([&] { return !admin.updatesLoading() && admin.updateReleases().size()==2 && admin.updateDevices().size()==1; }), "Update inventory failed");
+    const QByteArray package("!<arch>\nSynthetic DEB package for transport tests");
+    const auto packagePath = config.filePath("update.deb");
+    { QFile f(packagePath); verify(f.open(QIODevice::WriteOnly), "Fixture file creation failed"); f.write(package); }
+    admin.publishUpdate(QUrl::fromLocalFile(packagePath),"android","3.13.0",182046,"","");
+    verify(!admin.working() && !admin.error().isEmpty(),"Android accepted DEB package");
+    admin.publishUpdate(QUrl::fromLocalFile(packagePath),"linux","3.13.0",182046,"Тестовий пакет","");
+    verify(waitFor([&] { return !admin.working() && admin.notice().contains("опубліковане"); }),"Native publication failed");
+    admin.checkClientUpdate();
+    verify(waitFor([&] { return !admin.clientUpdate().isEmpty(); }),"Native update check failed");
+    const auto downloadPath = config.filePath("download.deb");
+    admin.downloadClientUpdate(QUrl::fromLocalFile(downloadPath));
+    verify(waitFor([&] { return !admin.working(); }),"Update download stuck");
+    { QFile f(downloadPath); verify(f.open(QIODevice::ReadOnly) && f.readAll()==package,"Verified package not saved correctly"); }
+
+    admin.checkClientUpdate();
+    verify(waitFor([&] { return admin.clientUpdate().value("sha256").toString()==QString(64,'0'); }),"Corrupt manifest fixture failed");
+    admin.downloadClientUpdate(QUrl::fromLocalFile(downloadPath));
+    verify(waitFor([&] { return !admin.working(); }) && !admin.error().isEmpty(),"Hash mismatch accepted");
+    { QFile f(downloadPath); verify(f.open(QIODevice::ReadOnly) && f.readAll()==package,"Rejected download overwrote existing file"); }
+
     const auto profile = QUrl::fromLocalFile(config.filePath("test.solvia"));
     admin.exportProfile(profile, true);
     verify(waitFor([&] { return QFile::exists(profile.toLocalFile()); }), "Admin profile export failed");

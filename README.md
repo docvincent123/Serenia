@@ -1,6 +1,11 @@
+# Lemvori Care 3.13 · build 182046
+
+Поточний випуск: пакетна версія `3.13.0`, Linux `3.13.0+182046`, Android versionCode `182046`.
+Деталі змін і встановлення: [випуск 3.13](docs/RELEASE-3.13.md).
+
 # Lemvori Care 3.1.2
 
-Єдина версія сервера, Windows, Linux, Server Console та Android. Android versionCode: 46; встановлюйте APK з тим самим підписом поверх попереднього. Деталі: [версія 3.0](docs/RELEASE-3.0.md), [TV-табло для Smart TV](docs/TV-DISPLAY.md).
+Єдина версія сервера, Windows, Linux, Server Console та Android. Android versionCode: 182046; встановлюйте APK з тим самим підписом поверх попереднього. Деталі: [версія 3.0](docs/RELEASE-3.0.md), [TV-табло для Smart TV](docs/TV-DISPLAY.md).
 
 ## Можливості Lemvori Care
 
