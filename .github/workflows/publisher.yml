@@ -24,6 +24,8 @@ jobs:
         run: |
           bash tools/ci-ubuntu-apt.sh
           sudo apt-get install -y python3-tk xvfb fonts-dejavu-core xfonts-base
+      - name: Test license registry and file safety
+        run: python -m unittest discover -s publisher/tests -v
       - name: Build native publisher
         working-directory: publisher
         run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Lemvori-Control --add-data "modules.json:." --collect-data tzdata main.py
