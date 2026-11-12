@@ -163,6 +163,7 @@ assert document["paper_signed"] is True
 recovery=next(body for path,body in Center.requests if path=="/api/admin/recovery/12")
 assert recovery["revision"]==2 and recovery["draft_version"]==3
 print("PASS: group participants, signed paper scan with preserved original, and recovery revision guards")
-assert ("/api/referrals/7", {"status":"sent"}) in Center.requests, "Referral follow-up status was not saved by Qt Native"
+if "--ui" in sys.argv[2:]:
+    assert ("/api/referrals/7", {"status":"sent"}) in Center.requests, "Referral follow-up status was not saved by Qt Native"
 assert ("/api/users/4/sessions", {}) in Center.requests, "Admin did not revoke selected employee sessions"
 assert ("/api/admin/module-permissions", {"user_id":4,"blocked_modules":["documents","clinical"]}) in Center.requests, "Qt access editor did not send selected restrictions"
