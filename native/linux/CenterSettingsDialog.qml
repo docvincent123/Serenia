@@ -62,11 +62,11 @@ Dialog {
                         readonly property var edited:({document_type:modelData.document_type,title:heading.text,content:body.text,required:consentRequired.checked})
                         Layout.fillWidth:true
                         CheckBox { id:consentRequired;text:"Обов’язкова · версія "+modelData.version;checked:modelData.required;onClicked:root.dirty=true }
-                        TextField { id:heading;Layout.fillWidth:true;text:modelData.title;onTextEdited:root.dirty=true
+                        CareTextField { id:heading;Layout.fillWidth:true;text:modelData.title;onTextEdited:root.dirty=true
     implicitHeight:46;leftPadding:14;selectByMouse:true
     background:Rectangle{radius:12;color:"white";border.color:heading.activeFocus?"#253745":"#CCD0CF"}
 }
-                        TextArea { id:body;Layout.fillWidth:true;implicitHeight:190;text:modelData.content;wrapMode:TextEdit.Wrap;selectByMouse:true;placeholderText:"Затверджений текст згоди";onTextChanged:{if(activeFocus)root.dirty=true}
+                        CareTextArea { id:body;Layout.fillWidth:true;implicitHeight:190;text:modelData.content;wrapMode:TextEdit.Wrap;selectByMouse:true;placeholderText:"Затверджений текст згоди";onTextChanged:{if(activeFocus)root.dirty=true}
     leftPadding:14;topPadding:12
     background:Rectangle{radius:12;color:"white";border.color:body.activeFocus?"#253745":"#CCD0CF"}
 }

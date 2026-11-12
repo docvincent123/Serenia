@@ -56,6 +56,12 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-ui-check --ui
+      - name: Verify input and dropdown contrast with a dark system palette
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          LEMVORI_TEST_DARK_PALETTE: '1'
+        run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-ui-check --ui
       - name: Check no WebKit or Chrome dependency is linked
         run: |
           if ldd build/native-linux/solvia-native | grep -Ei 'webkit|chromium|electron|webengine'; then

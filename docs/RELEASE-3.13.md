@@ -5,6 +5,9 @@ Android versionName: `3.13.0`; versionCode: `182046`.
 
 ## Native workplace and administration
 
+- Input text, placeholders and selections use explicit colors on light form surfaces, including when the operating system uses a dark theme. The admin editor uses the shared dropdown delegate so selected options remain readable.
+- “Вітаємо в Lemvori Care!” is a home-page element, rather than a persistent global status message shown in every section. Operational success and error messages remain available.
+
 - Consistent rounded selectors with clipped, scrollable option lists and full-text tooltips across registration, appointments, documents, rehabilitation and administrative editors.
 - Staff and permissions editors use the overlay dimensions and actual scroll viewport; staff fields adapt to one or two columns.
 - Administrative record actions move below the record on narrow screens.

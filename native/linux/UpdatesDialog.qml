@@ -30,7 +30,7 @@ Dialog {
             opacity: button.enabled ? 1 : .5
         }
     }
-    component Field: TextField {
+    component Field: CareTextField {
         implicitHeight: 46; leftPadding:14; rightPadding:14; selectByMouse:true
         background:Rectangle {radius:12;color:"white";border.color:parent.activeFocus?"#253745":"#CCD0CF"}
     }
@@ -108,7 +108,7 @@ Dialog {
                       platform.key === "windows" ? "EXE інсталятор, до 32 МБ" : "DEB або tar.gz, до 32 МБ"
             }
             Label { text: "Що змінилося"; font.bold: true }
-            TextArea {
+            CareTextArea {
                 id: notes; Layout.fillWidth: true; Layout.preferredHeight: 110
                 wrapMode: TextEdit.Wrap; selectByMouse: true
                 placeholderText: "Короткий опис для працівників (до 3000 символів)"

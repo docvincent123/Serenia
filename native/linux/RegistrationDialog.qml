@@ -45,7 +45,7 @@ Dialog {
     onOpened:{scans=({});printedSnapshot="";bridge.loadCenterConfiguration()}
     onClosed:{name.clear();phone.clear();dob.clear();scans=({});printedSnapshot=""}
     component Action:Button { id:b;implicitHeight:42;leftPadding:16;rightPadding:16;contentItem:Text{textFormat:Text.PlainText;text:b.text;color:b.enabled?"#11212D":"#9BA8AB";font.bold:true;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter} background:Rectangle{radius:21;color:b.hovered?"#CCD0CF":"white";border.color:"#CCD0CF"} }
-    component Field:TextField { implicitHeight:48;leftPadding:14;rightPadding:14;selectByMouse:true;background:Rectangle{radius:12;color:"white";border.color:parent.activeFocus?"#253745":"#CCD0CF"} }
+    component Field:CareTextField { implicitHeight:48;leftPadding:14;rightPadding:14;selectByMouse:true;background:Rectangle{radius:12;color:"white";border.color:parent.activeFocus?"#253745":"#CCD0CF"} }
     contentItem:ScrollView {
         id:scroll;contentWidth:availableWidth;clip:true;leftPadding:22;rightPadding:22;topPadding:8;bottomPadding:12
         ColumnLayout {

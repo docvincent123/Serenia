@@ -10,7 +10,7 @@ ComboBox {
     contentItem: Text {
         text: control.displayText
         textFormat: Text.PlainText
-        color: control.enabled ? "#11212D" : "#7D8B94"
+        color: control.enabled ? "#11212D" : "#5B6770"
         font: control.font
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
@@ -26,16 +26,18 @@ ComboBox {
         border.width: control.activeFocus ? 2 : 1
     }
     delegate: ItemDelegate {
+        id: option
+        objectName: "care-option-" + index
         required property int index
         width: control.width - 12
         implicitHeight: 44
         text: control.textAt(index)
         highlighted: control.highlightedIndex === index
         contentItem: Label {
-            text: parent.text; textFormat: Text.PlainText; elide: Text.ElideRight
+            text: option.text; textFormat: Text.PlainText; elide: Text.ElideRight
             color: "#11212D"; verticalAlignment: Text.AlignVCenter
         }
-        background: Rectangle { radius: 8; color: parent.highlighted ? "#DEE7EB" : parent.hovered ? "#F1F4F5" : "white" }
+        background: Rectangle { radius: 8; color: option.highlighted ? "#DEE7EB" : option.hovered ? "#F1F4F5" : "white" }
         ToolTip.visible: hovered
         ToolTip.text: text
     }

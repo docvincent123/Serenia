@@ -6,6 +6,24 @@ import QtQuick.Layouts
 ApplicationWindow {
     id: root
     visible: true
+    // The workspace has light surfaces regardless of the operating-system theme.
+    // Set both normal and highlighted roles: Basic delegates otherwise inherit
+    // white system text while their custom backgrounds remain light.
+    palette.window: "#F5F7F7"
+    palette.windowText: "#11212D"
+    palette.base: "#FFFFFF"
+    palette.alternateBase: "#EDF0F0"
+    palette.text: "#11212D"
+    palette.button: "#DEE2E2"
+    palette.buttonText: "#11212D"
+    palette.highlight: "#253745"
+    palette.highlightedText: "#FFFFFF"
+    palette.placeholderText: "#586873"
+    palette.toolTipBase: "#11212D"
+    palette.toolTipText: "#FFFFFF"
+    palette.disabled.text: "#5B6770"
+    palette.disabled.windowText: "#5B6770"
+    palette.disabled.buttonText: "#5B6770"
     onClosing: function(event) { if (api.databaseWorking) event.accepted = false }
     width: 1400
     height: 890
@@ -231,7 +249,7 @@ ApplicationWindow {
             border.width: btn.visualFocus ? 2 : 1
         }
     }
-    component CareField: TextField {
+    component CareField: CareTextField {
         id: field
         implicitHeight: 46
         leftPadding: 14; rightPadding: 14
@@ -529,6 +547,13 @@ ApplicationWindow {
                     ColumnLayout {
                         visible: root.page === "Головна"
                         Layout.fillWidth:true; spacing:18
+                        Label {
+                            objectName: "homepage-welcome"
+                            text: "Вітаємо в Lemvori Care!"
+                            textFormat: Text.PlainText
+                            color: root.ink; font.pixelSize: 18; font.bold: true
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        }
                         Rectangle {
                             visible: api.blockedModules.length > 0
                             Layout.fillWidth: true

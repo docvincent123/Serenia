@@ -54,7 +54,7 @@ Dialog {
             CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:choice; Layout.fillWidth:true; visible:!(root.record.existing || []).length; model:["Провести оригінал з телефона","Провести серверну чернетку"]; enabled:!!root.record.server_draft }
             CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:existing; Layout.fillWidth:true; visible:!!(root.record.existing || []).length; model:root.record.existing || []; textRole:"id"; valueRole:"id" }
             Label { textFormat:Text.PlainText; text:"Причина рішення *" }
-            TextArea { id:reason; Layout.fillWidth:true; implicitHeight:100; wrapMode:TextEdit.Wrap
+            CareTextArea { id:reason; Layout.fillWidth:true; implicitHeight:100; wrapMode:TextEdit.Wrap
                 selectByMouse:true;leftPadding:14;topPadding:12;placeholderText:"Укажіть причину та обґрунтування…"
                 background:Rectangle{radius:13;color:"white";border.color:reason.activeFocus?"#253745":"#CCD0CF"}
             }

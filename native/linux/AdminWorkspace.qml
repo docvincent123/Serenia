@@ -338,7 +338,7 @@ Item {
                     Layout.fillWidth: true; spacing: 8
                     RowLayout {
                         Layout.fillWidth: true; spacing: 10
-                        TextField {
+                        CareTextField {
                             id: adminSearch
                             Layout.fillWidth: true; Layout.preferredHeight: 42
                             text: root.searchText
@@ -497,6 +497,7 @@ Item {
         }
         contentItem: ScrollView {
             id: editorScroll
+            objectName: "admin-editor-scroll"
             clip: true
             leftPadding: 24; rightPadding: 24
             topPadding: 12; bottomPadding: 12
@@ -527,6 +528,7 @@ Item {
                                 id: comboEditor
                                 CareComboBox {
                                     id: selection
+                                    objectName: "admin-field-" + modelData.key
                                     readonly property var fieldValue: currentValue
                                     model: modelData.options; textRole: "label"; valueRole: "key"
                                     implicitHeight: 50
@@ -555,32 +557,7 @@ Item {
                                         border.color: selection.activeFocus ? "#253745" : "#C7D0D3"
                                         border.width: selection.activeFocus ? 2 : 1
                                     }
-                                    delegate: ItemDelegate {
-                                        width: selection.width - 14
-                                        implicitHeight: 42
-                                        text: selection.textRole ? model[selection.textRole] : modelData
-                                        highlighted: selection.highlightedIndex === index
-                                        background: Rectangle {
-                                            radius: 11
-                                            color: parent.highlighted ? "#E5ECEF" : parent.hovered ? "#F1F4F5" : "#FFFFFF"
-                                        }
-                                    }
-                                    popup: Popup {
-                                        y: selection.height + 4; width: selection.width
-                                        padding: 7
-                                        implicitHeight: Math.min(popupList.contentHeight + 14, 250)
-                                        background: Rectangle {
-                                            radius: 16; color: "#FFFFFF"
-                                            border.color: "#C7D0D3"
-                                        }
-                                        contentItem: ListView {
-                                            id: popupList
-                                            clip: true; implicitHeight: contentHeight
-                                            model: selection.delegateModel
-                                            currentIndex: selection.highlightedIndex
-                                            ScrollIndicator.vertical: ScrollIndicator { }
-                                        }
-                                    }
+
                                 }
                             }
                             Component {
@@ -608,8 +585,9 @@ Item {
                             }
                             Component {
                                 id: textEditor
-                                TextField {
+                                CareTextField {
                                     id: input
+                                    objectName: "admin-field-" + modelData.key
                                     readonly property string fieldValue: text
                                     text: String(original)
                                     echoMode: modelData.type === "password" ? TextInput.Password : TextInput.Normal
@@ -623,7 +601,7 @@ Item {
                                     }
                                 }
                             }
-                            Component { id: areaEditor; TextArea { id:area; readonly property string fieldValue:text; text:String(original); selectByMouse:true; wrapMode:TextEdit.Wrap; implicitHeight:200; leftPadding:15; rightPadding:15; topPadding:12; background:Rectangle{radius:15;color:"white";border.color:area.activeFocus?"#253745":"#C7D0D3"} } }
+                            Component { id: areaEditor; CareTextArea { id:area; readonly property string fieldValue:text; text:String(original); selectByMouse:true; wrapMode:TextEdit.Wrap; implicitHeight:200; leftPadding:15; rightPadding:15; topPadding:12; background:Rectangle{radius:15;color:"white";border.color:area.activeFocus?"#253745":"#C7D0D3"} } }
                         }
                     }
                 }
@@ -781,7 +759,7 @@ Item {
                 text: "Архів перевіряється в тимчасовій PostgreSQL-базі. Перед переключенням створюється страхувальна копія. Якщо HTTPS не запуститься, відновлюється стара база. Усі сеанси після успішного відновлення завершаться."
             }
             Label { text:"Шлях до архіву (лише з /var/backups/lemvori-care)"; font.bold:true; color:root.ink }
-            TextField {
+            CareTextField {
                 id: restorePath; Layout.fillWidth:true; implicitHeight:46
                 placeholderText:"/var/backups/lemvori-care/lemvori-core-....dump"
                 selectByMouse:true; leftPadding:13
@@ -793,7 +771,7 @@ Item {
                 text: "Дізнатися назви копій: sudo lemvori-carectl list-backups. Якщо залишити поле порожнім, обереться найновіша копія."
             }
             Label { text:"Для підтвердження введіть ВІДНОВИТИ"; font.bold:true; color:root.ink }
-            TextField {
+            CareTextField {
                 id: restoreConfirmation; Layout.fillWidth:true; implicitHeight:46
                 placeholderText:"ВІДНОВИТИ"; selectByMouse:true; leftPadding:13
                 background:Rectangle{radius:12;color:"white";border.color:restoreConfirmation.activeFocus?"#253745":"#CCD0CF"}

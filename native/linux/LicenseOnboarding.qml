@@ -70,7 +70,7 @@ Item {
                     }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#E1E6E7" }
                     Label { text: "Сервер центру"; font.bold: true; color: root.ink }
-                    TextArea {
+                    CareTextArea {
                         Layout.fillWidth: true; readOnly: true; selectByMouse: true
                         text: root.bridge.licenseStatus.server_id || "Очікуємо ідентифікатор"
                         font.family: "monospace"; font.pixelSize: 13; color: root.ink
@@ -99,7 +99,7 @@ Item {
                         }
                     }
                     Label { text: "АБО ВСТАВТЕ ПІДПИСАНИЙ JSON"; color: root.muted; font.pixelSize: 11; font.bold: true }
-                    TextArea {
+                    CareTextArea {
                         id: licenseText
                         Layout.fillWidth: true; implicitHeight: 112
                         selectByMouse: true; wrapMode: TextEdit.WrapAnywhere

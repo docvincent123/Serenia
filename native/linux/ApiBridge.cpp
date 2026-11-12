@@ -296,7 +296,7 @@ void ApiBridge::login(const QString &username, const QString &password) {
             role_ = accountRole;
             name_ = data.value("name").toString();
             working_ = false;
-            notify("Вітаємо в Lemvori Care!");
+            notify(QString()); // Welcome belongs to the home page, not the global status banner.
             refresh();
         });
     });

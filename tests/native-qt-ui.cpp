@@ -6,6 +6,8 @@
 #include <QQuickWindow>
 #include <QQuickStyle>
 #include <QImage>
+#include <QPalette>
+#include <QColor>
 #include <QFile>
 #include <QElapsedTimer>
 #include <QSettings>
@@ -26,6 +28,18 @@ static QQuickItem *find(QQuickItem *item,const char *property,const QString &val
 }
 int main(int argc,char **argv){
     QGuiApplication app(argc,argv); QQuickStyle::setStyle("Basic");
+    if (qEnvironmentVariableIsSet("LEMVORI_TEST_DARK_PALETTE")) {
+        QPalette dark;
+        for (const auto group : {QPalette::Active,QPalette::Inactive,QPalette::Disabled}) {
+            dark.setColor(group,QPalette::Text,Qt::white);
+            dark.setColor(group,QPalette::WindowText,Qt::white);
+            dark.setColor(group,QPalette::ButtonText,Qt::white);
+            dark.setColor(group,QPalette::HighlightedText,Qt::white);
+            dark.setColor(group,QPalette::Base,QColor("#202020"));
+            dark.setColor(group,QPalette::Window,QColor("#202020"));
+        }
+        QGuiApplication::setPalette(dark);
+    }
     verify(argc==3,"Expected HTTPS fixture and CA");
     QTemporaryDir config;QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,config.path());
     QCoreApplication::setOrganizationName("LemvoriLab");QCoreApplication::setApplicationName("NativeUiTest");
@@ -48,7 +62,10 @@ int main(int argc,char **argv){
     click("Підключення");verify(lookup("placeholderText","https://server.center:8443"),"Connection dialog missing");click("Готово");
     bridge.configureServer(argv[1]);verify(waitFor([&]{return bridge.connected();}),"Fixture connection failed");
     bridge.login("reception","test");verify(waitFor([&]{return bridge.role()=="reception";}),"Reception login failed");pump();
-    auto page=[&](const QString &name){verify(QMetaObject::invokeMethod(window,"showPage",Q_ARG(QVariant,QVariant(name))),"Navigation method failed");pump();verify(waitFor([&]{return !bridge.workspaceLoading();}),"Workspace stuck loading");};
+    auto page=[&](const QString &name){verify(QMetaObject::invokeMethod(window,"showPage",Q_ARG(QVariant,QVariant(name))),"Navigation method failed");pump();verify(waitFor([&]{return !bridge.workspaceLoading();}),"Workspace stuck loading");
+        verify((lookup("objectName","homepage-welcome")!=nullptr)==(name=="Головна"),"Greeting visible outside home page");};
+    verify(lookup("objectName","homepage-welcome"),"Homepage greeting missing");
+    verify(bridge.notice().isEmpty(),"Greeting leaked into global status");
     verify(!lookup("text","Адміністрування")&&!lookup("text","Супервізії"),"Reception sees management menu");
     click(bridge.displayName());
     verify(lookup("placeholderText","Поточний пароль"),"Profile form missing");
@@ -127,6 +144,31 @@ int main(int argc,char **argv){
     auto *field=find(adminWindow->contentItem(),"text","ПІБ");verify(field,"Staff editor missing");
     if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/admin-staff.png");
     auto *cancel=find(adminWindow->contentItem(),"text","Скасувати");verify(cancel,"Staff cancel missing");QMetaObject::invokeMethod(cancel,"clicked");pump();
+    select("center");
+    verify(waitFor([&]{return !admin.adminDetails().isEmpty();}),"Center settings did not load");pump();
+    auto *editCenter=find(adminWindow->contentItem(),"text","Редагувати");verify(editCenter,"Center editor action missing");
+    QMetaObject::invokeMethod(editCenter,"clicked");pump();
+    auto *centerScroll=find(adminWindow->contentItem(),"objectName","admin-editor-scroll");verify(centerScroll,"Center scroll missing");
+    auto *flick=centerScroll->property("contentItem").value<QObject*>();verify(flick,"Center viewport missing");
+    flick->setProperty("contentY",std::max(0.0,flick->property("contentHeight").toDouble()-flick->property("height").toDouble()));pump();
+    auto *headTitle=find(adminWindow->contentItem(),"objectName","admin-field-head_title");verify(headTitle,"Center text field missing");
+    verify(headTitle->property("color").value<QColor>()==QColor("#11212D"),"Input inherits unreadable system text");
+    verify(headTitle->property("placeholderTextColor").value<QColor>()==QColor("#586873"),"Placeholder contrast missing");
+    headTitle->setProperty("enabled",false);pump();
+    verify(headTitle->property("color").value<QColor>()==QColor("#5B6770"),"Disabled input unreadable");
+    headTitle->setProperty("enabled",true);pump();
+    auto *connectionMode=find(adminWindow->contentItem(),"objectName","admin-field-connection_mode");verify(connectionMode,"Connection selector missing");
+    auto *connectionPopup=connectionMode->property("popup").value<QObject*>();verify(connectionPopup,"Connection popup missing");
+    QMetaObject::invokeMethod(connectionPopup,"open");pump();
+    for (int i=0;i<2;++i) {
+        auto *option=find(adminWindow->contentItem(),"objectName","care-option-"+QString::number(i));verify(option,"Connection option not visible");
+        auto *label=option->property("contentItem").value<QObject*>();verify(label,"Connection option label missing");
+        verify(!label->property("text").toString().isEmpty(),"Connection option text empty");
+        verify(label->property("color").value<QColor>()==QColor("#11212D"),"Popup option text lacks contrast");
+    }
+    if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/connection-options.png");
+    QMetaObject::invokeMethod(connectionPopup,"close");pump();
+    cancel=find(adminWindow->contentItem(),"text","Скасувати");verify(cancel,"Center cancel missing");QMetaObject::invokeMethod(cancel,"clicked");pump();
     select("updates");
     verify(waitFor([&]{return !admin.updatesLoading();}),"Update inventory did not finish");pump();
     verify(find(adminWindow->contentItem(),"objectName","update-version"),"Update publisher form missing");

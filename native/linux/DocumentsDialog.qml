@@ -47,16 +47,16 @@ Dialog {
                 Label { textFormat:Text.PlainText; text:"Тип документа" }
                 CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:type; Layout.fillWidth:true; model:["Інформована згода","Обробка персональних даних","Правила центру","Сімейна згода","Відмова від послуг","Інший документ"] }
                 Label { textFormat:Text.PlainText; text:"Назва *" }
-                TextField { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:docTitle; Layout.fillWidth:true; placeholderText:"Назва документа"; selectByMouse:true; maximumLength:200 }
+                CareTextField { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:docTitle; Layout.fillWidth:true; placeholderText:"Назва документа"; selectByMouse:true; maximumLength:200 }
                 Label { textFormat:Text.PlainText; text:"Текст документа" }
-                TextArea { id:content; Layout.fillWidth:true; implicitHeight:160; wrapMode:TextEdit.Wrap; selectByMouse:true; placeholderText:"Повний текст, з яким ознайомлюється підписант";leftPadding:14;topPadding:12;background:Rectangle{radius:12;color:"white";border.color:content.activeFocus?"#253745":"#CCD0CF"} }
+                CareTextArea { id:content; Layout.fillWidth:true; implicitHeight:160; wrapMode:TextEdit.Wrap; selectByMouse:true; placeholderText:"Повний текст, з яким ознайомлюється підписант";leftPadding:14;topPadding:12;background:Rectangle{radius:12;color:"white";border.color:content.activeFocus?"#253745":"#CCD0CF"} }
                 RowLayout {
                     Layout.fillWidth:true
                     CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:source; Layout.fillWidth:true; model:["Підпис на екрані","Скан паперового документа"] }
                     CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:status; Layout.fillWidth:true; model:["Підписано","Відмова від підпису"] }
                 }
                 Label { textFormat:Text.PlainText; text:"ПІБ підписанта" }
-                TextField { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:signer; Layout.fillWidth:true; selectByMouse:true; maximumLength:200 }
+                CareTextField { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:signer; Layout.fillWidth:true; selectByMouse:true; maximumLength:200 }
                 ColumnLayout {
                     visible:source.currentIndex===1; Layout.fillWidth:true
                     Action { text:root.scanFile?"Змінити зображення":"Вибрати PNG / JPEG"; onClicked:picker.open() }

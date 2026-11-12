@@ -70,7 +70,7 @@ Item {
         contentItem: Text { text:control.text; color:control.primary ? "white" : root.ink; opacity:control.enabled?1:0.5; font.pixelSize:13; font.bold:true; horizontalAlignment:Text.AlignHCenter; verticalAlignment:Text.AlignVCenter; elide:Text.ElideRight }
         background: Rectangle { radius:20; color:control.primary?root.ink:control.hovered?"#CCD0CF":"white"; border.color:control.primary?root.ink:"#CCD0CF" }
     }
-    component Field: TextField {
+    component Field: CareTextField {
         implicitHeight:42; leftPadding:12; rightPadding:12; selectByMouse:true; color:root.ink
         background: Rectangle { radius:10; color:"white"; border.color:parent.activeFocus?root.muted:"#CCD0CF" }
     }
@@ -248,7 +248,7 @@ Item {
                                 readonly property string fieldValue:text;text:String(original)
                                 maximumLength:modelData.key==="summary"?300:3000
                             }}
-                            Component {id:areaEditor;TextArea{
+                            Component {id:areaEditor;CareTextArea{
                                 id:area;objectName:modelData.key;readonly property string fieldValue:text
                                 text:String(original);selectByMouse:true;wrapMode:TextEdit.Wrap
                                 implicitHeight:120;color:root.ink;leftPadding:14;topPadding:12
