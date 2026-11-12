@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from license_core import create_keys, issue_license, write_new
+from license_core import create_keys, issue_license, validate_private_key_file, write_new
 from license_store import (
     atomic_json, license_matches_record, load_preferences, load_registry,
     remove_record, save_preferences, upsert,
@@ -52,6 +52,17 @@ class LicenseRegistryTests(unittest.TestCase):
     def test_cannot_upsert_invalid_server_id(self):
         with self.assertRaises(ValueError):
             upsert([], {"center": "Bad", "server_id": "abc"})
+
+    def test_issuing_uses_private_pem_not_public_or_directory(self):
+        private, public = create_keys("long-local-test-password")
+        signing = self.root / "publisher-private.pem"
+        public_file = self.root / "publisher-public.pem"
+        write_new(signing, private, private=True)
+        write_new(public_file, public)
+        self.assertEqual(validate_private_key_file(signing), signing)
+        for invalid in [self.root, public_file, self.root / "missing.pem"]:
+            with self.assertRaises(ValueError):
+                validate_private_key_file(invalid)
 
     def test_signed_grant_file_matches_only_its_own_record(self):
         private, public = create_keys("long-local-test-password")
