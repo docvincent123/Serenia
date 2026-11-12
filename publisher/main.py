@@ -307,7 +307,7 @@ class Publisher(tk.Tk):
             "Файл: " + record.get("license_path", "не збережено — чернетка"))
 
     def clear_form(self):
-        self.list.selection_remove(self.list.selection())
+        self.list.selection_remove(*self.list.selection())
         for key, value in self.vars.items():
             value.set(INITIAL[key])
         for module in CATALOG:
@@ -516,7 +516,13 @@ class Publisher(tk.Tk):
                 raise
             self.records = updated
             self.license_dir = str(path.parent)
-            self.remember_paths()
+            try:
+                self.remember_paths()
+            except OSError as warning:
+                messagebox.showwarning(
+                    "Налаштування",
+                    "Ліцензію збережено, але останню папку не вдалося "
+                    f"запам’ятати: {warning}", parent=self)
             self.vars["center_id"].set(grant["center_id"])
             self.refresh(grant["server_id"])
             self.status.set(f"Ліцензію збережено: {path}")
