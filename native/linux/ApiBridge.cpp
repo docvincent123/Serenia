@@ -1028,9 +1028,9 @@ void ApiBridge::exportAppointmentTicket(const QUrl &file) {
     html+="<p><b>Дата й час:</b> "+CarePdf::text(next.value("start"))+"</p>";
     html+="<p><b>Спеціаліст:</b> "+CarePdf::text(next.value("psychologist"))+"</p>";
     html+="<p><b>Кабінет:</b> "+CarePdf::text(next.value("room"))+"</p>";
-    html+="<p style='font-size:10pt;color:#4A5C6A'>"+
-        "Цей талон підтверджує інформацію про запис на момент друку. "+
-        "При перенесенні або скасуванні прийому уточніть актуальний час у реєстратурі.</p>";
+    html += QStringLiteral("<p style='font-size:10pt;color:#4A5C6A'>"
+        "Цей талон підтверджує інформацію про запис на момент друку. "
+        "При перенесенні або скасуванні прийому уточніть актуальний час у реєстратурі.</p>");
     if(!CarePdf::save(file,"Талон на прийом · "+patientRecord_.value("name").toString(),html))
         return issue("Не вдалося зберегти талон PDF.");
     notify("Талон майбутнього прийому збережено у PDF.");
