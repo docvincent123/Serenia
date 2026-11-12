@@ -5,6 +5,10 @@ Android versionName: `3.13.0`; versionCode: `182046`.
 
 ## Native workplace and administration
 
+- Applies the approved navy-and-blue reference design across native screens: dark navigation with line icons, blue active actions, pale blue backgrounds, a light administration rail and six dashboard cards.
+- Adds a medical hero illustration, a matching ECG brand mark, profile/help controls, and a responsive one- or two-column dashboard. The greeting remains restricted to the home page.
+- Editable SVG source assets are converted to embedded high-resolution PNG data by `tools/build-native-visuals.cjs`, so the UI does not depend on an optional Qt SVG image plugin.
+
 - Input text, placeholders and selections use explicit colors on light form surfaces, including when the operating system uses a dark theme. The admin editor uses the shared dropdown delegate so selected options remain readable.
 - “Вітаємо в Lemvori Care!” is a home-page element, rather than a persistent global status message shown in every section. Operational success and error messages remain available.
 

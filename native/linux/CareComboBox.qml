@@ -10,7 +10,7 @@ ComboBox {
     contentItem: Text {
         text: control.displayText
         textFormat: Text.PlainText
-        color: control.enabled ? "#11212D" : "#5B6770"
+        color: control.enabled ? "#0C1C34" : "#52637D"
         font: control.font
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
@@ -18,11 +18,11 @@ ComboBox {
     indicator: Label {
         x: control.width - width - 14
         y: (control.height - height) / 2
-        text: "⌄"; font.pixelSize: 20; color: "#4A5C6A"
+        text: "⌄"; font.pixelSize: 20; color: "#405C83"
     }
     background: Rectangle {
         radius: 12; color: "white"
-        border.color: control.activeFocus ? "#253745" : "#CCD0CF"
+        border.color: control.activeFocus ? "#1764EF" : "#CFDDF0"
         border.width: control.activeFocus ? 2 : 1
     }
     delegate: ItemDelegate {
@@ -35,7 +35,7 @@ ComboBox {
         highlighted: control.highlightedIndex === index
         contentItem: Label {
             text: option.text; textFormat: Text.PlainText; elide: Text.ElideRight
-            color: "#11212D"; verticalAlignment: Text.AlignVCenter
+            color: "#0C1C34"; verticalAlignment: Text.AlignVCenter
         }
         background: Rectangle { radius: 8; color: option.highlighted ? "#DEE7EB" : option.hovered ? "#F1F4F5" : "white" }
         ToolTip.visible: hovered
@@ -47,7 +47,7 @@ ComboBox {
         padding: 6
         margins: 16
         implicitHeight: Math.min(300, list.contentHeight + 12)
-        background: Rectangle { color: "white"; radius: 13; border.color: "#CCD0CF" }
+        background: Rectangle { color: "white"; radius: 13; border.color: "#CFDDF0" }
         contentItem: ListView {
             id: list
             clip: true

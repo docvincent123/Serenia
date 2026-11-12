@@ -13,31 +13,31 @@ Dialog {
     height: Math.min(780, Overlay.overlay.height - 32)
     padding: 0
     closePolicy: bridge.working ? Popup.NoAutoClose : Popup.CloseOnEscape
-    background: Rectangle { radius: 22; color: "#F5F7F7"; border.color: "#CCD0CF" }
+    background: Rectangle { radius: 22; color: "#F3F7FD"; border.color: "#CFDDF0" }
     onOpened: bridge.loadUpdates()
     component Action: Button {
         id: button
         implicitHeight: 44
         leftPadding: 18; rightPadding: 18
         contentItem: Label {
-            text: button.text; textFormat: Text.PlainText; color: "#11212D"
+            text: button.text; textFormat: Text.PlainText; color: "#0C1C34"
             horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight; font.bold: true
         }
         background: Rectangle {
-            radius: 22; color: button.hovered ? "#DEE2E2" : "white"
-            border.color: button.activeFocus ? "#253745" : "#CCD0CF"
+            radius: 22; color: button.hovered ? "#E7EFFB" : "white"
+            border.color: button.activeFocus ? "#1764EF" : "#CFDDF0"
             opacity: button.enabled ? 1 : .5
         }
     }
     component Field: CareTextField {
         implicitHeight: 46; leftPadding:14; rightPadding:14; selectByMouse:true
-        background:Rectangle {radius:12;color:"white";border.color:parent.activeFocus?"#253745":"#CCD0CF"}
+        background:Rectangle {radius:12;color:"white";border.color:parent.activeFocus?"#1764EF":"#CFDDF0"}
     }
     header: Label {
         text: root.title; textFormat: Text.PlainText
         padding: 22; font.pixelSize: 22; font.bold: true
-        color: "#11212D"; wrapMode: Text.WordWrap
+        color: "#0C1C34"; wrapMode: Text.WordWrap
     }
     contentItem: ScrollView {
         id: scroll
@@ -47,10 +47,10 @@ Dialog {
         ColumnLayout {
             width: scroll.availableWidth; spacing: 14
             Label {
-                Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#4A5C6A"
+                Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#405C83"
                 text: "Опублікуйте пакет на сервері центру. Android перевіряє оновлення під час роботи; установка потребує підтвердження на пристрої та того самого підпису APK. Пакети ПК встановлюються на робочих місцях після збереження роботи."
             }
-            Label { text: "Новий пакет"; font.bold: true; font.pixelSize: 18; color: "#11212D" }
+            Label { text: "Новий пакет"; font.bold: true; font.pixelSize: 18; color: "#0C1C34" }
             GridLayout {
                 Layout.fillWidth: true; columns: scroll.availableWidth > 600 ? 2 : 1
                 columnSpacing: 16; rowSpacing: 10
@@ -83,7 +83,7 @@ Dialog {
                         from: 1; to: 2100000000; value: 182046; editable: true
                         textFromValue:function(value,locale){return String(value)}
                         valueFromText:function(text,locale){return Number(text)}
-                        background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"}
+                        background:Rectangle{radius:12;color:"white";border.color:"#CFDDF0"}
                         enabled: !root.bridge.working
                     }
                 }
@@ -102,7 +102,7 @@ Dialog {
                 onClicked: packageFile.open()
             }
             Label {
-                Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: "#4A5C6A"
+                Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: "#405C83"
                 text: packageFile.file ? String(packageFile.file).split("/").pop() :
                       platform.key === "android" ? "Робочий підписаний APK, до 8 МБ" :
                       platform.key === "windows" ? "EXE інсталятор, до 32 МБ" : "DEB або tar.gz, до 32 МБ"
@@ -113,7 +113,7 @@ Dialog {
                 wrapMode: TextEdit.Wrap; selectByMouse: true
                 placeholderText: "Короткий опис для працівників (до 3000 символів)"
                 enabled: !root.bridge.working
-                background: Rectangle { color: "white"; radius: 12; border.color: "#CCD0CF" }
+                background: Rectangle { color: "white"; radius: 12; border.color: "#CFDDF0" }
             }
             Action {
                 text: root.bridge.working ? "Завантажуємо пакет…" : "Опублікувати оновлення"
@@ -126,7 +126,7 @@ Dialog {
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                 color: root.bridge.error ? "#8C3632" : "#256540"
             }
-            Label { text: "Опубліковані версії"; font.bold: true; font.pixelSize: 18; color: "#11212D" }
+            Label { text: "Опубліковані версії"; font.bold: true; font.pixelSize: 18; color: "#0C1C34" }
             BusyIndicator { running: root.bridge.updatesLoading; visible: running; Layout.alignment: Qt.AlignHCenter }
             Label {
                 text: root.bridge.updatesError; visible: !!text
@@ -152,7 +152,7 @@ Dialog {
                         }
                         Label { text: modelData.release_notes || "Без опису"; textFormat: Text.PlainText; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                     }
-                    background: Rectangle { radius: 14; color: "white"; border.color: "#CCD0CF" }
+                    background: Rectangle { radius: 14; color: "white"; border.color: "#CFDDF0" }
                 }
             }
             Label { text: "Android: установлені версії й зв’язок"; font.bold: true; font.pixelSize: 18; Layout.fillWidth: true; wrapMode: Text.WordWrap }

@@ -139,6 +139,17 @@ int main(int argc,char **argv){
     QMetaObject::invokeMethod(adminWindow,"showPage",Q_ARG(QVariant,QVariant("Адміністрування")));pump();
     auto *workspace=find(adminWindow->contentItem(),"objectName","admin-workspace");verify(workspace,"Admin workspace missing");
     auto select=[&](const QString &section){verify(QMetaObject::invokeMethod(workspace,"select",Q_ARG(QVariant,QVariant(section))),"Admin section failed");pump();};
+    select("overview");
+    verify(find(adminWindow->contentItem(),"objectName","admin-hero"),"Medical dashboard hero missing");
+    auto *selectedSection=find(adminWindow->contentItem(),"text","Панель керування");verify(selectedSection,"Selected section missing");
+    auto *selectedBackground=selectedSection->property("background").value<QObject*>();verify(selectedBackground,"Selected section background missing");
+    verify(selectedBackground->property("color").value<QColor>()==QColor("#1764EF"),"Active navigation lost its blue background");
+    if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS")) {
+        adminWindow->resize(1440,900);pump();
+        adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/blue-admin-desktop.png");
+        adminWindow->resize(920,640);pump();
+        adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/blue-admin-small.png");
+    }
     select("team");
     auto *add=find(adminWindow->contentItem(),"text","+ Додати");verify(add,"Staff create action missing");QMetaObject::invokeMethod(add,"clicked");pump();
     auto *field=find(adminWindow->contentItem(),"text","ПІБ");verify(field,"Staff editor missing");
@@ -152,10 +163,10 @@ int main(int argc,char **argv){
     auto *flick=centerScroll->property("contentItem").value<QObject*>();verify(flick,"Center viewport missing");
     flick->setProperty("contentY",std::max(0.0,flick->property("contentHeight").toDouble()-flick->property("height").toDouble()));pump();
     auto *headTitle=find(adminWindow->contentItem(),"objectName","admin-field-head_title");verify(headTitle,"Center text field missing");
-    verify(headTitle->property("color").value<QColor>()==QColor("#11212D"),"Input inherits unreadable system text");
-    verify(headTitle->property("placeholderTextColor").value<QColor>()==QColor("#586873"),"Placeholder contrast missing");
+    verify(headTitle->property("color").value<QColor>()==QColor("#0C1C34"),"Input inherits unreadable system text");
+    verify(headTitle->property("placeholderTextColor").value<QColor>()==QColor("#526A89"),"Placeholder contrast missing");
     headTitle->setProperty("enabled",false);pump();
-    verify(headTitle->property("color").value<QColor>()==QColor("#5B6770"),"Disabled input unreadable");
+    verify(headTitle->property("color").value<QColor>()==QColor("#52637D"),"Disabled input unreadable");
     headTitle->setProperty("enabled",true);pump();
     auto *connectionMode=find(adminWindow->contentItem(),"objectName","admin-field-connection_mode");verify(connectionMode,"Connection selector missing");
     auto *connectionPopup=connectionMode->property("popup").value<QObject*>();verify(connectionPopup,"Connection popup missing");
@@ -164,7 +175,7 @@ int main(int argc,char **argv){
         auto *option=find(adminWindow->contentItem(),"objectName","care-option-"+QString::number(i));verify(option,"Connection option not visible");
         auto *label=option->property("contentItem").value<QObject*>();verify(label,"Connection option label missing");
         verify(!label->property("text").toString().isEmpty(),"Connection option text empty");
-        verify(label->property("color").value<QColor>()==QColor("#11212D"),"Popup option text lacks contrast");
+        verify(label->property("color").value<QColor>()==QColor("#0C1C34"),"Popup option text lacks contrast");
     }
     if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/connection-options.png");
     QMetaObject::invokeMethod(connectionPopup,"close");pump();

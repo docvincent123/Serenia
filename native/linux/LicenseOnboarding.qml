@@ -12,8 +12,8 @@ Item {
     z: 100
     readonly property string status: String(bridge.licenseStatus.status || "")
     readonly property bool publisherMissing: status === "publisher_key_required"
-    readonly property color ink: "#11212D"
-    readonly property color muted: "#4A5C6A"
+    readonly property color ink: "#0C1C34"
+    readonly property color muted: "#405C83"
 
     Rectangle {
         anchors.fill: parent
@@ -36,7 +36,7 @@ Item {
                 Layout.fillWidth: true
                 spacing: 12
                 Rectangle {
-                    width: 52; height: 52; radius: 18; color: "#253745"
+                    width: 52; height: 52; radius: 18; color: "#1764EF"
                     Label { anchors.centerIn: parent; text: "L"; font.pixelSize: 26; font.bold: true; color: "white" }
                 }
                 ColumnLayout {
@@ -54,7 +54,7 @@ Item {
                 radius: 24
                 implicitHeight: wizardContent.implicitHeight + 48
                 color: "white"
-                border.color: "#CCD0CF"
+                border.color: "#CFDDF0"
                 ColumnLayout {
                     id: wizardContent
                     anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
@@ -75,7 +75,7 @@ Item {
                         text: root.bridge.licenseStatus.server_id || "Очікуємо ідентифікатор"
                         font.family: "monospace"; font.pixelSize: 13; color: root.ink
                         wrapMode: TextEdit.WrapAnywhere; implicitHeight: 56
-                        background: Rectangle { radius: 12; color: "#F3F5F5"; border.color: "#D4DCDE" }
+                        background: Rectangle { radius: 12; color: "#F3F5F5"; border.color: "#D4E0F1" }
                     }
                     Label {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
@@ -105,7 +105,7 @@ Item {
                         selectByMouse: true; wrapMode: TextEdit.WrapAnywhere
                         placeholderText: "Вставте повний вміст .lemvori-license: format, payload і signature"
                         color: root.ink; font.family: "monospace"; font.pixelSize: 12
-                        background: Rectangle { radius: 13; color: "#F8FAFA"; border.color: licenseText.activeFocus ? "#253745" : "#CCD0CF" }
+                        background: Rectangle { radius: 13; color: "#F8FBFF"; border.color: licenseText.activeFocus ? "#1764EF" : "#CFDDF0" }
                     }
                     Button {
                         Layout.fillWidth: true

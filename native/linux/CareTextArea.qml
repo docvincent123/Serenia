@@ -3,17 +3,17 @@ import QtQuick.Controls
 
 TextArea {
     id: control
-    color: enabled ? "#11212D" : "#5B6770"
-    placeholderTextColor: "#586873"
-    selectionColor: "#253745"
+    color: enabled ? "#0C1C34" : "#52637D"
+    placeholderTextColor: "#526A89"
+    selectionColor: "#1764EF"
     selectedTextColor: "#FFFFFF"
     selectByMouse: true
     wrapMode: TextEdit.Wrap
     textFormat: TextEdit.PlainText
     leftPadding: 14; rightPadding: 14; topPadding: 12; bottomPadding: 12
     background: Rectangle {
-        radius: 12; color: control.enabled ? "#FFFFFF" : "#EDF0F0"
-        border.color: control.activeFocus ? "#253745" : "#CCD0CF"
+        radius: 12; color: control.enabled ? "#FFFFFF" : "#EEF4FC"
+        border.color: control.activeFocus ? "#1764EF" : "#CFDDF0"
         border.width: control.activeFocus ? 2 : 1
     }
 }

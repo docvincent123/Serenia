@@ -34,37 +34,37 @@ Dialog {
     title:"Реєстрація пацієнта та згоди"; modal:true; anchors.centerIn:Overlay.overlay
     width:Math.min(780,Overlay.overlay.width-40);height:Math.min(740,Overlay.overlay.height-40)
     closePolicy:bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
-    background:Rectangle{radius:22;color:"#F5F7F7";border.color:"#CCD0CF"}
+    background:Rectangle{radius:22;color:"#F3F7FD";border.color:"#CFDDF0"}
     header:Rectangle{
         color:"transparent";implicitHeight:82
         ColumnLayout{anchors.fill:parent;anchors.leftMargin:22;anchors.rightMargin:22;spacing:3
-            Label{text:bridge.centerConfiguration.center_name || "LEMVORI CARE";font.pixelSize:12;color:"#4A5C6A"}
-            Label{text:root.title;font.pixelSize:22;font.bold:true;color:"#11212D"}
+            Label{text:bridge.centerConfiguration.center_name || "LEMVORI CARE";font.pixelSize:12;color:"#405C83"}
+            Label{text:root.title;font.pixelSize:22;font.bold:true;color:"#0C1C34"}
         }
     }
     onOpened:{scans=({});printedSnapshot="";bridge.loadCenterConfiguration()}
     onClosed:{name.clear();phone.clear();dob.clear();scans=({});printedSnapshot=""}
-    component Action:Button { id:b;implicitHeight:42;leftPadding:16;rightPadding:16;contentItem:Text{textFormat:Text.PlainText;text:b.text;color:b.enabled?"#11212D":"#9BA8AB";font.bold:true;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter} background:Rectangle{radius:21;color:b.hovered?"#CCD0CF":"white";border.color:"#CCD0CF"} }
-    component Field:CareTextField { implicitHeight:48;leftPadding:14;rightPadding:14;selectByMouse:true;background:Rectangle{radius:12;color:"white";border.color:parent.activeFocus?"#253745":"#CCD0CF"} }
+    component Action:Button { id:b;implicitHeight:42;leftPadding:16;rightPadding:16;contentItem:Text{textFormat:Text.PlainText;text:b.text;color:b.enabled?"#0C1C34":"#6D85A4";font.bold:true;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter} background:Rectangle{radius:21;color:b.hovered?"#CFDDF0":"white";border.color:"#CFDDF0"} }
+    component Field:CareTextField { implicitHeight:48;leftPadding:14;rightPadding:14;selectByMouse:true;background:Rectangle{radius:12;color:"white";border.color:parent.activeFocus?"#1764EF":"#CFDDF0"} }
     contentItem:ScrollView {
         id:scroll;contentWidth:availableWidth;clip:true;leftPadding:22;rightPadding:22;topPadding:8;bottomPadding:12
         ColumnLayout {
             width:scroll.availableWidth;spacing:12
             Label { textFormat:Text.PlainText;text:"1. Реєстраційні дані";font.bold:true;font.pixelSize:18 }
-            Label { text:"ПІБ пацієнта *";font.bold:true;color:"#11212D" }
+            Label { text:"ПІБ пацієнта *";font.bold:true;color:"#0C1C34" }
             Field { id:name;Layout.fillWidth:true;placeholderText:"Прізвище, ім’я та по батькові";Accessible.name:"ПІБ пацієнта" }
             GridLayout {
                 Layout.fillWidth:true;columns:scroll.availableWidth>580?2:1
                 columnSpacing:14;rowSpacing:10
                 ColumnLayout{Layout.fillWidth:true;Layout.preferredWidth:1;Layout.minimumWidth:0;Layout.alignment:Qt.AlignTop;spacing:5
-                    Label{text:"Телефон *";font.bold:true;color:"#11212D"}
+                    Label{text:"Телефон *";font.bold:true;color:"#0C1C34"}
                     Field { id:phone;Layout.fillWidth:true;placeholderText:"+380…";Accessible.name:"Телефон"
                         inputMethodHints:Qt.ImhDialableCharactersOnly }
                     Label {visible:phone.text.length>0&&!root.phoneValid
                         text:"Перевірте номер: 7–15 цифр";font.pixelSize:11;color:"#8C3632"}
                 }
                 ColumnLayout{Layout.fillWidth:true;Layout.preferredWidth:1;Layout.minimumWidth:0;Layout.alignment:Qt.AlignTop;spacing:5
-                    Label{text:"Дата народження *";font.bold:true;color:"#11212D"}
+                    Label{text:"Дата народження *";font.bold:true;color:"#0C1C34"}
                     Field { id:dob;Layout.fillWidth:true;placeholderText:"РРРР-ММ-ДД";maximumLength:10;inputMethodHints:Qt.ImhDate;Accessible.name:"Дата народження" }
                     Label {visible:dob.text.length>0&&!root.dateValid
                         text:"Введіть дійсну дату, не пізніше сьогодні";font.pixelSize:11;color:"#8C3632"}
@@ -74,26 +74,26 @@ Dialog {
                 Layout.fillWidth:true;columns:scroll.availableWidth>580?2:1
                 columnSpacing:14;rowSpacing:10
                 ColumnLayout{Layout.fillWidth:true;Layout.preferredWidth:1;Layout.minimumWidth:0;Layout.alignment:Qt.AlignTop;spacing:5
-                    Label{text:"Категорія *";font.bold:true;color:"#11212D"}
+                    Label{text:"Категорія *";font.bold:true;color:"#0C1C34"}
                     CareComboBox { id:category;objectName:"registration-category";Layout.fillWidth:true;implicitHeight:46;model:["Військовий/військова","Ветеран/ветеранка","Партнер/партнерка","Дитина","Інше"]
-                        background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"} }
+                        background:Rectangle{radius:12;color:"white";border.color:"#CFDDF0"} }
                 }
                 ColumnLayout{Layout.fillWidth:true;Layout.preferredWidth:1;Layout.minimumWidth:0;Layout.alignment:Qt.AlignTop;spacing:5
-                    Label{text:"Відповідальний психолог *";font.bold:true;color:"#11212D"}
+                    Label{text:"Відповідальний психолог *";font.bold:true;color:"#0C1C34"}
                     CareComboBox { id:psychologist;Layout.fillWidth:true;implicitHeight:46;model:root.bridge.bookingPsychologists;textRole:"name";valueRole:"id"
-                        background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"} }
+                        background:Rectangle{radius:12;color:"white";border.color:"#CFDDF0"} }
                 }
             }
             Label {visible:!root.bridge.bookingPsychologists.length
                 text:"Немає психологів, доступних для призначення. Перевірте графік зміни.";Layout.fillWidth:true
                 wrapMode:Text.WordWrap;color:"#8C3632" }
             Label { textFormat:Text.PlainText;text:"2. Друк і власноручний підпис";font.bold:true;font.pixelSize:18;Layout.topMargin:8 }
-            Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Роздрукуйте картку та затверджені центром бланки. Пацієнт або законний представник підписує їх на папері. Якщо реєстраційні дані зміняться, бланки потрібно надрукувати повторно.";color:"#4A5C6A" }
+            Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Роздрукуйте картку та затверджені центром бланки. Пацієнт або законний представник підписує їх на папері. Якщо реєстраційні дані зміняться, бланки потрібно надрукувати повторно.";color:"#405C83" }
             Action { text:"Зберегти бланки PDF для друку";enabled:root.dataReady&&!root.bridge.working;onClicked:printPicker.open() }
             Action { text:"Відкрити PDF для друку";visible:!!root.printedFile&&root.printedSnapshot===JSON.stringify(root.fields());onClicked:root.bridge.openPdf(root.printedFile) }
-            Label { textFormat:Text.PlainText;visible:!!root.bridge.registrationReference;text:"Реєстрація: "+root.bridge.registrationReference;wrapMode:Text.WrapAnywhere;Layout.fillWidth:true;color:"#4A5C6A" }
+            Label { textFormat:Text.PlainText;visible:!!root.bridge.registrationReference;text:"Реєстрація: "+root.bridge.registrationReference;wrapMode:Text.WrapAnywhere;Layout.fillWidth:true;color:"#405C83" }
             Label { textFormat:Text.PlainText;text:"3. Скан підписаних згод";font.bold:true;font.pixelSize:18;Layout.topMargin:8 }
-            Label { Layout.fillWidth:true;wrapMode:Text.WordWrap;font.pixelSize:12;color:"#4A5C6A"
+            Label { Layout.fillWidth:true;wrapMode:Text.WordWrap;font.pixelSize:12;color:"#405C83"
                 text:root.requiresConsent ? "Потрібно оформити " + root.rules.length + " обов’язкових згод за актуальними редакціями." : "Обов’язкові згоди наразі не встановлені адміністратором." }
             Repeater {
                 id:consents
@@ -109,7 +109,7 @@ Dialog {
                     Image { visible:!!root.scans[documentType];source:root.scans[documentType] || "";Layout.fillWidth:true;Layout.preferredHeight:150;fillMode:Image.PreserveAspectFit;sourceSize.width:900;cache:false }
                     Field { id:signer;Layout.fillWidth:true;placeholderText:"ПІБ того, хто підписав документ" }
                     CheckBox { id:verified;text:"Підпис на паперовому оригіналі перевірено" }
-                    Rectangle { Layout.fillWidth:true;Layout.preferredHeight:1;color:"#CCD0CF" }
+                    Rectangle { Layout.fillWidth:true;Layout.preferredHeight:1;color:"#CFDDF0" }
                 }
             }
             Label { textFormat:Text.PlainText;visible:!root.rules.length;text:"Адміністратор має налаштувати та затвердити тексти згод центру.";Layout.fillWidth:true;wrapMode:Text.WordWrap;color:"#8C3632" }

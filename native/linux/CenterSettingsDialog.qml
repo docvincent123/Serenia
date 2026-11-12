@@ -14,15 +14,15 @@ Dialog {
     title:mode==="license"?"Ліцензія центру":mode==="modules"?"Модулі центру":"Обов’язкові згоди"
     modal:true;anchors.centerIn:Overlay.overlay;width:Math.min(780,Overlay.overlay.width-40);height:Math.min(730,Overlay.overlay.height-40)
     closePolicy:bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
-    background:Rectangle{radius:22;color:"#F5F7F7";border.color:"#CCD0CF"}
+    background:Rectangle{radius:22;color:"#F3F7FD";border.color:"#CFDDF0"}
     header:Rectangle{
         color:"transparent";implicitHeight:78
         ColumnLayout{anchors.fill:parent;anchors.leftMargin:24;anchors.rightMargin:24;spacing:4
-            Label{text:"LEMVORI CARE · АДМІНІСТРУВАННЯ";font.pixelSize:11;font.bold:true;color:"#4A5C6A"}
-            Label{text:root.title;font.pixelSize:22;font.bold:true;color:"#11212D"}
+            Label{text:"LEMVORI CARE · АДМІНІСТРУВАННЯ";font.pixelSize:11;font.bold:true;color:"#405C83"}
+            Label{text:root.title;font.pixelSize:22;font.bold:true;color:"#0C1C34"}
         }
     }
-    component Action:Button { id:b;implicitHeight:42;leftPadding:16;rightPadding:16;contentItem:Text{textFormat:Text.PlainText;text:b.text;color:b.enabled?"#11212D":"#9BA8AB";font.bold:true;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter} background:Rectangle{radius:21;color:b.hovered?"#CCD0CF":"white";border.color:"#CCD0CF"} }
+    component Action:Button { id:b;implicitHeight:42;leftPadding:16;rightPadding:16;contentItem:Text{textFormat:Text.PlainText;text:b.text;color:b.enabled?"#0C1C34":"#6D85A4";font.bold:true;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter} background:Rectangle{radius:21;color:b.hovered?"#CFDDF0":"white";border.color:"#CFDDF0"} }
     contentItem:ScrollView {
         id:scroll;contentWidth:availableWidth;clip:true;leftPadding:24;rightPadding:24;topPadding:8;bottomPadding:12
         ColumnLayout {
@@ -34,13 +34,13 @@ Dialog {
                 Label { textFormat:Text.PlainText;text:"Стан: "+(root.bridge.licenseStatus.status || "Завантаження…") }
                 Label { textFormat:Text.PlainText;text:"Ліцензія: "+(root.bridge.licenseStatus.perpetual?"Безстрокова":root.bridge.licenseStatus.expires_at?new Date((root.bridge.licenseStatus.expires_at-1)*1000).toLocaleDateString():"Не керується видавцем") }
                 Label { textFormat:Text.PlainText;text:"Працівники: "+(root.bridge.licenseStatus.max_users || "—")+" · Телефони: "+(root.bridge.licenseStatus.max_devices || "—") }
-                Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Файл ліцензії має бути підписаний Lemvori Control для цього сервера. Ключ видавця перевіряється сервером. Завершення ліцензії не видаляє картки й не закриває читання або експорт.";color:"#4A5C6A" }
+                Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Файл ліцензії має бути підписаний Lemvori Control для цього сервера. Ключ видавця перевіряється сервером. Завершення ліцензії не видаляє картки й не закриває читання або експорт.";color:"#405C83" }
                 Action { text:"Файл запиту для видавця";onClicked:requestPicker.open() }
                 Action { text:"Відкрити файл ліцензії";enabled:!root.bridge.working;onClicked:licensePicker.open() }
             }
             ColumnLayout {
                 visible:root.mode==="modules";Layout.fillWidth:true
-                Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Модулі можна ввімкнути в межах ліцензії. Залежності мають бути ввімкнені. Вимкнення зберігає дані; сервер перевіряє право виконання кожної операції.";color:"#4A5C6A" }
+                Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Модулі можна ввімкнути в межах ліцензії. Залежності мають бути ввімкнені. Вимкнення зберігає дані; сервер перевіряє право виконання кожної операції.";color:"#405C83" }
                 Repeater {
                     model:root.bridge.centerModules
                     delegate:CheckBox {
@@ -54,7 +54,7 @@ Dialog {
             ColumnLayout {
                 visible:root.mode==="consent-policy";Layout.fillWidth:true;spacing:10
                 CheckBox { text:"Без підписаних сканів не завершувати реєстрацію";enabled:root.bridge.licenseStatus.version!==2;checked:root.policy.required!==false;onClicked:{root.policy=Object.assign({},root.policy,{required:checked});root.dirty=true} }
-                Label { textFormat:Text.PlainText;text:"Внесіть затверджені центром тексти. Зміна тексту створює нову версію; старі підписані документи зберігаються в історії.";Layout.fillWidth:true;wrapMode:Text.WordWrap;color:"#4A5C6A" }
+                Label { textFormat:Text.PlainText;text:"Внесіть затверджені центром тексти. Зміна тексту створює нову версію; старі підписані документи зберігаються в історії.";Layout.fillWidth:true;wrapMode:Text.WordWrap;color:"#405C83" }
                 Repeater {
                     id:templates;model:root.policy.templates || []
                     delegate:ColumnLayout {
@@ -64,11 +64,11 @@ Dialog {
                         CheckBox { id:consentRequired;text:"Обов’язкова · версія "+modelData.version;checked:modelData.required;onClicked:root.dirty=true }
                         CareTextField { id:heading;Layout.fillWidth:true;text:modelData.title;onTextEdited:root.dirty=true
     implicitHeight:46;leftPadding:14;selectByMouse:true
-    background:Rectangle{radius:12;color:"white";border.color:heading.activeFocus?"#253745":"#CCD0CF"}
+    background:Rectangle{radius:12;color:"white";border.color:heading.activeFocus?"#1764EF":"#CFDDF0"}
 }
                         CareTextArea { id:body;Layout.fillWidth:true;implicitHeight:190;text:modelData.content;wrapMode:TextEdit.Wrap;selectByMouse:true;placeholderText:"Затверджений текст згоди";onTextChanged:{if(activeFocus)root.dirty=true}
     leftPadding:14;topPadding:12
-    background:Rectangle{radius:12;color:"white";border.color:body.activeFocus?"#253745":"#CCD0CF"}
+    background:Rectangle{radius:12;color:"white";border.color:body.activeFocus?"#1764EF":"#CFDDF0"}
 }
                     }
                 }

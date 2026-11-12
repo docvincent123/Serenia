@@ -26,14 +26,14 @@ Dialog {
     height: Math.min(720, Overlay.overlay.height-35)
     padding: 0
     onOpened: bridge.loadCenterConfiguration()
-    background: Rectangle { radius: 22; color: "#F5F7F7"; border.color: "#CCD0CF" }
+    background: Rectangle { radius: 22; color: "#F3F7FD"; border.color: "#CFDDF0" }
     header: Rectangle {
         color: "transparent"; implicitHeight: 90
         ColumnLayout {
             anchors.fill: parent; anchors.leftMargin: 24; anchors.rightMargin: 24; spacing: 4
             Label { text: "БІБЛІОТЕКА ДОКУМЕНТІВ"; color: "#64747E"; font.pixelSize: 11; font.bold: true }
-            Label { text: "Підготовка PDF-бланків"; color: "#11212D"; font.pixelSize: 24; font.bold: true }
-            Label { text: bridge.centerConfiguration.center_name || "Центр"; color: "#4A5C6A"; font.pixelSize: 12 }
+            Label { text: "Підготовка PDF-бланків"; color: "#0C1C34"; font.pixelSize: 24; font.bold: true }
+            Label { text: bridge.centerConfiguration.center_name || "Центр"; color: "#405C83"; font.pixelSize: 12 }
         }
     }
     contentItem: ScrollView {
@@ -45,7 +45,7 @@ Dialog {
             Label {
                 Layout.fillWidth: true
                 text: "Оберіть бланк. PDF матиме назву та реквізити центру, місця для ПІБ, дати й власноручних підписів."
-                wrapMode: Text.WordWrap; color: "#4A5C6A"
+                wrapMode: Text.WordWrap; color: "#405C83"
             }
             Repeater {
                 model: root.forms
@@ -53,7 +53,7 @@ Dialog {
                     required property var modelData
                     Layout.fillWidth: true; implicitHeight: 70; radius: 14
                     color: root.selectedForm === modelData.id ? "#E7EEF0" : "#FFFFFF"
-                    border.color: root.selectedForm === modelData.id ? "#253745" : "#D3DCDE"
+                    border.color: root.selectedForm === modelData.id ? "#1764EF" : "#D3DCDE"
                     RowLayout {
                         anchors.fill: parent; anchors.margins: 13; spacing: 12
                         RadioButton {
@@ -62,8 +62,8 @@ Dialog {
                         }
                         ColumnLayout {
                             Layout.fillWidth:true; spacing: 4
-                            Label { text:modelData.title; color:"#11212D"; font.pixelSize:14; font.bold:true }
-                            Label { text:modelData.description; color:"#4A5C6A"; font.pixelSize:12; wrapMode:Text.WordWrap; Layout.fillWidth:true }
+                            Label { text:modelData.title; color:"#0C1C34"; font.pixelSize:14; font.bold:true }
+                            Label { text:modelData.description; color:"#405C83"; font.pixelSize:12; wrapMode:Text.WordWrap; Layout.fillWidth:true }
                         }
                     }
                     MouseArea {
