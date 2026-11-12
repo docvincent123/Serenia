@@ -128,6 +128,21 @@ int main(int argc, char **argv) {
     admin.saveModulePermissions(4, QVariantList{"documents","clinical"});
     verify(waitFor([&] { return !admin.working() && admin.notice().contains("Права працівника оновлено"); }), "Admin permission update failed");
 
+    verify(waitFor([&]{return !admin.licenseStatus().isEmpty();}),"License metadata missing");
+    const auto previousGlobalError=admin.error();
+    admin.activateLicenseText("not a license");
+    verify(!admin.licenseError().isEmpty() && admin.error()==previousGlobalError && !admin.working(),"Invalid license polluted global status");
+    admin.activateLicenseText("{\"format\":\"quremed.solvia.license\",\"payload\":\"test\",\"signature\":\"test\"}");
+    verify(admin.licenseError().contains("ключ") && admin.error()==previousGlobalError && !admin.working(),"Missing publisher key was not scoped");
+    const auto publicKey=QUrl::fromLocalFile(qEnvironmentVariable("LEMVORI_TEST_PUBLIC_KEY"));
+    auto preview=admin.publisherKeyInfo(publicKey);
+    verify(preview.value("fingerprint").toString().size()==64,"Ed25519 publisher-key preview failed");
+    auto privateKey=QUrl::fromLocalFile(qEnvironmentVariable("LEMVORI_TEST_PRIVATE_KEY"));
+    verify(admin.publisherKeyInfo(privateKey).isEmpty() && !admin.licenseError().isEmpty(),"Private key accepted as publisher verifier");
+    verify(admin.error()==previousGlobalError,"Publisher-key validation polluted global status");
+    admin.clearLicenseFeedback();
+    verify(admin.licenseError().isEmpty() && admin.licenseNotice().isEmpty(),"License feedback did not clear");
+
     admin.loadUpdates();
     verify(waitFor([&] { return !admin.updatesLoading() && admin.updateReleases().size()==2 && admin.updateDevices().size()==1; }), "Update inventory failed");
     const QByteArray package("!<arch>\nSynthetic DEB package for transport tests");

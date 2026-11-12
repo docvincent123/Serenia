@@ -218,6 +218,7 @@ ApplicationWindow {
         onTriggered: api.loadSlots(bookingDate.text, Number(bookingPsych.currentValue || 0),
             Number(bookingRoom.currentValue || 0), bookingDuration.value, Number(root.bookingOriginal.id || 0))
     }
+    Timer { interval:60000;running:root.visible&&api.authenticated;repeat:true;onTriggered:{if(!api.working)api.loadCenterConfiguration()} }
     Timer { interval: 15000; running: root.visible && api.authenticated; repeat: true; onTriggered: api.refresh() }
 
     function pageIcon(page) {

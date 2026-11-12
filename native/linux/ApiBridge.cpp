@@ -25,6 +25,7 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSettings>
+#include <QTimer>
 #include <QSysInfo>
 #include <QTime>
 #include <QUrl>
@@ -66,6 +67,7 @@ void ApiBridge::notify(const QString &message) {
 }
 
 void ApiBridge::clearSession() {
+    clearLicenseFeedback();
     ++updatesGeneration_; clientUpdate_.clear(); updateReleases_.clear(); updateDevices_.clear();
     updatesLoading_ = false; updatesError_.clear(); emit updatesChanged();
     consentPolicy_.clear(); centerConfiguration_.clear(); licenseStatus_.clear(); centerModules_.clear(); registrationSnapshot_.clear(); registrationReference_.clear(); emit configurationChanged();
@@ -1222,29 +1224,99 @@ void ApiBridge::loadCenterConfiguration(){
  request("GET","/api/center/modules",{},[this](const QJsonValue&value){auto data=value.toObject();centerModules_=data.value("modules").toArray().toVariantList();licenseStatus_=data.value("license").toObject().toVariantMap();emit configurationChanged();},true);
  if(role_=="admin"||role_=="reception")request("GET","/api/consent-policy",{},[this](const QJsonValue&value){consentPolicy_=value.toObject().toVariantMap();emit configurationChanged();},true);
 }
-void ApiBridge::importLicense(const QUrl&url){
- if(!adminEdition_||role_!="admin"||working_||!url.isLocalFile())return;
- QFile file(url.toLocalFile());if(!file.open(QIODevice::ReadOnly)||file.size()>65536)return issue("Не вдалося прочитати файл ліцензії.");
- const auto envelope=QJsonDocument::fromJson(file.readAll());if(!envelope.isObject())return issue("Некоректний файл ліцензії.");
- working_=true;error_.clear();emit stateChanged();
- request("POST","/api/license",envelope.object(),[this](const QJsonValue&){working_=false;notify("Ліцензію перевірено сервером і активовано.");loadCenterConfiguration();emit operationCompleted("license");});
+void ApiBridge::setLicenseFeedback(const QString &text, bool failed) {
+    licenseError_ = failed ? text : QString();
+    licenseNotice_ = failed ? QString() : text;
+    emit licenseFeedbackChanged();
+}
+void ApiBridge::clearLicenseFeedback() { setLicenseFeedback(QString()); }
+
+void ApiBridge::importLicense(const QUrl &url) {
+    if (!adminEdition_ || role_!="admin" || working_) return;
+    if (!url.isLocalFile()) return setLicenseFeedback("Оберіть локальний файл ліцензії.",true);
+    QFile file(url.toLocalFile());
+    if (!file.open(QIODevice::ReadOnly) || file.size()>65536)
+        return setLicenseFeedback("Не вдалося прочитати файл ліцензії.",true);
+    activateLicenseText(QString::fromUtf8(file.readAll()));
 }
 void ApiBridge::activateLicenseText(const QString &signedJson) {
- if(!adminEdition_ || role_!="admin" || working_)return;
- const QByteArray bytes=signedJson.trimmed().toUtf8();
- if(bytes.isEmpty() || bytes.size()>65536)return issue("Вставте підписаний JSON-файл ліцензії, не звичайний пароль.");
- QJsonParseError parseError{};
- const auto document=QJsonDocument::fromJson(bytes,&parseError);
- if(parseError.error!=QJsonParseError::NoError || !document.isObject() ||
-    document.object().value("format").toString()!="quremed.solvia.license" ||
-    !document.object().value("payload").isString() ||
-    !document.object().value("signature").isString())
-   return issue("Потрібна підписана ліцензія від Lemvori Control у форматі JSON.");
- working_=true;error_.clear();emit stateChanged();
- request("POST","/api/license",document.object(),[this](const QJsonValue&){
-  working_=false;notify("Ліцензію перевірено і закріплено за цим сервером.");
-  loadCenterConfiguration();emit operationCompleted("license");
- });
+    if (!adminEdition_ || role_!="admin" || working_) return;
+    const QByteArray bytes=signedJson.trimmed().toUtf8();
+    if (bytes.isEmpty() || bytes.size()>65536)
+        return setLicenseFeedback("Оберіть підписану ліцензію Lemvori Control.",true);
+    QJsonParseError parse{};
+    const auto document=QJsonDocument::fromJson(bytes,&parse);
+    if (parse.error!=QJsonParseError::NoError || !document.isObject() ||
+        document.object().value("format").toString()!="quremed.solvia.license" ||
+        !document.object().value("payload").isString() || !document.object().value("signature").isString())
+        return setLicenseFeedback("Потрібен файл .lemvori-license із підписом. Файл PEM використовується окремо для ключа видавця.",true);
+    const auto state=licenseStatus_.value("status").toString();
+    if (state=="unmanaged" || state=="publisher_key_required")
+        return setLicenseFeedback("Спочатку налаштуйте відкритий ключ видавця — крок 1 у цьому вікні.",true);
+    working_=true; clearLicenseFeedback(); emit stateChanged();
+    request("POST","/api/license",document.object(),[this](const QJsonValue &){
+        working_=false; setLicenseFeedback("Підпис перевірено сервером. Ліцензію активовано.");
+        emit stateChanged();loadCenterConfiguration();emit operationCompleted("license");
+    },true,[this](const QString &why){working_=false;setLicenseFeedback(why,true);emit stateChanged();});
+}
+bool ApiBridge::publisherKeyToolsAvailable() const {
+    const auto host=QUrl(origin_).host();
+    return adminEdition_ && (host=="127.0.0.1" || host=="localhost" || host=="::1") &&
+        QFileInfo("/usr/local/sbin/lemvori-carectl").isExecutable() &&
+        QFileInfo("/usr/lib/lemvori-care/install-publisher-key").isExecutable();
+}
+QVariantMap ApiBridge::publisherKeyInfo(const QUrl &url) {
+    if (!adminEdition_ || role_!="admin" || working_ || !url.isLocalFile()) return {};
+    QFile file(url.toLocalFile());
+    if (!QFileInfo(file).isFile() || QFileInfo(file).isSymLink() || !file.open(QIODevice::ReadOnly) || file.size()>16384) {
+        setLicenseFeedback("Не вдалося прочитати відкритий ключ видавця.",true);return {};
+    }
+    const auto content=file.read(16385);
+    if (content.size()>16384 || file.error()!=QFile::NoError) {
+        setLicenseFeedback("Файл ключа змінився або не може бути прочитаний.",true);return {};
+    }
+    const auto pem=QString::fromUtf8(content);
+    const auto match=QRegularExpression("^\\s*-----BEGIN PUBLIC KEY-----\\s*([A-Za-z0-9+/=\\r\\n]+)\\s*-----END PUBLIC KEY-----\\s*$").match(pem);
+    const auto der=match.hasMatch()?QByteArray::fromBase64(match.captured(1).toLatin1()):QByteArray();
+    if (der.size()!=44 || !der.startsWith(QByteArray::fromHex("302a300506032b6570032100"))) {
+        setLicenseFeedback("Оберіть відкритий Ed25519 ключ (PUBLIC KEY) з Lemvori Control. Приватний ключ залишається у видавця.",true);return {};
+    }
+    clearLicenseFeedback();
+    return {{"name",QFileInfo(file).fileName()},{"file",url},
+            {"fingerprint",QString::fromLatin1(QCryptographicHash::hash(der,QCryptographicHash::Sha256).toHex())}};
+}
+void ApiBridge::installPublisherKey(const QUrl &url, const QString &fingerprint) {
+    if (!adminEdition_ || role_!="admin" || working_) return;
+    if (!publisherKeyToolsAvailable())
+        return setLicenseFeedback("Налаштуйте ключ у Lemvori Care Admin на Linux-сервері, підключеному через https://localhost:8443.",true);
+    const auto info=publisherKeyInfo(url);
+    if (info.isEmpty()) return;
+    if (fingerprint.isEmpty() || info.value("fingerprint").toString()!=fingerprint)
+        return setLicenseFeedback("Файл ключа змінився після підтвердження. Виберіть його знову.",true);
+    auto *process=new QProcess(this);
+    const int session=sessionGeneration_;
+    working_=true;databaseWorking_=true;setLicenseFeedback("Підтвердьте налаштування ключа у системному вікні. Сервер буде перезапущено.");emit stateChanged();
+    connect(process,&QProcess::errorOccurred,this,[this,process,session](QProcess::ProcessError error){
+        if(error!=QProcess::FailedToStart)return;
+        process->deleteLater();databaseWorking_=false;
+        if(session!=sessionGeneration_)return;
+        working_=false;setLicenseFeedback("Не вдалося відкрити системне підтвердження. Перевірте наявність pkexec.",true);emit stateChanged();
+    });
+    connect(process,&QProcess::finished,this,[this,process,session](int code,QProcess::ExitStatus status){
+        const auto details=QString::fromUtf8(process->readAllStandardError()).trimmed().left(1000);
+        process->deleteLater();databaseWorking_=false;
+        if(session!=sessionGeneration_)return;
+        working_=false;
+        if(status!=QProcess::NormalExit || code!=0)
+            setLicenseFeedback(code==126?"Налаштування скасовано.":"Ключ не налаштовано. "+details,true);
+        else {
+            setLicenseFeedback("Ключ видавця налаштовано. Тепер відкрийте файл ліцензії .lemvori-license.");
+            emit operationCompleted("publisher-key");
+            QTimer::singleShot(1800,this,[this,session]{if(session==sessionGeneration_)loadCenterConfiguration();});
+        }
+        emit stateChanged();
+    });
+    process->start("/usr/bin/pkexec",{"/usr/lib/lemvori-care/install-publisher-key",url.toLocalFile(),fingerprint});
 }
 void ApiBridge::saveCenterModules(const QVariantList&enabled){
  if(!adminEdition_||role_!="admin"||working_)return;
@@ -1391,7 +1463,7 @@ void ApiBridge::exportCenterRequest(const QUrl&url){
  if(!adminEdition_||role_!="admin"||!url.isLocalFile()||licenseStatus_.value("server_id").toString().isEmpty())return;
  QJsonArray modules;for(const auto&entry:centerModules_)if(entry.toMap().value("enabled").toBool())modules.append(entry.toMap().value("id").toString());
  QJsonObject request{{"format","lemvori.center-request"},{"version",1},{"server_id",licenseStatus_.value("server_id").toString()},{"center",centerConfiguration_.value("center_name").toString()},{"requested_modules",modules}};
- QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly)||file.write(QJsonDocument(request).toJson())<0||!file.commit())return issue("Не вдалося зберегти запит центру.");notify("Запит центру збережено для Lemvori Control.");
+ QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly)||file.write(QJsonDocument(request).toJson())<0||!file.commit())return setLicenseFeedback("Не вдалося зберегти запит центру.",true);setLicenseFeedback("Запит центру збережено для Lemvori Control.");
 }
 
 void ApiBridge::openPdf(const QUrl&url){

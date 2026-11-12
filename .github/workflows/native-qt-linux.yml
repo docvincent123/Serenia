@@ -6,12 +6,16 @@ on:
       - 'native/linux/**'
       - 'tests/native-qt-*.py'
       - 'tests/native-qt-*.cpp'
+      - 'tests/publisher-key-setup.py'
+      - 'deploy/lemvori-care/install-publisher-key.sh'
       - '.github/workflows/native-qt-linux.yml'
   pull_request:
     paths:
       - 'native/linux/**'
       - 'tests/native-qt-*.py'
       - 'tests/native-qt-*.cpp'
+      - 'tests/publisher-key-setup.py'
+      - 'deploy/lemvori-care/install-publisher-key.sh'
       - '.github/workflows/native-qt-linux.yml'
   workflow_dispatch:
 concurrency:
@@ -36,6 +40,7 @@ jobs:
         run: |
           python3 tests/module-route-map.py
           python3 tests/encrypted-storage.py
+          python3 tests/publisher-key-setup.py
       - name: Build native program
         run: |
           cmake -S native/linux -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release

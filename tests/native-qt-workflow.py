@@ -1,5 +1,6 @@
 """Exercise the compiled Qt bridge against an isolated HTTPS fixture."""
 import json
+import os
 import hashlib
 import base64
 import pathlib
@@ -137,6 +138,9 @@ with tempfile.TemporaryDirectory() as temporary:
         "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1",
         "-keyout", str(key), "-out", str(cert),
     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    public_key, private_key = tmp / "publisher-public.pem", tmp / "publisher-private.pem"
+    subprocess.run(["openssl","genpkey","-algorithm","Ed25519","-out",str(private_key)],check=True)
+    subprocess.run(["openssl","pkey","-in",str(private_key),"-pubout","-out",str(public_key)],check=True)
     with FixtureServer(("127.0.0.1", 0), Center) as server:
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls.load_cert_chain(cert, key)
@@ -145,7 +149,7 @@ with tempfile.TemporaryDirectory() as temporary:
         worker.start()
         try:
             subprocess.run([sys.argv[1], f"https://127.0.0.1:{server.server_port}", str(cert)],
-                           check=True, timeout=30)
+                           check=True, timeout=40, env={**os.environ,"LEMVORI_TEST_PUBLIC_KEY":str(public_key),"LEMVORI_TEST_PRIVATE_KEY":str(private_key)})
         finally:
             server.shutdown()
             worker.join()

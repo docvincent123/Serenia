@@ -16,6 +16,9 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QVariantList updateDevices READ updateDevices NOTIFY updatesChanged)
     Q_PROPERTY(bool updatesLoading READ updatesLoading NOTIFY updatesChanged)
     Q_PROPERTY(QString updatesError READ updatesError NOTIFY updatesChanged)
+    Q_PROPERTY(QString licenseError READ licenseError NOTIFY licenseFeedbackChanged)
+    Q_PROPERTY(QString licenseNotice READ licenseNotice NOTIFY licenseFeedbackChanged)
+    Q_PROPERTY(bool publisherKeyToolsAvailable READ publisherKeyToolsAvailable NOTIFY stateChanged)
     Q_PROPERTY(QVariantMap consentPolicy READ consentPolicy NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap centerConfiguration READ centerConfiguration NOTIFY configurationChanged)
     Q_PROPERTY(QVariantMap licenseStatus READ licenseStatus NOTIFY configurationChanged)
@@ -83,6 +86,12 @@ public:
     Q_INVOKABLE void publishUpdate(const QUrl &file, const QString &platform, const QString &version,
                                   int build, const QString &notes, const QString &pilotIds);
     explicit ApiBridge(bool adminEdition = false, QObject *parent = nullptr);
+    QString licenseError() const { return licenseError_; }
+    QString licenseNotice() const { return licenseNotice_; }
+    bool publisherKeyToolsAvailable() const;
+    Q_INVOKABLE void clearLicenseFeedback();
+    Q_INVOKABLE QVariantMap publisherKeyInfo(const QUrl &file);
+    Q_INVOKABLE void installPublisherKey(const QUrl &file, const QString &fingerprint);
     QVariantMap consentPolicy() const { return consentPolicy_; }
     QVariantMap centerConfiguration() const { return centerConfiguration_; }
     QVariantMap licenseStatus() const { return licenseStatus_; }
@@ -204,6 +213,7 @@ public:
                                      const QString &dob, const QString &category,
                                      int psychologistId, bool bookAfter);
 signals:
+    void licenseFeedbackChanged();
     void updatesChanged();
     void configurationChanged();
     void detailChanged();
@@ -221,6 +231,8 @@ private:
     bool updatesLoading_ = false;
     QString updatesError_;
     int updatesGeneration_ = 0;
+    QString licenseError_, licenseNotice_;
+    void setLicenseFeedback(const QString &text, bool failed = false);
     using Callback = std::function<void(const QJsonValue &)>;
     void request(const QByteArray &method, const QString &path, const QJsonObject &body,
                  Callback completed, bool quiet = false,

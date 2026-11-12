@@ -12,6 +12,7 @@ Item {
     z: 100
     readonly property string status: String(bridge.licenseStatus.status || "")
     readonly property bool publisherMissing: status === "publisher_key_required"
+    onVisibleChanged: if (visible) bridge.clearLicenseFeedback()
     readonly property color ink: "#0C1C34"
     readonly property color muted: "#405C83"
 
@@ -77,6 +78,7 @@ Item {
                         wrapMode: TextEdit.WrapAnywhere; implicitHeight: 56
                         background: Rectangle { radius: 12; color: "#F3F5F5"; border.color: "#D4E0F1" }
                     }
+                    PublisherKeySetup { bridge:root.bridge;visible:root.publisherMissing;Layout.fillWidth:true }
                     Label {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
                         color: root.publisherMissing ? "#925B24" : root.muted
@@ -94,7 +96,7 @@ Item {
                         Button {
                             text: "Вибрати файл ліцензії"
                             highlighted: true
-                            enabled: !root.bridge.working
+                            enabled: !root.publisherMissing && !root.bridge.working
                             onClicked: licenseFile.open()
                         }
                     }
@@ -110,15 +112,15 @@ Item {
                     Button {
                         Layout.fillWidth: true
                         text: root.bridge.working ? "Перевіряємо цифровий підпис…" : "Активувати підписану ліцензію"
-                        enabled: !root.bridge.working && licenseText.text.trim().length > 20
+                        enabled: !root.publisherMissing && !root.bridge.working && licenseText.text.trim().length > 20
                         onClicked: root.bridge.activateLicenseText(licenseText.text)
                     }
                     Label {
                         Layout.fillWidth: true
-                        visible: !!root.bridge.error || !!root.bridge.notice
-                        color: root.bridge.error ? "#943B35" : "#256540"
+                        visible: !!root.bridge.licenseError || !!root.bridge.licenseNotice
+                        color: root.bridge.licenseError ? "#943B35" : "#256540"
                         wrapMode: Text.WordWrap
-                        text: root.bridge.error || root.bridge.notice
+                        text: root.bridge.licenseError || root.bridge.licenseNotice
                     }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#E1E6E7" }
                     RowLayout {

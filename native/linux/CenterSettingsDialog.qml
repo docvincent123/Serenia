@@ -9,10 +9,13 @@ Dialog {
     property var selectedModules:[]
     property var policy:({})
     property bool dirty:false
+    readonly property bool publisherMissing:["unmanaged","publisher_key_required"].includes(String(bridge.licenseStatus.status || ""))
+    readonly property string licenseStateText:({unmanaged:"Перевірку ще не налаштовано",publisher_key_required:"Потрібен ключ видавця",activation_required:"Очікує активації",active:"Активна",expired:"Строк дії завершився",invalid:"Ліцензія не пройшла перевірку"})[bridge.licenseStatus.status] || "Перевіряємо…"
     function resetForm(){selectedModules=bridge.centerModules.filter(m=>m.enabled).map(m=>m.id);policy=JSON.parse(JSON.stringify(bridge.consentPolicy));dirty=false}
-    function show(next){mode=next;resetForm();bridge.loadCenterConfiguration();open()}
+    function show(next){bridge.clearLicenseFeedback();mode=next;resetForm();bridge.loadCenterConfiguration();open()}
     title:mode==="license"?"Ліцензія центру":mode==="modules"?"Модулі центру":"Обов’язкові згоди"
     modal:true;anchors.centerIn:Overlay.overlay;width:Math.min(780,Overlay.overlay.width-40);height:Math.min(730,Overlay.overlay.height-40)
+    onClosed: bridge.clearLicenseFeedback()
     closePolicy:bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
     background:Rectangle{radius:22;color:"#F3F7FD";border.color:"#CFDDF0"}
     header:Rectangle{
@@ -31,12 +34,16 @@ Dialog {
                 visible:root.mode==="license";Layout.fillWidth:true
                 Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WrapAnywhere;text:"ID сервера: "+(root.bridge.licenseStatus.server_id || "—");font.bold:true }
                 Label { textFormat:Text.PlainText;text:"Центр: "+(root.bridge.licenseStatus.center || root.bridge.centerConfiguration.center_name || "—");Layout.fillWidth:true;wrapMode:Text.WordWrap }
-                Label { textFormat:Text.PlainText;text:"Стан: "+(root.bridge.licenseStatus.status || "Завантаження…") }
-                Label { textFormat:Text.PlainText;text:"Ліцензія: "+(root.bridge.licenseStatus.perpetual?"Безстрокова":root.bridge.licenseStatus.expires_at?new Date((root.bridge.licenseStatus.expires_at-1)*1000).toLocaleDateString():"Не керується видавцем") }
+                Label { textFormat:Text.PlainText;text:"Стан: "+root.licenseStateText }
+                Label { textFormat:Text.PlainText;text:"Ліцензія: "+(root.bridge.licenseStatus.perpetual?"Безстрокова":root.bridge.licenseStatus.expires_at?new Date((root.bridge.licenseStatus.expires_at-1)*1000).toLocaleDateString():"Ще не активована") }
                 Label { textFormat:Text.PlainText;text:"Працівники: "+(root.bridge.licenseStatus.max_users || "—")+" · Телефони: "+(root.bridge.licenseStatus.max_devices || "—") }
                 Label { textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;text:"Файл ліцензії має бути підписаний Lemvori Control для цього сервера. Ключ видавця перевіряється сервером. Завершення ліцензії не видаляє картки й не закриває читання або експорт.";color:"#405C83" }
+                Label { objectName:"license-feedback";textFormat:Text.PlainText;text:root.bridge.licenseError || root.bridge.licenseNotice;visible:!!text;Layout.fillWidth:true;wrapMode:Text.WordWrap;color:root.bridge.licenseError?"#8C3632":"#256540" }
+                PublisherKeySetup { bridge:root.bridge;Layout.fillWidth:true;visible:root.publisherMissing }
+                Label { text:"2. Активація ліцензії";font.bold:true;font.pixelSize:16;color:"#0C1C34";Layout.topMargin:8 }
+                Label { text:"Після налаштування ключа відкрийте файл .lemvori-license, виданий для ID цього сервера. Сервер перевіряє підпис, строк дії та дозволені модулі.";Layout.fillWidth:true;wrapMode:Text.WordWrap;color:"#405C83" }
                 Action { text:"Файл запиту для видавця";onClicked:requestPicker.open() }
-                Action { text:"Відкрити файл ліцензії";enabled:!root.bridge.working;onClicked:licensePicker.open() }
+                Action { text:"Відкрити файл ліцензії";objectName:"license-import";enabled:!!root.bridge.licenseStatus.status&&!root.publisherMissing&&!root.bridge.working;onClicked:licensePicker.open() }
             }
             ColumnLayout {
                 visible:root.mode==="modules";Layout.fillWidth:true
@@ -73,7 +80,7 @@ Dialog {
                     }
                 }
             }
-            Label { textFormat:Text.PlainText;text:root.bridge.error || root.bridge.notice;visible:!!text;Layout.fillWidth:true;wrapMode:Text.WordWrap;color:root.bridge.error?"#8C3632":"#256540" }
+            Label { textFormat:Text.PlainText;text:root.bridge.error || root.bridge.notice;visible:root.mode!=="license"&&!!text;Layout.fillWidth:true;wrapMode:Text.WordWrap;color:root.bridge.error?"#8C3632":"#256540" }
         }
     }
     footer:DialogButtonBox {

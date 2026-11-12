@@ -278,7 +278,7 @@ Item {
                             anchors.fill:parent;anchors.margins:24;spacing:5
                             Label{color:"#E8F2FF";text:"LEMVORI CARE · АДМІНІСТРУВАННЯ";font.pixelSize:11;font.bold:true}
                             Label{Layout.fillWidth:true;color:"white";font.pixelSize:root.width>940?34:28;font.bold:true;elide:Text.ElideRight;text:root.bridge.centerConfiguration.center_name||"Lemvori Care"}
-                            Label{color:"#DFEBFF";text:"Ліцензія: "+(root.bridge.licenseStatus.status==="active"?"активна":root.bridge.licenseStatus.status||"перевіряємо…");font.pixelSize:14}
+                            Label{color:"#DFEBFF";text:"Ліцензія: "+centerSettings.licenseStateText;font.pixelSize:14}
                         }
                     }
                     GridLayout {

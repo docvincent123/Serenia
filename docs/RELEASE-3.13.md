@@ -41,3 +41,12 @@ This release does not implement MDM or silent remote installation. Android signa
 ## Validation
 
 The native HTTPS and UI tests exercise registration and paper consents, patient records, referrals, booking, waiting lists, handovers, supervision, documents, recovery, module permissions and administrative forms. Update tests cover publication, platform mismatch, inventory, a verified DEB download and rejection of a corrupt checksum without overwriting a file. The real server integration suite covers DEB distribution alongside EXE and tar.gz.
+
+
+## Publisher verification setup
+
+License activation now shows two explicit steps. On the Linux server, connect Lemvori Care Admin to `https://localhost:8443`, select the **public Ed25519 PEM** exported by Lemvori Control, compare its SHA-256 fingerprint and approve the OS authorization dialog. The packaged local helper snapshots and validates the file, rejects private keys and changed fingerprints, refuses replacement of an existing different key, preserves other server settings and enables mandatory verification before restarting the server. It provides no remote API for modifying trust.
+
+Then import the signed `.lemvori-license` issued for the displayed server ID. License import/export errors and notices remain in the license window. Closing that window clears its feedback; unrelated global status is preserved. The UI refreshes licensing metadata each minute, while the server continues to verify entitlement for protected requests.
+
+On an updated server installation, the equivalent local command is `sudo lemvori-carectl publisher-key /path/to/lemvori-publisher-public.pem`. Updating the native DEB installs the privileged helper too, so existing servers can use the setup button without replacing the API or database. A remote PC must perform this trust step on the Linux server itself. The app cannot invent the publisher's verification key; it must match the signing key that issued the license.

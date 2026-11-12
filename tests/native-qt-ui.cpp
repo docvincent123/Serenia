@@ -180,6 +180,18 @@ int main(int argc,char **argv){
     if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/connection-options.png");
     QMetaObject::invokeMethod(connectionPopup,"close");pump();
     cancel=find(adminWindow->contentItem(),"text","Скасувати");verify(cancel,"Center cancel missing");QMetaObject::invokeMethod(cancel,"clicked");pump();
+    select("license");
+    verify(find(adminWindow->contentItem(),"objectName","license-publisher-key"),"Publisher-key setup step missing");
+    auto *importLicense=find(adminWindow->contentItem(),"objectName","license-import");verify(importLicense,"License import missing");
+    verify(!importLicense->isEnabled(),"License import enabled before publisher-key setup");
+    const auto globalBeforeLicense=admin.error();
+    admin.activateLicenseText("invalid-license-json");pump();
+    verify(!admin.licenseError().isEmpty() && admin.error()==globalBeforeLicense,"License error escaped into global banner");
+    auto *feedback=find(adminWindow->contentItem(),"objectName","license-feedback");verify(feedback,"Scoped license error missing");
+    if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/license-setup.png");
+    auto *closeLicense=find(adminWindow->contentItem(),"objectName","settings-close");verify(closeLicense,"License close action missing");
+    QMetaObject::invokeMethod(closeLicense,"clicked");pump();
+    verify(admin.licenseError().isEmpty() && admin.error()==globalBeforeLicense,"Closed license error remained on other pages");
     select("updates");
     verify(waitFor([&]{return !admin.updatesLoading();}),"Update inventory did not finish");pump();
     verify(find(adminWindow->contentItem(),"objectName","update-version"),"Update publisher form missing");
