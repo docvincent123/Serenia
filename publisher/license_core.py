@@ -70,4 +70,11 @@ def write_new(path,data,private=False):
     path=Path(path)
     flags=os.O_WRONLY|os.O_CREAT|os.O_EXCL
     descriptor=os.open(path,flags,0o600 if private else 0o644)
-    with os.fdopen(descriptor,'wb') as output:output.write(data);output.flush();os.fsync(output.fileno())
+    try:
+        with os.fdopen(descriptor,'wb') as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
