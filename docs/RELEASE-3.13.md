@@ -50,3 +50,6 @@ License activation now shows two explicit steps. On the Linux server, connect Le
 Then import the signed `.lemvori-license` issued for the displayed server ID. License import/export errors and notices remain in the license window. Closing that window clears its feedback; unrelated global status is preserved. The UI refreshes licensing metadata each minute, while the server continues to verify entitlement for protected requests.
 
 On an updated server installation, the equivalent local command is `sudo lemvori-carectl publisher-key /path/to/lemvori-publisher-public.pem`. Updating the native DEB installs the privileged helper too, so existing servers can use the setup button without replacing the API or database. A remote PC must perform this trust step on the Linux server itself. The app cannot invent the publisher's verification key; it must match the signing key that issued the license.
+
+
+The license-file picker remains available before publisher-key provisioning, including in first-run onboarding. Missing verifier configuration produces an actionable activation message; it does not disable browsing for a license. Server-side signature and entitlement checks remain mandatory. A native UI regression opens the actual picker in the unconfigured state.

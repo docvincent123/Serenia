@@ -41,9 +41,9 @@ Dialog {
                 Label { objectName:"license-feedback";textFormat:Text.PlainText;text:root.bridge.licenseError || root.bridge.licenseNotice;visible:!!text;Layout.fillWidth:true;wrapMode:Text.WordWrap;color:root.bridge.licenseError?"#8C3632":"#256540" }
                 PublisherKeySetup { bridge:root.bridge;Layout.fillWidth:true;visible:root.publisherMissing }
                 Label { text:"2. Активація ліцензії";font.bold:true;font.pixelSize:16;color:"#0C1C34";Layout.topMargin:8 }
-                Label { text:"Після налаштування ключа відкрийте файл .lemvori-license, виданий для ID цього сервера. Сервер перевіряє підпис, строк дії та дозволені модулі.";Layout.fillWidth:true;wrapMode:Text.WordWrap;color:"#405C83" }
+                Label { text:"Файл .lemvori-license можна вибрати одразу. Для активації потрібен відкритий ключ видавця. Сервер перевіряє підпис, ID сервера, строк дії та дозволені модулі.";Layout.fillWidth:true;wrapMode:Text.WordWrap;color:"#405C83" }
                 Action { text:"Файл запиту для видавця";onClicked:requestPicker.open() }
-                Action { text:"Відкрити файл ліцензії";objectName:"license-import";enabled:!!root.bridge.licenseStatus.status&&!root.publisherMissing&&!root.bridge.working;onClicked:licensePicker.open() }
+                Action { text:"Відкрити файл ліцензії";objectName:"license-import";enabled:!root.bridge.working;onClicked:licensePicker.open() }
             }
             ColumnLayout {
                 visible:root.mode==="modules";Layout.fillWidth:true
@@ -91,6 +91,6 @@ Dialog {
         } }
     }
     FileDialog { id:requestPicker;title:"Зберегти запит центру";fileMode:FileDialog.SaveFile;defaultSuffix:"json";nameFilters:["JSON (*.json)"];onAccepted:root.bridge.exportCenterRequest(selectedFile) }
-    FileDialog { id:licensePicker;title:"Ліцензія цього центру";nameFilters:["Ліцензія (*.lemvori-license *.json)"];onAccepted:root.bridge.importLicense(selectedFile) }
+    FileDialog { id:licensePicker;objectName:"license-file-picker";title:"Ліцензія цього центру";nameFilters:["Ліцензія (*.lemvori-license *.json)"];onAccepted:root.bridge.importLicense(selectedFile) }
     Connections { target:root.bridge;function onConfigurationChanged(){if(root.opened&&!root.dirty)root.resetForm()}function onStateChanged(){if(!root.bridge.authenticated)root.close()}function onOperationCompleted(name){if(["modules","consent-policy"].includes(name))root.close()} }
 }

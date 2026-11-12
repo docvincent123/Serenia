@@ -5,6 +5,7 @@ import QtQuick.Layouts
 
 ColumnLayout {
     id: root
+    objectName: "publisher-key-setup"
     required property var bridge
     property var selectedKey: ({})
     spacing: 10
@@ -30,7 +31,7 @@ ColumnLayout {
         Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#73501B"
     }
     FileDialog {
-        id: keyPicker; title: "Відкритий ключ видавця Lemvori Control"
+        id: keyPicker; objectName:"publisher-public-key-picker"; title: "Відкритий ключ видавця Lemvori Control"
         nameFilters: ["Відкритий ключ (*.pem *.pub)"]
         onAccepted: {
             root.selectedKey = root.bridge.publisherKeyInfo(selectedFile)
@@ -38,7 +39,7 @@ ColumnLayout {
         }
     }
     Dialog {
-        id: confirm; modal: true; anchors.centerIn: Overlay.overlay
+        id: confirm; objectName:"publisher-key-confirmation"; modal: true; anchors.centerIn: Overlay.overlay
         title: "Довіряти цьому ключу видавця?"
         width: Math.min(560, root.width); height: 310
         closePolicy: Popup.CloseOnEscape

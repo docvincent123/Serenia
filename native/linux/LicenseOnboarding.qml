@@ -96,7 +96,7 @@ Item {
                         Button {
                             text: "Вибрати файл ліцензії"
                             highlighted: true
-                            enabled: !root.publisherMissing && !root.bridge.working
+                            enabled: !root.bridge.working
                             onClicked: licenseFile.open()
                         }
                     }
@@ -112,7 +112,7 @@ Item {
                     Button {
                         Layout.fillWidth: true
                         text: root.bridge.working ? "Перевіряємо цифровий підпис…" : "Активувати підписану ліцензію"
-                        enabled: !root.publisherMissing && !root.bridge.working && licenseText.text.trim().length > 20
+                        enabled: !root.bridge.working && licenseText.text.trim().length > 20
                         onClicked: root.bridge.activateLicenseText(licenseText.text)
                     }
                     Label {
