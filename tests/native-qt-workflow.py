@@ -57,7 +57,7 @@ class Center(BaseHTTPRequestHandler):
             "/api/me": {"role": role, "name": "Synthetic account"},
             "/api/settings/center": {"center_name":"Тестовий центр","address":"Synthetic address"},
             "/api/consent-policy": {"required":True,"revision":1,"templates":[{"document_type":kind,"title":kind,"content":"Synthetic approved consent text for native workflow checks.","version":1,"required":True} for kind in ["informed_consent","data_processing"]]},
-            "/api/center/modules": {"license":{"status":"unmanaged","write_allowed":True,"server_id":SERVER_ID},"modules":[{"id":"patients","name":"Картки","version":"1.0.0","core":True,"enabled":True,"licensed":True,"depends":[]}]},
+            "/api/center/modules": {"license":{"status":"active" if getattr(self.server,"license_active",False) else "unmanaged","write_allowed":True,"server_id":SERVER_ID},"modules":[{"id":"patients","name":"Картки","version":"1.0.0","core":True,"enabled":True,"licensed":True,"depends":[]}]},
             "/api/operations/handover": [{"id":5,"summary":"Завдання наступній зміні","state":"open","priority":"important","created_by":"Реєстратор","shift_date":"2026-11-11"}],
             "/api/shift-day": {"open":True,"shift_date":"2026-11-11"},
             "/api/patient-directory": {"items":[{"id":19,"name":"Тестовий пацієнт","patient_no":"0019","psychologist_id":7,"status":"active"}],"total":1},
@@ -119,6 +119,11 @@ class Center(BaseHTTPRequestHandler):
         if self.path == "/api/login":
             return self.respond({"token": body["login"]})
         self.requests.append((self.path, body))
+        if self.path == "/api/license":
+            if body.get("payload") != "server-accepted":
+                return self.respond({"error":"Сервер: ключ видавця не налаштовано"},403)
+            self.server.license_active = True
+            return self.respond({"status":"active","write_allowed":True,"server_id":SERVER_ID})
         self.respond({"ok": True, "id": 21})
 
     def do_PATCH(self):
@@ -158,6 +163,9 @@ if "--ui" in sys.argv[2:]:
     print("PASS: native role navigation, dialogs and responsive layout")
     sys.exit(0)
 
+license_attempts=[body for path,body in Center.requests if path=="/api/license"]
+assert [entry["payload"] for entry in license_attempts]==["server-denied","server-accepted"], "License was blocked locally instead of checked by the server"
+print("PASS: stale unmanaged UI metadata never blocks server verification; denial remains scoped and accepted state refreshes")
 published = next(body for path,body in Center.requests if path == "/api/desktop-updates")
 assert base64.b64decode(published["package_base64"]) == UPDATE_BYTES
 assert published["sha256"] == UPDATE_RELEASE["sha256"] and published["version"] == "3.13.0"

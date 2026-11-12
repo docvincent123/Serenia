@@ -1250,14 +1250,15 @@ void ApiBridge::activateLicenseText(const QString &signedJson) {
         document.object().value("format").toString()!="quremed.solvia.license" ||
         !document.object().value("payload").isString() || !document.object().value("signature").isString())
         return setLicenseFeedback("Потрібен файл .lemvori-license із підписом. Файл PEM використовується окремо для ключа видавця.",true);
-    const auto state=licenseStatus_.value("status").toString();
-    if (state=="unmanaged" || state=="publisher_key_required")
-        return setLicenseFeedback("Спочатку налаштуйте відкритий ключ видавця — крок 1 у цьому вікні.",true);
+    // Cached UI metadata can lag behind local publisher-key provisioning.
+    // Only the server decides whether this signed envelope is acceptable.
     working_=true; clearLicenseFeedback(); emit stateChanged();
-    request("POST","/api/license",document.object(),[this](const QJsonValue &){
+    request("POST","/api/license",document.object(),[this](const QJsonValue &result){
+        const auto verified=result.toObject();
+        if (verified.contains("status")) {licenseStatus_=verified.toVariantMap();emit configurationChanged();}
         working_=false; setLicenseFeedback("Підпис перевірено сервером. Ліцензію активовано.");
         emit stateChanged();loadCenterConfiguration();emit operationCompleted("license");
-    },true,[this](const QString &why){working_=false;setLicenseFeedback(why,true);emit stateChanged();});
+    },true,[this](const QString &why){working_=false;setLicenseFeedback(why,true);emit stateChanged();loadCenterConfiguration();});
 }
 bool ApiBridge::publisherKeyToolsAvailable() const {
     const auto host=QUrl(origin_).host();

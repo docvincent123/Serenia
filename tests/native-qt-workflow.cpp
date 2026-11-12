@@ -132,8 +132,12 @@ int main(int argc, char **argv) {
     const auto previousGlobalError=admin.error();
     admin.activateLicenseText("not a license");
     verify(!admin.licenseError().isEmpty() && admin.error()==previousGlobalError && !admin.working(),"Invalid license polluted global status");
-    admin.activateLicenseText("{\"format\":\"quremed.solvia.license\",\"payload\":\"test\",\"signature\":\"test\"}");
-    verify(admin.licenseError().contains("ключ") && admin.error()==previousGlobalError && !admin.working(),"Missing publisher key was not scoped");
+    admin.activateLicenseText("{\"format\":\"quremed.solvia.license\",\"payload\":\"server-denied\",\"signature\":\"test\"}");
+    verify(waitFor([&]{return !admin.working() && admin.licenseError().contains("Сервер:");}) && admin.error()==previousGlobalError,"Server denial was not scoped");
+    verify(admin.licenseStatus().value("status").toString()=="unmanaged","Stale-metadata fixture did not start unmanaged");
+    admin.activateLicenseText("{\"format\":\"quremed.solvia.license\",\"payload\":\"server-accepted\",\"signature\":\"test\"}");
+    verify(waitFor([&]{return !admin.working() && admin.licenseStatus().value("status").toString()=="active";}),"Stale cached state blocked server activation");
+    verify(admin.licenseError().isEmpty() && admin.licenseNotice().contains("Підпис перевірено") && admin.error()==previousGlobalError,"Verified activation feedback invalid");
     const auto publicKey=QUrl::fromLocalFile(qEnvironmentVariable("LEMVORI_TEST_PUBLIC_KEY"));
     auto preview=admin.publisherKeyInfo(publicKey);
     verify(preview.value("fingerprint").toString().size()==64,"Ed25519 publisher-key preview failed");

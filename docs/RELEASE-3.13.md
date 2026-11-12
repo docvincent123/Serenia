@@ -56,3 +56,6 @@ The license-file picker remains available before publisher-key provisioning, inc
 
 
 Linux Qt 6.4 file dialogs also require the QML module `Qt.labs.folderlistmodel`. The native Linux workflow installs `qml6-module-qt-labs-folderlistmodel` explicitly, and the native DEB declares it as a runtime dependency. This fixes file-picker loading in the `qt-native` job and on minimal Linux desktops. Existing installations can install that module with `sudo apt install qml6-module-qt-labs-folderlistmodel`, then restart the client.
+
+
+Activation always submits a structurally valid signed license to the server, even if cached UI metadata still says unmanaged or publisher_key_required. This prevents a stale pre-restart status from blocking verification after publisher-key setup. The client immediately displays the server-verified status on success and refreshes metadata on denial. Cryptographic verification and key provisioning requirements on the server are unchanged.
