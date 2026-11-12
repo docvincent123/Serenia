@@ -11,7 +11,8 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from zoneinfo import ZoneInfo
 
 from license_core import (
-    CATALOG, calendar_expiry, create_keys, issue_license, resolve_modules, write_new,
+    CATALOG, calendar_expiry, create_keys, issue_license, resolve_modules,
+    validate_private_key_file, write_new,
 )
 from license_store import (
     atomic_json, license_matches_record, load_preferences, load_registry,
@@ -40,7 +41,7 @@ def local_end_date(timestamp):
 class Publisher(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Lemvori Control · 1.1.0")
+        self.title("Lemvori Control · 1.1.1")
         self.geometry("1100x820")
         self.minsize(960, 730)
         self.configure(bg="#EFF3F9")
@@ -116,8 +117,12 @@ class Publisher(tk.Tk):
         key_card.pack(fill="x", pady=(0, 10))
         key_buttons = ttk.Frame(key_card, style="Card.TFrame")
         key_buttons.pack(fill="x")
-        ttk.Button(key_buttons, text="Новий ключ видавця", command=self.create_key).pack(side="left")
-        ttk.Button(key_buttons, text="Вибрати існуючий ключ", command=self.pick_key).pack(side="left", padx=8)
+        ttk.Button(key_buttons, text="Видати ліцензію (.lemvori-license)",
+                   style="Primary.TButton", command=self.issue).pack(side="left")
+        ttk.Button(key_buttons, text="Створити ключ підпису (.pem)",
+                   command=self.create_key).pack(side="left", padx=(8, 0))
+        ttk.Button(key_buttons, text="Вибрати існуючий ключ",
+                   command=self.pick_key).pack(side="left", padx=8)
         ttk.Button(key_buttons, text="Імпортувати запит центру", command=self.import_center).pack(side="left")
         ttk.Label(key_card, textvariable=self.key_label, style="Hint.TLabel",
                   wraplength=960).pack(anchor="w", pady=(7, 0))
@@ -199,7 +204,7 @@ class Publisher(tk.Tk):
 
         buttons = ttk.Frame(body)
         buttons.pack(fill="x", pady=(12, 10))
-        ttk.Button(buttons, text="Створити та зберегти ліцензію",
+        ttk.Button(buttons, text="Видати файл .lemvori-license",
                    style="Primary.TButton", command=self.issue).pack(side="left")
         ttk.Button(buttons, text="Зберегти чернетку", command=self.save_draft).pack(side="left", padx=7)
         ttk.Button(buttons, text="Новий центр", command=self.clear_form).pack(side="left")
@@ -240,8 +245,12 @@ class Publisher(tk.Tk):
 
     def update_key_label(self):
         raw = self.key_path.get().strip()
-        self.key_label.set("Приватний ключ: " + (raw if raw else "не вибраний") +
-                           "   •   пароль ніколи не зберігається")
+        self.key_label.set(
+            "Файл, який отримає центр: .lemvori-license.  "
+            "PEM — лише приватний ключ для підпису: "
+            + (raw if raw else "не вибраний")
+            + "   •   пароль не зберігається"
+        )
 
     def remember_paths(self):
         save_preferences(self.preferences_path, self.key_path.get(), self.license_dir)
@@ -405,36 +414,39 @@ class Publisher(tk.Tk):
             parent=self, title="Приватний ключ видавця",
             initialdir=initial_dir, filetypes=[("PEM", "*.pem")])
         if not path:
-            return
-        self.key_path.set(str(Path(path).resolve()))
-        self.update_key_label()
+            return False
         try:
+            validated = validate_private_key_file(path)
+            self.key_path.set(str(validated.resolve()))
+            self.update_key_label()
             self.remember_paths()
-            self.status.set("Шлях до ключа збережено. Сам ключ і пароль не копіюються.")
-        except OSError as error:
-            messagebox.showerror("Налаштування", str(error), parent=self)
+            self.status.set("Ключ підпису вибрано. Результатом видачі буде .lemvori-license.")
+            return True
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Невірний PEM", str(error), parent=self)
+            return False
 
     def create_key(self):
         password = simpledialog.askstring(
             "Захист ключа", "Новий пароль приватного ключа (щонайменше 12 символів):",
             show="*", parent=self)
         if password is None:
-            return
+            return False
         again = simpledialog.askstring(
             "Підтвердження", "Повторіть пароль:", show="*", parent=self)
         if again is None:
-            return
+            return False
         if password != again:
-            return messagebox.showerror("Пароль", "Паролі не збігаються", parent=self)
+            messagebox.showerror("Пароль", "Паролі не збігаються", parent=self)
+            return False
         folder = filedialog.askdirectory(parent=self, title="Папка для нової пари ключів")
         if not folder:
-            return
+            return False
         private_path = Path(folder) / "lemvori-publisher-private.pem"
         public_path = Path(folder) / "lemvori-publisher-public.pem"
         if private_path.exists() or public_path.exists():
-            return messagebox.showerror(
-                "Ключ", "У цій папці вже є ключі. Виберіть нову папку.",
-                parent=self)
+            messagebox.showerror("Ключ", "У цій папці вже є ключі. Виберіть нову папку.", parent=self)
+            return False
         try:
             private, public = create_keys(password)
             write_new(private_path, private, private=True)
@@ -453,19 +465,52 @@ class Publisher(tk.Tk):
                 f"{folder}\n\nЗбережіть резервну копію та пароль окремо. "
                 "На сервер центру передається ЛИШЕ публічний ключ.",
                 parent=self)
+            return True
         except Exception as error:
             messagebox.showerror("Не вдалося створити ключі", str(error), parent=self)
+            return False
+
+    def ensure_signing_key(self):
+        """Prompt once for a signing key; do not silently rotate trusted keys."""
+        current = self.key_path.get().strip()
+        if current:
+            try:
+                return validate_private_key_file(current)
+            except (OSError, ValueError):
+                pass
+        answer = messagebox.askyesnocancel(
+            "Потрібен ключ підпису",
+            "Для створення файлу .lemvori-license потрібен приватний PEM-ключ.\\n\\n"
+            "ТАК — вибрати вже створений приватний PEM.\\n"
+            "НІ — створити нову пару ключів видавця.\\n"
+            "СКАСУВАТИ — повернутися без змін.\\n\\n"
+            "Увага: новий ключ НЕ прийматиметься центрами, "
+            "де встановлений старий публічний ключ.",
+            icon="warning", parent=self,
+        )
+        if answer is None:
+            return None
+        if answer:
+            if not self.pick_key():
+                return None
+        elif not self.create_key():
+            return None
+        try:
+            return validate_private_key_file(self.key_path.get())
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Невірний ключ підпису", str(error), parent=self)
+            return None
 
     def issue(self):
         if not self.ready:
             return messagebox.showerror("Реєстр", "Спочатку відновіть пошкоджений реєстр.")
         try:
             record = self.collect_form()
-            key_path = Path(self.key_path.get())
-            if not self.key_path.get().strip() or not key_path.is_file():
-                raise ValueError("Виберіть існуючий приватний ключ видавця (.pem)")
         except (ValueError, OSError, TypeError) as error:
-            return messagebox.showerror("Перевірте дані", str(error), parent=self)
+            return messagebox.showerror("Перевірте дані центру", str(error), parent=self)
+        key_path = self.ensure_signing_key()
+        if key_path is None:
+            return
         password = simpledialog.askstring(
             "Підпис ліцензії", "Пароль приватного ключа:", show="*", parent=self)
         if password is None:
