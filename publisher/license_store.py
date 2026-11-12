@@ -4,6 +4,7 @@ This module never stores a private key, key password or patient information.
 Deleting a local grant is NOT a remote revocation mechanism.
 """
 import base64
+import binascii
 import json
 import os
 import re
@@ -80,7 +81,7 @@ def license_matches_record(path, record):
             and payload.get("license_id") == record["license_id"]
             and payload.get("server_id") == record.get("server_id")
         )
-    except (ValueError, KeyError, OSError, TypeError):
+    except (ValueError, KeyError, OSError, TypeError, binascii.Error):
         return False
 
 
