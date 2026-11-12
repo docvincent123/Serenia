@@ -11,8 +11,8 @@ Item {
     onSectionChanged: archivePage = 1
     signal bookPatient(var patient)
     signal bookWaiting(var entry)
-    readonly property color ink: "#11212D"
-    readonly property color muted: "#4A5C6A"
+    readonly property color ink: "#0C1C34"
+    readonly property color muted: "#405C83"
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
     readonly property var titles: ({handover:"Передача зміни",waiting:"Лист очікування",families:"Сім’ї",archive:"Архів",supervisions:"Супервізії",messages:"Повідомлення",workload:"Навантаження",reports:"Звіти психологів",tv:"Виклик на табло",devices:"Телефони психологів",recovery:"Проблеми синхронізації"})
     readonly property var descriptions: ({handover:"Завдання для наступної зміни без приватних консультаційних записів",waiting:"Побажання пацієнтів і запис у вільний час",families:"Об’єднуйте картки членів родини через поле «Сім’я» в картці пацієнта",archive:"Пошук архівних карток і повторне відкриття курсу",supervisions:"Планування зустрічей, підсумки та рекомендації",messages:"Службові повідомлення на Android психолога. Статуси доставки та прочитання",workload:"Показники центру за вибраний період",reports:"Звіти, подані психологами за зміни",tv:"Виклик доступний після відмітки прибуття пацієнта",devices:"Зв’язок, версія програми та черга синхронізації з телефона",recovery:"Непроведені записи з Android. Обробка потребує звірки з оригіналом"})
@@ -68,11 +68,11 @@ Item {
         implicitHeight: 40
         leftPadding: 16; rightPadding: 16
         contentItem: Text { text:control.text; color:control.primary ? "white" : root.ink; opacity:control.enabled?1:0.5; font.pixelSize:13; font.bold:true; horizontalAlignment:Text.AlignHCenter; verticalAlignment:Text.AlignVCenter; elide:Text.ElideRight }
-        background: Rectangle { radius:20; color:control.primary?root.ink:control.hovered?"#CCD0CF":"white"; border.color:control.primary?root.ink:"#CCD0CF" }
+        background: Rectangle { radius:12; color:control.primary?"#1764EF":control.hovered?"#CFDDF0":"white"; border.color:control.primary?"#1764EF":"#CFDDF0" }
     }
-    component Field: TextField {
+    component Field: CareTextField {
         implicitHeight:42; leftPadding:12; rightPadding:12; selectByMouse:true; color:root.ink
-        background: Rectangle { radius:10; color:"white"; border.color:parent.activeFocus?root.muted:"#CCD0CF" }
+        background: Rectangle { radius:10; color:"white"; border.color:parent.activeFocus?root.muted:"#CFDDF0" }
     }
     Timer { interval:15000; repeat:true; running:root.visible && root.bridge.authenticated; onTriggered: { if (!form.opened && !patientDialog.opened && !root.bridge.workspaceLoading) root.load() } }
     ScrollView {
@@ -200,7 +200,7 @@ Item {
         width:Math.min(760,Overlay.overlay.width-40); height:Math.min(700,Overlay.overlay.height-40)
         closePolicy:root.bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
         onOpened:validation=""
-        background:Rectangle{radius:21;color:"#F5F7F7";border.color:"#CCD0CF"}
+        background:Rectangle{radius:21;color:"#F3F7FD";border.color:"#CFDDF0"}
         header:Rectangle {
             color:"transparent";implicitHeight:83
             ColumnLayout{anchors.fill:parent;anchors.leftMargin:22;anchors.rightMargin:22;spacing:4
@@ -232,27 +232,27 @@ Item {
                         Loader {
                             id:editor;Layout.fillWidth:true
                             sourceComponent:modelData.options?comboEditor:modelData.type==="number"?numberEditor:modelData.type==="area"?areaEditor:textEditor
-                            Component {id:comboEditor;ComboBox{
+                            Component {id:comboEditor;CareComboBox{
                                 objectName:modelData.key;implicitHeight:46;readonly property var fieldValue:currentValue
                                 model:modelData.options;textRole:"label";valueRole:"key"
-                                background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"}
+                                background:Rectangle{radius:12;color:"white";border.color:"#CFDDF0"}
                                 Component.onCompleted:{const index=indexOfValue(original);currentIndex=index>=0?index:0}
                             }}
                             Component {id:numberEditor;SpinBox{
                                 implicitHeight:46;readonly property int fieldValue:value
                                 from:modelData.from;to:modelData.to;value:Number(original);editable:true
-                                background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"}
+                                background:Rectangle{radius:12;color:"white";border.color:"#CFDDF0"}
                             }}
                             Component {id:textEditor;Field{
                                 objectName:modelData.key;implicitHeight:46
                                 readonly property string fieldValue:text;text:String(original)
                                 maximumLength:modelData.key==="summary"?300:3000
                             }}
-                            Component {id:areaEditor;TextArea{
+                            Component {id:areaEditor;CareTextArea{
                                 id:area;objectName:modelData.key;readonly property string fieldValue:text
                                 text:String(original);selectByMouse:true;wrapMode:TextEdit.Wrap
                                 implicitHeight:120;color:root.ink;leftPadding:14;topPadding:12
-                                background:Rectangle{radius:12;color:"white";border.color:area.activeFocus?"#253745":"#CCD0CF"}
+                                background:Rectangle{radius:12;color:"white";border.color:area.activeFocus?"#1764EF":"#CFDDF0"}
                             }}
                         }
                     }
@@ -283,7 +283,7 @@ Item {
         modal: true; anchors.centerIn: Overlay.overlay
         width: Math.min(490, Overlay.overlay.width-36)
         closePolicy:root.bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
-        background:Rectangle{radius:19;color:"#F5F7F7";border.color:"#CCD0CF"}
+        background:Rectangle{radius:19;color:"#F3F7FD";border.color:"#CFDDF0"}
         onOpened:{
             const index=referralChoice.indexOfValue(referral.status || "recommended")
             referralChoice.currentIndex=index>=0?index:0
@@ -294,7 +294,7 @@ Item {
                 text:[referralStatusDialog.referral.destination_type,referralStatusDialog.referral.destination_name].filter(Boolean).join(" · ")
                 color:root.ink;font.bold:true}
             Label {text:"Новий статус";font.bold:true;color:root.ink}
-            ComboBox {
+            CareComboBox {
                 id:referralChoice;objectName:"referral-status-select";Layout.fillWidth:true;implicitHeight:48
                 model:[
                     {value:"recommended",label:"Рекомендовано"},
@@ -303,7 +303,7 @@ Item {
                     {value:"cancelled",label:"Скасовано"}
                 ]
                 textRole:"label";valueRole:"value"
-                background:Rectangle{radius:12;color:"white";border.color:"#CCD0CF"}
+                background:Rectangle{radius:12;color:"white";border.color:"#CFDDF0"}
             }
             Label {Layout.fillWidth:true;wrapMode:Text.WordWrap;color:root.muted;font.pixelSize:12
                 text:"Оновлення збережеться в історії змін сервера. Не позначайте направлення виконаним без підтвердження."}
@@ -342,7 +342,7 @@ Item {
         width: Math.min(980, Overlay.overlay.width-36)
         height: Math.min(770, Overlay.overlay.height-36)
         padding: 0
-        background: Rectangle { radius: 22; color:"#F4F6F6"; border.color:"#CCD0CF" }
+        background: Rectangle { radius: 22; color:"#F4F6F6"; border.color:"#CFDDF0" }
         onOpened: activeTab="overview"
         onClosed: root.bridge.closePatient()
 
@@ -444,7 +444,7 @@ Item {
                     Layout.fillWidth:true;spacing:12
                     Rectangle {
                         Layout.fillWidth:true;radius:16;implicitHeight:identityBlock.implicitHeight+36
-                        color:"white";border.color:"#CCD0CF"
+                        color:"white";border.color:"#CFDDF0"
                         ColumnLayout {id:identityBlock;anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:18;spacing:9
                             Label {text:"РЕЄСТРАЦІЙНІ ДАНІ";font.pixelSize:11;font.bold:true;color:root.muted}
                             Label {textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap;color:root.ink

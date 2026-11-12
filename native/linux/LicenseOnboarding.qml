@@ -12,8 +12,9 @@ Item {
     z: 100
     readonly property string status: String(bridge.licenseStatus.status || "")
     readonly property bool publisherMissing: status === "publisher_key_required"
-    readonly property color ink: "#11212D"
-    readonly property color muted: "#4A5C6A"
+    onVisibleChanged: if (visible) bridge.clearLicenseFeedback()
+    readonly property color ink: "#0C1C34"
+    readonly property color muted: "#405C83"
 
     Rectangle {
         anchors.fill: parent
@@ -36,7 +37,7 @@ Item {
                 Layout.fillWidth: true
                 spacing: 12
                 Rectangle {
-                    width: 52; height: 52; radius: 18; color: "#253745"
+                    width: 52; height: 52; radius: 18; color: "#1764EF"
                     Label { anchors.centerIn: parent; text: "L"; font.pixelSize: 26; font.bold: true; color: "white" }
                 }
                 ColumnLayout {
@@ -54,7 +55,7 @@ Item {
                 radius: 24
                 implicitHeight: wizardContent.implicitHeight + 48
                 color: "white"
-                border.color: "#CCD0CF"
+                border.color: "#CFDDF0"
                 ColumnLayout {
                     id: wizardContent
                     anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
@@ -70,13 +71,14 @@ Item {
                     }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#E1E6E7" }
                     Label { text: "Сервер центру"; font.bold: true; color: root.ink }
-                    TextArea {
+                    CareTextArea {
                         Layout.fillWidth: true; readOnly: true; selectByMouse: true
                         text: root.bridge.licenseStatus.server_id || "Очікуємо ідентифікатор"
                         font.family: "monospace"; font.pixelSize: 13; color: root.ink
                         wrapMode: TextEdit.WrapAnywhere; implicitHeight: 56
-                        background: Rectangle { radius: 12; color: "#F3F5F5"; border.color: "#D4DCDE" }
+                        background: Rectangle { radius: 12; color: "#F3F5F5"; border.color: "#D4E0F1" }
                     }
+                    PublisherKeySetup { bridge:root.bridge;visible:root.publisherMissing;Layout.fillWidth:true }
                     Label {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
                         color: root.publisherMissing ? "#925B24" : root.muted
@@ -99,13 +101,13 @@ Item {
                         }
                     }
                     Label { text: "АБО ВСТАВТЕ ПІДПИСАНИЙ JSON"; color: root.muted; font.pixelSize: 11; font.bold: true }
-                    TextArea {
+                    CareTextArea {
                         id: licenseText
                         Layout.fillWidth: true; implicitHeight: 112
                         selectByMouse: true; wrapMode: TextEdit.WrapAnywhere
                         placeholderText: "Вставте повний вміст .lemvori-license: format, payload і signature"
                         color: root.ink; font.family: "monospace"; font.pixelSize: 12
-                        background: Rectangle { radius: 13; color: "#F8FAFA"; border.color: licenseText.activeFocus ? "#253745" : "#CCD0CF" }
+                        background: Rectangle { radius: 13; color: "#F8FBFF"; border.color: licenseText.activeFocus ? "#1764EF" : "#CFDDF0" }
                     }
                     Button {
                         Layout.fillWidth: true
@@ -115,10 +117,10 @@ Item {
                     }
                     Label {
                         Layout.fillWidth: true
-                        visible: !!root.bridge.error || !!root.bridge.notice
-                        color: root.bridge.error ? "#943B35" : "#256540"
+                        visible: !!root.bridge.licenseError || !!root.bridge.licenseNotice
+                        color: root.bridge.licenseError ? "#943B35" : "#256540"
                         wrapMode: Text.WordWrap
-                        text: root.bridge.error || root.bridge.notice
+                        text: root.bridge.licenseError || root.bridge.licenseNotice
                     }
                     Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#E1E6E7" }
                     RowLayout {

@@ -10,12 +10,12 @@ Dialog {
     title:"Звірка запису з Android"; modal:true; anchors.centerIn:Overlay.overlay
     width:Math.min(830,Overlay.overlay.width-40); height:Math.min(730,Overlay.overlay.height-40)
     closePolicy:bridge.working?Popup.NoAutoClose:Popup.CloseOnEscape
-    background:Rectangle{radius:22;color:"#F5F7F7";border.color:"#CCD0CF"}
+    background:Rectangle{radius:22;color:"#F3F7FD";border.color:"#CFDDF0"}
     header:Rectangle{
         color:"transparent";implicitHeight:78
         ColumnLayout{anchors.fill:parent;anchors.leftMargin:24;anchors.rightMargin:24;spacing:5
-            Label{text:"LEMVORI CARE · КОНТРОЛЬ СИНХРОНІЗАЦІЇ";color:"#4A5C6A";font.pixelSize:11;font.bold:true}
-            Label{text:root.title;color:"#11212D";font.pixelSize:22;font.bold:true}
+            Label{text:"LEMVORI CARE · КОНТРОЛЬ СИНХРОНІЗАЦІЇ";color:"#405C83";font.pixelSize:11;font.bold:true}
+            Label{text:root.title;color:"#0C1C34";font.pixelSize:22;font.bold:true}
         }
     }
     function show(id){validation="";reason.text="";confirmed.checked=false;conflict.checked=false;choice.currentIndex=0;bridge.openDetail("recovery",id);open()}
@@ -24,8 +24,8 @@ Dialog {
     component Action: Button {
         id:control
         implicitHeight:40; leftPadding:16; rightPadding:16
-        contentItem:Text { text:control.text; color:"#11212D"; font.bold:true; opacity:control.enabled?1:0.45; horizontalAlignment:Text.AlignHCenter; verticalAlignment:Text.AlignVCenter }
-        background:Rectangle { radius:20; color:control.hovered?"#CCD0CF":"white"; border.color:"#CCD0CF" }
+        contentItem:Text { text:control.text; color:"#0C1C34"; font.bold:true; opacity:control.enabled?1:0.45; horizontalAlignment:Text.AlignHCenter; verticalAlignment:Text.AlignVCenter }
+        background:Rectangle { radius:20; color:control.hovered?"#CFDDF0":"white"; border.color:"#CFDDF0" }
     }
     contentItem:ScrollView {
         id:scroll; contentWidth:availableWidth; clip:true;leftPadding:24;rightPadding:24;topPadding:10;bottomPadding:16
@@ -35,28 +35,28 @@ Dialog {
             Label { textFormat:Text.PlainText; text:root.record.error || "Завантаження…"; wrapMode:Text.WordWrap; Layout.fillWidth:true; color:"#8C3632" }
             Rectangle {
                 Layout.fillWidth:true;implicitHeight:mobileText.implicitHeight+44
-                radius:16;color:"white";border.color:"#CCD0CF"
+                radius:16;color:"white";border.color:"#CFDDF0"
                 ColumnLayout{id:mobileText;anchors.fill:parent;anchors.margins:18;spacing:9
-                    Label{text:"ОРИГІНАЛ З ТЕЛЕФОНА";font.bold:true;color:"#4A5C6A";font.pixelSize:11}
-                    Label{textFormat:Text.PlainText;text:root.textFor(root.record.payload);wrapMode:Text.WordWrap;Layout.fillWidth:true;color:"#11212D"}
+                    Label{text:"ОРИГІНАЛ З ТЕЛЕФОНА";font.bold:true;color:"#405C83";font.pixelSize:11}
+                    Label{textFormat:Text.PlainText;text:root.textFor(root.record.payload);wrapMode:Text.WordWrap;Layout.fillWidth:true;color:"#0C1C34"}
                 }
             }
             Rectangle {
                 Layout.fillWidth:true;implicitHeight:serverText.implicitHeight+44
-                radius:16;color:"white";border.color:"#CCD0CF"
+                radius:16;color:"white";border.color:"#CFDDF0"
                 ColumnLayout{id:serverText;anchors.fill:parent;anchors.margins:18;spacing:9
-                    Label{text:"ЧЕРНЕТКА НА СЕРВЕРІ";font.bold:true;color:"#4A5C6A";font.pixelSize:11}
-                    Label{textFormat:Text.PlainText;text:root.textFor(root.record.server_draft);wrapMode:Text.WordWrap;Layout.fillWidth:true;color:"#11212D"}
+                    Label{text:"ЧЕРНЕТКА НА СЕРВЕРІ";font.bold:true;color:"#405C83";font.pixelSize:11}
+                    Label{textFormat:Text.PlainText;text:root.textFor(root.record.server_draft);wrapMode:Text.WordWrap;Layout.fillWidth:true;color:"#0C1C34"}
                 }
             }
             Label { textFormat:Text.PlainText; text:"Уже проведені консультації"; font.bold:true }
             Repeater { model:root.record.existing || []; delegate:Label { textFormat:Text.PlainText; required property var modelData; text:"№ "+modelData.id+"\n"+root.textFor(modelData); wrapMode:Text.WordWrap; Layout.fillWidth:true } }
-            ComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:choice; Layout.fillWidth:true; visible:!(root.record.existing || []).length; model:["Провести оригінал з телефона","Провести серверну чернетку"]; enabled:!!root.record.server_draft }
-            ComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CCD0CF"}  id:existing; Layout.fillWidth:true; visible:!!(root.record.existing || []).length; model:root.record.existing || []; textRole:"id"; valueRole:"id" }
+            CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CFDDF0"}  id:choice; Layout.fillWidth:true; visible:!(root.record.existing || []).length; model:["Провести оригінал з телефона","Провести серверну чернетку"]; enabled:!!root.record.server_draft }
+            CareComboBox { background:Rectangle {radius:10;color:"white";border.color:"#CFDDF0"}  id:existing; Layout.fillWidth:true; visible:!!(root.record.existing || []).length; model:root.record.existing || []; textRole:"id"; valueRole:"id" }
             Label { textFormat:Text.PlainText; text:"Причина рішення *" }
-            TextArea { id:reason; Layout.fillWidth:true; implicitHeight:100; wrapMode:TextEdit.Wrap
+            CareTextArea { id:reason; Layout.fillWidth:true; implicitHeight:100; wrapMode:TextEdit.Wrap
                 selectByMouse:true;leftPadding:14;topPadding:12;placeholderText:"Укажіть причину та обґрунтування…"
-                background:Rectangle{radius:13;color:"white";border.color:reason.activeFocus?"#253745":"#CCD0CF"}
+                background:Rectangle{radius:13;color:"white";border.color:reason.activeFocus?"#1764EF":"#CFDDF0"}
             }
             CheckBox { id:confirmed; text:(root.record.existing || []).length?"Підтверджую відповідність уже проведеної консультації":"Підтверджую, що консультація фактично відбулася" }
             CheckBox { id:conflict; text:"Я звірив відмінності та підтверджую вибір тексту"; visible:!!root.record.server_draft }

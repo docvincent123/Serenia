@@ -128,6 +128,47 @@ int main(int argc, char **argv) {
     admin.saveModulePermissions(4, QVariantList{"documents","clinical"});
     verify(waitFor([&] { return !admin.working() && admin.notice().contains("Права працівника оновлено"); }), "Admin permission update failed");
 
+    verify(waitFor([&]{return !admin.licenseStatus().isEmpty();}),"License metadata missing");
+    const auto previousGlobalError=admin.error();
+    admin.activateLicenseText("not a license");
+    verify(!admin.licenseError().isEmpty() && admin.error()==previousGlobalError && !admin.working(),"Invalid license polluted global status");
+    admin.activateLicenseText("{\"format\":\"quremed.solvia.license\",\"payload\":\"server-denied\",\"signature\":\"test\"}");
+    verify(waitFor([&]{return !admin.working() && admin.licenseError().contains("Сервер:");}) && admin.error()==previousGlobalError,"Server denial was not scoped");
+    verify(admin.licenseStatus().value("status").toString()=="unmanaged","Stale-metadata fixture did not start unmanaged");
+    admin.activateLicenseText("{\"format\":\"quremed.solvia.license\",\"payload\":\"server-accepted\",\"signature\":\"test\"}");
+    verify(waitFor([&]{return !admin.working() && admin.licenseStatus().value("status").toString()=="active";}),"Stale cached state blocked server activation");
+    verify(admin.licenseError().isEmpty() && admin.licenseNotice().contains("Підпис перевірено") && admin.error()==previousGlobalError,"Verified activation feedback invalid");
+    const auto publicKey=QUrl::fromLocalFile(qEnvironmentVariable("LEMVORI_TEST_PUBLIC_KEY"));
+    auto preview=admin.publisherKeyInfo(publicKey);
+    verify(preview.value("fingerprint").toString().size()==64,"Ed25519 publisher-key preview failed");
+    auto privateKey=QUrl::fromLocalFile(qEnvironmentVariable("LEMVORI_TEST_PRIVATE_KEY"));
+    verify(admin.publisherKeyInfo(privateKey).isEmpty() && !admin.licenseError().isEmpty(),"Private key accepted as publisher verifier");
+    verify(admin.error()==previousGlobalError,"Publisher-key validation polluted global status");
+    admin.clearLicenseFeedback();
+    verify(admin.licenseError().isEmpty() && admin.licenseNotice().isEmpty(),"License feedback did not clear");
+
+    admin.loadUpdates();
+    verify(waitFor([&] { return !admin.updatesLoading() && admin.updateReleases().size()==2 && admin.updateDevices().size()==1; }), "Update inventory failed");
+    const QByteArray package("!<arch>\nSynthetic DEB package for transport tests");
+    const auto packagePath = config.filePath("update.deb");
+    { QFile f(packagePath); verify(f.open(QIODevice::WriteOnly), "Fixture file creation failed"); f.write(package); }
+    admin.publishUpdate(QUrl::fromLocalFile(packagePath),"android","3.13.0",182046,"","");
+    verify(!admin.working() && !admin.error().isEmpty(),"Android accepted DEB package");
+    admin.publishUpdate(QUrl::fromLocalFile(packagePath),"linux","3.13.0",182046,"Тестовий пакет","");
+    verify(waitFor([&] { return !admin.working() && admin.notice().contains("опубліковане"); }),"Native publication failed");
+    admin.checkClientUpdate();
+    verify(waitFor([&] { return !admin.clientUpdate().isEmpty(); }),"Native update check failed");
+    const auto downloadPath = config.filePath("download.deb");
+    admin.downloadClientUpdate(QUrl::fromLocalFile(downloadPath));
+    verify(waitFor([&] { return !admin.working(); }),"Update download stuck");
+    { QFile f(downloadPath); verify(f.open(QIODevice::ReadOnly) && f.readAll()==package,"Verified package not saved correctly"); }
+
+    admin.checkClientUpdate();
+    verify(waitFor([&] { return admin.clientUpdate().value("sha256").toString()==QString(64,'0'); }),"Corrupt manifest fixture failed");
+    admin.downloadClientUpdate(QUrl::fromLocalFile(downloadPath));
+    verify(waitFor([&] { return !admin.working(); }) && !admin.error().isEmpty(),"Hash mismatch accepted");
+    { QFile f(downloadPath); verify(f.open(QIODevice::ReadOnly) && f.readAll()==package,"Rejected download overwrote existing file"); }
+
     const auto profile = QUrl::fromLocalFile(config.filePath("test.solvia"));
     admin.exportProfile(profile, true);
     verify(waitFor([&] { return QFile::exists(profile.toLocalFile()); }), "Admin profile export failed");

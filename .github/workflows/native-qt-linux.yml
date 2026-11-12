@@ -6,12 +6,16 @@ on:
       - 'native/linux/**'
       - 'tests/native-qt-*.py'
       - 'tests/native-qt-*.cpp'
+      - 'tests/publisher-key-setup.py'
+      - 'deploy/lemvori-care/install-publisher-key.sh'
       - '.github/workflows/native-qt-linux.yml'
   pull_request:
     paths:
       - 'native/linux/**'
       - 'tests/native-qt-*.py'
       - 'tests/native-qt-*.cpp'
+      - 'tests/publisher-key-setup.py'
+      - 'deploy/lemvori-care/install-publisher-key.sh'
       - '.github/workflows/native-qt-linux.yml'
   workflow_dispatch:
 concurrency:
@@ -28,7 +32,7 @@ jobs:
         run: |
           bash tools/ci-ubuntu-apt.sh
           sudo apt-get install -y cmake ninja-build g++ qt6-base-dev qt6-declarative-dev qt6-svg-dev \
-            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qt-labs-folderlistmodel qml6-module-qtquick-layouts \
             qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models \
             qml6-module-qtquick-templates qml6-module-qtquick-shapes \
             qml6-module-qtqml-workerscript libqt6svg6
@@ -36,6 +40,7 @@ jobs:
         run: |
           python3 tests/module-route-map.py
           python3 tests/encrypted-storage.py
+          python3 tests/publisher-key-setup.py
       - name: Build native program
         run: |
           cmake -S native/linux -B build/native-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -55,6 +60,12 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
+        run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-ui-check --ui
+      - name: Verify input and dropdown contrast with a dark system palette
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          LEMVORI_TEST_DARK_PALETTE: '1'
         run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-ui-check --ui
       - name: Check no WebKit or Chrome dependency is linked
         run: |

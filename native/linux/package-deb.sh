@@ -5,13 +5,15 @@ set -Eeuo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 build=${SOLVIA_NATIVE_BUILD_DIR:-"$root/build/native-linux"}
 binary="$build/solvia-native"
-version=${SOLVIA_NATIVE_VERSION:-3.2.0~preview7}
+version=${SOLVIA_NATIVE_VERSION:-3.13.0+182046}
 [[ -x $binary ]] || { echo "Спочатку зберіть $binary" >&2; exit 1; }
 command -v dpkg-deb >/dev/null || { echo "Потрібен dpkg-deb" >&2; exit 1; }
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 install -d "$stage/DEBIAN" "$stage/usr/bin" "$stage/usr/share/applications" \
     "$stage/usr/share/icons/hicolor/scalable/apps"
+install -d "$stage/usr/lib/lemvori-care"
+install -m 0755 "$root/deploy/lemvori-care/install-publisher-key.sh" "$stage/usr/lib/lemvori-care/install-publisher-key"
 install -m 0755 "$binary" "$stage/usr/bin/solvia-native"
 install -m 0644 "$root/native/linux/brand.svg" "$stage/usr/share/icons/hicolor/scalable/apps/solvia-admin.svg"
 for launcher in solvia-native lemvori-care-admin; do
@@ -25,7 +27,7 @@ Architecture: amd64
 Section: office
 Priority: optional
 Maintainer: LemvoriLab
-Depends: libqt6network6t64, libqt6quick6, libqt6quickcontrols2-6, qml6-module-qtqml, qml6-module-qtqml-models, qml6-module-qtqml-workerscript, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-dialogs, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtquick-shapes
+Depends: pkexec, openssl, util-linux, libqt6network6t64, libqt6quick6, libqt6quickcontrols2-6, qml6-module-qtqml, qml6-module-qtqml-models, qml6-module-qtqml-workerscript, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-dialogs, qml6-module-qt-labs-folderlistmodel, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtquick-shapes
 Description: Lemvori Care and Lemvori Care Admin for Linux
  Native Qt Quick/QML workplace for Lemvori Care, connecting to the
  separate Lemvori Care C++ HTTPS API on port 8443. This package does not

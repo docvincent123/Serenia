@@ -1,10 +1,12 @@
 import QtQuick
+import "CareVisuals.js" as Visuals
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 
 Item {
     id: root
+    objectName: "admin-workspace"
     required property var bridge
     property string section: "overview"
     property string searchText: ""
@@ -12,15 +14,15 @@ Item {
         const rows = bridge.adminRows || []
         const needle = searchText.trim().toLowerCase()
         if (!needle) return rows
-        const fields = ["name", "login", "role", "job_title", "primary_service_name", "code", "type", "category", "device_name", "platform", "event", "entity", "actor", "ip_address"]
+        const fields = ["name", "login", "role", "job_title", "primary_service_name", "code", "type", "category", "device_name", "platform", "event", "entity", "actor", "ip_address", "title", "message"]
         return rows.filter(function(record) {
             return fields.some(function(key) {
                 return String(record[key] ?? "").toLowerCase().includes(needle)
             })
         })
     }
-    readonly property color ink: "#11212D"
-    readonly property color muted: "#4A5C6A"
+    readonly property color ink: "#0C1C34"
+    readonly property color muted: "#405C83"
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
     readonly property var sections: [
         {label:"ОГЛЯД"},
@@ -43,6 +45,7 @@ Item {
         {key:"consent-policy",label:"Згоди пацієнтів",detail:"Затверджені тексти та версії"},
         {key:"templates",label:"Шаблони документів",detail:"Редаговані тексти для співробітників"},
         {label:"БЕЗПЕКА І СИСТЕМА"},
+        {key:"updates",label:"Оновлення пристроїв",detail:"Пакети Android, Windows і Linux та стан телефонів"},
         {key:"sessions",label:"Сеанси",detail:"Робочі пристрої"},
         {key:"audit",label:"Журнал дій",detail:"Події та контроль змін"},
         {key:"database",label:"База й копії",detail:"PostgreSQL і резервні копії"}
@@ -154,9 +157,11 @@ Item {
         ]
     })
 
+    UpdatesDialog { id:updates; bridge:root.bridge }
     CenterSettingsDialog { id:centerSettings; bridge:root.bridge }
     PrintableFormsDialog { id:printableForms; bridge:root.bridge }
     function select(key) {
+        if (key === "updates") {updates.open();return}
         if (["license","modules","consent-policy"].includes(key)) {centerSettings.show(key);return}
         if (key === "forms") {printableForms.open();return}
         searchText = ""
@@ -186,31 +191,35 @@ Item {
         return item ? item.label : String(key || "")
     }
 
+    function sectionIcon(key) {
+        const icons={overview:"grid",center:"card",license:"shield",modules:"layers",team:"people",permissions:"shield",services:"network",rooms:"door",workflow:"chart",access:"key","tv-displays":"grid",forms:"file","consent-policy":"file",templates:"file",sessions:"shield",audit:"chart",database:"database",updates:"update"}
+        return icons[key] || "grid"
+    }
     component Action: Button {
-        id: action
-        property bool primary: false
-        property bool onRail: false
-        implicitHeight: onRail ? 42 : 42
-        leftPadding: 16; rightPadding: 16
-        contentItem: Label { textFormat:Text.PlainText;
-            text: action.text; horizontalAlignment: action.onRail ? Text.AlignLeft : Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-            color: action.onRail ? root.ink : action.primary ? "#F1F3F3" : root.ink
-            font.bold: action.primary; elide: Text.ElideRight
+        id:action
+        property bool primary:false
+        property bool onRail:false
+        property string iconName:""
+        implicitHeight:onRail ? 43 : 42
+        leftPadding:14;rightPadding:14
+        contentItem:RowLayout {
+            spacing:12
+            CareIcon{visible:!!action.iconName;name:action.iconName;tone:action.primary?"white":"ink";Layout.preferredWidth:21;Layout.preferredHeight:21}
+            Label{textFormat:Text.PlainText;text:action.text;Layout.fillWidth:true;horizontalAlignment:action.onRail?Text.AlignLeft:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter;color:action.primary?"white":root.ink;font.pixelSize:13;font.bold:action.primary;elide:Text.ElideRight}
         }
-        background: Rectangle {
-            radius: action.onRail ? 12 : height/2
-            color: action.onRail ? (action.primary ? "#CCD0CF" : action.hovered ? "#EDF0F0" : "transparent")
-                 : action.primary ? (action.hovered ? "#11212D" : "#253745") : (action.hovered ? "#B9C2C4" : "#DEE2E2")
-            border.color: action.visualFocus ? root.ink : action.onRail ? "transparent" : "#9BA8AB"
-            opacity: action.enabled ? 1 : .55
+        background:Rectangle {
+            radius:action.onRail?10:12
+            color:action.primary?"#1764EF":action.onRail?(action.hovered?"#E8F1FF":"transparent"):(action.hovered?"#E7EFFB":"white")
+            border.color:action.visualFocus?"#1764EF":action.onRail||action.primary?"transparent":"#CFDDF0"
+            opacity:action.enabled?1:.55
         }
     }
 
     RowLayout {
-        anchors.fill: parent; anchors.margins: 18; spacing: 14
+        anchors.fill: parent; anchors.margins: 18; spacing: 18
         Rectangle {
-            Layout.fillHeight: true; Layout.preferredWidth: 222
-            color: "#F8FAFA"; border.color: "#CCD0CF"; radius: 13
+            Layout.fillHeight:true; Layout.preferredWidth:root.width<940?202:224
+            color:"#F8FBFF";border.color:"#CFDDF0";radius:16
             ScrollView {
                 id: adminRail
                 anchors.fill: parent; anchors.margins: 8; clip: true
@@ -229,7 +238,7 @@ Item {
                                 Layout.topMargin: 9; Layout.bottomMargin: 3; Layout.leftMargin: 12
                             }
                             Action {
-                                visible: !!modelData.key; text: modelData.label
+                                visible: !!modelData.key; text:modelData.label;iconName:root.sectionIcon(modelData.key)
                                 Layout.fillWidth: true
                                 onRail: true; primary: root.section === modelData.key
                                 enabled: !root.bridge.working
@@ -251,7 +260,7 @@ Item {
                     Layout.fillWidth: true
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 4
-                        Label { textFormat:Text.PlainText; text: root.currentSection.label; color: root.ink; font.pixelSize: 26; font.bold: true; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        Label { textFormat:Text.PlainText; text: root.currentSection.label; color: root.ink; font.pixelSize:root.width>940?30:26; font.bold:true; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                         Label { textFormat:Text.PlainText; text: root.currentSection.detail; color: root.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                     }
                     Action { text: "+ Додати"; primary: true; visible: root.listEditable; enabled: !root.bridge.working && (root.section !== "team" || root.bridge.serviceChoices.length > 0); onClicked: root.edit({}) }
@@ -261,46 +270,58 @@ Item {
                     Layout.fillWidth: true; spacing: 13
                     visible: root.section === "overview"
                     Rectangle {
-                        Layout.fillWidth: true; implicitHeight: 110; radius: 20
-                        color: "#253745"
+                        objectName:"admin-hero"
+                        Layout.fillWidth:true;Layout.preferredHeight:root.width>940?166:138
+                        radius:20;color:"#1559AF";clip:true
+                        Image{anchors.fill:parent;source:Visuals.hero;fillMode:Image.Stretch}
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 18; spacing: 7
-                            Label { color: "#D1DADD"; text: "LEMVORI CARE · АДМІНІСТРУВАННЯ"; font.pixelSize: 11; font.bold: true }
-                            Label { Layout.fillWidth: true; color: "#FFFFFF"; font.pixelSize: 23; font.bold: true; elide: Text.ElideRight
-                                text: root.bridge.centerConfiguration.center_name || "Додайте назву центру" }
-                            Label { color: "#D1DADD"; text: "Ліцензія: " + (root.bridge.licenseStatus.status === "active" ? "активна" : root.bridge.licenseStatus.status || "перевіряємо…"); font.pixelSize: 12 }
+                            anchors.fill:parent;anchors.margins:24;spacing:5
+                            Label{color:"#E8F2FF";text:"LEMVORI CARE · АДМІНІСТРУВАННЯ";font.pixelSize:11;font.bold:true}
+                            Label{Layout.fillWidth:true;color:"white";font.pixelSize:root.width>940?34:28;font.bold:true;elide:Text.ElideRight;text:root.bridge.centerConfiguration.center_name||"Lemvori Care"}
+                            Label{color:"#DFEBFF";text:"Ліцензія: "+centerSettings.licenseStateText;font.pixelSize:14}
                         }
                     }
                     GridLayout {
-                        Layout.fillWidth: true; columns: width > 650 ? 2 : 1; columnSpacing: 12; rowSpacing: 12
+                        Layout.fillWidth: true; columns: width > 620 ? 2 : 1; columnSpacing: 12; rowSpacing: 12
                         Repeater {
                             model: [
                                 {key:"center",title:"01 · Дані центру",info:"Назва, реквізити, адреса та контакти"},
-                                {key:"team",title:"02 · Персонал",info:"Працівники, ролі та кабінети"},
+                                {key:"team",title:"02 · Працівники",info:"Працівники, ролі та графіки"},
                                 {key:"workflow",title:"03 · Графік прийомів",info:"Розклад, зміни та доступ реєстратури"},
-                                {key:"forms",title:"04 · Документи",info:"PDF-бланки й підписи пацієнтів"},
+                                {key:"forms",title:"04 · Документи та шаблони",info:"PDF-бланки, згоди, виписки"},
                                 {key:"license",title:"05 · Ліцензія",info:"Активація, сервер та строк"},
-                                {key:"sessions",title:"06 · Безпека",info:"Сеанси працівників і журнал дій"}
+                                {key:"database",title:"06 · Безпека та бекапи",info:"Сеанси, журнал дій, резервні копії"}
                             ]
-                            delegate: Rectangle {
+                            delegate:Rectangle {
+                                id:quickCard
                                 required property var modelData
-                                Layout.fillWidth: true; Layout.preferredHeight: 98
-                                color: "#FFFFFF"; radius: 17; border.color: "#CCD0CF"
-                                ColumnLayout {
-                                    anchors.fill: parent; anchors.margins: 17; spacing: 5
-                                    Label { color: root.ink; font.pixelSize: 16; font.bold: true; text: modelData.title }
-                                    Label { color: root.muted; font.pixelSize: 12; text: modelData.info; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                                Layout.fillWidth:true;Layout.minimumWidth:0;Layout.preferredHeight:96
+                                radius:15;color:cardMouse.containsMouse?"#F0F6FF":"#FFFFFF";border.color:cardMouse.containsMouse?"#8DB6FA":"#CFDDF0"
+                                RowLayout {
+                                    anchors.fill:parent;anchors.margins:16;spacing:16
+                                    Rectangle {
+                                        Layout.preferredWidth:52;Layout.preferredHeight:56;radius:13
+                                        gradient:Gradient{GradientStop{position:0;color:"#E6F4FF"}GradientStop{position:1;color:"#D7E9F7"}}
+                                        CareIcon{anchors.centerIn:parent;name:quickCard.modelData.key==="center"?"people":quickCard.modelData.key==="workflow"?"calendar":root.sectionIcon(quickCard.modelData.key);tone:"blue";width:32;height:32;sourceSize.width:40;sourceSize.height:40}
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth:true;Layout.minimumWidth:0;spacing:5
+                                        Label{text:quickCard.modelData.title;color:root.ink;font.pixelSize:16;font.bold:true;Layout.fillWidth:true;wrapMode:Text.WordWrap}
+                                        Label{text:quickCard.modelData.info;color:root.muted;font.pixelSize:12;Layout.fillWidth:true;wrapMode:Text.WordWrap}
+                                    }
+                                    CareIcon{name:"chevron";Layout.preferredWidth:16;Layout.preferredHeight:18}
                                 }
-                                MouseArea {
-                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                    onClicked:root.select(modelData.key)
-                                }
+                                MouseArea{id:cardMouse;anchors.fill:parent;hoverEnabled:true;cursorShape:Qt.PointingHandCursor;onClicked:root.select(quickCard.modelData.key)}
                             }
                         }
                     }
-                    Label {
-                        Layout.fillWidth: true; color: root.muted; wrapMode: Text.WordWrap
-                        text: "Ліцензії, картки й документи зберігаються на сервері. Сервер перевіряє права співробітників для кожної операції."
+                    Rectangle {
+                        Layout.fillWidth:true;implicitHeight:infoRow.implicitHeight+28;radius:13;color:"#F3F8FF";border.color:"#D7E5F7"
+                        RowLayout {
+                            id:infoRow;x:14;y:14;width:parent.width-28;spacing:12
+                            CareIcon{name:"info";tone:"blue";Layout.preferredWidth:22;Layout.preferredHeight:22}
+                            Label{Layout.fillWidth:true;color:root.muted;wrapMode:Text.WordWrap;font.pixelSize:12;text:"Ліцензії, картки й документи зберігаються на сервері. Сервер перевіряє права співробітників та доступні модулі."}
+                        }
                     }
                 }
                 Label { textFormat:Text.PlainText;
@@ -334,7 +355,7 @@ Item {
                     Layout.fillWidth: true; spacing: 8
                     RowLayout {
                         Layout.fillWidth: true; spacing: 10
-                        TextField {
+                        CareTextField {
                             id: adminSearch
                             Layout.fillWidth: true; Layout.preferredHeight: 42
                             text: root.searchText
@@ -347,7 +368,7 @@ Item {
                             color: root.ink
                             background: Rectangle {
                                 radius: 12; color: "#FFFFFF"
-                                border.color: adminSearch.activeFocus ? "#253745" : "#CCD0CF"
+                                border.color: adminSearch.activeFocus ? "#1764EF" : "#CFDDF0"
                                 border.width: adminSearch.activeFocus ? 2 : 1
                             }
                         }
@@ -389,8 +410,9 @@ Item {
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true; implicitHeight: row.implicitHeight + 22
-                        color: "#FFFFFF"; radius: 13; border.color: "#CCD0CF"
-                        RowLayout {
+                        color: "#FFFFFF"; radius: 13; border.color: "#CFDDF0"
+                        GridLayout {
+                            columns: width > 730 ? 5 : 1
                             id: row
                             anchors.fill: parent; anchors.margins: 11
                             ColumnLayout {
@@ -470,13 +492,13 @@ Item {
         property var values: ({})
         title: root.currentSection.label
         modal: true; anchors.centerIn: Overlay.overlay
-        width: Math.min(790, root.width - 30)
-        height: Math.min(730, root.height - 32)
+        width: Math.min(790, Overlay.overlay.width - 32)
+        height: Math.min(730, Overlay.overlay.height - 32)
         padding: 0
         closePolicy: root.bridge.working ? Popup.NoAutoClose : Popup.CloseOnEscape
         background: Rectangle {
-            radius: 24; color: "#F8FAFA"
-            border.color: "#CCD0CF"; border.width: 1
+            radius: 24; color: "#F8FBFF"
+            border.color: "#CFDDF0"; border.width: 1
         }
         header: Rectangle {
             implicitHeight: 76
@@ -491,6 +513,8 @@ Item {
             }
         }
         contentItem: ScrollView {
+            id: editorScroll
+            objectName: "admin-editor-scroll"
             clip: true
             leftPadding: 24; rightPadding: 24
             topPadding: 12; bottomPadding: 12
@@ -498,7 +522,7 @@ Item {
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             GridLayout {
                 id: editorGrid
-                width: parent.width; columns: width > 640 ? 2 : 1
+                width: editorScroll.availableWidth; columns: width > 640 ? 2 : 1
                 columnSpacing: 16; rowSpacing: 18
                 Repeater {
                     id: editorFields
@@ -508,18 +532,20 @@ Item {
                         required property var modelData
                         readonly property var original: form.values[modelData.key] ?? modelData.initial ?? ""
                         readonly property var fieldValue: editor.item ? editor.item.fieldValue : original
+                        Layout.preferredWidth: 1; Layout.minimumWidth: 0
                         Layout.fillWidth: true
                         Layout.columnSpan: editorGrid.columns === 2 && ["content","document_footer","center_name","address"].includes(modelData.key) ? 2 : 1
                         spacing: 7
-                        Label { textFormat:Text.PlainText; text: modelData.label; color: root.ink; font.pixelSize: 13; font.bold: true }
+                        Label { textFormat:Text.PlainText; text: modelData.label; Layout.fillWidth:true; wrapMode:Text.WordWrap; color: root.ink; font.pixelSize: 13; font.bold: true }
                         Loader {
                             id: editor
                             Layout.fillWidth: true
                             sourceComponent: modelData.options ? comboEditor : modelData.type === "check" ? checkEditor : modelData.type === "number" ? numericEditor : modelData.type === "area" ? areaEditor : textEditor
                             Component {
                                 id: comboEditor
-                                ComboBox {
+                                CareComboBox {
                                     id: selection
+                                    objectName: "admin-field-" + modelData.key
                                     readonly property var fieldValue: currentValue
                                     model: modelData.options; textRole: "label"; valueRole: "key"
                                     implicitHeight: 50
@@ -545,35 +571,10 @@ Item {
                                     }
                                     background: Rectangle {
                                         radius: 15; color: "#FFFFFF"
-                                        border.color: selection.activeFocus ? "#253745" : "#C7D0D3"
+                                        border.color: selection.activeFocus ? "#1764EF" : "#C8D8ED"
                                         border.width: selection.activeFocus ? 2 : 1
                                     }
-                                    delegate: ItemDelegate {
-                                        width: selection.width - 14
-                                        implicitHeight: 42
-                                        text: selection.textRole ? model[selection.textRole] : modelData
-                                        highlighted: selection.highlightedIndex === index
-                                        background: Rectangle {
-                                            radius: 11
-                                            color: parent.highlighted ? "#E5ECEF" : parent.hovered ? "#F1F4F5" : "#FFFFFF"
-                                        }
-                                    }
-                                    popup: Popup {
-                                        y: selection.height + 4; width: selection.width
-                                        padding: 7
-                                        implicitHeight: Math.min(popupList.contentHeight + 14, 250)
-                                        background: Rectangle {
-                                            radius: 16; color: "#FFFFFF"
-                                            border.color: "#C7D0D3"
-                                        }
-                                        contentItem: ListView {
-                                            id: popupList
-                                            clip: true; implicitHeight: contentHeight
-                                            model: selection.delegateModel
-                                            currentIndex: selection.highlightedIndex
-                                            ScrollIndicator.vertical: ScrollIndicator { }
-                                        }
-                                    }
+
                                 }
                             }
                             Component {
@@ -595,14 +596,15 @@ Item {
                                     implicitHeight: 50
                                     background: Rectangle {
                                         radius: 15; color: "#FFFFFF"
-                                        border.color: numeric.activeFocus ? "#253745" : "#C7D0D3"
+                                        border.color: numeric.activeFocus ? "#1764EF" : "#C8D8ED"
                                     }
                                 }
                             }
                             Component {
                                 id: textEditor
-                                TextField {
+                                CareTextField {
                                     id: input
+                                    objectName: "admin-field-" + modelData.key
                                     readonly property string fieldValue: text
                                     text: String(original)
                                     echoMode: modelData.type === "password" ? TextInput.Password : TextInput.Normal
@@ -611,12 +613,12 @@ Item {
                                     leftPadding: 16; rightPadding: 16
                                     background: Rectangle {
                                         radius: 15; color: "#FFFFFF"
-                                        border.color: input.activeFocus ? "#253745" : "#C7D0D3"
+                                        border.color: input.activeFocus ? "#1764EF" : "#C8D8ED"
                                         border.width: input.activeFocus ? 2 : 1
                                     }
                                 }
                             }
-                            Component { id: areaEditor; TextArea { id:area; readonly property string fieldValue:text; text:String(original); selectByMouse:true; wrapMode:TextEdit.Wrap; implicitHeight:200; leftPadding:15; rightPadding:15; topPadding:12; background:Rectangle{radius:15;color:"white";border.color:area.activeFocus?"#253745":"#C7D0D3"} } }
+                            Component { id: areaEditor; CareTextArea { id:area; readonly property string fieldValue:text; text:String(original); selectByMouse:true; wrapMode:TextEdit.Wrap; implicitHeight:200; leftPadding:15; rightPadding:15; topPadding:12; background:Rectangle{radius:15;color:"white";border.color:area.activeFocus?"#1764EF":"#C8D8ED"} } }
                         }
                     }
                 }
@@ -658,11 +660,11 @@ Item {
         property var blocked: ([])
         title: "Доступ працівника"
         modal: true; anchors.centerIn: Overlay.overlay
-        width: Math.min(550, root.width - 30)
-        height: Math.min(630, root.height - 30)
+        width: Math.min(550, Overlay.overlay.width - 32)
+        height: Math.min(630, Overlay.overlay.height - 32)
         padding: 0
         closePolicy: root.bridge.working ? Popup.NoAutoClose : Popup.CloseOnEscape
-        background: Rectangle { radius: 24; color: "#F8FAFA"; border.color: "#CCD0CF" }
+        background: Rectangle { radius: 24; color: "#F8FBFF"; border.color: "#CFDDF0" }
         header: Rectangle {
             implicitHeight: 100; color: "transparent"
             ColumnLayout {
@@ -673,16 +675,17 @@ Item {
             }
         }
         contentItem: ScrollView {
+            id: permissionsScroll
             clip: true; contentWidth: availableWidth
             leftPadding: 22; rightPadding: 22
             ColumnLayout {
-                width: parent.width; spacing: 8
+                width: permissionsScroll.availableWidth; spacing: 8
                 Repeater {
                     model: root.moduleChoices
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true; implicitHeight: 58
-                        radius: 16; color: "#FFFFFF"; border.color: "#D4DCDE"
+                        radius: 16; color: "#FFFFFF"; border.color: "#D4E0F1"
                         RowLayout {
                             anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 14
                             Label { textFormat:Text.PlainText; text: modelData.label; Layout.fillWidth: true; color: root.ink; font.pixelSize: 14 }
@@ -759,7 +762,7 @@ Item {
         modal: true; anchors.centerIn: Overlay.overlay
         width: Math.min(540, root.width - 32)
         padding: 20
-        background: Rectangle { radius: 22; color:"#F8FAFA"; border.color:"#CCD0CF" }
+        background: Rectangle { radius: 22; color:"#F8FBFF"; border.color:"#CFDDF0" }
         ColumnLayout {
             width: parent.width; spacing: 13
             Label {
@@ -773,11 +776,11 @@ Item {
                 text: "Архів перевіряється в тимчасовій PostgreSQL-базі. Перед переключенням створюється страхувальна копія. Якщо HTTPS не запуститься, відновлюється стара база. Усі сеанси після успішного відновлення завершаться."
             }
             Label { text:"Шлях до архіву (лише з /var/backups/lemvori-care)"; font.bold:true; color:root.ink }
-            TextField {
+            CareTextField {
                 id: restorePath; Layout.fillWidth:true; implicitHeight:46
                 placeholderText:"/var/backups/lemvori-care/lemvori-core-....dump"
                 selectByMouse:true; leftPadding:13
-                background:Rectangle{radius:12;color:"white";border.color:restorePath.activeFocus?"#253745":"#CCD0CF"}
+                background:Rectangle{radius:12;color:"white";border.color:restorePath.activeFocus?"#1764EF":"#CFDDF0"}
             }
             Label {
                 textFormat: Text.PlainText; Layout.fillWidth:true; wrapMode:Text.WordWrap
@@ -785,10 +788,10 @@ Item {
                 text: "Дізнатися назви копій: sudo lemvori-carectl list-backups. Якщо залишити поле порожнім, обереться найновіша копія."
             }
             Label { text:"Для підтвердження введіть ВІДНОВИТИ"; font.bold:true; color:root.ink }
-            TextField {
+            CareTextField {
                 id: restoreConfirmation; Layout.fillWidth:true; implicitHeight:46
                 placeholderText:"ВІДНОВИТИ"; selectByMouse:true; leftPadding:13
-                background:Rectangle{radius:12;color:"white";border.color:restoreConfirmation.activeFocus?"#253745":"#CCD0CF"}
+                background:Rectangle{radius:12;color:"white";border.color:restoreConfirmation.activeFocus?"#1764EF":"#CFDDF0"}
             }
             RowLayout {
                 Layout.fillWidth:true;spacing:12

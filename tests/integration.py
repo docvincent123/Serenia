@@ -365,7 +365,7 @@ class Scenario(unittest.TestCase):
     def test_a_pc_update_distribution(self):
         self.assertEqual(self.call('GET','/api/desktop-updates')[0],401)
         self.assertFalse(self.api('director','GET','/api/desktop-updates?platform=windows')['available'])
-        for platform, content in [('windows', b'MZsynthetic-SOLVIA-installer'),('linux', b'\x1f\x8bsynthetic-SOLVIA-client')]:
+        for platform, content in [('windows', b'MZsynthetic-SOLVIA-installer'),('linux', b'\x1f\x8bsynthetic-SOLVIA-client'),('linux', b'!<arch>\nsynthetic-native-DEB')]:
             sha=hashlib.sha256(content).hexdigest()
             payload={'platform':platform,'version':'2.5.2','sha256':sha,'package_base64':base64.b64encode(content).decode(),'release_notes':'Synthetic PC package'}
             self.api('reception','POST','/api/desktop-updates',payload,status=403)
@@ -374,7 +374,11 @@ class Scenario(unittest.TestCase):
             info=self.api('director','GET','/api/desktop-updates?platform='+platform)
             self.assertEqual(info['sha256'],sha);self.assertTrue(info['available']);self.assertNotIn('desktop_file',info)
             request=urllib.request.Request(self.base+'/api/desktop-updates/package?platform='+platform+'&sha='+sha,headers={'Authorization':'Bearer '+self.tokens['director']})
-            with urllib.request.urlopen(request) as response:self.assertEqual(response.read(),content)
+            with urllib.request.urlopen(request) as response:
+                self.assertEqual(response.read(),content)
+                if content.startswith(b'!<arch>'):
+                    self.assertTrue(info['filename'].endswith('.deb'))
+                    self.assertEqual(response.headers['Content-Type'],'application/vnd.debian.binary-package')
             self.api('admin','POST','/api/desktop-updates',{**payload,'version':'2.5.1'},status=409)
             self.api('director','DELETE','/api/desktop-updates?platform='+platform,{},status=403)
             self.api('admin','DELETE','/api/desktop-updates?platform='+platform,{})

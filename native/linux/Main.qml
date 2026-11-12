@@ -1,4 +1,5 @@
 import QtQuick
+import "CareVisuals.js" as Visuals
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
@@ -6,6 +7,24 @@ import QtQuick.Layouts
 ApplicationWindow {
     id: root
     visible: true
+    // The workspace has light surfaces regardless of the operating-system theme.
+    // Set both normal and highlighted roles: Basic delegates otherwise inherit
+    // white system text while their custom backgrounds remain light.
+    palette.window: "#F3F7FD"
+    palette.windowText: "#0C1C34"
+    palette.base: "#FFFFFF"
+    palette.alternateBase: "#EEF4FC"
+    palette.text: "#0C1C34"
+    palette.button: "#E7EFFB"
+    palette.buttonText: "#0C1C34"
+    palette.highlight: "#1764EF"
+    palette.highlightedText: "#FFFFFF"
+    palette.placeholderText: "#526A89"
+    palette.toolTipBase: "#0C1C34"
+    palette.toolTipText: "#FFFFFF"
+    palette.disabled.text: "#52637D"
+    palette.disabled.windowText: "#52637D"
+    palette.disabled.buttonText: "#52637D"
     onClosing: function(event) { if (api.databaseWorking) event.accepted = false }
     width: 1400
     height: 890
@@ -36,7 +55,7 @@ ApplicationWindow {
         return groups
     }
     title: (api.adminEdition ? "Lemvori Care Admin" : "Lemvori Care") + (api.authenticated ? " · " + centerName : "")
-    color: "#EDF0F0"
+    color: "#EEF4FC"
     property string page: "Головна"
     property int bookingPatientId: 0
     property int bookingAssignedPsychId: 0
@@ -62,10 +81,10 @@ ApplicationWindow {
             return text.includes(needle)
         })
     }
-    readonly property color ink: "#11212D"
-    readonly property color muted: "#4A5C6A"
-    readonly property color accent: "#253745"
-    readonly property color line: "#CCD0CF"
+    readonly property color ink: "#0C1C34"
+    readonly property color muted: "#405C83"
+    readonly property color accent: "#1764EF"
+    readonly property color line: "#CFDDF0"
     readonly property string roleLabel: api.role === "admin" ? "Адміністратор"
         : api.role === "director" ? "Керівник" : "Реєстратура"
     readonly property var pageDescriptions: ({
@@ -199,39 +218,51 @@ ApplicationWindow {
         onTriggered: api.loadSlots(bookingDate.text, Number(bookingPsych.currentValue || 0),
             Number(bookingRoom.currentValue || 0), bookingDuration.value, Number(root.bookingOriginal.id || 0))
     }
+    Timer { interval:60000;running:root.visible&&api.authenticated;repeat:true;onTriggered:{if(!api.working)api.loadCenterConfiguration()} }
     Timer { interval: 15000; running: root.visible && api.authenticated; repeat: true; onTriggered: api.refresh() }
 
+    function pageIcon(page) {
+        const icons = {"Головна":"home","Адміністрування":"settings","Прийоми":"calendar","Календар":"calendar","Лист очікування":"people","Пацієнти":"patient","Сім’ї":"family","Архів":"archive","Передача зміни":"swap","Психологи":"people","Супервізії":"shield","Повідомлення":"message","Звіти":"chart","Навантаження":"chart","Виписки":"file","Виклик на табло":"grid","Телефони":"phone","Синхронізація":"update","Сервер":"server"}
+        return icons[page] || "grid"
+    }
     component SolviaButton: Button {
         id: btn
         property bool primary: false
         property bool subtle: false
         property bool onRail: false
-        implicitHeight: 42
-        implicitWidth: Math.max(98, contentItem.implicitWidth + 30)
-        leftPadding: 15; rightPadding: 15
-        font.pixelSize: 13
-        font.weight: Font.DemiBold
-        contentItem: Text { textFormat:Text.PlainText;
-            text: btn.text
-            font: btn.font
-            color: btn.onRail ? (btn.primary ? root.ink : "#F5F7F7")
-                              : btn.primary ? "#fff" : root.ink
-            opacity: btn.enabled ? 1 : 0.7
-            horizontalAlignment: btn.onRail ? Text.AlignLeft : Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
+        property bool iconOnly: false
+        property string iconName: onRail ? root.pageIcon(text) : ""
+        implicitHeight: onRail ? 46 : 42
+        implicitWidth: iconOnly ? 42 : Math.max(98, contentItem.implicitWidth + 30)
+        leftPadding:iconOnly?10:15; rightPadding:iconOnly?10:15
+        font.pixelSize: 13; font.weight: Font.DemiBold
+        Accessible.name: text
+        contentItem: RowLayout {
+            spacing: 12
+            CareIcon {
+                visible: !!btn.iconName
+                name: btn.iconName; tone: btn.onRail || btn.primary ? "white" : "ink"
+                Layout.preferredWidth:22; Layout.preferredHeight:22
+            }
+            Text {
+                visible:!btn.iconOnly
+                textFormat:Text.PlainText; text:btn.text; font:btn.font
+                color:btn.onRail || btn.primary ? "#FFFFFF" : root.ink
+                opacity:btn.enabled ? 1 : .65
+                Layout.fillWidth:true
+                horizontalAlignment:btn.onRail ? Text.AlignLeft : Text.AlignHCenter
+                verticalAlignment:Text.AlignVCenter; elide:Text.ElideRight
+            }
         }
         background: Rectangle {
-            radius: btn.onRail ? 11 : height / 2
-            color: btn.onRail ? (btn.primary ? "#CCD0CF" : btn.hovered ? "#253745" : "transparent")
-                         : !btn.enabled ? "#DEE2E2" : btn.down ? (btn.primary ? "#253745" : "#9BA8AB")
-                         : btn.primary ? root.ink : btn.hovered ? "#CCD0CF" : btn.subtle ? "transparent" : "#ffffff"
-            border.color: btn.visualFocus ? (btn.onRail || btn.primary ? "#9BA8AB" : root.accent)
-                         : btn.primary || btn.subtle || btn.onRail ? "transparent" : root.line
-            border.width: btn.visualFocus ? 2 : 1
+            radius:btn.onRail ? 10 : 12
+            color:!btn.enabled ? "#E7EFFB" : btn.primary ? "#1764EF" : btn.onRail ? (btn.hovered ? "#28445F" : "transparent")
+                 : btn.subtle ? (btn.hovered ? "#EAF2FF" : "transparent") : "#FFFFFF"
+            border.color:btn.visualFocus ? "#1764EF" : btn.onRail || btn.subtle || btn.primary ? "transparent" : root.line
+            border.width:btn.visualFocus ? 2 : 1
         }
     }
-    component CareField: TextField {
+    component CareField: CareTextField {
         id: field
         implicitHeight: 46
         leftPadding: 14; rightPadding: 14
@@ -243,7 +274,7 @@ ApplicationWindow {
             border.width: field.activeFocus ? 2 : 1
         }
     }
-    component CareSelect: ComboBox {
+    component CareSelect: CareComboBox {
         id: select
         implicitHeight: 40
         leftPadding: 12
@@ -255,7 +286,7 @@ ApplicationWindow {
         }
         background: Rectangle {
             radius: 10
-            color: select.enabled ? "#FFFFFF" : "#EDF0F0"
+            color: select.enabled ? "#FFFFFF" : "#EEF4FC"
             border.color: select.visualFocus ? root.accent : root.line
             border.width: select.visualFocus ? 2 : 1
         }
@@ -267,7 +298,7 @@ ApplicationWindow {
         implicitHeight: 114
         radius: 18
         color: "#ffffff"
-        border.color: "#D9DEDF"
+        border.color: "#D5E1F1"
         Column {
             anchors.fill: parent; anchors.margins: 18; spacing: 9
             Text { textFormat:Text.PlainText; text: figure; color: root.ink; font.pixelSize: 29; font.bold: true }
@@ -335,7 +366,7 @@ ApplicationWindow {
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 3
                         Label { textFormat:Text.PlainText; text: root.title; color: root.ink; font.pixelSize: 18; font.bold: true }
-                        Label { textFormat:Text.PlainText; text: "Реабілітаційний центр · " + (Qt.application.version || "3.2.0-preview7"); color: root.muted; font.pixelSize: 12 }
+                        Label { textFormat:Text.PlainText; text: "Реабілітаційний центр · " + (Qt.application.version || "3.13.0+182046"); color: root.muted; font.pixelSize: 12 }
                     }
                 }
                 Label { textFormat:Text.PlainText; text: "Вхід у систему"; color: root.ink; font.pixelSize: 28; font.bold: true; Layout.topMargin: 9 }
@@ -396,29 +427,32 @@ ApplicationWindow {
         anchors.fill: parent; spacing: 0
         visible: api.authenticated
         Rectangle {
-            Layout.fillWidth: true; Layout.preferredHeight: 77
+            Layout.fillWidth: true; Layout.preferredHeight: root.width < 1100 ? 78 : 88
             color: "#ffffff"
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 26; anchors.rightMargin: 26; spacing: 15
-                Image { source: "qrc:/brand.png"; Layout.preferredWidth: 38; Layout.preferredHeight: 38; fillMode: Image.PreserveAspectFit }
+                Image { source: Visuals.brand; Layout.preferredWidth: root.width < 1100 ? 42 : 52; Layout.preferredHeight: root.width < 1100 ? 42 : 52; fillMode: Image.PreserveAspectFit }
                 ColumnLayout {
                     spacing: 1
-                    Label { textFormat:Text.PlainText; text: root.centerName; font.pixelSize: 19; font.bold: true; color: root.ink; elide: Text.ElideRight; Layout.maximumWidth: 340 }
+                    Label { textFormat:Text.PlainText; text: root.centerName; font.pixelSize: root.width < 1100 ? 20 : 24; font.bold: true; color: root.ink; elide: Text.ElideRight; Layout.maximumWidth: root.width < 1100 ? 190 : 340 }
                     Label { textFormat:Text.PlainText; text: api.adminEdition ? "Lemvori Care Admin · Адміністрування" : "Lemvori Care · Робоче місце"; font.pixelSize: 11; color: root.muted }
                 }
                 Rectangle { width: 1; height: 25; color: root.line }
-                Text { textFormat:Text.PlainText; text: root.roleLabel; color: root.muted; font.pixelSize: 13 }
+                CareIcon { name:"shield"; visible:root.width>=1200; Layout.preferredWidth:22; Layout.preferredHeight:22 }
+                Text { textFormat:Text.PlainText; text: root.roleLabel; visible:root.width>=1200; color:root.ink; font.bold:true; font.pixelSize:15 }
                 Item { Layout.fillWidth: true }
                 Text { textFormat:Text.PlainText; text: !api.online ? "Сервер недоступний" : api.lastRefresh ? "Оновлено о " + api.lastRefresh : "Синхронізація…";
-                       font.pixelSize: 11; color: root.muted }
-                Rectangle { width: 1; height: 27; color: root.line }
-                SolviaButton { Layout.maximumWidth:170; text:api.displayName || "Профіль"; subtle:true; enabled:!api.working; onClicked:profileDialog.open() }
+                       visible:root.width>=1100; font.pixelSize: 11; color: root.muted }
+                SolviaButton { text:"Повідомлення"; iconName:"bell"; iconOnly:true; subtle:true; visible:root.width>=1100&&api.role!=="reception"&&api.moduleEnabled("messages"); onClicked:root.showPage("Повідомлення") }
+                SolviaButton { text:"Довідка"; iconName:"help"; iconOnly:true; subtle:true; visible:root.width>=1100;onClicked:helpDialog.open() }
+                Rectangle { width:1;height:27;color:root.line }
+                SolviaButton { iconName:"profile"; Layout.maximumWidth:170; text:api.displayName || "Профіль"; subtle:true; enabled:!api.working; onClicked:profileDialog.open() }
                 SolviaButton { text: "Вихід"; subtle: true; enabled: !api.databaseWorking; onClicked: { api.logout(); root.page="Головна" } }
             }
         }
         Rectangle { Layout.fillWidth:true; Layout.preferredHeight:1; color:root.line }
         Rectangle {
-            Layout.fillWidth:true; Layout.preferredHeight:52; color:"#F6F8F8"
+            Layout.fillWidth:true; Layout.preferredHeight:50; color:"#F2F7FF"
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin:28; anchors.rightMargin:28; spacing:15
                 Rectangle { width:7; height:7; radius:4; color:api.shift.open ? "#2e865b" : "#c7a045" }
@@ -441,8 +475,9 @@ ApplicationWindow {
         RowLayout {
             Layout.fillWidth: true; Layout.fillHeight: true; spacing:0
             Rectangle {
-                Layout.fillHeight: true; Layout.preferredWidth: 224
-                color: "#4A5C6A"
+                Layout.fillHeight: true; Layout.preferredWidth: root.width < 1100 ? 202 : 248
+                color:"#192C43"
+                gradient:Gradient { GradientStop{position:0;color:"#21374E"} GradientStop{position:1;color:"#17273B"} }
                 ScrollView {
                     anchors.fill: parent
                     padding: 12
@@ -461,7 +496,7 @@ ApplicationWindow {
                                 Label {
                                     visible: modelData.header
                                     text: modelData.group
-                                    color: "#D6DEE1"; font.pixelSize: 10; font.letterSpacing: 1.1; font.bold: true
+                                    color: "#BDD0E8"; font.pixelSize: 10; font.letterSpacing: 1.1; font.bold: true
                                     Layout.leftMargin: 14; Layout.topMargin: modelData.group === "ОГЛЯД" ? 6 : 13
                                     Layout.bottomMargin: 3
                                 }
@@ -529,6 +564,13 @@ ApplicationWindow {
                     ColumnLayout {
                         visible: root.page === "Головна"
                         Layout.fillWidth:true; spacing:18
+                        Label {
+                            objectName: "homepage-welcome"
+                            text: "Вітаємо в Lemvori Care!"
+                            textFormat: Text.PlainText
+                            color: root.ink; font.pixelSize: 18; font.bold: true
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        }
                         Rectangle {
                             visible: api.blockedModules.length > 0
                             Layout.fillWidth: true
@@ -542,7 +584,7 @@ ApplicationWindow {
                         }
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 138
-                            radius: 20; color: "#253745"
+                            radius: 20; color: "#1764EF"
                             RowLayout {
                                 anchors.fill: parent; anchors.margins: 22; spacing: 18
                                 ColumnLayout {
@@ -614,7 +656,7 @@ ApplicationWindow {
                                 model: api.overview.load || []
                                 delegate: Rectangle {
                                     required property var modelData
-                                    Layout.fillWidth: true; implicitHeight: 48; radius: 12; color:"#CCD0CF"
+                                    Layout.fillWidth: true; implicitHeight: 48; radius: 12; color:"#CFDDF0"
                                     RowLayout {
                                         anchors.fill: parent; anchors.margins: 10
                                         Text { textFormat:Text.PlainText; Layout.fillWidth:true; elide:Text.ElideRight; text:modelData.name || "Психолог"; color:root.ink; font.bold:true }
@@ -632,7 +674,7 @@ ApplicationWindow {
                                     model: api.overview.next || []
                                     delegate: Rectangle {
                                         required property var modelData
-                                        Layout.fillWidth:true; implicitHeight:54; radius:8; color:"#DEE2E2"
+                                        Layout.fillWidth:true; implicitHeight:54; radius:8; color:"#E7EFFB"
                                         RowLayout { anchors.fill:parent; anchors.margins:12
                                             Text { textFormat:Text.PlainText; text:String(modelData.start||"").slice(11,16); font.bold:true; color:root.ink }
                                             Text { textFormat:Text.PlainText; text:modelData.patient||""; Layout.fillWidth:true; color:root.ink }
@@ -917,7 +959,7 @@ ApplicationWindow {
                             model: api.dischargeRows
                             delegate: Rectangle {
                                 required property var modelData
-                                Layout.fillWidth: true; implicitHeight: 75; radius: 15; color: "#CCD0CF"; border.color: root.line
+                                Layout.fillWidth: true; implicitHeight: 75; radius: 15; color: "#CFDDF0"; border.color: root.line
                                 RowLayout {
                                     anchors.fill: parent; anchors.margins: 12
                                     ColumnLayout {
@@ -1075,9 +1117,10 @@ ApplicationWindow {
         modal: true; anchors.centerIn: Overlay.overlay
         width: Math.min(640, root.width - 40); height: Math.min(530, root.height - 30)
         contentItem: ScrollView {
+            id: dischargeScroll
             contentWidth: availableWidth
             ColumnLayout {
-                width: parent.width
+                width: dischargeScroll.availableWidth
                 Text { textFormat:Text.PlainText; text: dischargeReview.record.patient_name || ""; font.bold: true; color: root.ink }
                 Repeater {
                     model: [["Підсумок","summary"],["Динаміка","dynamics"],["Рекомендації","recommendations"],["Подальший супровід","followup"]]
@@ -1137,7 +1180,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 implicitHeight: 60
                 radius: 12
-                color: "#EDF0F0"
+                color: "#EEF4FC"
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 14
                     Label { textFormat:Text.PlainText; text: "ПАЦІЄНТ"; color: root.muted; font.pixelSize: 10; font.letterSpacing: 1.1 }
@@ -1296,11 +1339,15 @@ ApplicationWindow {
     }
     Dialog {
         id:profileDialog; title:"Профіль працівника"; modal:true; anchors.centerIn:Overlay.overlay
-        width:Math.min(460,root.width-40)
+        width:Math.min(540,root.width-40); height:Math.min(640,root.height-32)
         onClosed:{currentPassword.clear();nextPassword.clear();repeatPassword.clear()}
         closePolicy:api.working?Popup.NoAutoClose:Popup.CloseOnEscape
-        ColumnLayout {
-            anchors.fill:parent; spacing:10
+        contentItem: ScrollView {
+            id: profileScroll; clip:true; contentWidth:availableWidth
+            ColumnLayout {
+            width:profileScroll.availableWidth; spacing:10
+            Label { text:"Версія 3.13 · build 182046"; font.bold:true; color:root.muted }
+            SolviaButton { text:"Оновлення програми"; enabled:!api.working; onClicked:clientUpdateDialog.open() }
             Label { textFormat:Text.PlainText; text:api.displayName; font.bold:true; color:root.ink }
             Label { textFormat:Text.PlainText; text:root.roleLabel; color:root.muted }
             Label { textFormat:Text.PlainText; text:api.serverUrl; color:root.muted; Layout.fillWidth:true; wrapMode:Text.WrapAnywhere }
@@ -1310,6 +1357,7 @@ ApplicationWindow {
             CareField { id:repeatPassword; Layout.fillWidth:true; placeholderText:"Повторіть новий пароль"; echoMode:TextInput.Password }
             Label { textFormat:Text.PlainText; text:api.error; visible:!!text; color:"#8C3632"; Layout.fillWidth:true; wrapMode:Text.WordWrap }
             Label { textFormat:Text.PlainText; text:"Після зміни пароля всі сеанси облікового запису завершаться."; color:root.muted; Layout.fillWidth:true; wrapMode:Text.WordWrap }
+        }
         }
         footer:DialogButtonBox {
             SolviaButton { text:"Закрити"; enabled:!api.working; onClicked:profileDialog.close() }
@@ -1343,6 +1391,42 @@ ApplicationWindow {
             }
             SolviaButton { text:"Закрити"; onClicked:participantsDialog.close() }
         }
+    }
+    Dialog {
+        id:helpDialog;title:"Довідка Lemvori Care";modal:true;anchors.centerIn:Overlay.overlay
+        width:Math.min(580,root.width-40);height:Math.min(400,root.height-40)
+        background:Rectangle{radius:20;color:"#F8FBFF";border.color:root.line}
+        contentItem:ScrollView {
+            id:helpScroll;clip:true;contentWidth:availableWidth
+            Label {width:helpScroll.availableWidth;wrapMode:Text.WordWrap;color:root.ink
+                text:"Робочі розділи розташовані в лівому меню. Доступні дії визначає роль працівника.\n\nПрофіль: зміна пароля та оновлення цього ПК.\nАдміністрування: дані центру, працівники, права, ліцензія, документи, резервні копії й пакети оновлень.\n\nПід час роботи дані синхронізуються із сервером центру автоматично."}
+        }
+        footer:DialogButtonBox{SolviaButton{text:"Закрити";onClicked:helpDialog.close()}}
+    }
+    Dialog {
+        id:clientUpdateDialog; title:"Оновлення цього ПК"; modal:true; anchors.centerIn:Overlay.overlay
+        width:Math.min(580,root.width-32); height:Math.min(480,root.height-32)
+        onOpened:api.checkClientUpdate()
+        closePolicy:api.working?Popup.NoAutoClose:Popup.CloseOnEscape
+        contentItem:ScrollView {
+            id:clientUpdateScroll;clip:true;contentWidth:availableWidth
+            ColumnLayout {
+                width:clientUpdateScroll.availableWidth;spacing:14
+                Label { text:"Установлено: 3.13 · build 182046";font.bold:true }
+                Label { text:api.clientUpdate.version ? "Пакет сервера: "+api.clientUpdate.version : "Пакета ще немає або перевірка триває…";Layout.fillWidth:true;wrapMode:Text.WordWrap }
+                Label { text:api.clientUpdate.release_notes || "";textFormat:Text.PlainText;Layout.fillWidth:true;wrapMode:Text.WordWrap }
+                Label { text:"Пакет завантажується із сервера центру та перевіряється за SHA-256. Перед установкою збережіть роботу й закрийте програму.";Layout.fillWidth:true;wrapMode:Text.WordWrap }
+                Label { text:api.error || api.notice;Layout.fillWidth:true;wrapMode:Text.WordWrap;color:api.error?"#8C3632":root.muted }
+                SolviaButton { text:api.working?"Завантажуємо…":"Зберегти перевірений пакет"; enabled:!!api.clientUpdate.sha256&&!api.working;onClicked:clientPackage.open() }
+            }
+        }
+        footer:DialogButtonBox { SolviaButton { text:"Закрити";enabled:!api.working;onClicked:clientUpdateDialog.close() } }
+        Connections { target:api;function onStateChanged(){if(!api.authenticated){clientPackage.close();clientUpdateDialog.close()}} }
+    }
+    FileDialog {
+        id:clientPackage;title:"Зберегти пакет оновлення";fileMode:FileDialog.SaveFile
+        selectedFile:api.clientUpdate.filename || "Lemvori-Care-update"
+        onAccepted:api.downloadClientUpdate(selectedFile)
     }
     RegistrationDialog { id:newPatientDialog; bridge:api }
     LicenseOnboarding {

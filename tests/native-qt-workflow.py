@@ -1,5 +1,8 @@
 """Exercise the compiled Qt bridge against an isolated HTTPS fixture."""
 import json
+import os
+import hashlib
+import base64
 import pathlib
 import ssl
 import subprocess
@@ -9,6 +12,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SERVER_ID = "b" * 64
+UPDATE_BYTES = b"!<arch>\nSynthetic DEB package for transport tests"
+UPDATE_RELEASE = {"available":True,"platform":"linux","version":"3.13.0", "sha256":hashlib.sha256(UPDATE_BYTES).hexdigest(),"size_bytes":len(UPDATE_BYTES),"filename":"SOLVIA-3.13.0-Linux-x64.deb","release_notes":"Тестова версія"}
 
 
 class FixtureServer(ThreadingHTTPServer):
@@ -34,12 +39,25 @@ class Center(BaseHTTPRequestHandler):
     def do_GET(self):
         role = self.headers.get("Authorization", "").removeprefix("Bearer ")
         path = self.path.split("?", 1)[0]
+        if path == "/api/desktop-updates/package":
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(UPDATE_BYTES)))
+            self.end_headers()
+            self.wfile.write(UPDATE_BYTES)
+            return
+        update_release = dict(UPDATE_RELEASE)
+        if path == "/api/desktop-updates" and "?" in self.path:
+            self.server.update_checks = getattr(self.server, "update_checks", 0) + 1
+            if self.server.update_checks > 1:
+                update_release["sha256"] = "0" * 64
         responses = {
+            "/api/desktop-updates": update_release if "?" in self.path else [UPDATE_RELEASE],
+            "/api/mobile-update": {"available":True,"version_name":"3.13.0","version_code":182046,"sha256":"a"*64,"size_bytes":1024},
             "/api/health": {"ok": True, "server_id": SERVER_ID},
             "/api/me": {"role": role, "name": "Synthetic account"},
             "/api/settings/center": {"center_name":"Тестовий центр","address":"Synthetic address"},
             "/api/consent-policy": {"required":True,"revision":1,"templates":[{"document_type":kind,"title":kind,"content":"Synthetic approved consent text for native workflow checks.","version":1,"required":True} for kind in ["informed_consent","data_processing"]]},
-            "/api/center/modules": {"license":{"status":"unmanaged","write_allowed":True,"server_id":SERVER_ID},"modules":[{"id":"patients","name":"Картки","version":"1.0.0","core":True,"enabled":True,"licensed":True,"depends":[]}]},
+            "/api/center/modules": {"license":{"status":"active" if getattr(self.server,"license_active",False) else "unmanaged","write_allowed":True,"server_id":SERVER_ID},"modules":[{"id":"patients","name":"Картки","version":"1.0.0","core":True,"enabled":True,"licensed":True,"depends":[]}]},
             "/api/operations/handover": [{"id":5,"summary":"Завдання наступній зміні","state":"open","priority":"important","created_by":"Реєстратор","shift_date":"2026-11-11"}],
             "/api/shift-day": {"open":True,"shift_date":"2026-11-11"},
             "/api/patient-directory": {"items":[{"id":19,"name":"Тестовий пацієнт","patient_no":"0019","psychologist_id":7,"status":"active"}],"total":1},
@@ -101,6 +119,11 @@ class Center(BaseHTTPRequestHandler):
         if self.path == "/api/login":
             return self.respond({"token": body["login"]})
         self.requests.append((self.path, body))
+        if self.path == "/api/license":
+            if body.get("payload") != "server-accepted":
+                return self.respond({"error":"Сервер: ключ видавця не налаштовано"},403)
+            self.server.license_active = True
+            return self.respond({"status":"active","write_allowed":True,"server_id":SERVER_ID})
         self.respond({"ok": True, "id": 21})
 
     def do_PATCH(self):
@@ -120,6 +143,9 @@ with tempfile.TemporaryDirectory() as temporary:
         "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1",
         "-keyout", str(key), "-out", str(cert),
     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    public_key, private_key = tmp / "publisher-public.pem", tmp / "publisher-private.pem"
+    subprocess.run(["openssl","genpkey","-algorithm","Ed25519","-out",str(private_key)],check=True)
+    subprocess.run(["openssl","pkey","-in",str(private_key),"-pubout","-out",str(public_key)],check=True)
     with FixtureServer(("127.0.0.1", 0), Center) as server:
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls.load_cert_chain(cert, key)
@@ -128,7 +154,7 @@ with tempfile.TemporaryDirectory() as temporary:
         worker.start()
         try:
             subprocess.run([sys.argv[1], f"https://127.0.0.1:{server.server_port}", str(cert)],
-                           check=True, timeout=30)
+                           check=True, timeout=40, env={**os.environ,"LEMVORI_TEST_PUBLIC_KEY":str(public_key),"LEMVORI_TEST_PRIVATE_KEY":str(private_key)})
         finally:
             server.shutdown()
             worker.join()
@@ -137,6 +163,14 @@ if "--ui" in sys.argv[2:]:
     print("PASS: native role navigation, dialogs and responsive layout")
     sys.exit(0)
 
+license_attempts=[body for path,body in Center.requests if path=="/api/license"]
+assert [entry["payload"] for entry in license_attempts]==["server-denied","server-accepted"], "License was blocked locally instead of checked by the server"
+print("PASS: stale unmanaged UI metadata never blocks server verification; denial remains scoped and accepted state refreshes")
+published = next(body for path,body in Center.requests if path == "/api/desktop-updates")
+assert base64.b64decode(published["package_base64"]) == UPDATE_BYTES
+assert published["sha256"] == UPDATE_RELEASE["sha256"] and published["version"] == "3.13.0"
+assert published["platform"] == "linux"
+print("PASS: native administrator publication, bounded package validation and verified DEB download")
 bookings = [body for path, body in Center.requests if path == "/api/appointments"]
 assert len(bookings) == 2, "Double submit must create only one booking"
 assert bookings[1]["patient_ids"] == [19,20] and bookings[1]["kind"] == "group"

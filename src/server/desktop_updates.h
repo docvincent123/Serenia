@@ -17,8 +17,9 @@ J desktopUpdates(DB&db,const J&u,const httplib::Request&r,const J&b){
  if(r.path=="/api/desktop-updates/package"){
    check(method=="GET","Метод не дозволений",405);check(!rows.empty(),"Оновлення відкликане або ще не опубліковане",404);
    auto sha=r.get_param_value("sha");check(sha==rows[0]["sha256"].get<std::string>(),"Опис оновлення змінився. Перевірте ще раз",409);
-   const auto file=root/(sha+(platform=="windows"?".exe":".tar.gz"));check(std::filesystem::is_regular_file(file),"Пакет відсутній на сервері",404);
-   return {{"desktop_file",file.string()},{"filename",rows[0]["filename"]},{"content_type",platform=="windows"?"application/vnd.microsoft.portable-executable":"application/gzip"}};
+   const auto suffix=platform=="windows"?".exe":rows[0]["filename"].get<std::string>().ends_with(".deb")?".deb":".tar.gz";
+   const auto file=root/(sha+suffix);check(std::filesystem::is_regular_file(file),"Пакет відсутній на сервері",404);
+   return {{"desktop_file",file.string()},{"filename",rows[0]["filename"]},{"content_type",platform=="windows"?"application/vnd.microsoft.portable-executable":(rows[0]["filename"].get<std::string>().ends_with(".deb")?"application/vnd.debian.binary-package":"application/gzip")}};
  }
  if(method=="GET"){if(rows.empty())return {{"available",false},{"platform",platform}};auto result=rows[0];result["available"]=true;return result;}
  allow(u,{"admin"});
@@ -35,10 +36,11 @@ J desktopUpdates(DB&db,const J&u,const httplib::Request&r,const J&b){
  if(encoded.back()=='=')--size;
  if(encoded.size()>1&&encoded[encoded.size()-2]=='=')--size;
  check(size>=4&&size<=32*1024*1024,"Пакет: максимум 32 МБ");
- check(platform=="windows"?(data[0]=='M'&&data[1]=='Z'):(data[0]==0x1f&&data[1]==0x8b),"Оберіть EXE для Windows або tar.gz для Linux");
+ const bool deb=size>=8&&std::string(reinterpret_cast<const char*>(data.data()),8)=="!<arch>\n";
+ check(platform=="windows"?(data[0]=='M'&&data[1]=='Z'):((data[0]==0x1f&&data[1]==0x8b)||deb),"Оберіть EXE для Windows або DEB / tar.gz для Linux");
  auto bytes=std::string(reinterpret_cast<const char*>(data.data()),size);check(digest(bytes)==sha,"Контрольна сума пакета не збігається");
- const auto filename="SOLVIA-"+version+(platform=="windows"?"-Windows-x64.exe":"-Linux-x64.tar.gz");
- std::filesystem::create_directories(root);const auto file=root/(sha+(platform=="windows"?".exe":".tar.gz"));
+ const auto filename="SOLVIA-"+version+(platform=="windows"?"-Windows-x64.exe":(deb?"-Linux-x64.deb":"-Linux-x64.tar.gz"));
+ std::filesystem::create_directories(root);const auto file=root/(sha+(platform=="windows"?".exe":deb?".deb":".tar.gz"));
  if(!std::filesystem::exists(file)){auto temp=root/(sha+".part");std::ofstream output(temp,std::ios::binary);output.write(bytes.data(),bytes.size());output.close();check(output.good(),"Не вдалося зберегти пакет",500);std::filesystem::rename(temp,file);}
  db.query("INSERT INTO desktop_updates(platform,version,sha256,filename,size_bytes,release_notes,published,published_by) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(platform) DO UPDATE SET version=EXCLUDED.version,sha256=EXCLUDED.sha256,filename=EXCLUDED.filename,size_bytes=EXCLUDED.size_bytes,release_notes=EXCLUDED.release_notes,published=EXCLUDED.published,published_by=EXCLUDED.published_by",{platform,version,sha,filename,size,str(b,"release_notes",3000,false),now(),u["id"]});
  audit(db,u,"publish","desktop_update",0);return {{"ok",true},{"version",version},{"platform",platform}};

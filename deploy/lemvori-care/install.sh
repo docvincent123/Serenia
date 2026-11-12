@@ -78,6 +78,7 @@ install -o root -g root -m 0755 "$source_dir/build/lemvori-api/SolviaServer" \
 install -o root -g root -m 0755 "$package/network-address.py" /opt/lemvori-care/network-address.py
 install -o root -g root -m 0755 "$package/network-tls.sh" /opt/lemvori-care/network-tls.sh
 install -o root -g root -m 0755 "$package/lemvori-carectl" /usr/local/sbin/lemvori-carectl
+install -o root -g root -m 0755 "$package/install-publisher-key.sh" /opt/lemvori-care/install-publisher-key.sh
 install -o root -g root -m 0755 "$package/restore.sh" /opt/lemvori-care/restore.sh
 install -o root -g root -m 0755 "$package/verify-host.sh" /opt/lemvori-care/verify-host.sh
 

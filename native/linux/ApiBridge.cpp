@@ -1,7 +1,9 @@
 #include "ApiBridge.h"
 #include "CarePdf.h"
 #include <stdexcept>
+#include <memory>
 #include <QBuffer>
+#include <QCryptographicHash>
 #include <QImageReader>
 #include <QImage>
 #include <QPdfWriter>
@@ -23,6 +25,7 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSettings>
+#include <QTimer>
 #include <QSysInfo>
 #include <QTime>
 #include <QUrl>
@@ -64,6 +67,9 @@ void ApiBridge::notify(const QString &message) {
 }
 
 void ApiBridge::clearSession() {
+    clearLicenseFeedback();
+    ++updatesGeneration_; clientUpdate_.clear(); updateReleases_.clear(); updateDevices_.clear();
+    updatesLoading_ = false; updatesError_.clear(); emit updatesChanged();
     consentPolicy_.clear(); centerConfiguration_.clear(); licenseStatus_.clear(); centerModules_.clear(); registrationSnapshot_.clear(); registrationReference_.clear(); emit configurationChanged();
     ++workspaceGeneration_; ++recordGeneration_; ++detailGeneration_;
     detailRecord_.clear(); emit detailChanged();
@@ -109,7 +115,7 @@ void ApiBridge::request(const QByteArray &method, const QString &path,
     QNetworkRequest req(QUrl(origin_ + path));
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setRawHeader("Accept", "application/json");
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(path == "/api/mobile-update" || path == "/api/desktop-updates" ? 120000 : 15000);
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                      QNetworkRequest::ManualRedirectPolicy);
     if (!token_.isEmpty())
@@ -292,7 +298,7 @@ void ApiBridge::login(const QString &username, const QString &password) {
             role_ = accountRole;
             name_ = data.value("name").toString();
             working_ = false;
-            notify("Вітаємо в Lemvori Care!");
+            notify(QString()); // Welcome belongs to the home page, not the global status banner.
             refresh();
         });
     });
@@ -1218,29 +1224,100 @@ void ApiBridge::loadCenterConfiguration(){
  request("GET","/api/center/modules",{},[this](const QJsonValue&value){auto data=value.toObject();centerModules_=data.value("modules").toArray().toVariantList();licenseStatus_=data.value("license").toObject().toVariantMap();emit configurationChanged();},true);
  if(role_=="admin"||role_=="reception")request("GET","/api/consent-policy",{},[this](const QJsonValue&value){consentPolicy_=value.toObject().toVariantMap();emit configurationChanged();},true);
 }
-void ApiBridge::importLicense(const QUrl&url){
- if(!adminEdition_||role_!="admin"||working_||!url.isLocalFile())return;
- QFile file(url.toLocalFile());if(!file.open(QIODevice::ReadOnly)||file.size()>65536)return issue("Не вдалося прочитати файл ліцензії.");
- const auto envelope=QJsonDocument::fromJson(file.readAll());if(!envelope.isObject())return issue("Некоректний файл ліцензії.");
- working_=true;error_.clear();emit stateChanged();
- request("POST","/api/license",envelope.object(),[this](const QJsonValue&){working_=false;notify("Ліцензію перевірено сервером і активовано.");loadCenterConfiguration();emit operationCompleted("license");});
+void ApiBridge::setLicenseFeedback(const QString &text, bool failed) {
+    licenseError_ = failed ? text : QString();
+    licenseNotice_ = failed ? QString() : text;
+    emit licenseFeedbackChanged();
+}
+void ApiBridge::clearLicenseFeedback() { setLicenseFeedback(QString()); }
+
+void ApiBridge::importLicense(const QUrl &url) {
+    if (!adminEdition_ || role_!="admin" || working_) return;
+    if (!url.isLocalFile()) return setLicenseFeedback("Оберіть локальний файл ліцензії.",true);
+    QFile file(url.toLocalFile());
+    if (!file.open(QIODevice::ReadOnly) || file.size()>65536)
+        return setLicenseFeedback("Не вдалося прочитати файл ліцензії.",true);
+    activateLicenseText(QString::fromUtf8(file.readAll()));
 }
 void ApiBridge::activateLicenseText(const QString &signedJson) {
- if(!adminEdition_ || role_!="admin" || working_)return;
- const QByteArray bytes=signedJson.trimmed().toUtf8();
- if(bytes.isEmpty() || bytes.size()>65536)return issue("Вставте підписаний JSON-файл ліцензії, не звичайний пароль.");
- QJsonParseError parseError{};
- const auto document=QJsonDocument::fromJson(bytes,&parseError);
- if(parseError.error!=QJsonParseError::NoError || !document.isObject() ||
-    document.object().value("format").toString()!="quremed.solvia.license" ||
-    !document.object().value("payload").isString() ||
-    !document.object().value("signature").isString())
-   return issue("Потрібна підписана ліцензія від Lemvori Control у форматі JSON.");
- working_=true;error_.clear();emit stateChanged();
- request("POST","/api/license",document.object(),[this](const QJsonValue&){
-  working_=false;notify("Ліцензію перевірено і закріплено за цим сервером.");
-  loadCenterConfiguration();emit operationCompleted("license");
- });
+    if (!adminEdition_ || role_!="admin" || working_) return;
+    const QByteArray bytes=signedJson.trimmed().toUtf8();
+    if (bytes.isEmpty() || bytes.size()>65536)
+        return setLicenseFeedback("Оберіть підписану ліцензію Lemvori Control.",true);
+    QJsonParseError parse{};
+    const auto document=QJsonDocument::fromJson(bytes,&parse);
+    if (parse.error!=QJsonParseError::NoError || !document.isObject() ||
+        document.object().value("format").toString()!="quremed.solvia.license" ||
+        !document.object().value("payload").isString() || !document.object().value("signature").isString())
+        return setLicenseFeedback("Потрібен файл .lemvori-license із підписом. Файл PEM використовується окремо для ключа видавця.",true);
+    // Cached UI metadata can lag behind local publisher-key provisioning.
+    // Only the server decides whether this signed envelope is acceptable.
+    working_=true; clearLicenseFeedback(); emit stateChanged();
+    request("POST","/api/license",document.object(),[this](const QJsonValue &result){
+        const auto verified=result.toObject();
+        if (verified.contains("status")) {licenseStatus_=verified.toVariantMap();emit configurationChanged();}
+        working_=false; setLicenseFeedback("Підпис перевірено сервером. Ліцензію активовано.");
+        emit stateChanged();loadCenterConfiguration();emit operationCompleted("license");
+    },true,[this](const QString &why){working_=false;setLicenseFeedback(why,true);emit stateChanged();loadCenterConfiguration();});
+}
+bool ApiBridge::publisherKeyToolsAvailable() const {
+    const auto host=QUrl(origin_).host();
+    return adminEdition_ && (host=="127.0.0.1" || host=="localhost" || host=="::1") &&
+        QFileInfo("/usr/local/sbin/lemvori-carectl").isExecutable() &&
+        QFileInfo("/usr/lib/lemvori-care/install-publisher-key").isExecutable();
+}
+QVariantMap ApiBridge::publisherKeyInfo(const QUrl &url) {
+    if (!adminEdition_ || role_!="admin" || working_ || !url.isLocalFile()) return {};
+    QFile file(url.toLocalFile());
+    if (!QFileInfo(file).isFile() || QFileInfo(file).isSymLink() || !file.open(QIODevice::ReadOnly) || file.size()>16384) {
+        setLicenseFeedback("Не вдалося прочитати відкритий ключ видавця.",true);return {};
+    }
+    const auto content=file.read(16385);
+    if (content.size()>16384 || file.error()!=QFile::NoError) {
+        setLicenseFeedback("Файл ключа змінився або не може бути прочитаний.",true);return {};
+    }
+    const auto pem=QString::fromUtf8(content);
+    const auto match=QRegularExpression("^\\s*-----BEGIN PUBLIC KEY-----\\s*([A-Za-z0-9+/=\\r\\n]+)\\s*-----END PUBLIC KEY-----\\s*$").match(pem);
+    const auto der=match.hasMatch()?QByteArray::fromBase64(match.captured(1).toLatin1()):QByteArray();
+    if (der.size()!=44 || !der.startsWith(QByteArray::fromHex("302a300506032b6570032100"))) {
+        setLicenseFeedback("Оберіть відкритий Ed25519 ключ (PUBLIC KEY) з Lemvori Control. Приватний ключ залишається у видавця.",true);return {};
+    }
+    clearLicenseFeedback();
+    return {{"name",QFileInfo(file).fileName()},{"file",url},
+            {"fingerprint",QString::fromLatin1(QCryptographicHash::hash(der,QCryptographicHash::Sha256).toHex())}};
+}
+void ApiBridge::installPublisherKey(const QUrl &url, const QString &fingerprint) {
+    if (!adminEdition_ || role_!="admin" || working_) return;
+    if (!publisherKeyToolsAvailable())
+        return setLicenseFeedback("Налаштуйте ключ у Lemvori Care Admin на Linux-сервері, підключеному через https://localhost:8443.",true);
+    const auto info=publisherKeyInfo(url);
+    if (info.isEmpty()) return;
+    if (fingerprint.isEmpty() || info.value("fingerprint").toString()!=fingerprint)
+        return setLicenseFeedback("Файл ключа змінився після підтвердження. Виберіть його знову.",true);
+    auto *process=new QProcess(this);
+    const int session=sessionGeneration_;
+    working_=true;databaseWorking_=true;setLicenseFeedback("Підтвердьте налаштування ключа у системному вікні. Сервер буде перезапущено.");emit stateChanged();
+    connect(process,&QProcess::errorOccurred,this,[this,process,session](QProcess::ProcessError error){
+        if(error!=QProcess::FailedToStart)return;
+        process->deleteLater();databaseWorking_=false;
+        if(session!=sessionGeneration_)return;
+        working_=false;setLicenseFeedback("Не вдалося відкрити системне підтвердження. Перевірте наявність pkexec.",true);emit stateChanged();
+    });
+    connect(process,&QProcess::finished,this,[this,process,session](int code,QProcess::ExitStatus status){
+        const auto details=QString::fromUtf8(process->readAllStandardError()).trimmed().left(1000);
+        process->deleteLater();databaseWorking_=false;
+        if(session!=sessionGeneration_)return;
+        working_=false;
+        if(status!=QProcess::NormalExit || code!=0)
+            setLicenseFeedback(code==126?"Налаштування скасовано.":"Ключ не налаштовано. "+details,true);
+        else {
+            setLicenseFeedback("Ключ видавця налаштовано. Тепер відкрийте файл ліцензії .lemvori-license.");
+            emit operationCompleted("publisher-key");
+            QTimer::singleShot(1800,this,[this,session]{if(session==sessionGeneration_)loadCenterConfiguration();});
+        }
+        emit stateChanged();
+    });
+    process->start("/usr/bin/pkexec",{"/usr/lib/lemvori-care/install-publisher-key",url.toLocalFile(),fingerprint});
 }
 void ApiBridge::saveCenterModules(const QVariantList&enabled){
  if(!adminEdition_||role_!="admin"||working_)return;
@@ -1387,11 +1464,157 @@ void ApiBridge::exportCenterRequest(const QUrl&url){
  if(!adminEdition_||role_!="admin"||!url.isLocalFile()||licenseStatus_.value("server_id").toString().isEmpty())return;
  QJsonArray modules;for(const auto&entry:centerModules_)if(entry.toMap().value("enabled").toBool())modules.append(entry.toMap().value("id").toString());
  QJsonObject request{{"format","lemvori.center-request"},{"version",1},{"server_id",licenseStatus_.value("server_id").toString()},{"center",centerConfiguration_.value("center_name").toString()},{"requested_modules",modules}};
- QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly)||file.write(QJsonDocument(request).toJson())<0||!file.commit())return issue("Не вдалося зберегти запит центру.");notify("Запит центру збережено для Lemvori Control.");
+ QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly)||file.write(QJsonDocument(request).toJson())<0||!file.commit())return setLicenseFeedback("Не вдалося зберегти запит центру.",true);setLicenseFeedback("Запит центру збережено для Lemvori Control.");
 }
 
 void ApiBridge::openPdf(const QUrl&url){
  if(!authenticated()||!url.isLocalFile())return;
  const QFileInfo file(url.toLocalFile());if(!file.isFile()||file.suffix().compare("pdf",Qt::CaseInsensitive)!=0)return;
  if(!QDesktopServices::openUrl(url))issue("Відкрийте збережений PDF у системній програмі для друку.");
+}
+
+// Packages stay on the authenticated center server. Devices retain their own
+// installation/signature checks; publication never interrupts a consultation.
+void ApiBridge::loadUpdates() {
+    if (!adminEdition_ || role_ != "admin" || updatesLoading_) return;
+    const int generation = ++updatesGeneration_;
+    updatesLoading_ = true; updatesError_.clear();
+    updateReleases_.clear(); updateDevices_.clear(); emit updatesChanged();
+    auto remaining = std::make_shared<int>(3);
+    auto finish = [this, generation, remaining]() {
+        if (generation != updatesGeneration_) return;
+        if (--*remaining == 0) updatesLoading_ = false;
+        emit updatesChanged();
+    };
+    auto failure = [this, generation, finish](const QString &message) {
+        if (generation != updatesGeneration_) return;
+        updatesError_ = message; finish();
+    };
+    request("GET", "/api/desktop-updates", {}, [this,generation,finish](const QJsonValue &value) {
+        if (generation != updatesGeneration_) return;
+        for (const auto &entry : value.toArray()) updateReleases_.append(entry.toObject().toVariantMap());
+        finish();
+    }, true, failure);
+    request("GET", "/api/mobile-update", {}, [this,generation,finish](const QJsonValue &value) {
+        if (generation != updatesGeneration_) return;
+        auto release = value.toObject();
+        if (release.value("available").toBool()) {
+            release.insert("platform", "android");
+            release.insert("version", release.value("version_name"));
+            updateReleases_.append(release.toVariantMap());
+        }
+        finish();
+    }, true, failure);
+    request("GET", "/api/admin/devices", {}, [this,generation,finish](const QJsonValue &value) {
+        if (generation != updatesGeneration_) return;
+        updateDevices_ = value.toArray().toVariantList(); finish();
+    }, true, failure);
+}
+
+void ApiBridge::publishUpdate(const QUrl &file, const QString &platform, const QString &version,
+                              int build, const QString &notes, const QString &pilotIds) {
+    if (!adminEdition_ || role_ != "admin" || working_) return;
+    if (!QStringList{"android","windows","linux"}.contains(platform) || !file.isLocalFile())
+        return issue("Оберіть платформу та локальний файл оновлення.");
+    if (!QRegularExpression("^(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})$").match(version).hasMatch())
+        return issue("Версія пакета: три числа, наприклад 3.13.0.");
+    if (notes.size() > 3000 || (platform == "android" && build <= 0))
+        return issue("Перевірте номер збірки та опис (до 3000 символів).");
+    QJsonArray pilot;
+    for (const auto &part : pilotIds.split(',', Qt::SkipEmptyParts)) {
+        bool ok = false; const int id = part.trimmed().toInt(&ok);
+        if (!ok || id <= 0 || pilot.contains(id) || pilot.size() >= 200)
+            return issue("Пробна група: різні ID активних психологів через кому (до 200).");
+        pilot.append(id);
+    }
+    QFile input(file.toLocalFile());
+    const qint64 limit = (platform == "android" ? 8 : 32) * 1024 * 1024;
+    if (!input.open(QIODevice::ReadOnly) || input.size() < 8 || input.size() > limit)
+        return issue(platform == "android" ? "Оберіть APK до 8 МБ." : "Оберіть пакет ПК до 32 МБ.");
+    const auto bytes = input.read(limit + 1);
+    if (bytes.size() != input.size() || bytes.size() > limit || input.error() != QFile::NoError)
+        return issue("Не вдалося прочитати пакет повністю.");
+    if ((platform == "android" && !bytes.startsWith("PK")) ||
+        (platform == "windows" && !bytes.startsWith("MZ")) ||
+        (platform == "linux" && !(bytes.startsWith(QByteArray::fromHex("1f8b")) || bytes.startsWith("!<arch>\n"))))
+        return issue("Формат пакета не відповідає платформі.");
+    QJsonObject body{{"sha256",QString::fromLatin1(QCryptographicHash::hash(bytes,QCryptographicHash::Sha256).toHex())},
+                     {"release_notes",notes.trimmed()}};
+    const bool mobile = platform == "android";
+    if (mobile) {
+        body.insert("version_code",build); body.insert("version_name",version);
+        body.insert("package_name","com.quremed.solvia"); body.insert("rollout_user_ids",pilot);
+        body.insert("apk_base64",QString::fromLatin1(bytes.toBase64()));
+    } else {
+        body.insert("platform",platform); body.insert("version",version);
+        body.insert("package_base64",QString::fromLatin1(bytes.toBase64()));
+    }
+    working_ = true; error_.clear(); emit stateChanged();
+    request("POST", mobile ? "/api/mobile-update" : "/api/desktop-updates", body,
+            [this](const QJsonValue &) {
+        working_ = false; notify("Оновлення опубліковане на сервері центру.");
+        emit operationCompleted("update"); loadUpdates();
+    });
+}
+
+namespace {
+QString nativePlatform() {
+#ifdef Q_OS_WIN
+    return "windows";
+#else
+    return "linux";
+#endif
+}
+}
+void ApiBridge::checkClientUpdate() {
+    if (!authenticated() || working_) return;
+    clientUpdate_.clear(); emit updatesChanged();
+    request("GET", "/api/desktop-updates?platform=" + nativePlatform(), {}, [this](const QJsonValue &value) {
+        auto release = value.toObject();
+        if (release.value("available").toBool()) clientUpdate_ = release.toVariantMap();
+        else notify("Адміністратор ще не опублікував пакет для цього ПК.");
+        emit updatesChanged();
+    });
+}
+void ApiBridge::downloadClientUpdate(const QUrl &file) {
+    if (!authenticated() || working_ || clientUpdate_.isEmpty() || !file.isLocalFile()) return;
+    const auto release = clientUpdate_;
+    const auto sha = release.value("sha256").toString();
+    const qint64 size = release.value("size_bytes").toLongLong();
+    const QString filename = release.value("filename").toString();
+    if (!QRegularExpression("^[a-f0-9]{64}$").match(sha).hasMatch() || size < 8 || size > 32*1024*1024 ||
+        !(filename.endsWith(".deb") || filename.endsWith(".exe") || filename.endsWith(".tar.gz")))
+        return issue("Некоректний опис пакета оновлення.");
+    if (QFileInfo(file.toLocalFile()).absoluteFilePath() == QFileInfo(QCoreApplication::applicationFilePath()).absoluteFilePath())
+        return issue("Збережіть інсталятор в окремий файл.");
+    QNetworkRequest req(QUrl(origin_ + "/api/desktop-updates/package?platform=" + nativePlatform() + "&sha=" + sha));
+    req.setRawHeader("Authorization", QByteArray("Bearer ") + token_.toUtf8());
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+    req.setTransferTimeout(120000);
+    auto *reply = network_.get(req);
+    const int session = sessionGeneration_;
+    auto data = std::make_shared<QByteArray>();
+    working_ = true; error_.clear(); emit stateChanged();
+    connect(reply, &QNetworkReply::readyRead, this, [this,reply,data,size,session]() {
+        if (session != sessionGeneration_ || data->size() + reply->bytesAvailable() > size) { reply->abort(); return; }
+        data->append(reply->readAll());
+    });
+    connect(reply, &QNetworkReply::finished, this, [this,reply,data,size,sha,file,session,filename]() {
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const auto error = reply->error(); reply->deleteLater();
+        if (session != sessionGeneration_) return;
+        working_ = false;
+        if (error != QNetworkReply::NoError || status != 200 || data->size() != size ||
+            QCryptographicHash::hash(*data,QCryptographicHash::Sha256).toHex() != sha.toLatin1())
+            return issue("Не вдалося перевірити пакет. Файл не збережено.");
+        if ((filename.endsWith(".deb") && !data->startsWith("!<arch>\n")) ||
+            (filename.endsWith(".exe") && !data->startsWith("MZ")) ||
+            (filename.endsWith(".tar.gz") && !data->startsWith(QByteArray::fromHex("1f8b"))))
+            return issue("Формат пакета не збігається з описом.");
+        QSaveFile output(file.toLocalFile());
+        if (!output.open(QIODevice::WriteOnly) || output.write(*data) != data->size() || !output.commit())
+            return issue("Не вдалося зберегти інсталятор.");
+        notify("Пакет перевірено й збережено. Збережіть роботу, закрийте Lemvori Care та встановіть пакет системним інсталятором.");
+        emit operationCompleted("client-update");
+    });
 }

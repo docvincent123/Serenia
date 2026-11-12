@@ -9,7 +9,7 @@ export function DesktopReleaseSettings({api}){
   useEffect(()=>{load().catch(e=>setMessage(e.message));},[]);
   async function publish(e){e.preventDefault();if(busy)return;setBusy(true);setMessage('');try{
     if(!file||file.size>PC_PACKAGE_LIMIT)throw new Error('Оберіть інсталятор до 32 МБ.');
-    if(platform==='windows'?!/\.exe$/i.test(file.name):!/\.tar\.gz$/i.test(file.name))throw new Error('Windows: EXE-інсталятор. Linux: пакет tar.gz із install-client.sh.');
+    if(platform==='windows'?!/\.exe$/i.test(file.name):!/(\.tar\.gz|\.deb)$/i.test(file.name))throw new Error('Windows: EXE-інсталятор. Linux: DEB або tar.gz із install-client.sh.');
     const sha256=await packageHash(await file.arrayBuffer());
     const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(new Error('Не вдалося прочитати файл.'));reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.readAsDataURL(file);});
     await api('POST','/api/desktop-updates',{platform,version,sha256,package_base64:encoded,release_notes:notes});
@@ -17,11 +17,11 @@ export function DesktopReleaseSettings({api}){
   }catch(e){setMessage(e.message);}finally{setBusy(false);}}
   async function withdraw(target){if(!window.confirm('Прибрати це оновлення з роздачі?'))return;try{await api('DELETE','/api/desktop-updates?platform='+target,{});await load();setMessage('Оновлення знято з роздачі.');}catch(e){setMessage(e.message);}}
   return <section className="surface settings-panel"><h2>Оновлення програм на ПК</h2><p>Завантажте перевірений інсталятор Lemvori Care один раз. Працівники завантажать його із сервера центру, без інтернету на їхніх ПК.</p>
-    <p>Windows: EXE з цієї збірки. Linux: tar.gz з install-client.sh; на робочому місці запускайте саме install-client.sh, щоб оновити клієнт.</p>
+    <p>Windows: EXE з цієї збірки. Linux: DEB для Qt Native або tar.gz з install-client.sh; DEB відкрийте системним інсталятором, для архіву запустіть install-client.sh.</p>
     <form className="form-grid" onSubmit={publish}>
       <div className="field"><label>Платформа<select aria-label="Платформа оновлення ПК" value={platform} disabled={busy} onChange={e=>{setPlatform(e.target.value);setFile(null);}}><option value="windows">Windows</option><option value="linux">Linux</option></select></label></div>
       <div className="field"><label>Версія<input aria-label="Версія оновлення ПК" required pattern="[0-9]+\.[0-9]+\.[0-9]+" value={version} disabled={busy} onChange={e=>setVersion(e.target.value)} placeholder="3.1.0" /></label></div>
-      <div className="field full"><label>Пакет оновлення<input key={platform} aria-label="Пакет оновлення ПК" type="file" accept={platform==='windows'?'.exe':'.tar.gz'} disabled={busy} onChange={e=>setFile(e.target.files[0]||null)} /></label></div>
+      <div className="field full"><label>Пакет оновлення<input key={platform} aria-label="Пакет оновлення ПК" type="file" accept={platform==='windows'?'.exe':'.deb,.tar.gz'} disabled={busy} onChange={e=>setFile(e.target.files[0]||null)} /></label></div>
       <div className="field full"><label>Що змінилося<textarea aria-label="Опис оновлення ПК" maxLength={3000} value={notes} disabled={busy} onChange={e=>setNotes(e.target.value)} /></label></div>
       <button className="button" type="submit" disabled={busy}>{busy?'Завантажуємо…':'Опублікувати оновлення ПК'}</button>
     </form>{message&&<p role="status">{message}</p>}
@@ -41,7 +41,7 @@ export function DesktopUpdateNotice({api,base,token,passive=false}){
     const response=await fetch(`${cleanBase(base)}/api/desktop-updates/package?platform=${platform}&sha=${release.sha256}`,{headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(120000),redirect:'error'});
     const bytes=await checkedPackage(response,release);const url=URL.createObjectURL(new Blob([bytes],{type:platform==='windows'?'application/vnd.microsoft.portable-executable':'application/gzip'}));
     const link=document.createElement('a');link.href=url;link.download=release.filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-    setMessage(platform==='windows'?'Файл перевірено. Збережіть його, закрийте Lemvori Care та запустіть EXE-інсталятор поверх наявної програми.':'Файл перевірено. Збережіть і розпакуйте архів, закрийте Lemvori Care та виконайте в його папці: sudo bash install-client.sh');
+    setMessage(platform==='windows'?'Файл перевірено. Збережіть його, закрийте Lemvori Care та запустіть EXE-інсталятор поверх наявної програми.':release.filename.endsWith('.deb')?'Файл перевірено. Закрийте Lemvori Care та відкрийте DEB у системному менеджері пакунків.':'Файл перевірено. Збережіть і розпакуйте архів, закрийте Lemvori Care та виконайте в його папці: sudo bash install-client.sh');
   }catch(e){setMessage(e.message);}finally{setBusy(false);}}
   if(!release||hidden===release.sha256)return null;
   if(passive)return <aside role="region" aria-label="Доступна нова версія програми" className="pc-update-notice">
