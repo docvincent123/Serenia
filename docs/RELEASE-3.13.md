@@ -53,3 +53,6 @@ On an updated server installation, the equivalent local command is `sudo lemvori
 
 
 The license-file picker remains available before publisher-key provisioning, including in first-run onboarding. Missing verifier configuration produces an actionable activation message; it does not disable browsing for a license. Server-side signature and entitlement checks remain mandatory. A native UI regression opens the actual picker in the unconfigured state.
+
+
+Linux Qt 6.4 file dialogs also require the QML module `Qt.labs.folderlistmodel`. The native Linux workflow installs `qml6-module-qt-labs-folderlistmodel` explicitly, and the native DEB declares it as a runtime dependency. This fixes file-picker loading in the `qt-native` job and on minimal Linux desktops. Existing installations can install that module with `sudo apt install qml6-module-qt-labs-folderlistmodel`, then restart the client.

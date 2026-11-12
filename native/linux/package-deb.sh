@@ -27,7 +27,7 @@ Architecture: amd64
 Section: office
 Priority: optional
 Maintainer: LemvoriLab
-Depends: pkexec, openssl, util-linux, libqt6network6t64, libqt6quick6, libqt6quickcontrols2-6, qml6-module-qtqml, qml6-module-qtqml-models, qml6-module-qtqml-workerscript, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-dialogs, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtquick-shapes
+Depends: pkexec, openssl, util-linux, libqt6network6t64, libqt6quick6, libqt6quickcontrols2-6, qml6-module-qtqml, qml6-module-qtqml-models, qml6-module-qtqml-workerscript, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-dialogs, qml6-module-qt-labs-folderlistmodel, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtquick-shapes
 Description: Lemvori Care and Lemvori Care Admin for Linux
  Native Qt Quick/QML workplace for Lemvori Care, connecting to the
  separate Lemvori Care C++ HTTPS API on port 8443. This package does not
