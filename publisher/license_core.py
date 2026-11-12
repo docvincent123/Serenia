@@ -78,3 +78,16 @@ def write_new(path,data,private=False):
     except Exception:
         path.unlink(missing_ok=True)
         raise
+
+def validate_private_key_file(path):
+    """Check a PEM file is a private signing key, not a directory/public key."""
+    path = Path(path).expanduser()
+    if not path.is_file():
+        raise ValueError("Не знайдено приватний PEM-ключ. Виберіть існуючий файл або створіть нову пару ключів.")
+    if path.stat().st_size > 16384:
+        raise ValueError("Завеликий PEM-файл приватного ключа")
+    with path.open("rb") as source:
+        header = source.readline().strip()
+    if header not in (b"-----BEGIN ENCRYPTED PRIVATE KEY-----", b"-----BEGIN PRIVATE KEY-----"):
+        raise ValueError("Це не приватний ключ! Потрібен lemvori-publisher-private.pem, не public.pem і не ліцензія.")
+    return path
