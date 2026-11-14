@@ -1249,11 +1249,9 @@ class MainActivity : Activity() {
                 val patients = item.optJSONArray("patients") ?: JSONArray()
                 for(j in 0 until patients.length()) visits.add(item to patients.getJSONObject(j))
             }
-            val queued = offlineStore().queue()
-            fun localState(item: JSONObject, patient: JSONObject): String = (0 until queued.length()).map { queued.getJSONObject(it) }.lastOrNull {
-                val payload = it.getJSONObject("payload")
-                payload.optLong("appointment_id") == item.optLong("id") && payload.optLong("patient_id") == patient.optLong("id") && it.optString("state") in listOf("pending", "blocked", "sent")
-            }?.optString("state") ?: ""
+            var localStates = VisitState.localStates(offlineStore().queue())
+            fun localState(item: JSONObject, patient: JSONObject): String =
+                localStates[item.optLong("id") to patient.optLong("id")] ?: ""
             fun completed(item: JSONObject, patient: JSONObject) = patient.optString("visit_status").isBlank() && VisitState.completed(patient.optString("completed_at"), item.optString("status"), localState(item, patient))
             fun active(item: JSONObject, patient: JSONObject) = patient.optString("visit_status").isBlank() && !completed(item,patient) && item.optString("status") in listOf("scheduled", "confirmed")
             fun render(tab: String) {
@@ -1341,8 +1339,11 @@ class MainActivity : Activity() {
             render(initialTab)
             var fingerprint = entries.toString()
             homeAppointmentsRefresh = { updated ->
+                appointmentErrorView?.apply { text="";visibility=View.GONE }
                 val fresh = updated.toString()
-                if(fresh != fingerprint) {
+                val nextLocalStates = VisitState.localStates(offlineStore().queue())
+                if(fresh != fingerprint || nextLocalStates != localStates) {
+                    localStates = nextLocalStates
                     fingerprint = fresh; entries = updated; visits.clear()
                     for(i in 0 until updated.length()) {
                         val item = updated.getJSONObject(i); val patients = item.optJSONArray("patients") ?: JSONArray()
