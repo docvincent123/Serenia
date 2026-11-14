@@ -54,6 +54,8 @@ jobs:
           timeout 15s build/native-linux/solvia-native --admin --smoke
       - name: Verify company settings migration
         run: python3 tests/native-qt-settings.py build/native-linux/solvia-native
+      - name: Verify slow-server refresh coalescing and unchanged models
+        run: python3 tests/native-qt-refresh.py build/native-linux/lemvori-native-refresh-check
       - name: Verify staff and admin workflows through HTTPS
         run: python3 tests/native-qt-workflow.py build/native-linux/lemvori-native-workflow-check
       - name: Exercise native windows for each role

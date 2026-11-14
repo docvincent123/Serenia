@@ -240,6 +240,7 @@ private:
     void issue(const QString &message);
     void notify(const QString &message);
     void clearSession();
+    void finishRefreshRequest(int generation);
     void getOverview(int generation);
     void connectServer(const QString &value, const QString &expectedId);
     void saveBooking(QJsonObject booking, int id = 0);
@@ -285,5 +286,7 @@ private:
     QVariantMap shift_, overview_, system_;
     QStringList blockedModules_;
     QVariantList visits_, patients_, appointments_, roster_, psychologists_, rooms_;
+    int refreshPending_ = 0;
+    bool collectingRefresh_ = false, refreshQueued_ = false;
     int sessionGeneration_ = 0, refreshGeneration_ = 0, patientGeneration_ = 0;
 };

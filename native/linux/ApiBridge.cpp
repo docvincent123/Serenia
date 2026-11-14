@@ -79,6 +79,7 @@ void ApiBridge::clearSession() {
     emit workspaceChanged(); emit patientRecordChanged();
     ++sessionGeneration_;
     ++refreshGeneration_;
+    refreshPending_ = 0; collectingRefresh_ = false; refreshQueued_ = false;
     ++patientGeneration_;
     ++adminGeneration_;
     ++slotsGeneration_;
@@ -131,6 +132,9 @@ void ApiBridge::request(const QByteArray &method, const QString &path,
         return;
     }
     const int generation = sessionGeneration_;
+    const bool refreshRequest = collectingRefresh_;
+    const int refreshBatch = refreshGeneration_;
+    if (refreshRequest) ++refreshPending_;
     const bool ownsWork = method != "GET" || (path == "/api/me" && role_.isEmpty()) || (path == "/api/health" && !connected_);
     connect(reply, &QNetworkReply::finished, this,
             [this, reply, generation, path, quiet, ownsWork, completed = std::move(completed), failed = std::move(failed)]() mutable {
@@ -177,6 +181,21 @@ void ApiBridge::request(const QByteArray &method, const QString &path,
             return;
         }
         completed(value);
+    });
+    // This slot runs after response processing, including failure and logout paths.
+    if (refreshRequest) connect(reply, &QNetworkReply::finished, this,
+        [this, refreshBatch] { finishRefreshRequest(refreshBatch); });
+}
+
+void ApiBridge::finishRefreshRequest(int generation) {
+    if (generation != refreshGeneration_) return;
+    if (--refreshPending_ != 0 || !refreshQueued_) return;
+    const int session = sessionGeneration_;
+    QTimer::singleShot(0, this, [this, session] {
+        if (session == sessionGeneration_ && refreshPending_ == 0 && refreshQueued_) {
+            refreshQueued_ = false;
+            refresh();
+        }
     });
 }
 
@@ -323,22 +342,28 @@ void ApiBridge::logout() {
 void ApiBridge::getShift(int generation) {
     request("GET", "/api/shift-day", {}, [this,generation](const QJsonValue &v){
         if (generation != refreshGeneration_) return;
-        shift_ = v.toObject().toVariantMap();
+        const auto next = v.toObject().toVariantMap();
+        if (shift_ == next) return;
+        shift_ = next;
         emit dataChanged();
     }, true);
 }
 void ApiBridge::getOverview(int generation) {
     request("GET", role_ == "director" ? "/api/stats" : "/api/workday/home", {}, [this,generation](const QJsonValue &v){
         if (generation != refreshGeneration_) return;
-        overview_ = v.toObject().toVariantMap();
         lastRefresh_ = QTime::currentTime().toString("HH:mm:ss"); emit stateChanged();
+        const auto next = v.toObject().toVariantMap();
+        if (overview_ == next) return;
+        overview_ = next;
         emit dataChanged();
     }, true);
 }
 void ApiBridge::getVisits(int generation) {
     request("GET", "/api/shift-workspace", {}, [this,generation](const QJsonValue &v){
         if (generation != refreshGeneration_) return;
-        visits_ = v.toArray().toVariantList();
+        const auto next = v.toArray().toVariantList();
+        if (visits_ == next) return;
+        visits_ = next;
         emit dataChanged();
     }, true);
 }
@@ -346,7 +371,9 @@ void ApiBridge::getAppointments(int generation) {
     const QString day = calendarDate_.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : calendarDate_;
     request("GET", "/api/appointments?date=" + day, {}, [this,generation](const QJsonValue &v){
         if (generation != calendarGeneration_) return;
-        appointments_ = v.toArray().toVariantList();
+        const auto next = v.toArray().toVariantList();
+        if (appointments_ == next) return;
+        appointments_ = next;
         emit dataChanged();
     }, true);
 }
@@ -366,19 +393,25 @@ void ApiBridge::getRoster(int generation) {
     request("GET", "/api/shift-psychologists", {}, [this,generation](const QJsonValue &v){
         if (generation != refreshGeneration_) return;
         const auto previousBookingOptions = bookingPsychologists();
+        const auto previousRoster = roster_;
+        const auto previousDate = rosterDate_;
+        const bool previousSupported = rosterSupported_, previousConfigured = rosterConfigured_;
         rosterSupported_ = v.isObject();
         rosterConfigured_ = v.toObject().value("configured").toBool(false)
             && v.toObject().value("shift_open").toBool(false);
         rosterDate_ = v.toObject().value("date").toString();
         roster_ = v.toObject().value("psychologists").toArray().toVariantList();
         if (previousBookingOptions != bookingPsychologists()) emit bookingOptionsChanged();
-        emit dataChanged();
+        if (previousRoster != roster_ || previousDate != rosterDate_ ||
+            previousSupported != rosterSupported_ || previousConfigured != rosterConfigured_) emit dataChanged();
     }, true);
 }
 void ApiBridge::getSystem(int generation) {
     request("GET", "/api/admin/system", {}, [this,generation](const QJsonValue &v){
         if (generation != refreshGeneration_) return;
-        system_ = v.toObject().toVariantMap();
+        const auto next = v.toObject().toVariantMap();
+        if (system_ == next) return;
+        system_ = next;
         emit dataChanged();
     }, true);
 }
@@ -398,6 +431,11 @@ bool ApiBridge::moduleEnabled(const QString &module) const {
 
 void ApiBridge::refresh() {
     if (!authenticated()) return;
+    // Keep the active snapshot valid on slow LANs. Navigation/mutations request
+    // one follow-up snapshot rather than invalidating replies already in flight.
+    if (refreshPending_ > 0) { refreshQueued_ = true; return; }
+    refreshQueued_ = false;
+    collectingRefresh_ = true;
     const int generation = ++refreshGeneration_;
     if (role_ != "admin") {
         request("GET", "/api/my-module-permissions", {}, [this,generation](const QJsonValue &response) {
@@ -424,6 +462,7 @@ void ApiBridge::refresh() {
     }
     getRoster(generation);
     if (role_ == "admin") getSystem(generation);
+    collectingRefresh_ = false;
     emit stateChanged();
 }
 void ApiBridge::searchPatients(const QString &text) {
