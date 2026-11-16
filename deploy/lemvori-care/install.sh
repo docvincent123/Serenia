@@ -10,6 +10,10 @@ package=$source_dir/deploy/lemvori-care
 [[ -f $source_dir/CMakeLists.txt && -f $source_dir/src/server/schema.sql ]] || {
   echo "Use a complete source checkout (CMakeLists.txt and src/server/schema.sql required)." >&2; exit 1;
 }
+# Serialize installation with backup and restore before changing host state.
+install -d -m 0700 -o root -g root /run/lemvori-care
+exec 9>/run/lemvori-care/db-maintenance.lock
+flock -n 9 || { echo "Another installation or database operation is running" >&2; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y cmake g++ make pkg-config libpq-dev postgresql-client libssl-dev openssl \
@@ -47,15 +51,6 @@ if [[ ! -f $pgpass ]]; then
 fi
 chown lemvori-care:lemvori-care "$pgpass"
 chmod 0600 "$pgpass"
-cat > /etc/lemvori-care/server.env <<'ENV'
-LEMVORI_DATABASE_URL="host=127.0.0.1 port=5432 dbname=lemvori_core user=lemvori_app"
-PGPASSFILE=/etc/lemvori-care/pgpass
-LEMVORI_LICENSE_REQUIRED=1
-LEMVORI_LICENSE_PUBLIC_KEY=/etc/lemvori-care/license/publisher.pem
-TZ=Europe/Kyiv
-ENV
-chown root:lemvori-care /etc/lemvori-care/server.env
-chmod 0640 /etc/lemvori-care/server.env
 export LEMVORI_DATABASE_URL='host=127.0.0.1 port=5432 dbname=lemvori_core user=lemvori_app'
 export PGPASSFILE=/etc/lemvori-care/pgpass
 
@@ -70,6 +65,12 @@ dbpsql -Atc "SELECT current_database() || ':' || current_user" |
 [[ $(dbpsql -Atc "SELECT has_schema_privilege(current_user, 'public', 'CREATE')") == t ]] || {
   echo "Role lemvori_app needs CREATE privilege on public schema" >&2; exit 1;
 }
+
+# Preserve the complete configured environment, including custom trust paths and
+# operator settings. Do this only after the database credentials are verified.
+bash "$package/configure-env.sh" /etc/lemvori-care/server.env
+chown root:lemvori-care /etc/lemvori-care/server.env
+chmod 0640 /etc/lemvori-care/server.env
 
 # Keep previous database and local CA during reinstall.
 systemctl stop lemvori-care-network.timer lemvori-care.service 2>/dev/null || true
@@ -105,7 +106,8 @@ runuser -u lemvori-care --preserve-environment -- /opt/lemvori-care/lemvori-care
 unset LEMVORI_ADMIN_LOGIN LEMVORI_ADMIN_NAME LEMVORI_ADMIN_PASSWORD repeated_password
 
 for unit in lemvori-care.service lemvori-care-network.service \
-  lemvori-care-network-refresh.service lemvori-care-network.timer; do
+  lemvori-care-network-refresh.service lemvori-care-network.timer \
+  lemvori-care-backup.service lemvori-care-backup.timer; do
   install -o root -g root -m 0644 "$package/$unit" "/etc/systemd/system/$unit"
 done
 /opt/lemvori-care/network-tls.sh --no-restart
@@ -118,6 +120,10 @@ echo
 lemvori-carectl address
 lemvori-carectl certificate
 lemvori-carectl health
+# Persistent timers may trigger immediately. Release maintenance before enabling
+# nightly backups so a missed run can actually acquire the database lock.
+flock -u 9
+systemctl enable --now lemvori-care-backup.timer
 echo 'Management: sudo lemvori-carectl {status|logs|health|network|restart}'
 echo 'Publisher public key: sudo lemvori-carectl publisher-key /path/to/ed25519-public.pem'
 echo 'The first admin login will require the signed center license; never transfer the private signing key.'

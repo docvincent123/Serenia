@@ -3,7 +3,11 @@ on:
   pull_request:
     paths:
       - 'deploy/lemvori-care/**'
-      - 'src/server/main.cpp'
+      - 'src/server/**'
+      - 'CMakeLists.txt'
+      - 'tests/lemvori-install-config.py'
+      - 'tests/lemvori-restore-e2e.sh'
+      - 'tools/issue-center-license.py'
       - 'tests/lemvori-care-network.py'
       - '.github/workflows/lemvori-care-server.yml'
   workflow_dispatch:
@@ -17,6 +21,8 @@ jobs:
       - name: Validate installer and network scripts
         run: |
           bash -n deploy/lemvori-care/install.sh
+          bash -n deploy/lemvori-care/configure-env.sh
+          python3 tests/lemvori-install-config.py
           bash -n deploy/lemvori-care/network-tls.sh
           bash -n deploy/lemvori-care/lemvori-carectl
           bash -n deploy/lemvori-care/restore.sh
@@ -24,6 +30,15 @@ jobs:
           bash -n tests/lemvori-restore-e2e.sh
           python3 -m py_compile deploy/lemvori-care/network-address.py
           python3 tests/lemvori-care-network.py
+      - name: Validate nightly backup units and local calendar
+        run: |
+          mkdir -p "$RUNNER_TEMP/lemvori-units"
+          cp deploy/lemvori-care/lemvori-care-backup.{service,timer} "$RUNNER_TEMP/lemvori-units/"
+          # Unit syntax and timer linkage; the production executable is installed
+          # later on real hosts, so replace only its path for this parser check.
+          sed -i 's|/usr/local/sbin/lemvori-carectl|/usr/bin/true|' "$RUNNER_TEMP/lemvori-units/lemvori-care-backup.service"
+          systemd-analyze verify "$RUNNER_TEMP/lemvori-units/"*.service "$RUNNER_TEMP/lemvori-units/"*.timer
+          systemd-analyze calendar '*-*-* 00:00:00 Europe/Kyiv'
       - name: Verify live network selection and stable local CA
         run: |
           sudo useradd --system --user-group --home-dir /var/lib/lemvori-care \
