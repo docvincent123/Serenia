@@ -1,0 +1,10 @@
+[Unit]
+Description=Lemvori Care database backup at midnight Kyiv time
+
+[Timer]
+OnCalendar=*-*-* 00:00:00 Europe/Kyiv
+Persistent=true
+Unit=lemvori-care-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Lemvori Care nightly PostgreSQL backup
+After=postgresql.service
+ConditionPathExists=/etc/lemvori-care/pgpass
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lemvori-carectl backup
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
