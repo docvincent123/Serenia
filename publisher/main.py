@@ -21,7 +21,7 @@ from license_store import (
     remove_record, save_preferences, upsert,
 )
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 FONT = "Segoe UI" if sys.platform == "win32" else "DejaVu Sans"
 HOME = Path(os.environ.get("LEMVORI_CONTROL_HOME", str(Path.home() / ".lemvori-control")))
 INITIAL = {
@@ -88,6 +88,9 @@ class Publisher(tk.Tk):
         self.workflow_vars = {}
         self.admin_vars = {}
         self.apply_workflow = tk.BooleanVar(value=False)
+        self.exit_dialog = None
+        self.protocol("WM_DELETE_WINDOW", self.request_exit)
+        self.bind("<Control-q>", self.request_exit)
         self.setup_style()
         self.build_ui()
         self.admin_server = ""
@@ -267,10 +270,55 @@ class Publisher(tk.Tk):
             text="Видалення тут не відкликає раніше активовану ліцензію на сервері центру.",
             style="Hint.TLabel",
         ).pack(anchor="w", pady=(8, 0))
+        footer = tk.Frame(self, bg="#E2EAF6", padx=20, pady=5)
+        footer.pack(fill="x")
+        ttk.Button(footer, text="Вийти", command=self.request_exit).pack(side="right")
         tk.Label(
-            self, textvariable=self.status, bg="#E2EAF6", fg="#23466F",
-            font=(FONT, 9), anchor="w", padx=20, pady=7,
-        ).pack(fill="x")
+            footer, textvariable=self.status, bg="#E2EAF6", fg="#23466F",
+            font=(FONT, 9), anchor="w", padx=0, pady=7,
+        ).pack(side="left", fill="x", expand=True)
+
+    def request_exit(self, _event=None):
+        if self.exit_dialog is not None:
+            self.exit_dialog.lift()
+            return "break"
+
+        previous_focus = self.focus_get()
+        previous_grab = self.grab_current()
+        dialog = tk.Toplevel(self, name="exit_confirmation")
+        self.exit_dialog = dialog
+        dialog.title("Вихід із Lemvori Control")
+        dialog.transient(self)
+        dialog.resizable(False, False)
+
+        def stay(_event=None):
+            self.exit_dialog = None
+            dialog.destroy()
+            if previous_grab is not None and previous_grab.winfo_exists():
+                previous_grab.grab_set()
+            if previous_focus is not None and previous_focus.winfo_exists():
+                previous_focus.focus_set()
+            return "break"
+
+        dialog.protocol("WM_DELETE_WINDOW", stay)
+        dialog.bind("<Escape>", stay)
+        content = ttk.Frame(dialog, style="Card.TFrame", padding=20)
+        content.pack(fill="both", expand=True)
+        ttk.Label(content, text="Завершити роботу Lemvori Control?", style="Section.TLabel").pack(anchor="w")
+        ttk.Label(content, text="Після виходу незбережені зміни у формі буде втрачено.",
+                  style="Card.TLabel", wraplength=370).pack(anchor="w", pady=(8, 16))
+        actions = ttk.Frame(dialog, name="actions", style="Card.TFrame", padding=(20, 0, 20, 16))
+        actions.pack(fill="x")
+        ttk.Button(actions, name="finish", text="Завершити вихід",
+                   style="Danger.TButton", command=self.destroy).pack(side="right")
+        stay_button = ttk.Button(actions, name="stay", text="Залишитися",
+                                 style="Primary.TButton", command=stay)
+        stay_button.pack(side="right", padx=(0, 8))
+        stay_button.bind("<Return>", stay)
+        dialog.wait_visibility()
+        dialog.grab_set()
+        stay_button.focus_set()
+        return "break"
 
     def build_first_admin(self, panel):
         panel.columnconfigure(1, weight=1)
@@ -777,8 +825,32 @@ class Publisher(tk.Tk):
             messagebox.showerror("Видалення", str(error), parent=self)
 
 
+def verify_exit_confirmation(app):
+    app.update()
+    app.vars["center"].set("Тестова чернетка")
+    app.tk.call(app.protocol("WM_DELETE_WINDOW"))
+    dialog = app.exit_dialog
+    if dialog is None or dialog.grab_current() is not dialog:
+        raise RuntimeError("Window close did not open a modal confirmation")
+    app.request_exit()
+    if app.exit_dialog is not dialog:
+        raise RuntimeError("Repeated close opened a second confirmation")
+    dialog.nametowidget("actions.stay").invoke()
+    if app.exit_dialog is not None or app.vars["center"].get() != "Тестова чернетка":
+        raise RuntimeError("Cancel lost unsaved work or left the dialog open")
+    app.request_exit()
+    app.tk.call(app.exit_dialog.protocol("WM_DELETE_WINDOW"))
+    if app.exit_dialog is not None:
+        raise RuntimeError("Closing the confirmation did not return to the editor")
+    app.request_exit()
+    app.exit_dialog.nametowidget("actions.finish").invoke()
+    if app.tk.call("info", "commands", "."):
+        raise RuntimeError("Confirm did not close the application")
+
+
 if __name__ == "__main__":
     app = Publisher()
     if "--smoke" in sys.argv:
-        app.after(900, app.destroy)
-    app.mainloop()
+        verify_exit_confirmation(app)
+    else:
+        app.mainloop()
