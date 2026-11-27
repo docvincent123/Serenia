@@ -1,4 +1,4 @@
-name: SOLVIA verified product release
+name: Lemvori Care verified product release
 
 on:
   push:
@@ -67,9 +67,9 @@ jobs:
         shell: bash
         run: |
           mkdir release-files
-          cp "downloads/SOLVIA-$VERSION-Linux-x64-installer/SOLVIA-$VERSION-Linux-x64.tar.gz" release-files/
-          cp "downloads/SOLVIA-$VERSION-Setup-EXE/SOLVIA-Setup-$VERSION-Windows-x64.exe" release-files/
-          cp "downloads/SOLVIA-$MOBILE_VERSION-Android-release-APK/app-release.apk" "release-files/SOLVIA-$MOBILE_VERSION-Android.apk"
+          cp "downloads/Lemvori-Care-$VERSION-Linux-x64-installer/Lemvori-Care-$VERSION-Linux-x64.tar.gz" release-files/
+          cp "downloads/Lemvori-Care-$VERSION-Setup-EXE/Lemvori-Care-Setup-$VERSION-Windows-x64.exe" release-files/
+          cp "downloads/Lemvori-Care-3.13.0-build-182046-Android-release-APK/app-release.apk" "release-files/Lemvori-Care-$MOBILE_VERSION-Android.apk"
           cd release-files
           for file in *; do sha256sum "$file" > "$file.sha256"; done
       - name: Create reviewable draft release
@@ -83,5 +83,5 @@ jobs:
             test "$(cat draft.txt)" = true || { echo 'Published releases are immutable; use a new version.'; exit 1; }
             gh release upload "$tag" release-files/* --clobber
           else
-            gh release create "$tag" release-files/* --draft --target "$GITHUB_SHA" --title "SOLVIA $VERSION" --generate-notes
+            gh release create "$tag" release-files/* --draft --target "$GITHUB_SHA" --title "Lemvori Care $VERSION" --generate-notes
           fi

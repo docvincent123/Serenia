@@ -15,6 +15,9 @@ sudo install -o root -g root -m 0755 build/lemvori-ci/SolviaServer /opt/lemvori-
 sudo install -o root -g root -m 0755 deploy/lemvori-care/network-tls.sh /opt/lemvori-care/network-tls.sh
 sudo install -o root -g root -m 0755 deploy/lemvori-care/network-address.py /opt/lemvori-care/network-address.py
 sudo install -o root -g root -m 0755 deploy/lemvori-care/restore.sh /opt/lemvori-care/restore.sh
+sudo install -o root -g root -m 0755 deploy/lemvori-care/storage-check.sh /opt/lemvori-care/storage-check.sh
+sudo install -o root -g root -m 0644 deploy/lemvori-care/backup-archive.sh /opt/lemvori-care/backup-archive.sh
+sudo bash deploy/lemvori-care/provision-backup-key.sh /etc/lemvori-care/backup.agekey
 sudo install -o root -g root -m 0755 deploy/lemvori-care/lemvori-carectl /usr/local/sbin/lemvori-carectl
 sudo install -o root -g lemvori-care -m 0644 "$RUNNER_TEMP/license-public.pem" /etc/lemvori-care/license/publisher.pem
 cat > "$RUNNER_TEMP/server.env" <<'ENV'
@@ -52,21 +55,22 @@ sudo -u postgres psql -d lemvori_core -c "UPDATE center_settings SET center_name
 sudo install -d -o root -g root -m 0700 /var/backups/lemvori-care
 echo INVALID > "$RUNNER_TEMP/corrupt.dump"
 sudo install -o root -g root -m 0600 "$RUNNER_TEMP/corrupt.dump" \
-  /var/backups/lemvori-care/lemvori-core-corrupt.dump
-if sudo lemvori-carectl restore /var/backups/lemvori-care/lemvori-core-corrupt.dump 'ВІДНОВИТИ'; then
+  /var/backups/lemvori-care/lemvori-core-corrupt.dump.age
+if sudo lemvori-carectl restore /var/backups/lemvori-care/lemvori-core-corrupt.dump.age 'ВІДНОВИТИ'; then
   echo "Corrupt archive unexpectedly accepted" >&2; exit 1
 fi
-sudo rm -f /var/backups/lemvori-care/lemvori-core-corrupt.dump
+sudo rm -f /var/backups/lemvori-care/lemvori-core-corrupt.dump.age
 sudo lemvori-carectl health >/dev/null
 [[ $(sudo -u postgres psql -At -d lemvori_core -c 'SELECT center_name FROM center_settings WHERE id=1') == 'MUTATED_AFTER_BACKUP' ]] || exit 1
 
 # Full staging restore / stop service / pre-restore snapshot / swap / health.
-archive=$(sudo find /var/backups/lemvori-care -maxdepth 1 -name 'lemvori-core-*.dump' -type f | head -n 1)
+archive=$(sudo find /var/backups/lemvori-care -maxdepth 1 -name 'lemvori-core-*.dump.age' -type f | head -n 1)
+[[ $(sudo head -n 1 "$archive") == 'age-encryption.org/v1' ]]
 sudo lemvori-carectl restore "$archive" 'ВІДНОВИТИ'
 sudo lemvori-carectl health
 [[ $(center_profile) == "$original" ]] || { echo "Restored center profile mismatch" >&2; exit 1; }
 sudo -u postgres psql -At -d lemvori_core -c 'SELECT count(*) FROM sessions' | grep -qx 0
-sudo find /var/backups/lemvori-care -maxdepth 1 -name 'lemvori-core-pre-restore-*.dump' | grep -q .
+sudo find /var/backups/lemvori-care -maxdepth 1 -name 'lemvori-core-pre-restore-*.dump.age' | grep -q .
 sudo -u postgres psql -At -d postgres -c "SELECT datname FROM pg_database WHERE datname LIKE 'lemvori_previous_%'" | grep -q .
 echo "PASS: corrupted backup rejected; active DB unchanged; verified staged restore + safety snapshot + HTTPS health + session revocation"
 # Simulate a failed API restart AFTER cutover. The script must put the

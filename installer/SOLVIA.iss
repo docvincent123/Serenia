@@ -1,4 +1,4 @@
-#define MyAppName "Lemvori Care by LemvoriLab"
+#define MyAppName "Lemvori Care"
 #define MyAppVersion "3.1.2"
 #define MyAppPublisher "LemvoriLab"
 #define MyAppExeName "Solvia.exe"
@@ -14,7 +14,7 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\out\installer
-OutputBaseFilename=SOLVIA-Setup-{#MyAppVersion}-Windows-x64
+OutputBaseFilename=Lemvori-Care-Setup-{#MyAppVersion}-Windows-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -171,7 +171,7 @@ begin
       '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
       RaiseException('Cannot stop the previous Lemvori Care server. Restart Windows and retry setup.');
     if ExitCode <> 0 then
-      RaiseException('Previous SOLVIA server did not stop. Restart Windows and retry setup.');
+      RaiseException('Previous Lemvori Care server did not stop. Restart Windows and retry setup.');
     Exit;
   end;
   if CurStep <> ssPostInstall then Exit;

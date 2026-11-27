@@ -893,3 +893,21 @@ INSERT INTO center_consent_templates(document_type,title,required) VALUES
 ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS consent_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS registration_reference TEXT NOT NULL DEFAULT '';
 ALTER TABLE patient_documents ADD COLUMN IF NOT EXISTS patient_identity_hash TEXT NOT NULL DEFAULT '';
+
+-- Per-account permissions. An empty workstation hash leaves clinical access on Android.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS desktop_device_hash TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_archive_access BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS shift_date TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_consultations_shift_date ON consultations(shift_date,psychologist_id);
+
+CREATE TABLE IF NOT EXISTS patient_requests(
+ id BIGSERIAL PRIMARY KEY,
+ patient_id BIGINT NOT NULL REFERENCES patients(id),
+ created_by BIGINT NOT NULL REFERENCES users(id),
+ client_key TEXT NOT NULL,
+ service_code TEXT NOT NULL REFERENCES center_services(code),
+ snapshot TEXT NOT NULL,
+ created TEXT NOT NULL,
+ UNIQUE(patient_id,created_by,client_key)
+);
+CREATE INDEX IF NOT EXISTS idx_patient_requests_patient ON patient_requests(patient_id,id DESC);

@@ -60,7 +60,7 @@ fi
 old_ip=''
 [[ ! -f /etc/solvia/address ]] || old_ip=$(cat /etc/solvia/address)
 ip=$(python3 "$package/network-address.py" "${SOLVIA_SERVER_IP:-$old_ip}")
-echo "Визначено LAN-адресу SOLVIA: $ip"
+echo "Визначено LAN-адресу Lemvori Care: $ip"
 # Stop writers before the update snapshot and migrations.
 systemctl stop solvia-network.timer solvia-network-refresh.service solvia-network.service solvia-certificate.timer solvia-certificate.service solvia-http.service solvia.service 2>/dev/null || true
 # A failed update never deletes or silently replaces data.
@@ -145,11 +145,11 @@ with open(path,'w',encoding='utf-8') as stream:json.dump(data,stream,ensure_asci
 PYCONFIG
 chmod 0644 "$mobile_config"
 
-printf '\nSOLVIA готова: https://%s:8443\n' "$ip"
+printf '\nLemvori Care готова: https://%s:8443\n' "$ip"
 echo 'HTTP 8765 доступний лише локально; телефони підключаються через HTTPS 8443.'
 printf 'Файл підключення телефона: %s\n' "$mobile_config"
-echo 'Керування сервером: SOLVIA Server у меню програм або solvia-server-control у терміналі.'
-echo 'Linux Admin: відкрийте «SOLVIA Admin» у меню програм або виконайте solvia-admin-app.'
+echo 'Керування сервером: Lemvori Care Server у меню програм або solvia-server-control у терміналі.'
+echo 'Linux Admin: відкрийте «Lemvori Care Admin» у меню програм або виконайте solvia-admin-app.'
 echo 'Оновлення: sudo solvia-admin check-update / sudo solvia-admin update'
 echo 'Сертифікат для ПК/Android: /etc/solvia/ca/QureMed-Local-CA.crt'
 openssl x509 -in /etc/solvia/ca/QureMed-Local-CA.crt -noout -fingerprint -sha256

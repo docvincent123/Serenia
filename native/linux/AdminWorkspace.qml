@@ -113,6 +113,9 @@ Item {
             {key:"job_title", label:"Посада (не змінює права)", options:positions, initial:""},
             {key:"primary_service_code", label:"Професійний напрямок", options:root.serviceOptions, initial:""},
             {key:"phone", label:"Телефон"},
+            {key:"allow_desktop", label:"Робота з призначеного ПК", type:"check", role:"psychologist", initial:false},
+            {key:"desktop_code", label:"Код робочого ПК (у програмі перед входом)", role:"psychologist"},
+            {key:"shift_archive_access", label:"Доступ до архіву консультацій за зміну", type:"check", role:"director", initial:false},
             {key:"password", label:"Пароль", type:"password"},
             {key:"active", label:"Обліковий запис активний", type:"check", initial:true, editOnly:true}
         ],
@@ -182,6 +185,7 @@ Item {
     function edit(record) {
         form.recordId = Number(record.id || 0)
         form.values = Object.assign({}, record)
+        form.selectedRole = record.role || "reception"
         if (section === "access") {
             form.values.start_time = (record.starts_at || "").slice(11,16) || "08:00"
             form.values.enabled = record.enabled === undefined ? true : record.enabled
@@ -299,12 +303,12 @@ Item {
                         Layout.fillWidth: true; columns: width > 620 ? 2 : 1; columnSpacing: 12; rowSpacing: 12
                         Repeater {
                             model: [
-                                {key:"center",title:"01 · Профіль закладу",info:"Назва, підрозділ і основний напрямок"},
-                                {key:"team",title:"02 · Працівники",info:"Працівники, ролі та графіки"},
-                                {key:"workflow",title:"03 · Графік прийомів",info:"Розклад, зміни та доступ реєстратури"},
-                                {key:"forms",title:"04 · Документи та шаблони",info:"PDF-бланки, згоди, виписки"},
-                                {key:"license",title:"05 · Ліцензія",info:"Активація, сервер та строк"},
-                                {key:"database",title:"06 · Безпека та бекапи",info:"Сеанси, журнал дій, резервні копії"}
+                                {key:"center",title:"Профіль закладу",info:"Назва, підрозділ і основний напрямок"},
+                                {key:"team",title:"Працівники",info:"Працівники, ролі та графіки"},
+                                {key:"workflow",title:"Графік прийомів",info:"Розклад, зміни та доступ реєстратури"},
+                                {key:"forms",title:"Документи та шаблони",info:"PDF-бланки, згоди, виписки"},
+                                {key:"license",title:"Ліцензія",info:"Активація, сервер та строк"},
+                                {key:"database",title:"Безпека та бекапи",info:"Сеанси, журнал дій, резервні копії"}
                             ]
                             delegate:Rectangle {
                                 id:quickCard
@@ -503,6 +507,7 @@ Item {
     Dialog {
         id: form
         property int recordId: 0
+        property string selectedRole: "reception"
         property var values: ({})
         title: root.currentSection.label
         modal: true; anchors.centerIn: Overlay.overlay
@@ -544,6 +549,7 @@ Item {
                         (!field.createOnly || !form.recordId) && (!field.editOnly || !!form.recordId)) : []
                     delegate: ColumnLayout {
                         required property var modelData
+                        visible: !modelData.role || modelData.role === form.selectedRole
                         readonly property var original: form.values[modelData.key] ?? modelData.initial ?? ""
                         readonly property var fieldValue: editor.item ? editor.item.fieldValue : original
                         Layout.preferredWidth: 1; Layout.minimumWidth: 0
@@ -562,6 +568,9 @@ Item {
                                     objectName: "admin-field-" + modelData.key
                                     readonly property var fieldValue: currentValue
                                     model: modelData.options; textRole: "label"; valueRole: "key"
+                                    onActivated: function(index) {
+                                        if (modelData.key === "role") form.selectedRole = currentValue
+                                    }
                                     implicitHeight: 50
                                     leftPadding: 16; rightPadding: 38
                                     font.pixelSize: 14
@@ -654,7 +663,7 @@ Item {
                         const body = {}
                         for (let i=0; i<editorFields.count; i++) {
                             const field = editorFields.itemAt(i)
-                            if (root.section !== "center" || field.fieldValue !== field.original)
+                            if (field.visible && (root.section !== "center" || field.fieldValue !== field.original))
                                 body[field.modelData.key] = field.fieldValue
                         }
                         root.bridge.saveAdminEntry(root.section, form.recordId, body)
@@ -793,7 +802,7 @@ Item {
             Label { text:"Шлях до архіву (лише з /var/backups/lemvori-care)"; font.bold:true; color:root.ink }
             CareTextField {
                 id: restorePath; Layout.fillWidth:true; implicitHeight:46
-                placeholderText:"/var/backups/lemvori-care/lemvori-core-....dump"
+                placeholderText:"/var/backups/lemvori-care/lemvori-core-....dump.age"
                 selectByMouse:true; leftPadding:13
                 background:Rectangle{radius:12;color:"white";border.color:restorePath.activeFocus?"#1764EF":"#CFDDF0"}
             }

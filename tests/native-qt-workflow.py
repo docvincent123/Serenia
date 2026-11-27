@@ -66,6 +66,7 @@ class Center(BaseHTTPRequestHandler):
             "/api/admin/devices": [{"name":"Тестовий психолог","device_name":"Android test","fresh":True,"pending_count":2,"blocked_count":0}],
             "/api/admin/recovery": [{"id":12,"patient":"Тестовий пацієнт","psychologist":"Тестовий психолог","state":"open","kind":"consultation","revision":2}],
             "/api/admin/recovery/12": {"id":12,"patient":"Тестовий пацієнт","state":"open","revision":2,"draft_version":3,"payload":{"note":"Запис із телефона","patient_id":19,"appointment_id":4,"client_key":"test-key-123456789"},"existing":[],"server_draft":None},
+            "/api/patients/19/requests": [],
             "/api/patients/19/documents": [{"id":1,"title":"Згода","status":"signed","content":"Текст згоди","signed_by_name":"Пацієнт"}],
             "/api/waiting-list": [{"id":6,"version":3,"patient_id":19,"psychologist_id":7,"status":"waiting"}],
             "/api/patients/19": {"id":19,"name":"Synthetic patient","psychologist_id":7,"status":"active","courses":[{"id":4,"course_no":1,"started_at":"2026-11-01","status":"active","psychologist":"Тестовий психолог"}],"documents":[{"id":1,"title":"Згода","status":"signed"}],
@@ -122,6 +123,11 @@ class Center(BaseHTTPRequestHandler):
         if self.path == "/api/login":
             return self.respond({"token": body["login"]})
         self.requests.append((self.path, body))
+        if self.path == "/api/patients/19/requests":
+            return self.respond({"id":26,"number":"LC-ZV-2026-000026","created":"2026-11-13T08:30:00",
+                                 "patient_no":"0019","patient_name":"Synthetic patient","dob":"1992-03-04",
+                                 "service":"Психологічне консультування","template_version":1,
+                                 "center":{"center_name":"Test hospital","department_name":"Test department"}})
         if self.path == "/api/license":
             if body.get("payload") != "server-accepted":
                 return self.respond({"error":"Сервер: ключ видавця не налаштовано"},403)
@@ -165,7 +171,9 @@ with tempfile.TemporaryDirectory() as temporary:
 if "--ui" in sys.argv[2:]:
     profile_updates = [body for path, body in Center.requests if path == "/api/settings/center"]
     assert profile_updates == [{"facility_type":"hospital","department_name":"Відділення психології","primary_service_code":"psychology"}], profile_updates
-    print("PASS: native role navigation, facility profile, dialogs and responsive layout")
+    intake = next(body for path, body in Center.requests if path == "/api/patients/19/requests")
+    assert intake["service_code"] == "psychology" and intake["client_key"]
+    print("PASS: native role navigation, numbered intake PDF, facility profile and responsive layout")
     sys.exit(0)
 
 license_attempts=[body for path,body in Center.requests if path=="/api/license"]

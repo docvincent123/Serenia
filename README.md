@@ -16,8 +16,8 @@ Lemvori Care — робоча система реабілітаційно-пси
 
 Основний варіант встановлення: **Ubuntu 24.04 / elementary OS 8 x86_64 → Windows-клієнти та Android у LAN**. Покроково: [docs/LINUX.md](docs/LINUX.md).
 
-- Linux artifact: **SOLVIA-3.1.2-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **Lemvori Care** у меню Linux.
-- Windows artifact: **SOLVIA-3.1.2-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
+- Linux artifact: **Lemvori-Care-3.1.2-Linux-x64-installer**. Розпакуйте tar.gz, запустіть `sudo bash install.sh`. Інсталятор ставить сервер і окремий пункт **Lemvori Care** у меню Linux.
+- Windows artifact: **Lemvori-Care-3.1.2-Setup-EXE**. Виберіть «Робоче місце — підключення до Linux-сервера», укажіть HTTPS-адресу та імпортуйте CA сервера.
 - Сервер: C++20, PostgreSQL, HTTPS/8443, systemd, щоденні резервні копії.
 - Linux Admin: окремий desktop launcher з ізольованим вікном браузера, автоматичною перевіркою локального API та імпортом локального CA у NSS-сховище користувача.
 - Linux updater: `sudo solvia-admin check-update` / `sudo solvia-admin update` або вкладка оновлень у Lemvori Care Server Console; оновлення береться з перевіреного GitHub Release зі SHA-256 і pre-update backup.
@@ -48,7 +48,7 @@ Lemvori Care — робоча система реабілітаційно-пси
 
 ## Android
 
-GitHub Actions створює artifact **SOLVIA-Android-test-APK**.
+GitHub Actions створює artifact **Lemvori-Care-3.13.0-build-182046-Android-test-APK**.
 
 Перший запуск:
 

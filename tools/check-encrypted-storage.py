@@ -9,7 +9,9 @@ def encrypted_device(device,seen=None):
     try:
         if (device/'dm'/'uuid').read_text().strip().startswith('CRYPT-LUKS'):return True
     except OSError:pass
-    try:return any(encrypted_device(slave,seen) for slave in (device/'slaves').iterdir())
+    try:
+        slaves=list((device/'slaves').iterdir())
+        return bool(slaves) and all(encrypted_device(slave,seen.copy()) for slave in slaves)
     except OSError:return False
 
 def inspect(path):
@@ -18,5 +20,11 @@ def inspect(path):
     return dict(path=str(resolved),state='luks_verified' if encrypted else 'unverified',encrypted=encrypted,
         note='An unverified result is not proof of plaintext; verify managed or remote storage separately.')
 if __name__=='__main__':
-    if len(sys.argv)<2:raise SystemExit('Usage: python3 check-encrypted-storage.py DATA_DIRECTORY [DOCUMENTS_DIRECTORY BACKUPS_DIRECTORY]')
-    print(json.dumps([inspect(path) for path in sys.argv[1:]],ensure_ascii=False,indent=2))
+    args=sys.argv[1:]
+    required=bool(args and args[0]=='--require-luks')
+    paths=args[1:] if required else args
+    if not paths:raise SystemExit('Usage: check-encrypted-storage.py [--require-luks] PATH ...')
+    results=[inspect(path) for path in paths]
+    print(json.dumps(results,ensure_ascii=False,indent=2))
+    if required and any(not result['encrypted'] for result in results):
+        raise SystemExit('A Lemvori Care data or key path has no verified LUKS volume.')

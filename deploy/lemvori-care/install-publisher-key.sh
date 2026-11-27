@@ -3,8 +3,12 @@
 set -Eeuo pipefail
 umask 077
 check_only=false
-if [[ ${1:-} == --check ]]; then check_only=true; shift; fi
-[[ $# -ge 1 && $# -le 2 ]] || { echo 'Usage: install-publisher-key [--check] PUBLIC.pem [SHA256]' >&2; exit 2; }
+restart=true
+case "${1:-}" in
+  --check) check_only=true; shift ;;
+  --no-restart) restart=false; shift ;;
+esac
+[[ $# -ge 1 && $# -le 2 ]] || { echo 'Usage: install-publisher-key [--check | --no-restart] PUBLIC.pem [SHA256]' >&2; exit 2; }
 source_file=$1
 expected=${2:-}
 [[ -f $source_file && -r $source_file && ! -L $source_file ]] || { echo 'Select a readable public-key file, not a symbolic link.' >&2; exit 1; }
@@ -53,5 +57,5 @@ cat "$work/server.env" > "$new_env"
 chown --reference="$env_file" "$new_env"
 chmod --reference="$env_file" "$new_env"
 mv -f -- "$new_env" "$env_file"
-systemctl restart lemvori-care.service
+if $restart; then systemctl restart lemvori-care.service; fi
 printf 'Publisher key verified and installed: %s\n' "$fingerprint"

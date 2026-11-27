@@ -1,5 +1,7 @@
 #pragma once
 #include <QVariant>
+#include <QPrinter>
+#include <QPrintDialog>
 #include <QPainter>
 #include <QPdfWriter>
 #include <QSaveFile>
@@ -7,9 +9,19 @@
 #include <QUrl>
 namespace CarePdf {
 inline QString text(const QVariant&value){return value.toString().toHtmlEscaped().replace("\n","<br>");}
+inline void print(const QString& title,const QString& html){
+ QPrinter printer(QPrinter::HighResolution);
+ printer.setPageSize(QPageSize(QPageSize::A4));
+ printer.setDocName(title);
+ QPrintDialog dialog(&printer);
+ if(dialog.exec()!=QDialog::Accepted)return;
+ QTextDocument document;
+ document.setHtml(html);
+ document.print(&printer);
+}
 inline bool save(const QUrl&url,const QString&title,const QString&html){
  if(!url.isLocalFile())return false;
- QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly))return false;
+ QSaveFile file(url.toLocalFile());if(!file.open(QIODevice::WriteOnly)||!file.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner))return false;
  bool success=false;
  {
   QPdfWriter writer(&file);writer.setResolution(96);writer.setPageSize(QPageSize(QPageSize::A4));writer.setPageMargins(QMarginsF(16,16,16,16));writer.setTitle(title);writer.setCreator("Lemvori Care");

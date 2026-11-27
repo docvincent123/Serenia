@@ -39,7 +39,7 @@ sudo lemvori-carectl list-backups
 ```bash
 sudo lemvori-carectl backup
 sudo lemvori-carectl list-backups
-sudo lemvori-carectl restore /var/backups/lemvori-care/lemvori-core-YYYYMMDDTHHMMSSZ.dump ВІДНОВИТИ
+sudo lemvori-carectl restore /var/backups/lemvori-care/lemvori-core-YYYYMMDDTHHMMSSZ.dump.age ВІДНОВИТИ
 ```
 
 Qt Admin → **Адміністрування → База й копії → Відновити з резервної копії**:
@@ -87,9 +87,9 @@ sudo journalctl -u lemvori-care-backup.service -n 50 --no-pager
 sudo lemvori-carectl list-backups
 ```
 
-Це локальні архіви PostgreSQL із правами 0600, без шифрування та автоматичного
-видалення старих копій. Шифрування, контроль вільного місця й копіювання на
-інший носій залишаються умовами приймання перед роботою з реальними даними.
+Це локальні зашифровані архіви PostgreSQL із правами 0600. Старі архіви `.dump`
+доступні для відновлення. Контроль вільного місця й перевірка копій на іншому
+носії входять до приймання перед роботою з реальними даними.
 
 Перевірки: `tests/lemvori-install-config.py` виконує справжній скрипт
 створення конфігурації на тимчасових файлах, перевіряє повторний запуск і
