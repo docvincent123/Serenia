@@ -156,9 +156,18 @@ int main(int argc,char **argv){
     if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/admin-staff.png");
     auto *cancel=find(adminWindow->contentItem(),"text","Скасувати");verify(cancel,"Staff cancel missing");QMetaObject::invokeMethod(cancel,"clicked");pump();
     select("center");
-    verify(waitFor([&]{return !admin.adminDetails().isEmpty();}),"Center settings did not load");pump();
+    verify(waitFor([&]{return !admin.adminDetails().isEmpty()&&!admin.serviceChoices().isEmpty();}),"Center settings or directions did not load");
     auto *editCenter=find(adminWindow->contentItem(),"text","Редагувати");verify(editCenter,"Center editor action missing");
     QMetaObject::invokeMethod(editCenter,"clicked");pump();
+    auto *facilityType=find(adminWindow->contentItem(),"objectName","admin-field-facility_type");
+    auto *department=find(adminWindow->contentItem(),"objectName","admin-field-department_name");
+    auto *primaryService=find(adminWindow->contentItem(),"objectName","admin-field-primary_service_code");
+    verify(facilityType&&department&&primaryService,"Facility profile fields missing");
+    facilityType->setProperty("currentIndex",1);
+    department->setProperty("text",QStringLiteral("Відділення психології"));
+    primaryService->setProperty("currentIndex",2);
+    verify(facilityType->property("currentValue").toString()=="hospital"&&
+           primaryService->property("currentValue").toString()=="psychology","Facility selections missing");
     auto *centerScroll=find(adminWindow->contentItem(),"objectName","admin-editor-scroll");verify(centerScroll,"Center scroll missing");
     auto *flick=centerScroll->property("contentItem").value<QObject*>();verify(flick,"Center viewport missing");
     flick->setProperty("contentY",std::max(0.0,flick->property("contentHeight").toDouble()-flick->property("height").toDouble()));pump();
@@ -179,7 +188,9 @@ int main(int argc,char **argv){
     }
     if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))adminWindow->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/connection-options.png");
     QMetaObject::invokeMethod(connectionPopup,"close");pump();
-    cancel=find(adminWindow->contentItem(),"text","Скасувати");verify(cancel,"Center cancel missing");QMetaObject::invokeMethod(cancel,"clicked");pump();
+    auto *saveCenter=find(adminWindow->contentItem(),"text","Зберегти");verify(saveCenter,"Center save missing");
+    QMetaObject::invokeMethod(saveCenter,"clicked");
+    verify(waitFor([&]{return !admin.working()&&!find(adminWindow->contentItem(),"objectName","admin-editor-scroll");}),"Facility profile did not save");
     select("license");
     verify(find(adminWindow->contentItem(),"objectName","license-publisher-key"),"Publisher-key setup step missing");
     auto *setup=find(adminWindow->contentItem(),"objectName","publisher-key-setup");verify(setup,"Publisher setup view missing");

@@ -2,6 +2,7 @@
 
 Поточний випуск: пакетна версія `3.13.0`, Linux `3.13.0+182046`, Android versionCode `182046`.
 Деталі змін і встановлення: [випуск 3.13](docs/RELEASE-3.13.md).
+Для пілоту Qt Native з Linux-сервером дивіться [встановлення, активацію і профіль закладу](docs/LEMVORI-CARE-ADMIN-GUIDE.md).
 
 # Lemvori Care 3.1.2
 

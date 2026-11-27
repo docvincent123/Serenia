@@ -443,7 +443,7 @@ if(path=="/api/license"){
 }
 if(path=="/api/desktop-updates"||path=="/api/desktop-updates/package")return desktopUpdates(db,u,r,b);
 if(path=="/api/center-identity"&&method=="GET"){
- auto settings=db.query("SELECT center_name AS name,short_name,city FROM center_settings WHERE id=1");
+ auto settings=db.query("SELECT center_name AS name,short_name,city,facility_type,department_name,primary_service_code FROM center_settings WHERE id=1");
  J identity=settings.empty()?J::object():settings[0];
  identity["server_id"]=installationId(db);
  return identity;
@@ -650,7 +650,70 @@ if(path=="/api/mobile-config"&&method=="GET"){
     check(host!="localhost"&&host!="0.0.0.0"&&host.rfind("127.",0)!=0,"Для телефона потрібна мережева адреса сервера",400);
     return {{"format","quremed.solvia.mobile"},{"version",2},{"server_id",installationId(db)},{"center",settings.value("center_name",std::string("Lemvori Care"))},{"preferred","https"},{"api_url",url},{"https_url",url},{"generated",now()}};
 }
-if(path=="/api/settings/center"){allow(u,{"admin","reception","psychologist","director"});if(method=="GET"){auto s=db.query("SELECT * FROM center_settings WHERE id=1");auto settings=s.empty()?J::object():s[0];auto lan=lanUrl();if(!lan.empty()&&settings.value("local_api_url",std::string()).empty())settings["local_api_url"]=lan;return settings;}allow(u,{"admin"});check(method=="PATCH","Метод не дозволений",405);auto existingSettings=db.query("SELECT * FROM center_settings WHERE id=1 FOR UPDATE");check(!existingSettings.empty(),"Налаштування центру відсутні",409);auto changes=b;b=existingSettings[0];b.update(changes);auto serverName=b.contains("server_name")?str(b,"server_name",120):db.query("SELECT server_name FROM center_settings WHERE id=1")[0]["server_name"].get<std::string>();db.query("UPDATE center_settings SET server_name=? WHERE id=1",{serverName});auto logo=str(b,"logo_data",1500000,false);imageData(logo,true);int reminder=b.value("appointment_reminder_minutes",30);check(reminder>=5&&reminder<=240,"Нагадування: 5–240 хвилин");auto connectionMode=str(b,"connection_mode",20,false);if(connectionMode.empty())connectionMode="local";check(connectionMode=="local"||connectionMode=="vps","Режим підключення: local або vps");auto localUrl=str(b,"local_api_url",500,false);auto vpsUrl=str(b,"vps_api_url",500,false);auto vpsName=str(b,"vps_name",120,false);auto normalizeUrl=[](std::string&value){while(!value.empty()&&value.back()=='/')value.pop_back();};if(!localUrl.empty()){check(localUrl.rfind("http://",0)==0||localUrl.rfind("https://",0)==0,"Локальна адреса API має починатися з http:// або https://");check(localUrl.find(' ')==std::string::npos,"Некоректна локальна адреса API");normalizeUrl(localUrl);}if(!vpsUrl.empty()){check(vpsUrl.rfind("https://",0)==0,"VPS API має використовувати HTTPS");check(vpsUrl.find(' ')==std::string::npos,"Некоректна адреса VPS API");normalizeUrl(vpsUrl);}if(connectionMode=="vps")check(!vpsUrl.empty(),"Для режиму VPS вкажіть HTTPS адресу API");db.query("UPDATE center_settings SET center_name=?,short_name=?,address=?,phone=?,email=?,website=?,city=?,director_name=?,admin_name=?,work_hours=?,document_footer=?,discharge_signatory=?,head_name=?,head_title=?,logo_data=?,appointment_reminder_minutes=?,connection_mode=?,local_api_url=?,vps_api_url=?,vps_name=?,updated=? WHERE id=1",{str(b,"center_name",200),str(b,"short_name",100,false),str(b,"address",300,false),str(b,"phone",100,false),str(b,"email",200,false),str(b,"website",300,false),str(b,"city",120,false),str(b,"director_name",200,false),str(b,"admin_name",200,false),str(b,"work_hours",200,false),str(b,"document_footer",2000,false),str(b,"discharge_signatory",200,false),str(b,"head_name",200,false),str(b,"head_title",120,false),logo,reminder,connectionMode,localUrl,vpsUrl,vpsName,now()});audit(db,u,"update","center_settings",1);return {{"ok",true},{"connection_mode",connectionMode},{"local_api_url",localUrl},{"vps_api_url",vpsUrl}};}
+if(path=="/api/settings/center"){
+    allow(u,{"admin","reception","psychologist","director"});
+    if(method=="GET"){
+        auto rows=db.query("SELECT * FROM center_settings WHERE id=1");
+        auto settings=rows.empty()?J::object():rows[0];
+        auto lan=lanUrl();
+        if(!lan.empty()&&settings.value("local_api_url",std::string()).empty())settings["local_api_url"]=lan;
+        return settings;
+    }
+    allow(u,{"admin"});
+    check(method=="PATCH","Метод не дозволений",405);
+    check(b.is_object(),"Очікується об’єкт налаштувань");
+    auto rows=db.query("SELECT * FROM center_settings WHERE id=1 FOR UPDATE");
+    check(!rows.empty(),"Налаштування центру відсутні",409);
+    const auto &existing=rows[0];
+    auto settings=existing;
+    settings.update(b);
+
+    auto facilityType=str(settings,"facility_type",40,false);
+    check(facilityType.empty()||facilityType=="hospital"||facilityType=="psychology_center"||
+          facilityType=="rehabilitation_center"||facilityType=="other","Невідомий тип закладу");
+    auto departmentName=str(settings,"department_name",240,false);
+    auto primaryService=str(settings,"primary_service_code",80,false);
+    if(!primaryService.empty()&&primaryService!=existing["primary_service_code"].get<std::string>()){
+        check(!db.query("SELECT id FROM center_services WHERE code=? AND active",{primaryService}).empty(),
+              "Оберіть активний напрямок роботи");
+    }
+    auto logo=str(settings,"logo_data",1500000,false);
+    imageData(logo,true);
+    int reminder=settings.value("appointment_reminder_minutes",30);
+    check(reminder>=5&&reminder<=240,"Нагадування: 5–240 хвилин");
+
+    auto connectionMode=str(settings,"connection_mode",20,false);
+    if(connectionMode.empty())connectionMode="local";
+    check(connectionMode=="local"||connectionMode=="vps","Режим підключення: local або vps");
+    auto localUrl=str(settings,"local_api_url",500,false);
+    auto vpsUrl=str(settings,"vps_api_url",500,false);
+    auto vpsName=str(settings,"vps_name",120,false);
+    auto normalizeUrl=[](std::string&value){while(!value.empty()&&value.back()=='/')value.pop_back();};
+    if(!localUrl.empty()){
+        check(localUrl.rfind("http://",0)==0||localUrl.rfind("https://",0)==0,"Локальна адреса API має починатися з http:// або https://");
+        check(localUrl.find(' ')==std::string::npos,"Некоректна локальна адреса API");
+        normalizeUrl(localUrl);
+    }
+    if(!vpsUrl.empty()){
+        check(vpsUrl.rfind("https://",0)==0,"VPS API має використовувати HTTPS");
+        check(vpsUrl.find(' ')==std::string::npos,"Некоректна адреса VPS API");
+        normalizeUrl(vpsUrl);
+    }
+    if(connectionMode=="vps")check(!vpsUrl.empty(),"Для режиму VPS вкажіть HTTPS адресу API");
+    db.query(
+        "UPDATE center_settings SET center_name=?,short_name=?,facility_type=?,department_name=?,primary_service_code=?,"
+        "address=?,phone=?,email=?,website=?,city=?,director_name=?,admin_name=?,work_hours=?,document_footer=?,"
+        "discharge_signatory=?,head_name=?,head_title=?,logo_data=?,appointment_reminder_minutes=?,"
+        "connection_mode=?,local_api_url=?,vps_api_url=?,vps_name=?,server_name=?,updated=? WHERE id=1",
+        {str(settings,"center_name",200),str(settings,"short_name",100,false),facilityType,departmentName,primaryService,
+         str(settings,"address",300,false),str(settings,"phone",100,false),str(settings,"email",200,false),
+         str(settings,"website",300,false),str(settings,"city",120,false),str(settings,"director_name",200,false),
+         str(settings,"admin_name",200,false),str(settings,"work_hours",200,false),str(settings,"document_footer",2000,false),
+         str(settings,"discharge_signatory",200,false),str(settings,"head_name",200,false),str(settings,"head_title",120,false),
+         logo,reminder,connectionMode,localUrl,vpsUrl,vpsName,str(settings,"server_name",120),now()});
+    audit(db,u,"update","center_settings",1);
+    return {{"ok",true},{"connection_mode",connectionMode},{"local_api_url",localUrl},{"vps_api_url",vpsUrl}};
+}
 if(path=="/api/search"&&method=="GET"){
     allow(u,{"admin","reception","psychologist"});
     auto q=r.has_param("q")?r.get_param_value("q"):"";

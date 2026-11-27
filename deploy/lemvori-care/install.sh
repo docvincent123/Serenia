@@ -18,6 +18,10 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y cmake g++ make pkg-config libpq-dev postgresql-client libssl-dev openssl \
     ca-certificates curl iproute2 python3 nlohmann-json3-dev libcpp-httplib-dev
+if ! pg_isready -h 127.0.0.1 -p 5432 -q; then
+  apt-get install -y postgresql
+  systemctl start postgresql
+fi
 pg_isready -h 127.0.0.1 -p 5432 || { echo "PostgreSQL 5432 is not listening" >&2; exit 1; }
 
 # Build the same C++ backend expected by the Qt Native API bridge.
@@ -39,31 +43,14 @@ install -d -m 0750 -o root -g lemvori-care /etc/lemvori-care /etc/lemvori-care/t
 install -d -m 0700 -o root -g root /etc/lemvori-care/ca
 install -d -m 0750 -o root -g lemvori-care /etc/lemvori-care/license
 
-pgpass=/etc/lemvori-care/pgpass
-if [[ ! -f $pgpass ]]; then
-  read -r -s -p 'PostgreSQL password for lemvori_app: ' db_password
-  printf '\n'
-  [[ -n $db_password && $db_password != *$'\n'* ]] || { echo "Password is required" >&2; exit 1; }
-  escaped=${db_password//\\/\\\\}
-  escaped=${escaped//:/\\:}
-  printf '127.0.0.1:5432:lemvori_core:lemvori_app:%s\n' "$escaped" > "$pgpass"
-  unset db_password escaped
-fi
-chown lemvori-care:lemvori-care "$pgpass"
-chmod 0600 "$pgpass"
+unset PGPASSWORD
 export LEMVORI_DATABASE_URL='host=127.0.0.1 port=5432 dbname=lemvori_core user=lemvori_app'
 export PGPASSFILE=/etc/lemvori-care/pgpass
+bash "$package/provision-postgres.sh" "$PGPASSFILE"
 
 dbpsql() {
-  runuser -u lemvori-care --preserve-environment -- \
-    psql -X -v ON_ERROR_STOP=1 "$LEMVORI_DATABASE_URL" "$@"
-}
-dbpsql -Atc "SELECT current_database() || ':' || current_user" |
-  grep -qx 'lemvori_core:lemvori_app' || {
-  echo "Cannot log in as lemvori_app to lemvori_core" >&2; exit 1;
-}
-[[ $(dbpsql -Atc "SELECT has_schema_privilege(current_user, 'public', 'CREATE')") == t ]] || {
-  echo "Role lemvori_app needs CREATE privilege on public schema" >&2; exit 1;
+  runuser -u lemvori-care -- env -u PGPASSWORD PGPASSFILE="$PGPASSFILE" \
+    psql -X -w -v ON_ERROR_STOP=1 "$LEMVORI_DATABASE_URL" "$@"
 }
 
 # Preserve the complete configured environment, including custom trust paths and
@@ -71,17 +58,6 @@ dbpsql -Atc "SELECT current_database() || ':' || current_user" |
 bash "$package/configure-env.sh" /etc/lemvori-care/server.env
 chown root:lemvori-care /etc/lemvori-care/server.env
 chmod 0640 /etc/lemvori-care/server.env
-
-# Keep previous database and local CA during reinstall.
-systemctl stop lemvori-care-network.timer lemvori-care.service 2>/dev/null || true
-install -o root -g root -m 0755 "$source_dir/build/lemvori-api/SolviaServer" \
-  /opt/lemvori-care/lemvori-care-api
-install -o root -g root -m 0755 "$package/network-address.py" /opt/lemvori-care/network-address.py
-install -o root -g root -m 0755 "$package/network-tls.sh" /opt/lemvori-care/network-tls.sh
-install -o root -g root -m 0755 "$package/lemvori-carectl" /usr/local/sbin/lemvori-carectl
-install -o root -g root -m 0755 "$package/install-publisher-key.sh" /opt/lemvori-care/install-publisher-key.sh
-install -o root -g root -m 0755 "$package/restore.sh" /opt/lemvori-care/restore.sh
-install -o root -g root -m 0755 "$package/verify-host.sh" /opt/lemvori-care/verify-host.sh
 
 has_users=$(dbpsql -Atc "SELECT to_regclass('public.users') IS NOT NULL")
 count=0
@@ -99,8 +75,20 @@ if [[ $count == 0 ]]; then
   }
   pw_length=$(printf '%s' "$LEMVORI_ADMIN_PASSWORD" | wc -c)
   (( pw_length >= 12 && pw_length <= 128 )) || { echo "Password must be 12-128 bytes" >&2; exit 1; }
+  [[ $LEMVORI_ADMIN_PASSWORD != *$'\r'* ]] || { echo "Password contains a carriage return" >&2; exit 1; }
   export LEMVORI_ADMIN_LOGIN LEMVORI_ADMIN_NAME LEMVORI_ADMIN_PASSWORD
 fi
+# Keep previous database and local CA during reinstall.
+systemctl stop lemvori-care-network.timer lemvori-care.service 2>/dev/null || true
+install -o root -g root -m 0755 "$source_dir/build/lemvori-api/SolviaServer" \
+  /opt/lemvori-care/lemvori-care-api
+install -o root -g root -m 0755 "$package/network-address.py" /opt/lemvori-care/network-address.py
+install -o root -g root -m 0755 "$package/network-tls.sh" /opt/lemvori-care/network-tls.sh
+install -o root -g root -m 0755 "$package/lemvori-carectl" /usr/local/sbin/lemvori-carectl
+install -o root -g root -m 0755 "$package/install-publisher-key.sh" /opt/lemvori-care/install-publisher-key.sh
+install -o root -g root -m 0755 "$package/restore.sh" /opt/lemvori-care/restore.sh
+install -o root -g root -m 0755 "$package/verify-host.sh" /opt/lemvori-care/verify-host.sh
+
 # --init executes bundled schema.sql and creates an initial admin if the users table is empty.
 runuser -u lemvori-care --preserve-environment -- /opt/lemvori-care/lemvori-care-api --init
 unset LEMVORI_ADMIN_LOGIN LEMVORI_ADMIN_NAME LEMVORI_ADMIN_PASSWORD repeated_password
@@ -119,7 +107,10 @@ systemctl enable --now lemvori-care.service lemvori-care-network.timer
 echo
 lemvori-carectl address
 lemvori-carectl certificate
-lemvori-carectl health
+if ! timeout 30s bash -c 'until lemvori-carectl health 2>/dev/null; do sleep 1; done'; then
+  echo 'Lemvori Care did not become ready over HTTPS. Run sudo lemvori-carectl logs.' >&2
+  exit 1
+fi
 # Persistent timers may trigger immediately. Release maintenance before enabling
 # nightly backups so a missed run can actually acquire the database lock.
 flock -u 9

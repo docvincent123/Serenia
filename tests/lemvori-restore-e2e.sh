@@ -24,8 +24,6 @@ LEMVORI_LICENSE_REQUIRED=1
 LEMVORI_LICENSE_PUBLIC_KEY=/etc/lemvori-care/license/publisher.pem
 ENV
 sudo install -o root -g lemvori-care -m 0640 "$RUNNER_TEMP/server.env" /etc/lemvori-care/server.env
-printf '127.0.0.1:5432:lemvori_core:lemvori_app:local-ci-password-only\n' > "$RUNNER_TEMP/dbpass"
-sudo install -o lemvori-care -g lemvori-care -m 0600 "$RUNNER_TEMP/dbpass" /etc/lemvori-care/pgpass
 for unit in lemvori-care.service lemvori-care-network.service lemvori-care-network-refresh.service lemvori-care-network.timer; do
   sudo install -o root -g root -m 0644 "deploy/lemvori-care/$unit" "/etc/systemd/system/$unit"
 done
@@ -39,8 +37,14 @@ done
 sudo lemvori-carectl health
 sudo lemvori-carectl backup
 sudo lemvori-carectl list-backups
-original=$(sudo -u postgres psql -At -d lemvori_core -c 'SELECT center_name FROM center_settings WHERE id=1')
-[[ $original == 'CI Лемворі Центр' ]] || { echo "License center name unexpected" >&2; exit 1; }
+center_profile() {
+  sudo -u postgres psql -At -d lemvori_core \
+    -c 'SELECT center_name, facility_type, department_name, primary_service_code FROM center_settings WHERE id=1'
+}
+original=$(center_profile)
+[[ $original == 'CI Лемворі Центр|hospital|Відділення психології|psychology' ]] || {
+  echo "Unexpected licensed center profile" >&2; exit 1;
+}
 sudo -u postgres psql -d lemvori_core -c "UPDATE center_settings SET center_name='MUTATED_AFTER_BACKUP' WHERE id=1"
 [[ $(sudo -u postgres psql -At -d lemvori_core -c 'SELECT center_name FROM center_settings WHERE id=1') == 'MUTATED_AFTER_BACKUP' ]] || exit 1
 
@@ -60,8 +64,7 @@ sudo lemvori-carectl health >/dev/null
 archive=$(sudo find /var/backups/lemvori-care -maxdepth 1 -name 'lemvori-core-*.dump' -type f | head -n 1)
 sudo lemvori-carectl restore "$archive" 'ВІДНОВИТИ'
 sudo lemvori-carectl health
-restored=$(sudo -u postgres psql -At -d lemvori_core -c 'SELECT center_name FROM center_settings WHERE id=1')
-[[ $restored == "$original" ]] || { echo "Restored center name mismatch" >&2; exit 1; }
+[[ $(center_profile) == "$original" ]] || { echo "Restored center profile mismatch" >&2; exit 1; }
 sudo -u postgres psql -At -d lemvori_core -c 'SELECT count(*) FROM sessions' | grep -qx 0
 sudo find /var/backups/lemvori-care -maxdepth 1 -name 'lemvori-core-pre-restore-*.dump' | grep -q .
 sudo -u postgres psql -At -d postgres -c "SELECT datname FROM pg_database WHERE datname LIKE 'lemvori_previous_%'" | grep -q .
