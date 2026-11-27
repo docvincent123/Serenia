@@ -1670,6 +1670,18 @@ class Scenario(unittest.TestCase):
         current=next(x for x in self.api('admin','GET','/api/services') if x['id']==sid)
         self.assertFalse(current['active'])
         self.assertEqual(current['name'],name+' редаговано')
+        path = '/api/settings/center'
+        profile = {'facility_type':'hospital','department_name':'Відділення психології','primary_service_code':'psychology'}
+        previous = self.api('admin','GET',path)
+        try:
+            self.api('reception','PATCH',path,profile,status=403)
+            self.api('admin','PATCH',path,dict(profile,primary_service_code=created['code']),status=400)
+            self.api('admin','PATCH',path,profile)
+            stored = self.api('psychologist','GET','/api/center-identity')
+            self.assertEqual({key:stored[key] for key in profile},profile)
+        finally:
+            self.api('admin','PATCH',path,{key:previous[key] for key in profile})
+
 
     def test_z_managed_license_limits_and_read_access(self):
         sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'publisher'))

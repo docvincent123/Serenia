@@ -55,7 +55,7 @@ class Center(BaseHTTPRequestHandler):
             "/api/mobile-update": {"available":True,"version_name":"3.13.0","version_code":182046,"sha256":"a"*64,"size_bytes":1024},
             "/api/health": {"ok": True, "server_id": SERVER_ID},
             "/api/me": {"role": role, "name": "Synthetic account"},
-            "/api/settings/center": {"center_name":"Тестовий центр","address":"Synthetic address"},
+            "/api/settings/center": {"id":1,"center_name":"Тестовий центр","address":"Synthetic address","connection_mode":"local","local_api_url":"https://192.0.2.1:8443"},
             "/api/consent-policy": {"required":True,"revision":1,"templates":[{"document_type":kind,"title":kind,"content":"Synthetic approved consent text for native workflow checks.","version":1,"required":True} for kind in ["informed_consent","data_processing"]]},
             "/api/center/modules": {"license":{"status":"active" if getattr(self.server,"license_active",False) else "unmanaged","write_allowed":True,"server_id":SERVER_ID},"modules":[{"id":"patients","name":"Картки","version":"1.0.0","core":True,"enabled":True,"licensed":True,"depends":[]}]},
             "/api/operations/handover": [{"id":5,"summary":"Завдання наступній зміні","state":"open","priority":"important","created_by":"Реєстратор","shift_date":"2026-11-11"}],
@@ -74,7 +74,10 @@ class Center(BaseHTTPRequestHandler):
             "/api/meta": {"psychologists":[{"id":7,"name":"Synthetic psychologist"}],"rooms":[{"id":2,"name":"Room 2"}]},
             "/api/slots": ["10:15", "14:15"],
             "/api/users": [{"id": 4, "name": "Synthetic staff", "active": True}],
-            "/api/services": [{"id": 2, "code": "art", "name": "Арттерапія", "category": "creative", "active": True}],
+            "/api/services": [
+                {"id":2,"code":"art","name":"Арттерапія","category":"creative","active":True},
+                {"id":3,"code":"psychology","name":"Психологічне консультування","category":"psychology","active":True},
+            ],
             "/api/admin/module-permissions": [{"id":4,"name":"Synthetic staff","role":"reception","blocked_modules":[]}],
             "/api/discharges": [{"id": 9, "revision": 2, "workflow_status": "review"}],
             "/api/stats": {"total_patients": 15},
@@ -160,7 +163,9 @@ with tempfile.TemporaryDirectory() as temporary:
             worker.join()
 
 if "--ui" in sys.argv[2:]:
-    print("PASS: native role navigation, dialogs and responsive layout")
+    profile_updates = [body for path, body in Center.requests if path == "/api/settings/center"]
+    assert profile_updates == [{"facility_type":"hospital","department_name":"Відділення психології","primary_service_code":"psychology"}], profile_updates
+    print("PASS: native role navigation, facility profile, dialogs and responsive layout")
     sys.exit(0)
 
 license_attempts=[body for path,body in Center.requests if path=="/api/license"]

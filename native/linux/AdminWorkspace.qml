@@ -28,7 +28,7 @@ Item {
         {label:"ОГЛЯД"},
         {key:"overview",label:"Панель керування",detail:"Швидкі дії та стан центру"},
         {label:"ЦЕНТР"},
-        {key:"center",label:"Профіль центру",detail:"Назва, реквізити, керівництво, контакти й підписи"},
+        {key:"center",label:"Профіль закладу",detail:"Тип закладу, підрозділ, основний напрямок і реквізити"},
         {key:"license",label:"Ліцензія",detail:"Активація, сервер та ліміти"},
         {key:"modules",label:"Модулі",detail:"Функції в межах ліцензії"},
         {label:"ПЕРСОНАЛ"},
@@ -88,6 +88,12 @@ Item {
         {key:"reception", label:"Реєстратура"}, {key:"psychologist", label:"Психолог"},
         {key:"director", label:"Керівник"}, {key:"admin", label:"Адміністратор"}
     ]
+    readonly property var facilityTypes: [
+        {key:"", label:"Не вказано"}, {key:"hospital", label:"Лікарня"},
+        {key:"psychology_center", label:"Психологічний центр"},
+        {key:"rehabilitation_center", label:"Реабілітаційний центр"},
+        {key:"other", label:"Інший заклад"}
+    ]
     readonly property var roomTypes: [
         {key:"individual", label:"Індивідуальний"}, {key:"group", label:"Груповий"},
         {key:"family", label:"Сімейний"}
@@ -146,7 +152,10 @@ Item {
             {key:"session_hours", label:"Тривалість сеансу, год", type:"number", from:1, to:24}
         ],
         center:[
-            {key:"center_name", label:"Назва центру"}, {key:"short_name", label:"Коротка назва"},
+            {key:"center_name", label:"Повна назва закладу"}, {key:"short_name", label:"Коротка назва"},
+            {key:"facility_type", label:"Тип закладу", options:facilityTypes},
+            {key:"department_name", label:"Відділення або підрозділ"},
+            {key:"primary_service_code", label:"Основний напрямок роботи", options:root.serviceOptions},
             {key:"city", label:"Місто"}, {key:"address", label:"Адреса"},
             {key:"phone", label:"Телефон"}, {key:"email", label:"Електронна пошта"},
             {key:"website", label:"Сайт"}, {key:"work_hours", label:"Години роботи"},
@@ -264,7 +273,12 @@ Item {
                         Label { textFormat:Text.PlainText; text: root.currentSection.detail; color: root.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                     }
                     Action { text: "+ Додати"; primary: true; visible: root.listEditable; enabled: !root.bridge.working && (root.section !== "team" || root.bridge.serviceChoices.length > 0); onClicked: root.edit({}) }
-                    Action { text: "Редагувати"; primary: true; visible: root.detailsEditable; enabled: !root.bridge.working && Object.keys(root.bridge.adminDetails).length > 0; onClicked: root.edit(root.bridge.adminDetails) }
+                    Action {
+                        text: "Редагувати"; primary: true; visible: root.detailsEditable
+                        enabled: !root.bridge.working && Object.keys(root.bridge.adminDetails).length > 0
+                                 && (root.section !== "center" || root.bridge.serviceChoices.length > 0)
+                        onClicked: root.edit(root.bridge.adminDetails)
+                    }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: 13
@@ -285,7 +299,7 @@ Item {
                         Layout.fillWidth: true; columns: width > 620 ? 2 : 1; columnSpacing: 12; rowSpacing: 12
                         Repeater {
                             model: [
-                                {key:"center",title:"01 · Дані центру",info:"Назва, реквізити, адреса та контакти"},
+                                {key:"center",title:"01 · Профіль закладу",info:"Назва, підрозділ і основний напрямок"},
                                 {key:"team",title:"02 · Працівники",info:"Працівники, ролі та графіки"},
                                 {key:"workflow",title:"03 · Графік прийомів",info:"Розклад, зміни та доступ реєстратури"},
                                 {key:"forms",title:"04 · Документи та шаблони",info:"PDF-бланки, згоди, виписки"},
@@ -640,7 +654,8 @@ Item {
                         const body = {}
                         for (let i=0; i<editorFields.count; i++) {
                             const field = editorFields.itemAt(i)
-                            body[field.modelData.key] = field.fieldValue
+                            if (root.section !== "center" || field.fieldValue !== field.original)
+                                body[field.modelData.key] = field.fieldValue
                         }
                         root.bridge.saveAdminEntry(root.section, form.recordId, body)
                     }

@@ -566,6 +566,10 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS shift_date TEXT NOT NULL DEFAULT '
 ALTER TABLE users ADD COLUMN IF NOT EXISTS staff_number TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_staff_number ON users(staff_number);
 ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS server_name TEXT NOT NULL DEFAULT 'Основний';
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS facility_type TEXT NOT NULL DEFAULT ''
+  CHECK(facility_type IN ('','hospital','psychology_center','rehabilitation_center','other'));
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS department_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE center_settings ADD COLUMN IF NOT EXISTS primary_service_code TEXT NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS shift_device_bindings(
  shift_date TEXT NOT NULL,
  device_id TEXT NOT NULL,

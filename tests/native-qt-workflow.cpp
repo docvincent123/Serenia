@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
     verify(admin.patients().front().toMap().value("id").toInt() == 2, "Patient register page content mismatch");
     admin.loadAdminSection("team");
     verify(waitFor([&] { return admin.adminRows().size() == 1; }), "Admin team did not load");
-    verify(waitFor([&] { return admin.serviceChoices().size() == 1; }), "Service options did not load");
+    verify(waitFor([&] { return admin.serviceChoices().size() == 2; }), "Service options did not load");
     admin.saveAdminEntry("team", 4, {{"name", "Test Staff"}, {"role", "reception"}, {"active", true}, {"primary_service_code", "art"}});
     verify(waitFor([&] { return !admin.working() && admin.notice().contains("Зміни збережено"); }), "Admin team change failed");
     admin.endUserSessions(4);

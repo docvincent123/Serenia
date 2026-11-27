@@ -714,10 +714,10 @@ void ApiBridge::loadAdminSection(const QString &section) {
     const int generation = ++adminGeneration_;
     if (adminSection_ != section) {
         adminSection_ = section;
-        adminRows_.clear(); adminDetails_.clear();
+        adminRows_.clear(); adminDetails_.clear(); serviceChoices_.clear();
         emit dataChanged();
     }
-    if (section == "team") {
+    if (section == "team" || section == "center") {
         request("GET", "/api/services", {}, [this, generation](const QJsonValue &result) {
             if (generation != adminGeneration_) return;
             serviceChoices_ = result.toArray().toVariantList();
