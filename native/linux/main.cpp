@@ -1,6 +1,6 @@
 #include "ApiBridge.h"
 #include <QFileInfo>
-#include <QGuiApplication>
+#include <QApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -12,7 +12,7 @@
 #include <algorithm>
 
 int main(int argc, char **argv) {
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     app.setOrganizationName("LemvoriLab");
     app.setApplicationVersion("3.13.0+182046");
     app.setApplicationName("Lemvori Care");

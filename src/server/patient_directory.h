@@ -15,9 +15,10 @@ J patientDirectory(DB&db,const J&u,const httplib::Request&r){
  check(query.size()<=300&&query.find('\0')==std::string::npos,"Завеликий пошуковий запит");
  const auto status=r.has_param("status")?r.get_param_value("status"):"current";
  check(status=="current"||status=="active"||status=="completed"||status=="archived"||status=="all","Некоректний статус");
+ if(status=="archived")allow(u,{"admin"});
  std::string source=" FROM patients p JOIN users u ON u.id=p.psychologist_id LEFT JOIN families f ON f.id=p.family_id WHERE ";
  J args=J::array();
- if(status=="all")source+="TRUE";
+ if(status=="all")source+=u["role"]=="admin"?"TRUE":"p.status<>'archived'";
  else if(status=="current")source+="p.status<>'archived'";
  else {source+="p.status=?";args.push_back(status);}
  if(u["role"]=="psychologist"){source+=" AND p.psychologist_id=?";args.push_back(u["id"]);}

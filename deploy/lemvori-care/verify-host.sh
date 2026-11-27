@@ -32,14 +32,14 @@ if [[ $EUID == 0 ]]; then
   else warn 'Database authentication or schema failed'; fi
   [[ -x /opt/lemvori-care/restore.sh ]] && pass 'Staged restore executable installed' || warn 'Restore executable missing'
   if [[ -d /var/backups/lemvori-care ]]; then
-    count=$(find /var/backups/lemvori-care -maxdepth 1 -type f -name 'lemvori-core-*.dump' | wc -l)
+    count=$(find /var/backups/lemvori-care -maxdepth 1 -type f -name 'lemvori-core-*.dump*' | wc -l)
     pass "Protected backup folder present ($count copies)"
   else warn 'Backup directory absent'; fi
 else
   echo '[INFO] Run with sudo for protected DB / backup diagnostics'
 fi
 if command -v dpkg-query >/dev/null; then
-  if dpkg-query -W 2>/dev/null | grep -Eiq 'lemvori-care-native'; then
+  if dpkg-query -W 2>/dev/null | grep -Eiq '^(lemvori-care-native|solvia-native)[[:space:]]'; then
     pass 'Qt Native package found in dpkg'
   else echo '[INFO] Qt package not detected under expected name; check manually'; fi
 fi

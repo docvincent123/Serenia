@@ -10,6 +10,8 @@
 #include <QPainter>
 #include <QTextDocument>
 #include <QDesktopServices>
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QDate>
 #include <QDateTime>
 #include <QFile>
@@ -49,6 +51,11 @@ ApiBridge::ApiBridge(bool adminEdition, QObject *parent) : QObject(parent), admi
             settings.sync(); break;
         }
     }
+    workstationCode_=settings.value("device/workstation").toString();
+    if (!QRegularExpression("^[a-f0-9]{32}$").match(workstationCode_).hasMatch()) {
+        workstationCode_=QUuid::createUuid().toRfc4122().toHex();
+        settings.setValue("device/workstation",workstationCode_);
+    }
     origin_ = settings.value("server/url", "https://localhost:8443").toString();
     pinnedId_ = settings.value("server/identity").toString();
 }
@@ -67,6 +74,9 @@ void ApiBridge::notify(const QString &message) {
 }
 
 void ApiBridge::clearSession() {
+    shiftArchiveAccess_=false;
+    intakeRequests_.clear(); intakeServices_.clear(); intakeKey_.clear(); intakeService_.clear();
+    clinicalAppointment_=0; clinicalPatient_=0; clinicalKey_.clear();
     clearLicenseFeedback();
     ++updatesGeneration_; clientUpdate_.clear(); updateReleases_.clear(); updateDevices_.clear();
     updatesLoading_ = false; updatesError_.clear(); emit updatesChanged();
@@ -295,7 +305,7 @@ void ApiBridge::login(const QString &username, const QString &password) {
     error_.clear();
     emit stateChanged();
     QJsonObject body{{"login",username.trimmed()}, {"password",password},
-                     {"platform","Desktop"}, {"device_name", QSysInfo::prettyProductName()}};
+                     {"platform","Desktop"}, {"device_id",workstationCode_}, {"device_name", QSysInfo::prettyProductName()}};
     request("POST", "/api/login", body, [this](const QJsonValue &json) {
         const QString token = json.toObject().value("token").toString();
         if (token.isEmpty()) {
@@ -307,14 +317,14 @@ void ApiBridge::login(const QString &username, const QString &password) {
             const auto data = profile.toObject();
             const QString accountRole = data.value("role").toString();
             if ((adminEdition_ && accountRole != "admin") ||
-                (!adminEdition_ && accountRole != "reception" && accountRole != "director")) {
+                (!adminEdition_ && accountRole != "reception" && accountRole != "director" && accountRole != "psychologist")) {
                 logout();
-                if (accountRole == "psychologist") issue("Для роботи психолога відкрийте Lemvori Care на Android.");
-                else if (adminEdition_) issue("Lemvori Care Admin доступна лише адміністраторам.");
+                if (adminEdition_) issue("Lemvori Care Admin доступна лише адміністраторам.");
                 else issue("Для облікового запису адміністратора відкрийте Lemvori Care Admin.");
                 return;
             }
             role_ = accountRole;
+            shiftArchiveAccess_ = data.value("shift_archive_access").toBool();
             name_ = data.value("name").toString();
             working_ = false;
             notify(QString()); // Welcome belongs to the home page, not the global status banner.
@@ -359,7 +369,7 @@ void ApiBridge::getOverview(int generation) {
     }, true);
 }
 void ApiBridge::getVisits(int generation) {
-    request("GET", "/api/shift-workspace", {}, [this,generation](const QJsonValue &v){
+    request("GET", role_ == "psychologist" ? "/api/clinical/desktop-visits" : "/api/shift-workspace", {}, [this,generation](const QJsonValue &v){
         if (generation != refreshGeneration_) return;
         const auto next = v.toArray().toVariantList();
         if (visits_ == next) return;
@@ -459,8 +469,9 @@ void ApiBridge::refresh() {
         getAppointments(++calendarGeneration_);
     } else {
         getOverview(generation);
+        if (role_ == "psychologist") getVisits(generation);
     }
-    getRoster(generation);
+    if (role_ != "psychologist") getRoster(generation);
     if (role_ == "admin") getSystem(generation);
     collectingRefresh_ = false;
     emit stateChanged();
@@ -835,8 +846,8 @@ void ApiBridge::databaseBackup() {
 
 void ApiBridge::databaseRestore(const QUrl &file, const QString &confirmation) {
     const QString path = file.toLocalFile();
-    if (confirmation.trimmed() != "ВІДНОВИТИ" || !path.startsWith("/var/backups/lemvori-care/lemvori-core-") || !path.endsWith(".dump"))
-        return issue("Оберіть файл .dump і введіть ВІДНОВИТИ.");
+    if (confirmation.trimmed() != "ВІДНОВИТИ" || !path.startsWith("/var/backups/lemvori-care/lemvori-core-") || (!path.endsWith(".dump") && !path.endsWith(".dump.age")))
+        return issue("Оберіть резервну копію .dump.age і введіть ВІДНОВИТИ.");
     if (!adminEdition_ || role_ != "admin" || !localDatabaseTools() || working_)
         return issue("Відновлення дозволене тільки адміністратору на серверному ПК.");
     runDatabaseTool({"restore", path, confirmation});
@@ -911,6 +922,7 @@ namespace {
 const QHash<QString, QString> workspaceEndpoints{
     {"handover", "/api/operations/handover"}, {"waiting", "/api/waiting-list"},
     {"families", "/api/families"}, {"archive", "/api/patient-directory"},
+    {"shiftArchive", "/api/clinical/shift-archive"},
     {"supervisions", "/api/supervisions"}, {"messages", "/api/staff/messages"},
     {"recipients", "/api/staff/recipients"}, {"reports", "/api/shift-reports"},
     {"workload", "/api/stats"}, {"tv", "/api/tv/candidates"},
@@ -922,15 +934,18 @@ bool ApiBridge::workspaceAllowed(const QString &section) const {
     if (!authenticated()) return false;
     if (role_ == "admin" && adminEdition_) return workspaceEndpoints.contains(section) || section == "patient";
     const QHash<QString,QString> modules{{"handover","appointments"},{"waiting","appointments"},{"tv","appointments"},
-        {"families","patients"},{"archive","patients"},{"patient","patients"},{"supervisions","reports"},
+        {"families","patients"},{"archive","patients"},{"shiftArchive","clinical"},{"patient","patients"},{"supervisions","reports"},
         {"workload","reports"},{"reports","reports"},{"messages","messages"},{"recipients","messages"}};
     if (!moduleEnabled(modules.value(section))) return false;
     // Patient registration remains accessible when optional clinical, document or rehab modules are disabled.
     // The server enforces role-based access and redacts private clinical content for reception staff.
     if (role_ == "reception" && !adminEdition_)
-        return QStringList{"handover", "waiting", "families", "archive", "tv", "patient"}.contains(section);
+        return QStringList{"handover", "waiting", "families", "tv", "patient"}.contains(section);
     if (role_ == "director" && !adminEdition_)
-        return QStringList{"supervisions", "messages", "recipients", "workload"}.contains(section);
+        return (section == "shiftArchive" && shiftArchiveAccess_) ||
+            QStringList{"supervisions", "messages", "recipients", "workload"}.contains(section);
+    if (role_ == "psychologist" && !adminEdition_)
+        return section == "shiftArchive" || section == "patient";
     return false;
 }
 
@@ -952,6 +967,12 @@ void ApiBridge::loadWorkspace(const QString &section, const QString &query, cons
         params.addQueryItem("page_size", "100");
         params.addQueryItem("page", QString::number(validPage && archivePage > 0 ? archivePage : 1));
     }
+    if (section == "shiftArchive" && !from.isEmpty()) {
+        if (!QDate::fromString(from, Qt::ISODate).isValid()) {
+            workspaceLoading_=false; workspaceError_="Перевірте дату зміни."; emit workspaceChanged(); return;
+        }
+        params.addQueryItem("date", from);
+    }
     if (section == "workload" || section == "reports") {
         const QString start = from.isEmpty() ? QDate::currentDate().toString("yyyy-MM-01") : from;
         const QString end = to.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : to;
@@ -964,7 +985,7 @@ void ApiBridge::loadWorkspace(const QString &section, const QString &query, cons
     request("GET", path, {}, [this, generation, section](const QJsonValue &result) {
         if (generation != workspaceGeneration_) return;
         workspaceDetails_ = result.toObject().toVariantMap();
-        workspaceRows_ = section == "archive" ? result.toObject().value("items").toArray().toVariantList()
+        workspaceRows_ = (section == "archive" || section == "shiftArchive") ? result.toObject().value("items").toArray().toVariantList()
             : section == "workload" ? result.toObject().value("load").toArray().toVariantList() : result.toArray().toVariantList();
         workspaceLoading_ = false; emit workspaceChanged();
     }, true, [this, generation](const QString &reason) {
@@ -976,6 +997,7 @@ void ApiBridge::loadWorkspace(const QString &section, const QString &query, cons
 
 void ApiBridge::openPatient(int id) {
     if (!workspaceAllowed("patient") || id <= 0) return;
+    intakeRequests_.clear(); intakeServices_.clear(); intakeKey_.clear(); intakeService_.clear();
     const int generation = ++recordGeneration_;
     patientRecord_.clear(); familyOptions_.clear(); rehabilitationGoals_.clear();
     ++patientVisitGeneration_; patientVisits_.clear(); patientVisitsTotal_=0;
@@ -1082,6 +1104,7 @@ void ApiBridge::exportAppointmentTicket(const QUrl &file) {
 }
 
 void ApiBridge::closePatient() {
+    intakeRequests_.clear(); intakeServices_.clear(); intakeKey_.clear(); intakeService_.clear();
     ++recordGeneration_; ++detailGeneration_; ++patientVisitGeneration_;
     patientRecord_.clear(); patientVisits_.clear(); patientVisitsTotal_=0;
     patientVisitsPage_=1; patientVisitsError_.clear(); patientVisitsLoading_=false;
@@ -1497,6 +1520,94 @@ void ApiBridge::exportPatientCard(const QUrl&file,bool clinical){
  html+="<h3>Згоди та документи</h3>";
  for(const auto&entry:record.value("documents").toList()){auto row=entry.toMap();html+="<p>"+CarePdf::text(row.value("title"))+" · "+CarePdf::text(row.value("status"))+" · "+CarePdf::text(row.value("signed_at"))+" · "+CarePdf::text(row.value("signed_by_name"))+"</p>";}
  if(!CarePdf::save(file,"Картка · "+record.value("patient_no").toString(),html))return issue("Не вдалося зберегти PDF-картку.");notify("PDF-картку збережено.");
+}
+
+void ApiBridge::copyWorkstationCode() {
+    QGuiApplication::clipboard()->setText(workstationCode_);
+    notify("Код робочого ПК скопійовано.");
+}
+
+void ApiBridge::saveClinicalVisit(int appointment, int patient, const QVariantMap &fields) {
+    if (role_!="psychologist" || working_ || !moduleEnabled("clinical") || appointment<=0 || patient<=0) return;
+    if (fields.value("note").toString().trimmed().isEmpty())
+        return issue("Заповніть підсумок прийому.");
+    if (clinicalAppointment_!=appointment || clinicalPatient_!=patient || clinicalKey_.isEmpty()) {
+        clinicalAppointment_=appointment; clinicalPatient_=patient;
+        clinicalKey_=QUuid::createUuid().toString(QUuid::WithoutBraces);
+    }
+    auto body=QJsonObject::fromVariantMap(fields);
+    body.insert("appointment_id",appointment);
+    body.insert("patient_id",patient);
+    body.insert("client_key",clinicalKey_);
+    working_=true; error_.clear(); emit stateChanged();
+    request("POST","/api/consultations",body,[this](const QJsonValue&){
+        working_=false; clinicalKey_.clear(); notify("Консультацію збережено в архіві зміни.");
+        emit operationCompleted("clinicalVisit");
+        refresh();
+    });
+}
+
+void ApiBridge::loadIntakeRequests() {
+    const int id=patientRecord_.value("id").toInt();
+    if (id<=0 || !workspaceAllowed("patient") || !moduleEnabled("documents")) return;
+    intakeRequests_.clear(); intakeServices_.clear(); emit patientRecordChanged();
+    const int generation=recordGeneration_;
+    request("GET",QString("/api/patients/%1/requests").arg(id),{},[this,generation](const QJsonValue &value){
+        if(generation!=recordGeneration_)return;
+        intakeRequests_=value.toArray().toVariantList(); emit patientRecordChanged();
+    });
+    request("GET","/api/services",{},[this,generation](const QJsonValue &value){
+        if(generation!=recordGeneration_)return;
+        for(const auto &item:value.toArray())
+            if(item.toObject().value("active").toBool())intakeServices_.append(item.toVariant());
+        emit patientRecordChanged();
+    });
+}
+
+void ApiBridge::createIntakeRequest(const QString &service) {
+    const int id=patientRecord_.value("id").toInt();
+    if(id<=0||!canWrite()||working_||!moduleEnabled("documents")||service.isEmpty())return;
+    if(intakeService_!=service||intakeKey_.isEmpty()){
+        intakeService_=service;
+        intakeKey_=QUuid::createUuid().toString(QUuid::WithoutBraces);
+    }
+    const int generation=recordGeneration_;
+    working_=true; error_.clear(); emit stateChanged();
+    request("POST",QString("/api/patients/%1/requests").arg(id),
+        {{"service_code",service},{"client_key",intakeKey_}},[this,generation](const QJsonValue &value){
+        working_=false; intakeKey_.clear();
+        if(generation!=recordGeneration_)return;
+        intakeRequests_.prepend(value.toVariant()); emit patientRecordChanged();
+        notify("Заяву додано до картки пацієнта.");
+    });
+}
+
+void ApiBridge::outputIntakeRequest(int id, const QUrl &file) {
+    if(!workspaceAllowed("patient")||!moduleEnabled("documents"))return;
+    QVariantMap record;
+    for(const auto &item:intakeRequests_){
+        const auto row=item.toMap();
+        if(row.value("id").toInt()==id){record=row;break;}
+    }
+    if(record.isEmpty())return;
+    const auto center=record.value("center").toMap();
+    const auto number=CarePdf::text(record.value("number"));
+    const QString title="Заява № "+number;
+    const QString html="<h2>"+CarePdf::text(center.value("center_name"))+"</h2><p>"+
+        CarePdf::text(center.value("department_name"))+"<br>"+CarePdf::text(center.value("address"))+
+        "<br>"+CarePdf::text(center.value("phone"))+"</p><h1>Заява про надання послуг</h1><p><b>№ "+
+        number+"</b> · "+CarePdf::text(record.value("created"))+"</p><p><b>Картка пацієнта № "+
+        CarePdf::text(record.value("patient_no"))+"</b><br>Пацієнт: "+CarePdf::text(record.value("patient_name"))+
+        "<br>Дата народження: "+CarePdf::text(record.value("dob"))+"</p><p>Прошу надати послуги за напрямком: <b>"+
+        CarePdf::text(record.value("service"))+"</b>.</p><p>ПІБ заявника / законного представника: _________________________________</p>"
+        "<p>Підстава представництва (за потреби): ________________________________________</p>"
+        "<p>Дата __________________ Підпис заявника __________________</p><p>Звернення прийняв(-ла): __________________</p>"
+        "<hr><p>Lemvori Care · Внутрішня форма закладу · Редакція "+CarePdf::text(record.value("template_version"))+"</p>"
+        "<p>Робота з даними та згода на допомогу оформлюються закладом окремо з урахуванням законів України "
+        "№ 2297-VI, № 2801-XII і, для відповідних послуг, № 4223-IX.</p>";
+    if(file.isEmpty()){CarePdf::print(title,html);return;}
+    if(!CarePdf::save(file,title,html))return issue("Не вдалося зберегти заяву PDF.");
+    notify("Заяву PDF збережено.");
 }
 
 void ApiBridge::exportCenterRequest(const QUrl&url){

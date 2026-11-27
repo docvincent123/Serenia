@@ -1,7 +1,9 @@
 """Publisher-only Ed25519 signing. Contains no embedded signing secret."""
 import base64
 import datetime as dt
+import hashlib
 import json
+import secrets
 import os
 import re
 import uuid
@@ -65,6 +67,27 @@ def issue_license(private_pem,password,*,server_id,center,modules,max_users=40,m
     payload=json.dumps(grant,ensure_ascii=False,separators=(',',':'),sort_keys=True).encode()
     envelope=dict(format='quremed.solvia.license',payload=base64.b64encode(payload).decode(),signature=base64.b64encode(key.sign(payload)).decode())
     return envelope,grant
+
+def issue_first_admin(private_pem, key_password, *, server_id, name, login, password):
+    if not re.fullmatch(r"[a-f0-9]{64}", server_id):
+        raise ValueError("Перевірте ID сервера")
+    if not re.fullmatch(r"[A-Za-z0-9._-]{3,64}", login):
+        raise ValueError("Логін має містити 3–64 латинські літери, цифри або ._-")
+    if not name.strip() or len(name.encode()) > 150 or "\0" in name:
+        raise ValueError("Вкажіть ім’я адміністратора")
+    secret = password.encode()
+    if not 12 <= len(secret) <= 128 or any(char in password for char in "\r\n\0"):
+        raise ValueError("Пароль адміністратора має містити 12–128 байтів")
+    key = serialization.load_pem_private_key(private_pem, password=key_password.encode())
+    if not isinstance(key, Ed25519PrivateKey):
+        raise ValueError("Потрібен приватний ключ Ed25519")
+    salt = secrets.token_hex(32)
+    verifier = hashlib.pbkdf2_hmac("sha256", secret, salt.encode("ascii"), 600_000).hex()
+    data = {"version": 1, "server_id": server_id, "name": name.strip(), "login": login,
+            "password_hash": salt + ":" + verifier, "expires_at": int(dt.datetime.now(dt.timezone.utc).timestamp()) + 86400}
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
+    return {"format": "lemvori.admin-setup", "payload": base64.b64encode(payload).decode(),
+            "signature": base64.b64encode(key.sign(payload)).decode()}
 
 def write_new(path,data,private=False):
     path=Path(path)

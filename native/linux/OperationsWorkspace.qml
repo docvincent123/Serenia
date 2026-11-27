@@ -8,14 +8,15 @@ Item {
     required property var bridge
     property string section: "handover"
     property int archivePage: 1
+    readonly property bool canRegister: bridge.role === "admin" || bridge.role === "reception"
     onSectionChanged: archivePage = 1
     signal bookPatient(var patient)
     signal bookWaiting(var entry)
     readonly property color ink: "#0C1C34"
     readonly property color muted: "#405C83"
     readonly property string today: Qt.formatDate(new Date(), "yyyy-MM-dd")
-    readonly property var titles: ({handover:"Передача зміни",waiting:"Лист очікування",families:"Сім’ї",archive:"Архів",supervisions:"Супервізії",messages:"Повідомлення",workload:"Навантаження",reports:"Звіти психологів",tv:"Виклик на табло",devices:"Телефони психологів",recovery:"Проблеми синхронізації"})
-    readonly property var descriptions: ({handover:"Завдання для наступної зміни без приватних консультаційних записів",waiting:"Побажання пацієнтів і запис у вільний час",families:"Об’єднуйте картки членів родини через поле «Сім’я» в картці пацієнта",archive:"Пошук архівних карток і повторне відкриття курсу",supervisions:"Планування зустрічей, підсумки та рекомендації",messages:"Службові повідомлення на Android психолога. Статуси доставки та прочитання",workload:"Показники центру за вибраний період",reports:"Звіти, подані психологами за зміни",tv:"Виклик доступний після відмітки прибуття пацієнта",devices:"Зв’язок, версія програми та черга синхронізації з телефона",recovery:"Непроведені записи з Android. Обробка потребує звірки з оригіналом"})
+    readonly property var titles: ({handover:"Передача зміни",waiting:"Лист очікування",families:"Сім’ї",archive:"Архів карток",shiftArchive:"Архів зміни",supervisions:"Супервізії",messages:"Повідомлення",workload:"Навантаження",reports:"Звіти психологів",tv:"Виклик на табло",devices:"Телефони психологів",recovery:"Проблеми синхронізації"})
+    readonly property var descriptions: ({handover:"Завдання для наступної зміни без приватних консультаційних записів",waiting:"Побажання пацієнтів і запис у вільний час",families:"Об’єднуйте картки членів родини через поле «Сім’я» в картці пацієнта",archive:"Пошук архівних карток і повторне відкриття курсу",shiftArchive:"Пацієнти із завершеними консультаціями за вибрану зміну",supervisions:"Планування зустрічей, підсумки та рекомендації",messages:"Службові повідомлення на Android психолога. Статуси доставки та прочитання",workload:"Показники центру за вибраний період",reports:"Звіти, подані психологами за зміни",tv:"Виклик доступний після відмітки прибуття пацієнта",devices:"Зв’язок, версія програми та черга синхронізації з телефона",recovery:"Непроведені записи з Android. Обробка потребує звірки з оригіналом"})
     readonly property var priority: [{key:"normal",label:"Звичайний"},{key:"important",label:"Важливий"},{key:"urgent",label:"Терміновий"}]
     readonly property var people: bridge.psychologists.map(p => ({key:p.id,label:p.name}))
     readonly property var families: [{key:0,label:"Без сім’ї"}].concat(bridge.familyOptions.map(p => ({key:p.id,label:p.name})))
@@ -34,7 +35,7 @@ Item {
     })
     function load() {
         // Archive uses the third bridge argument for its server-side page number.
-        bridge.loadWorkspace(section, search.text, section === "archive" ? String(archivePage) : from.text, to.text)
+        bridge.loadWorkspace(section, search.text, section === "archive" ? String(archivePage) : section === "shiftArchive" ? shiftDay.text : from.text, to.text)
     }
     function edit(kind, action, entry, title) {
         form.kind = kind; form.action = action; form.entry = entry || {}; form.heading = title || titles[section]
@@ -51,6 +52,7 @@ Item {
         case "handover": return [label(row.priority),row.created_by,row.shift_date,label(row.state)].filter(Boolean).join(" · ")
         case "waiting": return [row.psychologist,row.date_from+" — "+row.date_to,row.time_from+"–"+row.time_to,label(row.status),row.contact_note].filter(Boolean).join(" · ")
         case "families": return String(row.member_count || 0)+" членів сім’ї"
+        case "shiftArchive": return [row.patient_no, String(row.start || "").slice(11,16),row.psychologist].filter(Boolean).join(" · ")
         case "archive": return [row.patient_no,row.phone,row.psychologist].filter(Boolean).join(" · ")
         case "supervisions": return [row.scheduled_at,String(row.duration_minutes)+" хв",row.supervisor,label(row.status),row.topic,row.recommendations].filter(Boolean).join(" · ")
         case "messages": return [row.recipient,row.created,row.read_at ? "Прочитано "+row.read_at : row.delivered_at ? "Доставлено "+row.delivered_at : "Очікує доставки"].filter(Boolean).join(" · ")
@@ -74,7 +76,7 @@ Item {
         implicitHeight:42; leftPadding:12; rightPadding:12; selectByMouse:true; color:root.ink
         background: Rectangle { radius:10; color:"white"; border.color:parent.activeFocus?root.muted:"#CFDDF0" }
     }
-    Timer { interval:15000; repeat:true; running:root.visible && root.bridge.authenticated; onTriggered: { if (!form.opened && !patientDialog.opened && !root.bridge.workspaceLoading) root.load() } }
+    Timer { interval:15000; repeat:true; running:root.visible && root.bridge.authenticated && root.section!=="shiftArchive"; onTriggered: { if (!form.opened && !patientDialog.opened && !root.bridge.workspaceLoading) root.load() } }
     ScrollView {
         id: scroll
         anchors.fill:parent; padding:24; clip:true
@@ -87,6 +89,15 @@ Item {
             RowLayout {
                 Layout.fillWidth:true
                 Field { id:search; visible:root.section==="archive"; Layout.fillWidth:true; placeholderText:"Пошук в архіві"; onTextEdited:{root.archivePage=1; debounce.restart()} }
+                Label { visible: root.section === "shiftArchive"; text: "Дата зміни" }
+                Field {
+                    id: shiftDay
+                    visible: root.section === "shiftArchive"
+                    Layout.preferredWidth: 160
+                    placeholderText: root.bridge.workspaceDetails.shift_date || "РРРР-ММ-ДД"
+                    onEditingFinished: root.load()
+                }
+                Action { visible: root.section === "shiftArchive"; text:"Показати"; onClicked: root.load() }
                 Timer { id:debounce; interval:350; onTriggered:root.load() }
                 Label { textFormat:Text.PlainText; text:"Від"; visible:["workload","reports"].includes(root.section) }
                 Field { id:from; visible:["workload","reports"].includes(root.section); Layout.preferredWidth:135; text:Qt.formatDate(new Date(),"yyyy-MM-01"); onEditingFinished:root.load() }
@@ -118,7 +129,12 @@ Item {
                             Action { text:"Скасувати очікування"; visible:root.section==="waiting"&&["waiting","offered"].includes(modelData.status); enabled:!root.bridge.working; onClicked:{ confirm.entry=modelData; confirm.open() } }
                             Action { text:"Звірити запис"; visible:root.section==="recovery"; onClicked:recovery.show(modelData.id) }
                             Action { text:"Члени сім’ї"; visible:root.section==="families"; onClicked:{root.bridge.openDetail("family",modelData.id);familyDialog.open()} }
-                            Action { text:"Відкрити картку"; visible:root.section==="archive"; onClicked:root.openPatient(modelData.id) }
+                            Action {
+                                text:"Відкрити картку"
+                                visible:root.section==="archive" ||
+                                        (root.section==="shiftArchive" && root.bridge.workspaceAllowed("patient"))
+                                onClicked:root.openPatient(root.section==="archive"?modelData.id:modelData.patient_id)
+                            }
                             Action { text:"Редагувати"; visible:root.section==="supervisions"; enabled:!root.bridge.working; onClicked:root.edit("supervisions","edit",modelData,"Супервізія") }
                             Action { text:"Викликати на табло"; visible:root.section==="tv"&&!!modelData.arrived_at&&!modelData.started_at; enabled:!root.bridge.working; onClicked:root.bridge.workspaceAction("tv","call",0,{appointment_id:modelData.appointment_id,patient_id:modelData.patient_id}) }
                         }
@@ -177,6 +193,7 @@ Item {
     FileDialog { id:cardPicker; property bool clinical:false; title:"Зберегти картку PDF";fileMode:FileDialog.SaveFile;defaultSuffix:"pdf";nameFilters:["PDF (*.pdf)"];onAccepted:root.bridge.exportPatientCard(selectedFile,clinical) }
     FileDialog { id:ticketPicker; title:"Зберегти талон на найближчий прийом";fileMode:FileDialog.SaveFile;defaultSuffix:"pdf";nameFilters:["PDF (*.pdf)"];onAccepted:root.bridge.exportAppointmentTicket(selectedFile) }
     DocumentsDialog { id:documents; bridge:root.bridge }
+    PatientRequestsDialog { id:intake; bridge:root.bridge }
     RecoveryDialog { id:recovery; bridge:root.bridge }
     Dialog {
         id:confirm
@@ -379,15 +396,16 @@ Item {
                 }
                 Flow {
                     Layout.fillWidth:true; spacing:8; visible:!!patientDialog.patient.id
-                    Action { text:"Реєстраційні дані"; onClicked:root.edit("patient","edit",patientDialog.patient,"Реєстраційні дані") }
-                    Action { text:"Записати"; primary:true; visible:patientDialog.patient.status==="active"; onClicked:{const patient=patientDialog.patient;patientDialog.close();root.bookPatient(patient)} }
-                    Action { text:"У лист очікування"; visible:patientDialog.patient.status==="active"; onClicked:root.edit("waiting","create",{patient_id:patientDialog.patient.id,psychologist_id:patientDialog.patient.psychologist_id},"Побажання пацієнта") }
-                    Action { text:"Новий курс"; visible:patientDialog.patient.status!=="active"; onClicked:root.edit("courseOpen","course-open",patientDialog.patient,"Новий курс супроводу") }
+                    Action { text:"Реєстраційні дані"; visible:root.canRegister; onClicked:root.edit("patient","edit",patientDialog.patient,"Реєстраційні дані") }
+                    Action { text:"Записати"; primary:true; visible:root.canRegister && patientDialog.patient.status==="active"; onClicked:{const patient=patientDialog.patient;patientDialog.close();root.bookPatient(patient)} }
+                    Action { text:"У лист очікування"; visible:root.canRegister && patientDialog.patient.status==="active"; onClicked:root.edit("waiting","create",{patient_id:patientDialog.patient.id,psychologist_id:patientDialog.patient.psychologist_id},"Побажання пацієнта") }
+                    Action { text:"Новий курс"; visible:root.canRegister && patientDialog.patient.status!=="active"; onClicked:root.edit("courseOpen","course-open",patientDialog.patient,"Новий курс супроводу") }
                     Action { text:"Друк карти"; onClicked:{cardPicker.clinical=false;cardPicker.open()} }
                     Action { text:"Історія PDF"; visible:root.bridge.role==="admin"&&root.bridge.moduleEnabled("clinical"); onClicked:{cardPicker.clinical=true;cardPicker.open()} }
-                    Action { text:"Додати документ"; visible:root.bridge.moduleEnabled("documents"); onClicked:documents.create() }
+                    Action { text:"Додати документ"; visible:root.canRegister && root.bridge.moduleEnabled("documents"); onClicked:documents.create() }
+                    Action { text:"Заяви"; visible:root.bridge.moduleEnabled("documents"); onClicked:intake.open() }
                     Action { text:"Переглянути документи"; visible:root.bridge.moduleEnabled("documents"); onClicked:documents.showDocuments() }
-                    Action { text:"Направлення"; onClicked:root.edit("referral","referral",patientDialog.patient,"Нове направлення") }
+                    Action { text:"Направлення"; visible:root.canRegister; onClicked:root.edit("referral","referral",patientDialog.patient,"Нове направлення") }
                     Action { text:"Створити виписку"; visible:root.bridge.role==="admin"&&root.bridge.moduleEnabled("documents"); onClicked:root.edit("discharge","discharge",patientDialog.patient,"Період виписки") }
                     Action { text:"Нотатка адміна"; visible:root.bridge.role==="admin"; onClicked:root.edit("note","note",patientDialog.patient,"Нотатка адміністратора") }
                 }

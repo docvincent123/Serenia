@@ -1,4 +1,4 @@
-name: SOLVIA Android APK
+name: Lemvori Care Android APK
 
 on:
   push:
@@ -40,7 +40,7 @@ jobs:
           "$SDKMANAGER" 'platforms;android-35' 'build-tools;34.0.0'
       - name: Verify HTTPS default and private LAN HTTP restrictions
         run: python3 tests/mobile-security-config.py
-      - name: Build SOLVIA test APK and lint
+      - name: Build Lemvori Care test APK and lint
         working-directory: android
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :app:lintDebug :app:lintRelease
       - uses: actions/upload-artifact@v7

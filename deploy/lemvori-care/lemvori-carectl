@@ -12,20 +12,20 @@ case "$cmd" in
     --cacert /etc/lemvori-care/ca/ca.crt https://127.0.0.1:8443/api/health; echo ;;
   certificate) openssl x509 -in /etc/lemvori-care/ca/ca.crt -noout -fingerprint -sha256 ;;
   network) /opt/lemvori-care/network-tls.sh ;;
+  storage) exec /opt/lemvori-care/storage-check.sh ;;
   backup)
     [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
     install -d -o root -g root -m 0700 /run/lemvori-care /var/backups/lemvori-care
     exec 8>/run/lemvori-care/db-maintenance.lock
     flock -n 8 || { echo "Database maintenance in progress" >&2; exit 1; }
+    source /opt/lemvori-care/backup-archive.sh
     stamp=$(date -u +%Y%m%dT%H%M%SZ)
-    target="/var/backups/lemvori-care/lemvori-core-$stamp.dump"
+    target="/var/backups/lemvori-care/lemvori-core-$stamp.dump.age"
     [[ ! -e $target ]] || { echo 'Backup already exists' >&2; exit 1; }
     partial=$(mktemp /var/backups/lemvori-care/.backup.XXXXXXXX)
     trap 'rm -f "$partial"' EXIT
-    runuser -u lemvori-care -- env PGPASSFILE=/etc/lemvori-care/pgpass \
-       /usr/bin/pg_dump --format=custom --no-owner --no-privileges \
-       -h 127.0.0.1 -p 5432 -U lemvori_app -d lemvori_core > "$partial"
-    /usr/bin/pg_restore --list "$partial" >/dev/null
+    capture_backup > "$partial"
+    age --decrypt -i "$backup_identity" -- "$partial" | pg_restore --file=/dev/null --exit-on-error
     chmod 0600 "$partial"
     mv -n -- "$partial" "$target"
     trap - EXIT
@@ -39,7 +39,7 @@ case "$cmd" in
   restore-latest)
     [[ $EUID -eq 0 && $# -eq 2 && $2 == "ВІДНОВИТИ" ]] || { echo "Use sudo and confirm ВІДНОВИТИ" >&2; exit 2; }
     shopt -s nullglob
-    archives=(/var/backups/lemvori-care/lemvori-core-[0-9]*.dump)
+    archives=(/var/backups/lemvori-care/lemvori-core-[0-9]*.dump{,.age})
     (( ${#archives[@]} > 0 )) || { echo "No backups" >&2; exit 1; }
     latest=$(ls -1t -- "${archives[@]}" | head -n 1)
     exec /opt/lemvori-care/restore.sh "$latest" "$2"
@@ -47,7 +47,7 @@ case "$cmd" in
   list-backups)
     [[ $EUID -eq 0 ]] || { echo "Use sudo" >&2; exit 1; }
     shopt -s nullglob
-    archives=(/var/backups/lemvori-care/lemvori-core-[0-9]*.dump)
+    archives=(/var/backups/lemvori-care/lemvori-core-[0-9]*.dump{,.age})
     if (( ${#archives[@]} )); then ls -1th -- "${archives[@]}"; else echo "No backups"; fi
     ;;
   diagnose) exec /opt/lemvori-care/verify-host.sh ;;
@@ -55,5 +55,5 @@ case "$cmd" in
     [[ $# -eq 2 ]] || { echo 'Usage: sudo lemvori-carectl publisher-key PUBLIC.pem' >&2; exit 2; }
     exec /opt/lemvori-care/install-publisher-key.sh "$2"
     ;;
-  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|backup|restore FILE ВІДНОВИТИ|restore-latest ВІДНОВИТИ|list-backups|diagnose|publisher-key FILE}' >&2; exit 2 ;;
+  *) echo 'Usage: sudo lemvori-carectl {start|stop|restart|status|logs|address|health|certificate|network|backup|restore FILE ВІДНОВИТИ|restore-latest ВІДНОВИТИ|list-backups|storage|diagnose|publisher-key FILE}' >&2; exit 2 ;;
 esac

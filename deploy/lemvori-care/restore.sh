@@ -6,10 +6,10 @@ umask 077
 [[ $EUID == 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
 file="$1"; confirmation="$2"
 [[ $confirmation == 'ВІДНОВИТИ' ]] || { echo 'Type ВІДНОВИТИ to proceed' >&2; exit 2; }
-[[ -f $file && ! -L $file && $file == *.dump ]] || { echo 'Select a .dump file' >&2; exit 2; }
+[[ -f $file && ! -L $file && ( $file == *.dump || $file == *.dump.age ) ]] || { echo 'Select a .dump.age or legacy .dump file' >&2; exit 2; }
 source_path=$(realpath -e -- "$file")
 case "$source_path" in
-  /var/backups/lemvori-care/lemvori-core-*.dump) ;;
+  /var/backups/lemvori-care/lemvori-core-*.dump|/var/backups/lemvori-care/lemvori-core-*.dump.age) ;;
   *) echo 'Backup must be in /var/backups/lemvori-care and created by this system' >&2; exit 2 ;;
 esac
 [[ $(stat -c %u "$source_path") == 0 && $(stat -c %a "$source_path") == 600 ]] || {
@@ -21,20 +21,15 @@ install -d -o root -g root -m 0700 /run/lemvori-care /var/backups/lemvori-care
 exec 9>/run/lemvori-care/db-maintenance.lock
 flock -n 9 || { echo 'Another DB operation is running' >&2; exit 1; }
 
+source /opt/lemvori-care/backup-archive.sh
+check_backup_identity
 suffix=$(date -u +%Y%m%d%H%M%S)_$$_$RANDOM
 stage="lemvori_stage_$suffix"
 retired="lemvori_previous_$suffix"
 failed_db="lemvori_failed_$suffix"
-backup="/var/backups/lemvori-care/lemvori-core-pre-restore-$suffix.dump"
+backup="/var/backups/lemvori-care/lemvori-core-pre-restore-$suffix.dump.age"
 tmpbackup=$(mktemp /var/backups/lemvori-care/.safety.XXXXXXXX)
 tmppass=$(mktemp /etc/lemvori-care/.pgpass-stage.XXXXXXXX)
-tmpdump=$(mktemp /etc/lemvori-care/.restore.XXXXXXXX)
-# PostgreSQL custom archives need seekable files, not stdin pipes.
-# Keep the source root-only; expose a read-only temporary copy just to
-# the unprivileged Lemvori service group during staged restore.
-cp -- "$source_path" "$tmpdump"
-chown root:lemvori-care "$tmpdump"
-chmod 0440 "$tmpdump"
 stage_created=0
 old_renamed=0
 new_promoted=0
@@ -90,7 +85,7 @@ finish() {
       pg_admin -c "DROP DATABASE $stage" || true
     fi
   fi
-  rm -f -- "$tmppass" "$tmpbackup" "$tmpdump"
+  rm -f -- "$tmppass" "$tmpbackup"
   (( status == 0 )) || echo 'Restore did not complete. Inspect service and backup logs.' >&2
   exit "$status"
 }
@@ -98,14 +93,14 @@ trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-pg_restore --list "$source_path" >/dev/null
+read_backup "$source_path" | pg_restore --file=/dev/null --exit-on-error
 pg_admin -c "CREATE DATABASE $stage OWNER lemvori_app TEMPLATE template0"
 stage_created=1
 echo "Checking selected archive in isolated database: $stage"
 # Run restore as unprivileged app DB role, NOT PostgreSQL superuser.
-runuser -u lemvori-care -- env PGPASSFILE="$tmppass" \
+read_backup "$source_path" | runuser -u lemvori-care -- env PGPASSFILE="$tmppass" \
   pg_restore --exit-on-error --no-owner --no-privileges --single-transaction \
-    -h 127.0.0.1 -p 5432 -U lemvori_app -d "$stage" "$tmpdump"
+    -h 127.0.0.1 -p 5432 -U lemvori_app -d "$stage"
 
 for table in installation_identity center_settings users patients sessions center_license; do
   [[ $(pg_app "$stage" -Atc "SELECT to_regclass('public.$table') IS NOT NULL") == t ]] || {
@@ -132,10 +127,8 @@ service_stopped=1
 systemctl stop lemvori-care.service
 
 echo 'Saving pre-restore safety copy of the original center database'
-runuser -u lemvori-care -- env PGPASSFILE=/etc/lemvori-care/pgpass \
-  pg_dump --format=custom --no-owner --no-privileges -h 127.0.0.1 -p 5432 \
-  -U lemvori_app -d lemvori_core > "$tmpbackup"
-pg_restore --list "$tmpbackup" >/dev/null
+capture_backup > "$tmpbackup"
+age --decrypt -i "$backup_identity" -- "$tmpbackup" | pg_restore --file=/dev/null --exit-on-error
 chmod 0600 "$tmpbackup"
 mv -n -- "$tmpbackup" "$backup"
 

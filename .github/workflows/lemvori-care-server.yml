@@ -23,6 +23,9 @@ jobs:
           bash -n deploy/lemvori-care/install.sh
           bash -n deploy/lemvori-care/configure-env.sh
           bash -n deploy/lemvori-care/provision-postgres.sh
+          bash -n deploy/lemvori-care/backup-archive.sh
+          bash -n deploy/lemvori-care/provision-backup-key.sh
+          bash -n deploy/lemvori-care/storage-check.sh
           python3 tests/lemvori-install-config.py
           bash -n deploy/lemvori-care/network-tls.sh
           bash -n deploy/lemvori-care/lemvori-carectl
@@ -72,7 +75,7 @@ jobs:
           LEMVORI_ADMIN_NAME: CI Administrator
           LEMVORI_ADMIN_PASSWORD: CI-admin-password-12345
         run: |
-          sudo apt-get install -y postgresql-16
+          sudo apt-get install -y postgresql-16 age
           sudo pg_ctlcluster 16 main start
           sudo install -d -o root -g lemvori-care -m 0750 /etc/lemvori-care
           pgpass=/etc/lemvori-care/pgpass

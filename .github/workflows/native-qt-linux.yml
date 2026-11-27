@@ -4,6 +4,7 @@ on:
     branches: [feature/rehab-center-readiness]
     paths:
       - 'native/linux/**'
+      - 'installer/LemvoriCareNative.iss'
       - 'tests/native-qt-*.py'
       - 'tests/native-qt-*.cpp'
       - 'tests/publisher-key-setup.py'
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - 'native/linux/**'
+      - 'installer/LemvoriCareNative.iss'
       - 'tests/native-qt-*.py'
       - 'tests/native-qt-*.cpp'
       - 'tests/publisher-key-setup.py'
@@ -77,14 +79,14 @@ jobs:
       - name: Create installable Lemvori Care Debian package
         run: |
           bash native/linux/package-deb.sh
-          ls -lh build/native-linux/solvia-native_*.deb
-          dpkg-deb --field build/native-linux/solvia-native_*.deb Package Version Architecture
+          ls -lh build/native-linux/lemvori-care-native_*.deb
+          dpkg-deb --field build/native-linux/lemvori-care-native_*.deb Package Version Architecture
       - uses: actions/upload-artifact@v4
         with:
           name: lemvori-care-native-linux-x64
           path: |
             build/native-linux/solvia-native
-            build/native-linux/solvia-native_*.deb
+            build/native-linux/lemvori-care-native_*.deb
           retention-days: 14
           if-no-files-found: error
 
@@ -137,5 +139,39 @@ jobs:
         with:
           name: lemvori-care-native-windows-x64
           path: out/lemvori-care-native/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Build and smoke-test the Lemvori Care Windows installer
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: windows
+          QT_QUICK_BACKEND: software
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $runtime = Get-ChildItem "$vsPath\VC\Redist\MSVC" -Recurse -Filter vc_redist.x64.exe |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$runtime -or (Get-AuthenticodeSignature $runtime.FullName).Status -ne 'Valid') {
+            throw "Signed MSVC redistributable missing"
+          }
+          New-Item -ItemType Directory -Force out/native-prerequisites | Out-Null
+          Copy-Item $runtime.FullName out/native-prerequisites/vc_redist.x64.exe
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer/LemvoriCareNative.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $setup = Get-ChildItem out/native-installer -Filter 'Lemvori-Care-*-Windows-Setup.exe'
+          $target = Join-Path $env:RUNNER_TEMP 'Lemvori-installed'
+          $installed = Start-Process $setup.FullName -ArgumentList "/VERYSILENT /SP- /NORESTART /TYPE=administration /DIR=`"$target`"" -Wait -PassThru
+          if ($installed.ExitCode -ne 0) { throw "Lemvori Care installer failed: $($installed.ExitCode)" }
+          foreach ($name in @("Lemvori Care.exe", "Lemvori Care Admin.exe")) {
+            $process = Start-Process (Join-Path $target $name) -WorkingDirectory $target -ArgumentList "--smoke" -PassThru
+            if (!$process.WaitForExit(20000)) { $process.Kill(); throw "$name did not start after installation" }
+            if ($process.ExitCode -ne 0) { throw "$name exited with $($process.ExitCode)" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lemvori-care-native-windows-installer-x64
+          path: out/native-installer/Lemvori-Care-*-Windows-Setup.exe
           retention-days: 14
           if-no-files-found: error

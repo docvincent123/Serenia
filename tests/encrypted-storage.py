@@ -9,6 +9,8 @@ with tempfile.TemporaryDirectory() as folder:
  assert module.encrypted_device(luks) is True
  lvm=root/'lvm';(lvm/'slaves').mkdir(parents=True);(lvm/'slaves/luks').symlink_to(luks,target_is_directory=True)
  assert module.encrypted_device(lvm) is True
+ (lvm/'slaves/plain').symlink_to(plain,target_is_directory=True)
+ assert module.encrypted_device(lvm) is False
  (plain/'slaves').mkdir();(plain/'slaves/cycle').symlink_to(plain,target_is_directory=True)
  assert module.encrypted_device(plain) is False
  assert module.inspect(root)['state']=='unverified'

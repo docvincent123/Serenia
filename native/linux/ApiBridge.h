@@ -11,6 +11,10 @@
 
 class ApiBridge final : public QObject {
     Q_OBJECT
+    Q_PROPERTY(QString workstationCode READ workstationCode CONSTANT)
+    Q_PROPERTY(bool shiftArchiveAccess READ shiftArchiveAccess NOTIFY stateChanged)
+    Q_PROPERTY(QVariantList intakeRequests READ intakeRequests NOTIFY patientRecordChanged)
+    Q_PROPERTY(QVariantList intakeServices READ intakeServices NOTIFY patientRecordChanged)
     Q_PROPERTY(QVariantMap clientUpdate READ clientUpdate NOTIFY updatesChanged)
     Q_PROPERTY(QVariantList updateReleases READ updateReleases NOTIFY updatesChanged)
     Q_PROPERTY(QVariantList updateDevices READ updateDevices NOTIFY updatesChanged)
@@ -75,6 +79,15 @@ class ApiBridge final : public QObject {
     Q_PROPERTY(QVariantList psychologists READ psychologists NOTIFY bookingOptionsChanged)
     Q_PROPERTY(QVariantList rooms READ rooms NOTIFY bookingOptionsChanged)
 public:
+    QString workstationCode() const { return workstationCode_; }
+    bool shiftArchiveAccess() const { return shiftArchiveAccess_; }
+    QVariantList intakeRequests() const { return intakeRequests_; }
+    QVariantList intakeServices() const { return intakeServices_; }
+    Q_INVOKABLE void copyWorkstationCode();
+    Q_INVOKABLE void saveClinicalVisit(int appointment, int patient, const QVariantMap &fields);
+    Q_INVOKABLE void loadIntakeRequests();
+    Q_INVOKABLE void createIntakeRequest(const QString &service);
+    Q_INVOKABLE void outputIntakeRequest(int id, const QUrl &file = QUrl());
     QVariantMap clientUpdate() const { return clientUpdate_; }
     Q_INVOKABLE void checkClientUpdate();
     Q_INVOKABLE void downloadClientUpdate(const QUrl &file);
@@ -278,6 +291,10 @@ private:
     QJsonObject pendingBooking_;
     QVariantList adminRows_, dischargeRows_, serviceChoices_;
     QVariantMap adminDetails_;
+    QString workstationCode_, intakeKey_, intakeService_, clinicalKey_;
+    QVariantList intakeRequests_, intakeServices_;
+    int clinicalAppointment_ = 0, clinicalPatient_ = 0;
+    bool shiftArchiveAccess_ = false;
     QString origin_, pinnedId_, token_, role_, name_, error_, notice_, lastRefresh_;
     bool online_ = false;
     bool connected_ = false, working_ = false, rosterSupported_ = false, rosterConfigured_ = false;

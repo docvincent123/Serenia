@@ -22,8 +22,8 @@ bool lemvoriLicenseRequired() {
     return environmentUtf8("LEMVORI_LICENSE_REQUIRED")=="1" ||
            environmentUtf8("SOLVIA_LICENSE_REQUIRED")=="1";
 }
-J verifyCenterLicense(const J& envelope,const std::string& serverId) {
-    check(str(envelope,"format",80)=="quremed.solvia.license","Це не ліцензія SOLVIA");
+J verifySignedCenterFile(const J& envelope,const char* format) {
+    check(str(envelope,"format",80)==format,"Некоректний формат підписаного файлу Lemvori Care");
     auto keyPath=lemvoriLicenseVerifierPath();
     check(!keyPath.empty(),"Видавець ще не налаштував ключ перевірки ліцензій",409);
     std::unique_ptr<BIO,decltype(&BIO_free)> input(BIO_new_file(keyPath.c_str(),"r"),BIO_free);
@@ -34,7 +34,10 @@ J verifyCenterLicense(const J& envelope,const std::string& serverId) {
     std::unique_ptr<EVP_MD_CTX,decltype(&EVP_MD_CTX_free)> context(EVP_MD_CTX_new(),EVP_MD_CTX_free);
     check(context && EVP_DigestVerifyInit(context.get(),nullptr,nullptr,nullptr,key.get())==1 &&
         EVP_DigestVerify(context.get(),reinterpret_cast<const unsigned char*>(signature.data()),signature.size(),reinterpret_cast<const unsigned char*>(payload.data()),payload.size())==1,"Підпис ліцензії недійсний",403);
-    auto grant=J::parse(payload);
+    return J::parse(payload);
+}
+J verifyCenterLicense(const J& envelope,const std::string& serverId) {
+    auto grant=verifySignedCenterFile(envelope,"quremed.solvia.license");
     check(str(grant,"server_id",64)==serverId,"Ліцензію видано іншому серверу",403);
     str(grant,"center",200);str(grant,"license_id",100);
     check(grant.value("version",1)==1||grant.value("version",1)==2,"Непідтримувана версія ліцензії");
@@ -69,6 +72,21 @@ J verifyCenterLicense(const J& envelope,const std::string& serverId) {
         for(auto key:{"max_users","max_devices"})check(grant.contains(key)&&grant[key].is_number_integer()&&grant[key]>=1&&grant[key]<=10000,"Некоректні ліміти ліцензії");
     }
     return grant;
+}
+J verifyFirstAdminSetup(const J& envelope,const std::string& serverId) {
+    auto setup=verifySignedCenterFile(envelope,"lemvori.admin-setup");
+    const auto currentTime=epoch();
+    check(setup.value("version",0)==1 && str(setup,"server_id",64)==serverId,
+          "Файл першого адміністратора видано іншому серверу або формату",403);
+    check(setup.contains("expires_at") && setup["expires_at"].is_number_integer() &&
+          setup["expires_at"]>currentTime && setup["expires_at"]<=currentTime+86400,
+          "Строк файлу першого адміністратора завершився",403);
+    check(std::regex_match(str(setup,"login",64),std::regex("[A-Za-z0-9._-]{3,64}")),
+          "Некоректний логін першого адміністратора");
+    str(setup,"name",150);
+    check(std::regex_match(str(setup,"password_hash",129),std::regex("[a-f0-9]{64}:[a-f0-9]{64}")),
+          "Некоректні дані першого адміністратора");
+    return setup;
 }
 J centerAccess(DB& db) {
     auto id=installationId(db);

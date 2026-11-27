@@ -6,7 +6,7 @@ import os
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox,simpledialog
 from pathlib import Path
-from license_core import CATALOG,create_keys,issue_license,write_new,resolve_modules,calendar_expiry
+from license_core import CATALOG,create_keys,issue_license,issue_first_admin,write_new,resolve_modules,calendar_expiry
 
 class Publisher(tk.Tk):
     def __init__(self):
@@ -42,7 +42,7 @@ class Publisher(tk.Tk):
             variable=tk.StringVar(value=value);self.workflow_vars[key]=variable;ttk.Entry(workflow_panel,textvariable=variable).grid(row=row,column=1,sticky='ew',pady=4)
         actions=ttk.Frame(body);actions.pack(fill='x',pady=(0,10))
         ttk.Button(actions,text='Видати файл ліцензії',command=self.issue).pack(side='left')
-        ttk.Label(actions,text='Приватний ключ зашифрований. Пароль не зберігається. Медичні картки залишаються в центрі.',wraplength=620).pack(side='left',padx=20)
+        ttk.Button(actions,text='Підготувати першого адміністратора',command=self.issue_admin_setup).pack(side='left',padx=8)
         self.list=ttk.Treeview(body,columns=('center','server','support'),show='headings',height=3)
         for name,title in [('center','Центр'),('server','Сервер'),('support','Підтримка до')]:self.list.heading(name,text=title)
         self.list.pack(fill='x');self.list.bind('<<TreeviewSelect>>',self.load_center);self.refresh()
@@ -101,6 +101,36 @@ class Publisher(tk.Tk):
             if path.exists() or public_path.exists():raise ValueError('У цій папці вже є ключі. Виберіть іншу папку.')
             write_new(path,private,private=True);write_new(public_path,public);self.key_path.set(str(path));self.key_label.set(path.name);messagebox.showinfo('Ключ створено','Збережіть резервну копію приватного ключа та його пароль. На сервери центрів передається лише публічний ключ.')
         except Exception as error:messagebox.showerror('Ключ',str(error))
+    def issue_admin_setup(self):
+        login = simpledialog.askstring('Перший адміністратор', 'Логін адміністратора:', parent=self)
+        if login is None:
+            return
+        name = simpledialog.askstring('Перший адміністратор', 'Ім’я адміністратора:', parent=self)
+        if name is None:
+            return
+        password = simpledialog.askstring('Перший адміністратор', 'Пароль адміністратора:', show='*', parent=self)
+        if password is None:
+            return
+        again = simpledialog.askstring('Перший адміністратор', 'Повторіть пароль адміністратора:', show='*', parent=self)
+        if password != again:
+            return messagebox.showerror('Пароль', 'Паролі не збігаються')
+        key_password = simpledialog.askstring('Підпис налаштувань', 'Пароль ключа видавця:', show='*', parent=self)
+        if key_password is None:
+            return
+        try:
+            if not self.key_path.get():
+                raise ValueError('Спочатку виберіть приватний ключ видавця')
+            envelope = issue_first_admin(Path(self.key_path.get()).read_bytes(), key_password,
+                server_id=self.vars['server_id'].get().strip(), name=name, login=login.strip(), password=password)
+            path = filedialog.asksaveasfilename(title='Налаштування першого адміністратора',
+                defaultextension='.lemvori-admin', initialfile='Lemvori-Care.lemvori-admin')
+            if not path:
+                return
+            write_new(path, json.dumps(envelope, indent=2).encode('utf-8'), private=True)
+            messagebox.showinfo('Файл готовий', 'Передайте файл адміністратору Linux-сервера. Він діє 24 години і призначений для порожньої бази.')
+        except Exception as error:
+            messagebox.showerror('Перший адміністратор', str(error))
+
     def issue(self):
         if not self.registry_path:return messagebox.showerror('Реєстр','Спочатку відновіть пошкоджений реєстр центрів.')
         password=simpledialog.askstring('Підпис ліцензії','Пароль приватного ключа:',show='*',parent=self)

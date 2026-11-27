@@ -848,9 +848,12 @@ class Scenario(unittest.TestCase):
             'ended_at':dt.date.today().isoformat(),
             'outcome':'Курс завершено'
         })
-        archived=self.api(rec,'GET','/api/patients?status=archived')
+        self.api(rec,'GET','/api/patients?status=archived',status=403)
+        archived=self.api(admin,'GET','/api/patients?status=archived')
         self.assertTrue(any(x['id']==pid for x in archived))
-        new_course=self.api(rec,'POST',f'/api/patients/{pid}/courses',{
+        self.api(rec,'GET',f'/api/patients/{pid}',status=403)
+        self.api(rec,'PATCH',f'/api/patients/{pid}',{'phone':'+380990085002'},status=403)
+        new_course=self.api(admin,'POST',f'/api/patients/{pid}/courses',{
             'started_at':dt.date.today().isoformat(),
             'reason':'Повторне звернення'
         })
@@ -1481,9 +1484,9 @@ class Scenario(unittest.TestCase):
                 self.api('admin','GET',endpoint+'?'+query,status=400)
             sql(f"UPDATE patients SET status='archived' WHERE id={ids[1]}")
             members=self.api('reception','GET',f'/api/patient-directory?family_id={family}&status=all')
-            self.assertEqual(members['total'],3)
+            self.assertEqual(members['total'],2)
             self.assertNotIn('PRIVATE_',json.dumps(members))
-            self.assertEqual(self.api('psychologist','GET',f'/api/patient-directory?family_id={family}&status=all')['total'],2)
+            self.assertEqual(self.api('psychologist','GET',f'/api/patient-directory?family_id={family}&status=all')['total'],1)
             listing=self.api('admin','GET','/api/families')
             self.assertEqual(next(f for f in listing if f['id']==family)['member_count'],3)
             for value in ('0','-1','abc','99999999999999999999'):
@@ -1682,6 +1685,61 @@ class Scenario(unittest.TestCase):
         finally:
             self.api('admin','PATCH',path,{key:previous[key] for key in profile})
 
+
+    def test_zz_clinical_workstations_and_intake_requests(self):
+        # Previous abuse-control tests intentionally exhaust the address limit.
+        self.__class__.proc.terminate()
+        self.__class__.proc.wait(timeout=10)
+        self.__class__.start()
+        if not self.api('admin','GET','/api/shift-day')['open']:
+            self.api('admin','POST','/api/shift-day',{'action':'open'})
+        today = dt.date.today().isoformat()
+        self.api('admin','POST','/api/reception-access',{'access_date':today,'start_time':'00:00','enabled':True})
+        clinician = self.api('psychologist','GET','/api/me')['id']
+        created = self.api('admin','POST','/api/patients',{
+            'name':'Synthetic intake patient','dob':'1995-05-01','phone':'+380990085001',
+            'category':'Інше','psychologist_id':clinician
+        })
+        route = f"/api/patients/{created['id']}/requests"
+        document = {'client_key':'intake-retry-synthetic-1','service_code':'psychology'}
+        registered = self.api('reception','POST',route,document)
+        self.assertRegex(registered['number'], r'^LC-ZV-[0-9]{4}-[0-9]{6,}$')
+        self.assertEqual(registered['patient_no'],created['patient_no'])
+        self.assertEqual(self.api('reception','POST',route,document),registered)
+        self.api('reception','POST',route,dict(document,service_code='psychiatry'),status=409)
+        self.assertEqual(self.api('psychologist','GET',route),[registered])
+        self.api('psychologist','POST',route,document,status=403)
+        self.api('director','GET',route,status=403)
+        self.api('reception','GET','/api/patient-directory?status=archived',status=403)
+
+        shift_archive = '/api/clinical/shift-archive'
+        self.api('reception','GET',shift_archive,status=403)
+        self.api('director','GET',shift_archive,status=403)
+        own=self.api('psychologist','GET',shift_archive)
+        all_rows = self.api('admin','GET',shift_archive)['items']
+        self.assertTrue({v['id'] for v in own['items']} <= {v['id'] for v in all_rows})
+        self.assertTrue(all('note' not in v for v in all_rows))
+        doc_login = {'login':'intake-doctor','password':'synthetic-workstation-pass','platform':'Desktop'}
+        doc_id = self.api('admin','POST','/api/users',dict(doc_login,role='psychologist',name='Test clinician'))['id']
+        self.assertEqual(self.call('POST','/api/login',doc_login)[0],403)
+        code = 'a'*32
+        self.api('admin','PATCH',f'/api/users/{doc_id}',{'allow_desktop':True,'desktop_code':code})
+        self.assertEqual(self.call('POST','/api/login',dict(doc_login,device_id='b'*32))[0],403)
+        status, signed = self.call('POST','/api/login',dict(doc_login,device_id=code))
+        self.assertEqual(status,200)
+        self.assertEqual(self.call('GET',shift_archive,token=signed['token'])[1]['items'],[])
+        self.api('admin','PATCH',f'/api/users/{doc_id}',{'allow_desktop':False})
+        self.assertEqual(self.call('GET',shift_archive,token=signed['token'])[0],401)
+
+        director_login={'login':'medical-director','password':'synthetic-director-archive','platform':'Desktop'}
+        director_id=self.api('admin','POST','/api/users',dict(director_login,role='director',name='Test medical director',
+            shift_archive_access=True))['id']
+        status, signed = self.call('POST','/api/login',director_login)
+        self.assertEqual(status,200)
+        self.assertTrue(self.call('GET','/api/me',token=signed['token'])[1]['shift_archive_access'])
+        self.assertEqual(self.call('GET',shift_archive,token=signed['token'])[1]['items'],all_rows)
+        self.api('admin','PATCH',f'/api/users/{director_id}',{'shift_archive_access':False})
+        self.assertEqual(self.call('GET',shift_archive,token=signed['token'])[0],401)
 
     def test_z_managed_license_limits_and_read_access(self):
         sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'publisher'))

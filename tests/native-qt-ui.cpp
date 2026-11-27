@@ -109,6 +109,17 @@ int main(int argc,char **argv){
     verify(lookup("text","Телефон: —"),"Patient overview registration field missing");
         verify(lookup("text","Новий документ")==nullptr,"Document dialog unexpectedly open");click("Додати документ");verify(lookup("placeholderText","Назва документа"),"Document form missing");clickObject("document-close");
     click("Переглянути документи");verify(waitFor([&]{return lookup("text","Текст згоди")!=nullptr;}),"Document text missing");clickObject("document-close");
+    click("Заяви");
+    verify(waitFor([&]{return bridge.intakeServices().size()==2;}),"Request directions did not load");
+    bridge.createIntakeRequest("psychology");
+    verify(waitFor([&]{return bridge.intakeRequests().size()==1;}),"Numbered request did not save");
+    verify(lookup("text","Роздрукувати"),"Print action missing");
+    QFile intake(config.filePath("clinic-intake.pdf"));
+    bridge.outputIntakeRequest(26,QUrl::fromLocalFile(intake.fileName()));
+    verify(intake.open(QIODevice::ReadOnly)&&intake.read(5)=="%PDF-","Intake document not a PDF");
+    QObject *intakeDialog=engine.rootObjects().first()->findChild<QObject*>("patient-requests-dialog");
+    verify(intakeDialog&&QMetaObject::invokeMethod(intakeDialog,"close"),"Intake dialog cannot close");
+    pump();
     click("У лист очікування");verify(lookup("objectName","date_from"),"Waiting request editor missing");click("Скасувати");clickObject("patient-close");
     verify(waitFor([&]{return !bridge.centerConfiguration().isEmpty()&&!bridge.consentPolicy().isEmpty();}),"Consent rules did not load");
     QVariantMap registration{{"name","Synthetic consent patient"},{"dob","2000-01-02"},{"phone","+380990000111"},{"category","Інше"},{"psychologist_id",7}};
@@ -121,7 +132,7 @@ int main(int argc,char **argv){
     int registered=0;QObject::connect(&bridge,&ApiBridge::patientRegistered,[&](const QVariantMap&patient,bool){registered=patient.value("id").toInt();});
     bridge.registerWithConsents(registration,signatures,false);verify(waitFor([&]{return registered==21;}),"Registration did not attach signed scans");
     click("Записати на прийом");auto *kind=lookup("objectName","booking-kind");verify(kind,"Booking type selector missing");kind->setProperty("currentIndex",4);pump();verify(lookup("text","+ Учасник"),"Group participant selector missing");click("Закрити");
-    page("Виклик на табло");page("Архів");
+    page("Виклик на табло");verify(!lookup("text","Архів"),"Reception can access archive");
     if(qEnvironmentVariableIsSet("LEMVORI_UI_SHOTS"))window->grabWindow().save(qEnvironmentVariable("LEMVORI_UI_SHOTS")+"/archive.png");
     bridge.logout();bridge.login("director","test");verify(waitFor([&]{return bridge.role()=="director";}),"Director login failed");pump();
     verify(!lookup("text","Пацієнти")&&!lookup("text","Телефони"),"Director sees confidential modules");page("Супервізії");click("+ Додати");verify(lookup("objectName","scheduled_at"),"Supervision form missing");click("Скасувати");page("Повідомлення");click("+ Додати");verify(lookup("objectName","body"),"Message editor missing");click("Скасувати");page("Навантаження");

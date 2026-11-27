@@ -31,19 +31,33 @@ ApplicationWindow {
     minimumWidth: 920
     minimumHeight: 640
     readonly property string centerName: String(api.centerConfiguration.center_name || api.licenseStatus.center || "Lemvori Care")
+    Dialog {
+        id: workstationNotice
+        width: Math.min(480, Overlay.overlay.width - 36)
+        title: "Код робочого ПК"
+        anchors.centerIn: Overlay.overlay
+        standardButtons: Dialog.Close
+        modal: true
+        contentItem: ColumnLayout {
+            Label { text: "Передайте код адміністратору вашого закладу." }
+            CareTextField { text: api.workstationCode; readOnly: true; selectByMouse: true; Layout.fillWidth: true }
+        }
+    }
     function navGroup(page) {
         if (["Головна","Адміністрування"].includes(page)) return "ОГЛЯД"
         if (["Прийоми","Календар","Лист очікування","Передача зміни"].includes(page)) return "РОБОЧИЙ ДЕНЬ"
-        if (["Пацієнти","Сім’ї","Архів","Виписки"].includes(page)) return "ПАЦІЄНТИ ТА ДОКУМЕНТИ"
+        if (["Пацієнти","Сім’ї","Архів","Архів зміни","Виписки"].includes(page)) return "ПАЦІЄНТИ ТА ДОКУМЕНТИ"
         if (["Психологи","Супервізії","Навантаження","Звіти"].includes(page)) return "КОМАНДА"
         return "КОМУНІКАЦІЇ ТА СИСТЕМА"
     }
     readonly property var navigation: {
         const pages = api.role === "director"
-            ? ["Головна","Психологи","Навантаження","Супервізії","Виписки","Повідомлення"]
+            ? ["Головна","Психологи","Навантаження","Супервізії","Виписки","Архів зміни","Повідомлення"]
             : api.role === "reception"
-            ? ["Головна","Прийоми","Календар","Лист очікування","Пацієнти","Сім’ї","Архів","Передача зміни","Психологи","Виклик на табло"]
-            : ["Головна","Адміністрування","Прийоми","Календар","Лист очікування","Пацієнти","Сім’ї","Архів","Передача зміни","Психологи","Супервізії","Повідомлення","Звіти","Навантаження","Виписки","Виклик на табло","Телефони","Синхронізація","Сервер"]
+            ? ["Головна","Прийоми","Календар","Лист очікування","Пацієнти","Сім’ї","Передача зміни","Психологи","Виклик на табло"]
+            : api.role === "psychologist"
+            ? ["Головна","Архів зміни"]
+            : ["Головна","Адміністрування","Прийоми","Календар","Лист очікування","Пацієнти","Сім’ї","Архів","Архів зміни","Передача зміни","Психологи","Супервізії","Повідомлення","Звіти","Навантаження","Виписки","Виклик на табло","Телефони","Синхронізація","Сервер"]
         const filtered = pages.filter(function(page){ return root.pageAllowed(page) })
         const groups = []
         let last = ""
@@ -63,7 +77,7 @@ ApplicationWindow {
     property var bookingOriginal: ({})
     property var waitingOriginal: ({})
     property var bookingParticipants: []
-    readonly property var operationPages: ({"Передача зміни":"handover","Лист очікування":"waiting","Сім’ї":"families","Архів":"archive","Супервізії":"supervisions","Повідомлення":"messages","Навантаження":"workload","Звіти":"reports","Виклик на табло":"tv","Телефони":"devices","Синхронізація":"recovery"})
+    readonly property var operationPages: ({"Передача зміни":"handover","Лист очікування":"waiting","Сім’ї":"families","Архів":"archive","Архів зміни":"shiftArchive","Супервізії":"supervisions","Повідомлення":"messages","Навантаження":"workload","Звіти":"reports","Виклик на табло":"tv","Телефони":"devices","Синхронізація":"recovery"})
     property string calendarDay: today
     property string visitQuery: ""
     property string visitFilter: "all"
@@ -85,8 +99,10 @@ ApplicationWindow {
     readonly property color muted: "#405C83"
     readonly property color accent: "#1764EF"
     readonly property color line: "#CFDDF0"
+    readonly property bool clinician: api.role === "psychologist"
+    readonly property bool registeringStaff: api.role === "reception" || api.role === "admin"
     readonly property string roleLabel: api.role === "admin" ? "Адміністратор"
-        : api.role === "director" ? "Керівник" : "Реєстратура"
+        : api.role === "director" ? "Медичний директор" : clinician ? "Клінічний працівник" : "Реєстратура"
     readonly property var pageDescriptions: ({
         "Головна": "Стан роботи центру та швидкий доступ до щоденних дій",
         "Прийоми": "Прибуття пацієнтів і статус консультацій",
@@ -113,6 +129,10 @@ ApplicationWindow {
         if (bookingDialog.opened) slotDebounce.restart()
     }
     function pageAllowed(next) {
+        if (next === "Архів") return api.adminEdition && api.role === "admin"
+        if (next === "Архів зміни") return api.workspaceAllowed("shiftArchive")
+        if (next === "Адміністрування") return api.adminEdition && api.role === "admin"
+        if (root.clinician) return next === "Головна"
         const lookup = {
             "Прийоми":"appointments", "Пацієнти":"patients",
             "Психологи":"roster", "Календар":"appointments",
@@ -222,7 +242,7 @@ ApplicationWindow {
     Timer { interval: 15000; running: root.visible && api.authenticated; repeat: true; onTriggered: api.refresh() }
 
     function pageIcon(page) {
-        const icons = {"Головна":"home","Адміністрування":"settings","Прийоми":"calendar","Календар":"calendar","Лист очікування":"people","Пацієнти":"patient","Сім’ї":"family","Архів":"archive","Передача зміни":"swap","Психологи":"people","Супервізії":"shield","Повідомлення":"message","Звіти":"chart","Навантаження":"chart","Виписки":"file","Виклик на табло":"grid","Телефони":"phone","Синхронізація":"update","Сервер":"server"}
+        const icons = {"Головна":"home","Адміністрування":"settings","Прийоми":"calendar","Календар":"calendar","Лист очікування":"people","Пацієнти":"patient","Сім’ї":"family","Архів":"archive","Архів зміни":"archive","Передача зміни":"swap","Психологи":"people","Супервізії":"shield","Повідомлення":"message","Звіти":"chart","Навантаження":"chart","Виписки":"file","Виклик на табло":"grid","Телефони":"phone","Синхронізація":"update","Сервер":"server"}
         return icons[page] || "grid"
     }
     component SolviaButton: Button {
@@ -413,6 +433,15 @@ ApplicationWindow {
                               : api.error ? "З’єднання не встановлено" : "Підключіть сервер центру"
                     }
                     SolviaButton {
+                        visible: !api.adminEdition
+                        text: "Код цього ПК"
+                        subtle: true
+                        onClicked: {
+                            api.copyWorkstationCode()
+                            workstationNotice.open()
+                        }
+                    }
+                    SolviaButton {
                         text: "Підключення"
                         subtle: true
                         enabled: !api.working || !api.connected
@@ -542,7 +571,7 @@ ApplicationWindow {
                         Layout.fillWidth:true
                         ColumnLayout {
                             Layout.fillWidth: true; spacing: 4
-                            SectionHeading { text:root.page === "Головна" ? "Огляд центру" : root.page; Layout.fillWidth:true }
+                            SectionHeading { text:root.page === "Головна" ? (api.role === "reception" ? "Реєстратура" : root.clinician ? "Робоче місце спеціаліста" : "Огляд центру") : root.page; Layout.fillWidth:true }
                             Label { textFormat:Text.PlainText;
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                                 text: root.pageDescriptions[root.page] || ""
@@ -560,9 +589,14 @@ ApplicationWindow {
                                font.pixelSize:12; text:api.error||api.notice; wrapMode:Text.WordWrap }
                     }
 
-                    // Homepage: active workday and one-click access to operational modules.
+                    ClinicianWorkspace {
+                        visible: root.page === "Головна" && root.clinician
+                        Layout.fillWidth: true
+                        bridge: api
+                        onOpenPatient: function(id) { operations.openPatient(id) }
+                    }
                     ColumnLayout {
-                        visible: root.page === "Головна"
+                        visible: root.page === "Головна" && !root.clinician
                         Layout.fillWidth:true; spacing:18
                         Label {
                             objectName: "homepage-welcome"
@@ -584,30 +618,35 @@ ApplicationWindow {
                         }
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 138
-                            radius: 20; color: "#1764EF"
+                            radius: 20; color: api.role === "reception" ? "#0D655F" : "#173968"
                             RowLayout {
                                 anchors.fill: parent; anchors.margins: 22; spacing: 18
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: 7
                                     Label { textFormat:Text.PlainText;
-                                        text: api.role === "director" ? "КЕРУВАННЯ ЦЕНТРОМ" : "РОБОЧИЙ ПРОСТІР"
+                                        text: api.role === "director" ? "МЕДИЧНИЙ ДИРЕКТОР" : api.role === "admin" ? "АДМІНІСТРУВАННЯ" : "РЕЄСТРАТУРА"
                                         color: "#C8D4DC"; font.pixelSize: 10; font.letterSpacing: 1.5
                                     }
                                     Label { textFormat:Text.PlainText;
-                                        text: api.role === "director" ? "Огляд роботи центру" : "Усе для щоденного прийому"
+                                        text: api.role === "director" ? "Огляд роботи центру" : api.role === "admin" ? "Панель управління закладом" : "Робоча зміна реєстратури"
                                         color: "#FFFFFF"; font.bold: true; font.pixelSize: 23
                                     }
                                     Label { textFormat:Text.PlainText;
-                                        text: api.role === "director" ? "Дані центру та навантаження команди" : "Знайдіть пацієнта, перевірте час та створіть запис"
+                                        text: api.role === "director" ? "Дані центру та навантаження команди" : api.role === "admin" ? "Працівники, доступи, профіль, документи та сервер" : "Пошук пацієнта, реєстрація прибуття та запис"
                                         color: "#E0E8EC"; font.pixelSize: 13; wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
                                 }
                                 SolviaButton {
-                                    visible: api.role !== "director" && root.pageAllowed("Пацієнти") && root.pageAllowed("Прийоми")
+                                    visible: api.role === "reception" && root.pageAllowed("Пацієнти") && root.pageAllowed("Прийоми")
                                     text: "+ Записати на прийом"
                                     Accessible.name: "Відкрити пошук пацієнта для запису"
                                     onClicked: root.openPatientDirectory("")
+                                }
+                                SolviaButton {
+                                    visible: api.adminEdition && api.role === "admin"
+                                    text: "Відкрити адміністрування"
+                                    onClicked: root.showPage("Адміністрування")
                                 }
                                 SolviaButton {
                                     visible: api.role === "director"

@@ -5,6 +5,16 @@ umask 077
 trap 'echo "Lemvori Care install failed at line $LINENO. No databases were deleted." >&2' ERR
 [[ $EUID == 0 ]] || { echo "Use sudo bash deploy/lemvori-care/install.sh" >&2; exit 1; }
 [[ $(uname -m) == x86_64 && -x /usr/bin/apt-get ]] || { echo "Requires Ubuntu/Linux Mint x86_64" >&2; exit 1; }
+mode=interactive
+case $# in
+  0) ;;
+  1) [[ $1 == --prepare-center ]] || exit 2; mode=prepare ;;
+  4)
+    [[ $1 == --admin-setup && -s $2 && -f $2 && ! -L $2 && $(stat -c %s -- "$2") -le 32768 ]] || exit 2
+    mode=signed; setup_file=$2; publisher_key=$3; publisher_fingerprint=$4
+    [[ $publisher_fingerprint =~ ^[a-f0-9]{64}$ ]] || exit 2 ;;
+  *) echo 'Usage: install.sh [--prepare-center | --admin-setup FILE PUBLIC.pem SHA256]' >&2; exit 2 ;;
+esac
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 package=$source_dir/deploy/lemvori-care
 [[ -f $source_dir/CMakeLists.txt && -f $source_dir/src/server/schema.sql ]] || {
@@ -17,7 +27,7 @@ flock -n 9 || { echo "Another installation or database operation is running" >&2
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y cmake g++ make pkg-config libpq-dev postgresql-client libssl-dev openssl \
-    ca-certificates curl iproute2 python3 nlohmann-json3-dev libcpp-httplib-dev
+    ca-certificates curl iproute2 python3 nlohmann-json3-dev libcpp-httplib-dev age
 if ! pg_isready -h 127.0.0.1 -p 5432 -q; then
   apt-get install -y postgresql
   systemctl start postgresql
@@ -59,10 +69,17 @@ bash "$package/configure-env.sh" /etc/lemvori-care/server.env
 chown root:lemvori-care /etc/lemvori-care/server.env
 chmod 0640 /etc/lemvori-care/server.env
 
+if [[ $mode == prepare ]]; then
+  runuser -u lemvori-care --preserve-environment -- "$source_dir/build/lemvori-api/SolviaServer" --prepare-center
+  exit
+fi
 has_users=$(dbpsql -Atc "SELECT to_regclass('public.users') IS NOT NULL")
 count=0
 if [[ $has_users == t ]]; then count=$(dbpsql -Atc 'SELECT count(*) FROM users'); fi
-if [[ $count == 0 ]]; then
+if [[ $mode == signed ]]; then
+  [[ $count == 0 ]] || { echo 'The existing center already has users.' >&2; exit 1; }
+  bash "$package/install-publisher-key.sh" --no-restart "$publisher_key" "$publisher_fingerprint"
+elif [[ $count == 0 ]]; then
   read -r -p 'First administrator login (3-64 letters/digits/._-): ' LEMVORI_ADMIN_LOGIN
   read -r -p 'Administrator display name: ' LEMVORI_ADMIN_NAME
   read -r -s -p 'Administrator password (12-128 UTF-8 bytes): ' LEMVORI_ADMIN_PASSWORD
@@ -78,6 +95,12 @@ if [[ $count == 0 ]]; then
   [[ $LEMVORI_ADMIN_PASSWORD != *$'\r'* ]] || { echo "Password contains a carriage return" >&2; exit 1; }
   export LEMVORI_ADMIN_LOGIN LEMVORI_ADMIN_NAME LEMVORI_ADMIN_PASSWORD
 fi
+install -d -m 0700 -o root -g root /var/backups/lemvori-care
+bash "$package/provision-backup-key.sh" /etc/lemvori-care/backup.agekey
+install -o root -g root -m 0644 "$source_dir/tools/check-encrypted-storage.py" /opt/lemvori-care/check-encrypted-storage.py
+install -o root -g root -m 0755 "$package/storage-check.sh" /opt/lemvori-care/storage-check.sh
+install -o root -g root -m 0644 "$package/backup-archive.sh" /opt/lemvori-care/backup-archive.sh
+
 # Keep previous database and local CA during reinstall.
 systemctl stop lemvori-care-network.timer lemvori-care.service 2>/dev/null || true
 install -o root -g root -m 0755 "$source_dir/build/lemvori-api/SolviaServer" \
@@ -90,7 +113,12 @@ install -o root -g root -m 0755 "$package/restore.sh" /opt/lemvori-care/restore.
 install -o root -g root -m 0755 "$package/verify-host.sh" /opt/lemvori-care/verify-host.sh
 
 # --init executes bundled schema.sql and creates an initial admin if the users table is empty.
-runuser -u lemvori-care --preserve-environment -- /opt/lemvori-care/lemvori-care-api --init
+if [[ $mode == signed ]]; then
+  export LEMVORI_LICENSE_PUBLIC_KEY=/etc/lemvori-care/license/publisher.pem
+  runuser -u lemvori-care --preserve-environment -- /opt/lemvori-care/lemvori-care-api --init-admin-setup < "$setup_file"
+else
+  runuser -u lemvori-care --preserve-environment -- /opt/lemvori-care/lemvori-care-api --init
+fi
 unset LEMVORI_ADMIN_LOGIN LEMVORI_ADMIN_NAME LEMVORI_ADMIN_PASSWORD repeated_password
 
 for unit in lemvori-care.service lemvori-care-network.service \
