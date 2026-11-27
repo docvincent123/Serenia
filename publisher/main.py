@@ -1,157 +1,784 @@
-"""Lemvori Control: native publisher console. No patient data is requested."""
+"""Lemvori Control — local native publisher and license manager."""
 import datetime as dt
+import hashlib
 import json
-import sys
 import os
+import re
+import subprocess
+import sys
 import tkinter as tk
-from tkinter import ttk,filedialog,messagebox,simpledialog
 from pathlib import Path
-from license_core import CATALOG,create_keys,issue_license,issue_first_admin,write_new,resolve_modules,calendar_expiry
+from tkinter import filedialog, messagebox, simpledialog, ttk
+from zoneinfo import ZoneInfo
+
+from license_core import (
+    CATALOG, LICENSE_PRESETS, calendar_expiry, create_keys, issue_first_admin,
+    issue_license, publisher_public_key, read_center_request, resolve_modules,
+    validate_private_key_file, write_new,
+)
+from license_store import (
+    atomic_json, license_matches_record, load_preferences, load_registry,
+    remove_record, save_preferences, upsert,
+)
+
+VERSION = "1.2.0"
+FONT = "Segoe UI" if sys.platform == "win32" else "DejaVu Sans"
+HOME = Path(os.environ.get("LEMVORI_CONTROL_HOME", str(Path.home() / ".lemvori-control")))
+INITIAL = {
+    "center": "", "server_id": "", "center_id": "",
+    "max_users": "40", "max_devices": "40", "expires": "", "support": "",
+}
+WORKFLOW = {
+    "opening_time": "08:00", "closing_time": "20:00", "working_days": "1234567",
+    "slot_step_minutes": "60", "default_duration_minutes": "60", "session_hours": "8",
+}
+
+
+MODULE_LABELS = {
+    "patients": "Картки, сім’ї та загальний архів",
+    "documents": "Нумеровані заяви, документи, PDF і друк",
+    "consents": "Обов’язкові згоди та підписані скани",
+    "appointments": "Реєстратура, календар і лист очікування",
+    "clinical": "Кабінет спеціаліста, консультації та архів зміни",
+    "rehabilitation": "Курси та план реабілітації",
+    "reports": "Аналітика, звіти та супервізії",
+    "messages": "Службові повідомлення",
+    "roster": "Склад спеціалістів на зміні",
+}
+
+
+def local_end_date(timestamp):
+    if not timestamp:
+        return ""
+    # Timestamp is the instant AFTER the last active day in Europe/Kyiv.
+    return dt.datetime.fromtimestamp(int(timestamp) - 1, ZoneInfo("Europe/Kyiv")).date().isoformat()
+
 
 class Publisher(tk.Tk):
     def __init__(self):
-        super().__init__();self.title('Lemvori Control · 1.0.0 preview1');self.geometry('1000x700');self.minsize(900,680);self.configure(bg='#EDF0F0')
-        font_family='Segoe UI' if sys.platform=='win32' else 'DejaVu Sans'
-        style=ttk.Style(self);style.theme_use('clam');style.configure('.',font=(font_family,11),background='#EDF0F0',foreground='#11212D');style.configure('TButton',padding=10);style.configure('TEntry',padding=4);style.configure('Title.TLabel',font=(font_family,23,'bold'))
-        self.registry_path=Path(os.environ.get('LEMVORI_CONTROL_HOME',str(Path.home()/'.lemvori-control')))/'centers.json';self.records=[];self.key_path=tk.StringVar();self.key_label=tk.StringVar();self.vars={};self.modules={};self.workflow_vars={};self.apply_workflow=tk.BooleanVar(value=False)
+        super().__init__()
+        self.title(f"Lemvori Control · {VERSION}")
+        self.geometry("1100x820")
+        self.minsize(960, 730)
+        self.configure(bg="#EFF3F9")
+        self.registry_path = HOME / "centers.json"
+        self.preferences_path = HOME / "settings.json"
+        self.records = []
+        self.ready = True
         try:
-            self.records=json.loads(self.registry_path.read_text(encoding='utf-8'))
-            if not isinstance(self.records,list) or any(not isinstance(record,dict) or not isinstance(record.get('center'),str) or not isinstance(record.get('server_id'),str) for record in self.records):raise ValueError('Invalid center registry')
-        except FileNotFoundError:pass
-        except (ValueError,OSError):messagebox.showerror('Реєстр','Не вдалося прочитати реєстр центрів. Збережіть його копію перед подальшою роботою.');self.registry_path=None
-        body=ttk.Frame(self,padding=20);body.pack(fill='both',expand=True)
-        ttk.Label(body,text='Lemvori Control',style='Title.TLabel').pack(anchor='w');ttk.Label(body,text='Центри, підписані ліцензії та доступні модулі').pack(anchor='w',pady=(3,15))
-        keys=ttk.Frame(body);keys.pack(fill='x');ttk.Button(keys,text='Новий ключ видавця',command=self.create_key).pack(side='left');ttk.Button(keys,text='Вибрати ключ',command=self.pick_key).pack(side='left',padx=8);ttk.Button(keys,text='Запит центру',command=self.import_center).pack(side='left');ttk.Label(keys,textvariable=self.key_label,wraplength=220).pack(side='left')
-        tabs=ttk.Notebook(body);tabs.pack(fill='both',expand=True,pady=10)
-        center_panel=ttk.Frame(tabs,padding=10);module_panel=ttk.Frame(tabs,padding=12);workflow_panel=ttk.Frame(tabs,padding=12)
-        tabs.add(center_panel,text='Центр і ліцензія');tabs.add(module_panel,text='Модулі');tabs.add(workflow_panel,text='Правила роботи')
-        center_panel.columnconfigure(1,weight=1)
-        for row,(key,label,initial) in enumerate([('center','Назва центру',''),('server_id','Ідентифікатор сервера',''),('center_id','Постійний ID центру',''),('max_users','Активних працівників','40'),('max_devices','Android-пристроїв','40'),('expires','Строк до: РРРР-ММ-ДД; порожньо — безстроково',''),('support','Підтримка до: РРРР-ММ-ДД','')]):
-            ttk.Label(center_panel,text=label,wraplength=300).grid(row=row,column=0,sticky='w',padx=(0,16),pady=3)
-            variable=tk.StringVar(value=initial);self.vars[key]=variable;ttk.Entry(center_panel,textvariable=variable).grid(row=row,column=1,sticky='ew',pady=3)
-        ttk.Label(module_panel,text='Доступні функції центру',font=(font_family,14,'bold')).pack(anchor='w',pady=(0,8))
+            self.records = load_registry(self.registry_path)
+        except (OSError, ValueError, UnicodeError) as error:
+            self.ready = False
+            messagebox.showerror(
+                "Реєстр центрів",
+                f"Не вдалося прочитати {self.registry_path}\n\n{error}\n\n"
+                "Реєстр залишено без змін. Відновіть резервну копію перед записом.",
+                parent=self,
+            )
+        try:
+            preferences = load_preferences(self.preferences_path)
+        except (OSError, ValueError, UnicodeError):
+            preferences = {"key_path": "", "license_dir": ""}
+        self.key_path = tk.StringVar(value=preferences["key_path"])
+        self.license_dir = preferences["license_dir"]
+        self.key_label = tk.StringVar()
+        self.status = tk.StringVar(value=f"Локальний реєстр: {self.registry_path}")
+        self.vars = {}
+        self.modules = {}
+        self.workflow_vars = {}
+        self.admin_vars = {}
+        self.apply_workflow = tk.BooleanVar(value=False)
+        self.setup_style()
+        self.build_ui()
+        self.admin_server = ""
+        self.vars["server_id"].trace_add("write", self.on_server_changed)
+        self.update_key_label()
+        self.refresh()
+
+    def setup_style(self):
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure(".", font=(FONT, 10), background="#EFF3F9", foreground="#182840")
+        style.configure("Card.TFrame", background="#FFFFFF")
+        style.configure("Card.TLabel", background="#FFFFFF", foreground="#182840")
+        style.configure("Hint.TLabel", background="#FFFFFF", foreground="#66758A", font=(FONT, 9))
+        style.configure("Section.TLabel", background="#FFFFFF", foreground="#192B46", font=(FONT, 13, "bold"))
+        style.configure("TButton", padding=(13, 9), background="#E8EDF7", foreground="#1C3657", borderwidth=0)
+        style.map("TButton", background=[("active", "#DCE5F3"), ("disabled", "#EFF1F5")])
+        style.configure("Primary.TButton", background="#2966D0", foreground="#FFFFFF", font=(FONT, 10, "bold"))
+        style.map("Primary.TButton", background=[("active", "#1F56BA"), ("disabled", "#9FB8DB")])
+        style.configure("Danger.TButton", background="#FBE9EA", foreground="#A42839")
+        style.map("Danger.TButton", background=[("active", "#F5D7DA")])
+        style.configure("TEntry", padding=7, fieldbackground="#F9FBFF", foreground="#182840")
+        style.configure("TNotebook", background="#EFF3F9", borderwidth=0)
+        style.configure("TNotebook.Tab", padding=(17, 10), background="#E3E9F3", foreground="#384D66")
+        style.map("TNotebook.Tab", background=[("selected", "#FFFFFF")], foreground=[("selected", "#1A57B8")])
+        style.configure("Treeview", background="#FFFFFF", fieldbackground="#FFFFFF",
+                        foreground="#233652", rowheight=30, borderwidth=0)
+        style.configure("Treeview.Heading", background="#E7EDF6", foreground="#243B5C",
+                        font=(FONT, 10, "bold"), padding=7)
+        style.map("Treeview", background=[("selected", "#C9DBF5")],
+                  foreground=[("selected", "#15243B")])
+
+    def build_ui(self):
+        header = tk.Frame(self, bg="#172B49", padx=26, pady=17)
+        header.pack(fill="x")
+        tk.Label(header, text=f"LEMVORI CONTROL  {VERSION}", bg="#172B49", fg="#90B7FF",
+                 font=(FONT, 10, "bold")).pack(anchor="w")
+        tk.Label(header, text="Керування ліцензіями", bg="#172B49", fg="white",
+                 font=(FONT, 24, "bold")).pack(anchor="w", pady=(2, 0))
+        tk.Label(header, text="Ліцензії закладів і підготовка першого адміністратора",
+                 bg="#172B49", fg="#CBDAF1", font=(FONT, 10)).pack(anchor="w")
+
+        body = ttk.Frame(self, padding=(20, 16, 20, 10))
+        body.pack(fill="both", expand=True)
+        key_card = ttk.Frame(body, style="Card.TFrame", padding=14)
+        key_card.pack(fill="x", pady=(0, 10))
+        key_buttons = ttk.Frame(key_card, style="Card.TFrame")
+        key_buttons.pack(fill="x")
+        ttk.Button(key_buttons, text="Імпортувати запит закладу",
+                   style="Primary.TButton", command=self.import_center).pack(side="left")
+        ttk.Button(key_buttons, text="Створити ключ підпису",
+                   command=self.create_key).pack(side="left", padx=(8, 0))
+        ttk.Button(key_buttons, text="Вибрати приватний PEM",
+                   command=self.pick_key).pack(side="left", padx=8)
+        ttk.Button(key_buttons, text="Експортувати публічний ключ",
+                   command=self.export_public_key).pack(side="left")
+        ttk.Label(key_card, textvariable=self.key_label, style="Hint.TLabel",
+                  wraplength=960).pack(anchor="w", pady=(7, 0))
+
+        tabs = ttk.Notebook(body)
+        tabs.pack(fill="both", expand=True)
+        center_panel = ttk.Frame(tabs, style="Card.TFrame", padding=18)
+        module_panel = ttk.Frame(tabs, style="Card.TFrame", padding=18)
+        workflow_panel = ttk.Frame(tabs, style="Card.TFrame", padding=18)
+        admin_panel = ttk.Frame(tabs, style="Card.TFrame", padding=18)
+        tabs.add(center_panel, text="Заклад і ліцензія")
+        tabs.add(module_panel, text="Модулі")
+        tabs.add(admin_panel, text="Перший адміністратор")
+        tabs.add(workflow_panel, text="Правила роботи")
+
+        center_panel.columnconfigure(1, weight=1)
+        ttk.Label(center_panel, text="Параметри закладу", style="Section.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 9))
+        fields = [
+            ("center", "Назва закладу"),
+            ("server_id", "ID сервера (64 символи 0–9, a–f)"),
+            ("center_id", "Постійний ID центру (необов’язково)"),
+            ("max_users", "Максимум працівників"),
+            ("max_devices", "Максимум Android-пристроїв"),
+            ("expires", "Діє до (РРРР-ММ-ДД; порожньо — безстроково)"),
+            ("support", "Підтримка до (РРРР-ММ-ДД)"),
+        ]
+        for row, (key, label) in enumerate(fields, start=1):
+            ttk.Label(center_panel, text=label, style="Card.TLabel").grid(
+                row=row, column=0, sticky="w", padx=(0, 18), pady=5)
+            variable = tk.StringVar(value=INITIAL[key])
+            self.vars[key] = variable
+            ttk.Entry(center_panel, textvariable=variable).grid(
+                row=row, column=1, sticky="ew", pady=5)
+        ttk.Label(
+            center_panel,
+            text="Підписана ліцензія не змінюється від редагування полів. "
+                 "Щоб застосувати зміни, видайте новий файл.",
+            style="Hint.TLabel", wraplength=820,
+        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(12, 0))
+
+        presets = ttk.Frame(module_panel, style="Card.TFrame")
+        presets.pack(fill="x", pady=(0, 7))
+        ttk.Label(presets, text="Набір модулів", style="Card.TLabel").pack(side="left", padx=(0, 14))
+        for title in LICENSE_PRESETS:
+            ttk.Button(presets, text=title, command=lambda selected=title: self.apply_preset(selected)).pack(
+                side="left", padx=(0, 6))
         for module in CATALOG:
-            value=tk.BooleanVar(value=True);self.modules[module['id']]=value
-            item=ttk.Checkbutton(module_panel,text=module['name']+(' · базовий' if module['core'] else ''),variable=value,command=lambda name=module['id']:self.toggle_module(name));item.pack(anchor='w',pady=3)
-            if module['core']:item.state(['disabled'])
-        ttk.Label(module_panel,text='Залежності додаються автоматично. Вимкнення функції зберігає дані центру.',wraplength=800).pack(anchor='w',pady=10)
-        ttk.Checkbutton(workflow_panel,text='Застосувати ці правила при активації ключа',variable=self.apply_workflow).grid(row=0,column=0,columnspan=2,sticky='w',pady=(0,10))
-        workflow_panel.columnconfigure(1,weight=1)
-        for row,(key,label,value) in enumerate([('opening_time','Початок роботи','08:00'),('closing_time','Завершення роботи','20:00'),('working_days','Дні: 1–7 без розділювачів','1234567'),('slot_step_minutes','Крок запису: 15, 30 або 60 хв','60'),('default_duration_minutes','Прийом за замовчуванням, хв','60'),('session_hours','Час сеансу входу, год','8')],start=1):
-            ttk.Label(workflow_panel,text=label).grid(row=row,column=0,sticky='w',padx=(0,16),pady=4)
-            variable=tk.StringVar(value=value);self.workflow_vars[key]=variable;ttk.Entry(workflow_panel,textvariable=variable).grid(row=row,column=1,sticky='ew',pady=4)
-        actions=ttk.Frame(body);actions.pack(fill='x',pady=(0,10))
-        ttk.Button(actions,text='Видати файл ліцензії',command=self.issue).pack(side='left')
-        ttk.Button(actions,text='Підготувати першого адміністратора',command=self.issue_admin_setup).pack(side='left',padx=8)
-        self.list=ttk.Treeview(body,columns=('center','server','support'),show='headings',height=3)
-        for name,title in [('center','Центр'),('server','Сервер'),('support','Підтримка до')]:self.list.heading(name,text=title)
-        self.list.pack(fill='x');self.list.bind('<<TreeviewSelect>>',self.load_center);self.refresh()
-    def toggle_module(self,name):
+            enabled = tk.BooleanVar(value=True)
+            self.modules[module["id"]] = enabled
+            checkbox = ttk.Checkbutton(
+                module_panel,
+                text=MODULE_LABELS[module["id"]] + (" · базовий" if module["core"] else ""),
+                variable=enabled,
+                command=lambda name=module["id"]: self.toggle_module(name),
+            )
+            checkbox.pack(anchor="w", pady=3)
+            if module["core"]:
+                checkbox.state(["disabled"])
+        ttk.Label(
+            module_panel, text="Залежності додаються автоматично. Адміністратор закладу призначає ПК "
+            "спеціалістам і надає медичному директору доступ до архіву зміни у Lemvori Care Admin.",
+            style="Hint.TLabel", wraplength=860,
+        ).pack(anchor="w", pady=(8, 0))
+
+        self.build_first_admin(admin_panel)
+
+        workflow_panel.columnconfigure(1, weight=1)
+        ttk.Checkbutton(
+            workflow_panel, text="Застосувати правила при активації нової ліцензії",
+            variable=self.apply_workflow,
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 15))
+        rules = [
+            ("opening_time", "Початок роботи"),
+            ("closing_time", "Завершення роботи"),
+            ("working_days", "Дні роботи (цифри 1–7)"),
+            ("slot_step_minutes", "Крок запису (15, 30 або 60 хв)"),
+            ("default_duration_minutes", "Тривалість прийому (хв)"),
+            ("session_hours", "Тривалість сеансу входу (год)"),
+        ]
+        for row, (key, label) in enumerate(rules, start=1):
+            ttk.Label(workflow_panel, text=label, style="Card.TLabel").grid(
+                row=row, column=0, sticky="w", padx=(0, 16), pady=5)
+            variable = tk.StringVar(value=WORKFLOW[key])
+            self.workflow_vars[key] = variable
+            ttk.Entry(workflow_panel, textvariable=variable).grid(
+                row=row, column=1, sticky="ew", pady=5)
+
+        buttons = ttk.Frame(body)
+        buttons.pack(fill="x", pady=(12, 10))
+        ttk.Button(buttons, text="Видати файл .lemvori-license",
+                   style="Primary.TButton", command=self.issue).pack(side="left")
+        ttk.Button(buttons, text="Зберегти чернетку", command=self.save_draft).pack(side="left", padx=7)
+        ttk.Button(buttons, text="Новий центр", command=self.clear_form).pack(side="left")
+
+        registry_card = ttk.Frame(body, style="Card.TFrame", padding=12)
+        registry_card.pack(fill="x")
+        registry_title = ttk.Frame(registry_card, style="Card.TFrame")
+        registry_title.pack(fill="x", pady=(0, 8))
+        ttk.Label(registry_title, text="Локальний реєстр ліцензій",
+                  style="Section.TLabel").pack(side="left")
+        ttk.Button(registry_title, text="Видалити", style="Danger.TButton",
+                   command=self.delete_license).pack(side="right")
+        ttk.Button(registry_title, text="Показати файл", command=self.reveal_license).pack(
+            side="right", padx=7)
+        self.list = ttk.Treeview(
+            registry_card,
+            columns=("center", "server", "expires", "state", "saved"),
+            show="headings", height=4, selectmode="browse",
+        )
+        for key, name, width in [
+            ("center", "Центр", 225), ("server", "Сервер", 140),
+            ("expires", "Строк", 125), ("state", "Стан", 110),
+            ("saved", "Файл", 235),
+        ]:
+            self.list.heading(key, text=name)
+            self.list.column(key, width=width, minwidth=70, stretch=(key in ("center", "saved")))
+        self.list.pack(fill="x")
+        self.list.bind("<<TreeviewSelect>>", self.load_center)
+        ttk.Label(
+            registry_card,
+            text="Видалення тут не відкликає раніше активовану ліцензію на сервері центру.",
+            style="Hint.TLabel",
+        ).pack(anchor="w", pady=(8, 0))
+        tk.Label(
+            self, textvariable=self.status, bg="#E2EAF6", fg="#23466F",
+            font=(FONT, 9), anchor="w", padx=20, pady=7,
+        ).pack(fill="x")
+
+    def build_first_admin(self, panel):
+        panel.columnconfigure(1, weight=1)
+        ttk.Label(panel, text="Обліковий запис для нового сервера", style="Section.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        ttk.Label(panel, text="ID сервера", style="Card.TLabel").grid(
+            row=1, column=0, sticky="w", padx=(0, 16))
+        ttk.Entry(panel, textvariable=self.vars["server_id"]).grid(row=1, column=1, sticky="ew", pady=4)
+        for row, (key, label) in enumerate((
+            ("name", "Ім’я адміністратора"), ("login", "Логін"),
+            ("password", "Пароль адміністратора"), ("confirm", "Повторіть пароль"),
+        ), start=2):
+            value = tk.StringVar()
+            self.admin_vars[key] = value
+            ttk.Label(panel, text=label, style="Card.TLabel").grid(
+                row=row, column=0, sticky="w", padx=(0, 16), pady=4)
+            masked = "*" if key in {"password", "confirm"} else ""
+            ttk.Entry(panel, textvariable=value, show=masked).grid(row=row, column=1, sticky="ew", pady=4)
+        ttk.Button(panel, text="Підписати файл .lemvori-admin", style="Primary.TButton",
+                   command=self.export_first_admin).grid(row=6, column=1, sticky="w", pady=(10, 4))
+        ttk.Label(
+            panel, text="Для нового сервера отримайте ID командою install.sh --prepare-center. "
+            "Файл діє 24 години. Підпишіть ліцензію та підготовку адміністратора тим самим ключем видавця.",
+            style="Hint.TLabel", wraplength=800,
+        ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+    def on_server_changed(self, *_args):
+        server = self.vars["server_id"].get().strip()
+        if server != self.admin_server:
+            self.admin_server = server
+            self.clear_first_admin()
+
+    def clear_first_admin(self):
+        for value in self.admin_vars.values():
+            value.set("")
+
+    def apply_preset(self, preset):
+        enabled = resolve_modules(LICENSE_PRESETS[preset])
+        for name, value in self.modules.items():
+            value.set(name in enabled)
+        self.status.set(f"Вибрано набір модулів «{preset}»")
+
+    def update_key_label(self):
+        raw = self.key_path.get().strip()
+        self.key_label.set("Приватний ключ підпису: " + (raw or "виберіть файл PEM"))
+
+    def remember_paths(self):
+        save_preferences(self.preferences_path, self.key_path.get(), self.license_dir)
+
+    def toggle_module(self, name):
         if self.modules[name].get():
-            effective=resolve_modules([key for key,value in self.modules.items() if value.get()])
-            for key,value in self.modules.items():value.set(key in effective)
+            enabled = resolve_modules([key for key, value in self.modules.items() if value.get()])
+            for key, value in self.modules.items():
+                value.set(key in enabled)
         else:
-            disabled={name}
+            disabled = {name}
             while True:
-                dependent=disabled | {m['id'] for m in CATALOG if any(d in disabled for d in m['depends'])}
-                if dependent==disabled:break
-                disabled=dependent
+                expanded = disabled | {
+                    module["id"] for module in CATALOG
+                    if any(dependency in disabled for dependency in module["depends"])
+                }
+                if expanded == disabled:
+                    break
+                disabled = expanded
             for module in CATALOG:
-                if module['id'] in disabled and not module['core']:self.modules[module['id']].set(False)
-    def refresh(self):
+                if module["id"] in disabled and not module["core"]:
+                    self.modules[module["id"]].set(False)
+
+    def selected_record(self):
+        selected = self.list.selection()
+        if not selected:
+            return None
+        index = int(selected[0])
+        return self.records[index] if index < len(self.records) else None
+
+    def refresh(self, select_server=None):
         self.list.delete(*self.list.get_children())
-        for i,record in enumerate(self.records):
-            support=dt.datetime.fromtimestamp(record['support_until'],dt.timezone.utc).date().isoformat() if record.get('support_until') else '—'
-            self.list.insert('',tk.END,iid=str(i),values=(record['center'],record['server_id'][:16]+'…',support))
-    def load_center(self,_):
-        selected=self.list.selection()
-        if not selected:return
-        record=self.records[int(selected[0])]
-        for key in ['center','server_id','center_id','max_users','max_devices']:self.vars[key].set(record.get(key,''))
-        for key,field in [('expires','expires_at'),('support','support_until')]:self.vars[key].set(dt.datetime.fromtimestamp(record[field],dt.timezone.utc).date().isoformat() if record.get(field) else '')
-        for key,value in self.modules.items():value.set(key in record.get('modules',[]))
-        self.apply_workflow.set(bool(record.get('workflow')))
-        for key,value in self.workflow_vars.items():
-            if key in record.get('workflow',{}):value.set(record['workflow'][key])
+        for index, record in enumerate(self.records):
+            server = record.get("server_id", "")
+            filename = record.get("license_path", "")
+            self.list.insert("", tk.END, iid=str(index), values=(
+                record.get("center", ""), server[:16] + "…",
+                local_end_date(record.get("expires_at")) or (
+                    "Безстроково" if record.get("license_id") else "—"),
+                "Видана" if record.get("license_id") else "Чернетка",
+                Path(filename).name if filename else "—",
+            ))
+            if select_server and server == select_server:
+                self.list.selection_set(str(index))
+                self.list.see(str(index))
+
+    def load_center(self, _event=None):
+        record = self.selected_record()
+        if record is not None:
+            self.load_record(record)
+
+    def load_record(self, record):
+        for key in ("center", "server_id", "center_id", "max_users", "max_devices"):
+            self.vars[key].set(str(record.get(key, INITIAL[key])))
+        for key, field in (("expires", "expires_at"), ("support", "support_until")):
+            self.vars[key].set(local_end_date(record.get(field, 0)))
+        selected = set(record.get("modules", []))
+        for module in CATALOG:
+            self.modules[module["id"]].set(module["core"] or module["id"] in selected)
+        workflow = record.get("workflow") or {}
+        self.apply_workflow.set(bool(workflow))
+        for key, value in self.workflow_vars.items():
+            value.set(str(workflow.get(key, WORKFLOW[key])))
+        self.status.set(
+            "Файл: " + record.get("license_path", "не збережено — чернетка"))
+
+    def clear_form(self):
+        self.clear_first_admin()
+        self.list.selection_remove(*self.list.selection())
+        for key, value in self.vars.items():
+            value.set(INITIAL[key])
+        for module in CATALOG:
+            self.modules[module["id"]].set(True)
+        self.apply_workflow.set(False)
+        for key, value in self.workflow_vars.items():
+            value.set(WORKFLOW[key])
+        self.status.set("Новий центр: заповніть реквізити або імпортуйте запит.")
+
+    def collect_form(self):
+        data = {key: value.get().strip() for key, value in self.vars.items()}
+        if not re.fullmatch(r"[a-f0-9]{64}", data["server_id"]):
+            raise ValueError("ID сервера: рівно 64 символи 0–9, a–f. "
+                             "Зручніше імпортувати запит із Lemvori Care Admin.")
+        if not data["center"] or len(data["center"].encode()) > 200:
+            raise ValueError("Укажіть назву центру до 200 байтів")
+        max_users = int(data["max_users"])
+        max_devices = int(data["max_devices"])
+        if not (1 <= max_users <= 10000 and 1 <= max_devices <= 10000):
+            raise ValueError("Ліміти працівників і пристроїв: 1–10000")
+        workflow = None
+        if self.apply_workflow.get():
+            workflow = {
+                key: int(value.get()) if key in (
+                    "slot_step_minutes", "default_duration_minutes", "session_hours"
+                ) else value.get().strip()
+                for key, value in self.workflow_vars.items()
+            }
+        return {
+            "center": data["center"], "server_id": data["server_id"],
+            "center_id": data["center_id"],
+            "max_users": max_users, "max_devices": max_devices,
+            "expires_at": calendar_expiry(data["expires"]),
+            "support_until": calendar_expiry(data["support"]),
+            "modules": resolve_modules([
+                key for key, value in self.modules.items() if value.get()
+            ]),
+            "workflow": workflow,
+        }
+
+    def save_draft(self):
+        if not self.ready:
+            return messagebox.showerror("Реєстр", "Спочатку відновіть пошкоджений реєстр.")
+        try:
+            record = self.collect_form()
+            old = next((item for item in self.records
+                        if item["server_id"] == record["server_id"]), None)
+            if old and old.get("license_id"):
+                raise ValueError(
+                    "Центр уже має видану ліцензію. Щоб змінити умови, "
+                    "видайте нову підписану ліцензію.")
+            record["status"] = "draft"
+            updated = upsert(self.records, record)
+            atomic_json(self.registry_path, updated)
+            self.records = updated
+            self.refresh(record["server_id"])
+            self.status.set(f"Чернетку збережено: {self.registry_path}")
+        except (ValueError, OSError, TypeError) as error:
+            messagebox.showerror("Не вдалося зберегти чернетку", str(error), parent=self)
+
     def import_center(self):
-        path=filedialog.askopenfilename(title='Запит центру',filetypes=[('JSON','*.json')])
-        if not path:return
+        path = filedialog.askopenfilename(
+            parent=self, title="Запит центру", filetypes=[("JSON", "*.json")])
+        if not path:
+            return
         try:
-            if Path(path).stat().st_size>65536:raise ValueError('Файл завеликий')
-            request=json.loads(Path(path).read_text(encoding='utf-8'))
-            if request.get('format')!='lemvori.center-request' or request.get('version')!=1:raise ValueError('Це не запит центру Lemvori Care')
-            import re
-            if not re.fullmatch('[a-f0-9]{64}',request.get('server_id','')):raise ValueError('Некоректний ID сервера')
-            self.vars['server_id'].set(request['server_id']);self.vars['center'].set(request.get('center',''))
-            previous=next((r for r in self.records if r['server_id']==request['server_id']),{})
-            self.vars['center_id'].set(previous.get('center_id',''))
-            for module in CATALOG:self.modules[module['id']].set(module['core'] or module['id'] in request.get('requested_modules',[]))
-        except Exception as error:messagebox.showerror('Запит центру',str(error))
+            server_id, center, enabled = read_center_request(path)
+            self.clear_form()
+            old = next((record for record in self.records if record["server_id"] == server_id), None)
+            if old:
+                self.load_record(old)
+            self.vars["server_id"].set(server_id)
+            if center:
+                self.vars["center"].set(center)
+            for module in CATALOG:
+                self.modules[module["id"]].set(module["id"] in enabled)
+            self.status.set(f"Запит центру імпортовано: {path}")
+        except (OSError, ValueError, TypeError, UnicodeError) as error:
+            messagebox.showerror("Запит центру", str(error), parent=self)
+
     def pick_key(self):
-        path=filedialog.askopenfilename(title='Приватний ключ видавця',filetypes=[('PEM','*.pem')]);self.key_path.set(path or self.key_path.get());self.key_label.set(Path(self.key_path.get()).name if self.key_path.get() else '')
+        initial_dir = str(Path(self.key_path.get()).parent) if self.key_path.get() else str(Path.home())
+        path = filedialog.askopenfilename(
+            parent=self, title="Приватний ключ видавця",
+            initialdir=initial_dir, filetypes=[("PEM", "*.pem")])
+        if not path:
+            return False
+        try:
+            validated = validate_private_key_file(path)
+            self.key_path.set(str(validated.resolve()))
+            self.update_key_label()
+            self.remember_paths()
+            self.status.set("Ключ підпису вибрано. Результатом видачі буде .lemvori-license.")
+            return True
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Невірний PEM", str(error), parent=self)
+            return False
+
     def create_key(self):
-        password=simpledialog.askstring('Захист ключа','Новий пароль приватного ключа (від 12 символів):',show='*',parent=self)
-        if password is None:return
-        again=simpledialog.askstring('Підтвердження','Повторіть пароль:',show='*',parent=self)
-        if password!=again:return messagebox.showerror('Пароль','Паролі не збігаються')
-        folder=filedialog.askdirectory(title='Папка для нового ключа видавця')
-        if not folder:return
-        try:
-            private,public=create_keys(password);path=Path(folder)/'lemvori-publisher-private.pem';public_path=Path(folder)/'lemvori-publisher-public.pem'
-            if path.exists() or public_path.exists():raise ValueError('У цій папці вже є ключі. Виберіть іншу папку.')
-            write_new(path,private,private=True);write_new(public_path,public);self.key_path.set(str(path));self.key_label.set(path.name);messagebox.showinfo('Ключ створено','Збережіть резервну копію приватного ключа та його пароль. На сервери центрів передається лише публічний ключ.')
-        except Exception as error:messagebox.showerror('Ключ',str(error))
-    def issue_admin_setup(self):
-        login = simpledialog.askstring('Перший адміністратор', 'Логін адміністратора:', parent=self)
-        if login is None:
-            return
-        name = simpledialog.askstring('Перший адміністратор', 'Ім’я адміністратора:', parent=self)
-        if name is None:
-            return
-        password = simpledialog.askstring('Перший адміністратор', 'Пароль адміністратора:', show='*', parent=self)
+        password = simpledialog.askstring(
+            "Захист ключа", "Новий пароль приватного ключа (щонайменше 12 символів):",
+            show="*", parent=self)
         if password is None:
-            return
-        again = simpledialog.askstring('Перший адміністратор', 'Повторіть пароль адміністратора:', show='*', parent=self)
+            return False
+        again = simpledialog.askstring(
+            "Підтвердження", "Повторіть пароль:", show="*", parent=self)
+        if again is None:
+            return False
         if password != again:
-            return messagebox.showerror('Пароль', 'Паролі не збігаються')
-        key_password = simpledialog.askstring('Підпис налаштувань', 'Пароль ключа видавця:', show='*', parent=self)
-        if key_password is None:
-            return
+            messagebox.showerror("Пароль", "Паролі не збігаються", parent=self)
+            return False
+        folder = filedialog.askdirectory(parent=self, title="Папка для нової пари ключів")
+        if not folder:
+            return False
+        private_path = Path(folder) / "lemvori-publisher-private.pem"
+        public_path = Path(folder) / "lemvori-publisher-public.pem"
+        if private_path.exists() or public_path.exists():
+            messagebox.showerror("Ключ", "У цій папці вже є ключі. Виберіть нову папку.", parent=self)
+            return False
         try:
-            if not self.key_path.get():
-                raise ValueError('Спочатку виберіть приватний ключ видавця')
-            envelope = issue_first_admin(Path(self.key_path.get()).read_bytes(), key_password,
-                server_id=self.vars['server_id'].get().strip(), name=name, login=login.strip(), password=password)
-            path = filedialog.asksaveasfilename(title='Налаштування першого адміністратора',
-                defaultextension='.lemvori-admin', initialfile='Lemvori-Care.lemvori-admin')
+            private, public = create_keys(password)
+            write_new(private_path, private, private=True)
+            try:
+                write_new(public_path, public)
+            except Exception:
+                private_path.unlink(missing_ok=True)
+                raise
+            self.key_path.set(str(private_path.resolve()))
+            self.update_key_label()
+            self.remember_paths()
+            self.status.set(f"Пару ключів створено: {folder}")
+            messagebox.showinfo(
+                "Ключі створено",
+                "Приватний ключ і публічний ключ записано в:\n"
+                f"{folder}\n\nЗбережіть резервну копію та пароль окремо. "
+                "На сервер центру передається ЛИШЕ публічний ключ.",
+                parent=self)
+            return True
+        except Exception as error:
+            messagebox.showerror("Не вдалося створити ключі", str(error), parent=self)
+            return False
+
+    def ensure_signing_key(self):
+        """Prompt once for a signing key; do not silently rotate trusted keys."""
+        current = self.key_path.get().strip()
+        if current:
+            try:
+                return validate_private_key_file(current)
+            except (OSError, ValueError):
+                pass
+        answer = messagebox.askyesnocancel(
+            "Потрібен ключ підпису",
+            "Для підпису потрібен приватний PEM-ключ видавця.\n\n"
+            "ТАК — вибрати вже створений приватний PEM.\n"
+            "НІ — створити нову пару ключів видавця.\n"
+            "СКАСУВАТИ — повернутися без змін.\n\n"
+            "Увага: новий ключ НЕ прийматиметься центрами, "
+            "де встановлений старий публічний ключ.",
+            icon="warning", parent=self,
+        )
+        if answer is None:
+            return None
+        if answer:
+            if not self.pick_key():
+                return None
+        elif not self.create_key():
+            return None
+        try:
+            return validate_private_key_file(self.key_path.get())
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Невірний ключ підпису", str(error), parent=self)
+            return None
+
+    def signing_material(self):
+        key_path = self.ensure_signing_key()
+        if key_path is None:
+            return None
+        with key_path.open("rb") as source:
+            material = source.read(16385)
+        if len(material) > 16384:
+            raise ValueError("Завеликий PEM-файл приватного ключа")
+        password = ""
+        if material.lstrip().startswith(b"-----BEGIN ENCRYPTED PRIVATE KEY-----"):
+            password = simpledialog.askstring(
+                "Ключ видавця", "Пароль приватного ключа:", show="*", parent=self)
+            if password is None:
+                return None
+        return material, password
+
+    def export_public_key(self):
+        try:
+            signing = self.signing_material()
+            if signing is None:
+                return
+            public, fingerprint = publisher_public_key(*signing)
+            path = filedialog.asksaveasfilename(parent=self, title="Експортувати публічний ключ",
+                defaultextension=".pem", initialfile="lemvori-publisher-public.pem",
+                filetypes=[("Публічний PEM", "*.pem")])
+            if path:
+                if Path(path).suffix.lower() != ".pem":
+                    raise ValueError("Потрібне розширення .pem")
+                write_new(path, public)
+                self.status.set(f"SHA-256 публічного ключа: {fingerprint}")
+                messagebox.showinfo("Публічний ключ закладу", f"SHA-256\n{fingerprint}", parent=self)
+        except (ValueError, OSError) as error:
+            messagebox.showerror("Експорт публічного ключа", str(error), parent=self)
+
+    def export_first_admin(self):
+        values = {name: value.get() for name, value in self.admin_vars.items()}
+        if values["password"] != values.pop("confirm"):
+            return messagebox.showerror("Перший адміністратор", "Паролі не збігаються", parent=self)
+        server_id = self.vars["server_id"].get().strip()
+        if not re.fullmatch(r"[a-f0-9]{64}", server_id):
+            return messagebox.showerror("Перший адміністратор", "Перевірте ID нового сервера", parent=self)
+        values["login"] = values["login"].strip()
+        try:
+            path = filedialog.asksaveasfilename(
+                parent=self, title="Файл першого адміністратора", defaultextension=".lemvori-admin",
+                initialfile=f"Lemvori-{server_id[:12]}.lemvori-admin",
+                filetypes=[("Lemvori Admin", "*.lemvori-admin")])
             if not path:
                 return
-            write_new(path, json.dumps(envelope, indent=2).encode('utf-8'), private=True)
-            messagebox.showinfo('Файл готовий', 'Передайте файл адміністратору Linux-сервера. Він діє 24 години і призначений для порожньої бази.')
-        except Exception as error:
-            messagebox.showerror('Перший адміністратор', str(error))
+            if Path(path).suffix != ".lemvori-admin":
+                raise ValueError("Потрібне розширення .lemvori-admin")
+            signing = self.signing_material()
+            if signing is None:
+                return
+            envelope = issue_first_admin(*signing, server_id=server_id, **values)
+            write_new(path, json.dumps(envelope, indent=2).encode("utf-8"), private=True)
+            self.clear_first_admin()
+            self.status.set(f"Файл першого адміністратора збережено: {path}")
+            messagebox.showinfo("Перший адміністратор",
+                "Файл підписано. Передайте його відповідальному за встановлення сервера закладу.",
+                parent=self)
+        except (ValueError, OSError) as error:
+            messagebox.showerror("Перший адміністратор", str(error), parent=self)
 
     def issue(self):
-        if not self.registry_path:return messagebox.showerror('Реєстр','Спочатку відновіть пошкоджений реєстр центрів.')
-        password=simpledialog.askstring('Підпис ліцензії','Пароль приватного ключа:',show='*',parent=self)
-        if password is None:return
+        if not self.ready:
+            return messagebox.showerror("Реєстр", "Спочатку відновіть пошкоджений реєстр.")
         try:
-            def stamp(key):
-                value=self.vars[key].get().strip()
-                return calendar_expiry(value)
-            envelope,grant=issue_license(Path(self.key_path.get()).read_bytes(),password,
-                center=self.vars['center'].get(),server_id=self.vars['server_id'].get().strip(),center_id=self.vars['center_id'].get().strip() or None,
-                workflow={name:(int(value.get()) if name in ['slot_step_minutes','default_duration_minutes','session_hours'] else value.get().strip()) for name,value in self.workflow_vars.items()} if self.apply_workflow.get() else None,
-                modules=[name for name,value in self.modules.items() if value.get()],max_users=int(self.vars['max_users'].get()),max_devices=int(self.vars['max_devices'].get()),expires_at=stamp('expires'),support_until=stamp('support'))
-            path=filedialog.asksaveasfilename(title='Файл ліцензії для центру',defaultextension='.lemvori-license',initialfile='Lemvori-Care.lemvori-license')
-            if not path:return
-            write_new(path,json.dumps(envelope,ensure_ascii=False,indent=2).encode())
-            self.records=[r for r in self.records if r['server_id']!=grant['server_id']]+[grant]
-            self.registry_path.parent.mkdir(mode=0o700,parents=True,exist_ok=True);temporary=self.registry_path.with_suffix('.tmp');temporary.write_text(json.dumps(self.records,ensure_ascii=False,indent=2),encoding='utf-8');temporary.chmod(0o600);temporary.replace(self.registry_path)
-            self.vars['center_id'].set(grant['center_id']);self.refresh();messagebox.showinfo('Ліцензія готова','Передайте центру створений файл. Приватний ключ залишається у вас.')
-        except Exception as error:messagebox.showerror('Не вдалося видати ліцензію',str(error))
+            record = self.collect_form()
+        except (ValueError, OSError, TypeError) as error:
+            return messagebox.showerror("Перевірте дані центру", str(error), parent=self)
+        try:
+            signing = self.signing_material()
+            if signing is None:
+                return
+            envelope, grant = issue_license(
+                *signing,
+                center=record["center"], server_id=record["server_id"],
+                center_id=record["center_id"] or None, modules=record["modules"],
+                max_users=record["max_users"], max_devices=record["max_devices"],
+                expires_at=record["expires_at"], support_until=record["support_until"],
+                workflow=record["workflow"],
+            )
+        except Exception as error:
+            return messagebox.showerror("Не вдалося підписати", str(error), parent=self)
+        initial_dir = self.license_dir
+        if not initial_dir or not Path(initial_dir).is_dir():
+            initial_dir = str(Path.home() / "Downloads")
+            if not Path(initial_dir).is_dir():
+                initial_dir = str(Path.home())
+        chosen = filedialog.asksaveasfilename(
+            parent=self, title="Зберегти підписану ліцензію",
+            initialdir=initial_dir,
+            initialfile=f"Lemvori-{grant['server_id'][:12]}.lemvori-license",
+            defaultextension=".lemvori-license",
+            filetypes=[("Lemvori license", "*.lemvori-license")],
+        )
+        if not chosen:
+            return
+        path = Path(chosen).expanduser().absolute()
+        if path.suffix != ".lemvori-license":
+            return messagebox.showerror("Невірний тип файлу", "Потрібне розширення .lemvori-license", parent=self)
+        if path.exists():
+            return messagebox.showerror(
+                "Файл існує", "Цей файл уже існує. Виберіть іншу назву, "
+                "щоб не втратити стару підписану ліцензію.", parent=self)
+        content = json.dumps(envelope, ensure_ascii=False, indent=2).encode("utf-8")
+        grant["license_path"] = str(path)
+        grant["license_sha256"] = hashlib.sha256(content).hexdigest()
+        grant["status"] = "issued"
+        updated = upsert(self.records, grant)
+        try:
+            write_new(path, content, private=True)
+            try:
+                if not license_matches_record(path, grant):
+                    raise ValueError("Не вдалося перевірити щойно записаний файл")
+                atomic_json(self.registry_path, updated)
+            except Exception:
+                path.unlink(missing_ok=True)
+                raise
+            self.records = updated
+            self.license_dir = str(path.parent)
+            try:
+                self.remember_paths()
+            except OSError as warning:
+                messagebox.showwarning(
+                    "Налаштування",
+                    "Ліцензію збережено, але останню папку не вдалося "
+                    f"запам’ятати: {warning}", parent=self)
+            self.vars["center_id"].set(grant["center_id"])
+            self.refresh(grant["server_id"])
+            self.status.set(f"Ліцензію збережено: {path}")
+            messagebox.showinfo(
+                "Ліцензія створена",
+                f"Файл успішно записаний:\n{path}\n\n"
+                "Передайте центру цей файл. Приватний ключ залишається у вас.",
+                parent=self)
+        except Exception as error:
+            messagebox.showerror("Не вдалося зберегти ліцензію", str(error), parent=self)
 
-if __name__=='__main__':
-    app=Publisher()
-    if '--smoke' in sys.argv:app.after(900,app.destroy)
+    def reveal_license(self):
+        record = self.selected_record()
+        if not record:
+            return messagebox.showinfo("Ліцензії", "Спочатку виберіть рядок у реєстрі.", parent=self)
+        location = record.get("license_path", "")
+        if not location or not Path(location).is_file():
+            return messagebox.showwarning(
+                "Файл не знайдено", f"Для цього запису немає доступного файлу.\n{location}",
+                parent=self)
+        path = Path(location)
+        self.status.set(f"Файл ліцензії: {path}")
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(path.parent))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path.parent)])
+            else:
+                subprocess.Popen(["xdg-open", str(path.parent)])
+        except (OSError, AttributeError):
+            messagebox.showinfo("Шлях до файлу", str(path), parent=self)
+
+    def delete_license(self):
+        if not self.ready:
+            return messagebox.showerror("Реєстр", "Спочатку відновіть пошкоджений реєстр.")
+        record = self.selected_record()
+        if not record:
+            return messagebox.showinfo("Ліцензії", "Виберіть запис для видалення.", parent=self)
+        confirmed = messagebox.askyesno(
+            "Видалити запис?",
+            f"Видалити запис «{record['center']}» із реєстру цього комп’ютера?\n\n"
+            "Це НЕ відкличе вже активовану ліцензію на сервері центру.",
+            icon="warning", parent=self,
+        )
+        if not confirmed:
+            return
+        target = record.get("license_path", "")
+        remove_file = False
+        if target and Path(target).exists():
+            if license_matches_record(target, record):
+                choice = messagebox.askyesnocancel(
+                    "Видалити також файл?",
+                    "Видалити локальний файл ліцензії з диска?\n\n"
+                    f"{target}\n\n"
+                    "Так — видалити файл і запис.\n"
+                    "Ні — лише запис із реєстру.\n"
+                    "Скасувати — нічого не змінювати.",
+                    icon="warning", parent=self,
+                )
+                if choice is None:
+                    return
+                remove_file = bool(choice)
+            else:
+                messagebox.showwarning(
+                    "Файл не видалятиметься",
+                    "Файл не збігається з ліцензією в реєстрі або є символьним "
+                    "посиланням. Буде видалено лише запис.",
+                    parent=self,
+                )
+        try:
+            updated = remove_record(self.records, record["server_id"])
+            atomic_json(self.registry_path, updated)
+            self.records = updated
+            self.clear_form()
+            self.refresh()
+            if remove_file:
+                try:
+                    Path(target).unlink()
+                except OSError as error:
+                    messagebox.showwarning(
+                        "Реєстр оновлено",
+                        f"Запис видалено, але файл не вдалося видалити:\n{error}",
+                        parent=self,
+                    )
+            self.status.set("Запис видалено з локального реєстру. "
+                            "Ліцензія, активована на сервері, не відкликана.")
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Видалення", str(error), parent=self)
+
+
+if __name__ == "__main__":
+    app = Publisher()
+    if "--smoke" in sys.argv:
+        app.after(900, app.destroy)
     app.mainloop()
